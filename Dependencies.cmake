@@ -8,6 +8,48 @@ function(vkgsplat_setup_dependencies)
   # For each dependency, see if it's
   # already been provided to us by a parent project
 
+
+  if(NOT TARGET Vulkan::Headers)
+    cpmaddpackage(
+      NAME
+      Vulkan-Headers
+      GITHUB_REPOSITORY
+      KhronosGroup/Vulkan-Headers
+      GIT_TAG
+      "v1.4.352"
+      SYSTEM
+      YES)
+  endif()
+
+  if(NOT TARGET vk-bootstrap::vk-bootstrap)
+    cpmaddpackage(
+      NAME
+      vk-bootstrap
+      GITHUB_REPOSITORY
+      "charles-lunarg/vk-bootstrap"
+      GIT_TAG
+      "v1.4.352"
+      SYSTEM
+      YES)
+  endif()
+
+  if(NOT TARGET glfw AND NOT TARGET glfw::glfw)
+    cpmaddpackage(
+      NAME
+      glfw
+      GITHUB_REPOSITORY
+      "glfw/glfw"
+      GIT_TAG
+      "3.4"
+      SYSTEM
+      YES)
+  endif()
+
+  if(TARGET glfw AND NOT TARGET glfw::glfw)
+    add_library(glfw::glfw ALIAS glfw)
+  endif()
+
+
   if(NOT TARGET fmtlib::fmtlib)
     cpmaddpackage(
       NAME

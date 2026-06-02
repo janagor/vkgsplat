@@ -24,36 +24,77 @@
           }
         );
 
+        project_packages = with pkgs; [
+          libXi
+          libX11
+          libXrandr
+          libXcursor
+          libXinerama
+
+          libffi
+          libxkbcommon
+          wayland
+          wayland-scanner
+
+          vulkan-loader
+        ];
+
+        ld_library_path = pkgs.lib.makeLibraryPath (
+          with pkgs;
+          [
+            libXi
+            libX11
+            libXrandr
+            libXcursor
+            libXinerama
+
+            libxkbcommon
+            wayland
+
+            vulkan-loader
+          ]
+        );
+
         clangShell = pkgs.mkShell.override { stdenv = llvmStdenv; } {
-          packages = with pkgs; [
-            cmake
-            ninja
-            gcovr
-            ccache
-            doxygen
-            cppcheck
-            graphviz
-            pkg-config
-            include-what-you-use
-            llvm.clang-tools
-          ];
+          packages =
+            with pkgs;
+            [
+              cmake
+              ninja
+              gcovr
+              ccache
+              doxygen
+              cppcheck
+              graphviz
+              pkg-config
+              include-what-you-use
+              llvm.clang-tools
+            ]
+            ++ project_packages;
+
+          LD_LIBRARY_PATH = ld_library_path;
         };
 
         gccShell = pkgs.mkShell.override { stdenv = pkgs.gcc16Stdenv; } {
-          packages = with pkgs; [
-            cmake
-            ninja
-            gcovr
-            ccache
-            doxygen
-            cppcheck
-            graphviz
-            pkg-config
-            include-what-you-use
-            llvm.clang-tools
+          packages =
+            with pkgs;
+            [
+              cmake
+              ninja
+              gcovr
+              ccache
+              doxygen
+              cppcheck
+              graphviz
+              pkg-config
+              include-what-you-use
+              llvm.clang-tools
 
-            mold
-          ];
+              mold
+            ]
+            ++ project_packages;
+
+          LD_LIBRARY_PATH = ld_library_path;
         };
       in
       {
