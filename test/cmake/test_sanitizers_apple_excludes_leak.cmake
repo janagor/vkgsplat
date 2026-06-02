@@ -2,7 +2,7 @@
 #
 # Simulates an Apple toolchain by setting APPLE=TRUE before including
 # Sanitizers.cmake, stubs the target_*_options commands so that the flags
-# requested by myproject_enable_sanitizers can be inspected, then asserts
+# requested by vkgsplat_enable_sanitizers can be inspected, then asserts
 # that "leak" is not propagated to the compiler/linker even when the user
 # enables the leak sanitizer option.
 
@@ -25,7 +25,7 @@ endfunction()
 
 include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/Sanitizers.cmake")
 
-myproject_enable_sanitizers(
+vkgsplat_enable_sanitizers(
   test_target
   ON  # ENABLE_SANITIZER_ADDRESS
   ON  # ENABLE_SANITIZER_LEAK (should be filtered out on Apple)

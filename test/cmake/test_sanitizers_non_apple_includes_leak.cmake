@@ -22,7 +22,7 @@ endfunction()
 
 include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/Sanitizers.cmake")
 
-myproject_enable_sanitizers(
+vkgsplat_enable_sanitizers(
   test_target
   OFF # ENABLE_SANITIZER_ADDRESS
   ON  # ENABLE_SANITIZER_LEAK

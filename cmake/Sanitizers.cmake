@@ -1,5 +1,5 @@
 function(
-  myproject_enable_sanitizers
+  vkgsplat_enable_sanitizers
   project_name
   ENABLE_SANITIZER_ADDRESS
   ENABLE_SANITIZER_LEAK
@@ -19,7 +19,7 @@ function(
       # -fsanitize=leak on macOS, including arm64). On Apple, leak detection
       # is provided by AddressSanitizer with ASAN_OPTIONS=detect_leaks=1.
       if(APPLE)
-        message(WARNING "Leak sanitizer is not supported on Apple platforms; ignoring myproject_ENABLE_SANITIZER_LEAK")
+        message(WARNING "Leak sanitizer is not supported on Apple platforms; ignoring vkgsplat_ENABLE_SANITIZER_LEAK")
       else()
         list(APPEND SANITIZERS "leak")
       endif()
