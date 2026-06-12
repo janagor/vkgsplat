@@ -2,15 +2,15 @@ add_executable(triangle main.cpp)
 
 target_link_libraries(
   triangle
-  PRIVATE myproject::myproject_options
-          myproject::myproject_warnings
+  PRIVATE vkgsplat::vkgsplat_options
+          vkgsplat::vkgsplat_warnings
 
           glfw::glfw
           Vulkan::Headers
           vk-bootstrap::vk-bootstrap
 )
 
-myproject_configure_linker(triangle)
+vkgsplat_configure_linker(triangle)
 
 configure_file (
     "${PROJECT_SOURCE_DIR}/src/triangle/example_config.h.in"
@@ -22,7 +22,7 @@ target_include_directories(triangle PRIVATE "${CMAKE_BINARY_DIR}/configured_file
 
 # Apply WASM-specific configuration
 # if(EMSCRIPTEN)
-#   myproject_configure_wasm_target(intro
+#   vkgsplat_configure_wasm_target(intro
 #     TITLE "Intro - FTXUI Sample"
 #     DESCRIPTION "FTXUI-based terminal application"
 #   )
