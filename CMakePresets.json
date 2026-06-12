@@ -123,7 +123,7 @@
                 "CMAKE_RANLIB": "gcc-ranlib",
                 "CMAKE_CXX_COMPILER_AR": "gcc-ar",
                 "CMAKE_CXX_COMPILER_RANLIB": "gcc-ranlib",
-                "myproject_USER_LINKER_OPTION": "MOLD"
+                "vkgsplat_USER_LINKER_OPTION": "MOLD"
             }
         },
         {
@@ -139,7 +139,7 @@
                 "CMAKE_RANLIB": "gcc-ranlib",
                 "CMAKE_CXX_COMPILER_AR": "gcc-ar",
                 "CMAKE_CXX_COMPILER_RANLIB": "gcc-ranlib",
-                "myproject_USER_LINKER_OPTION": "MOLD"
+                "vkgsplat_USER_LINKER_OPTION": "MOLD"
             }
         },
         {
@@ -155,7 +155,7 @@
                 "CMAKE_RANLIB": "llvm-ranlib",
                 "CMAKE_CXX_COMPILER_AR": "llvm-ar",
                 "CMAKE_CXX_COMPILER_RANLIB": "llvm-ranlib",
-                "myproject_USER_LINKER_OPTION": "LLD"
+                "vkgsplat_USER_LINKER_OPTION": "LLD"
             }
         },
         {
@@ -171,7 +171,7 @@
                 "CMAKE_RANLIB": "llvm-ranlib",
                 "CMAKE_CXX_COMPILER_AR": "llvm-ar",
                 "CMAKE_CXX_COMPILER_RANLIB": "llvm-ranlib",
-                "myproject_USER_LINKER_OPTION": "LLD"
+                "vkgsplat_USER_LINKER_OPTION": "LLD"
             }
         }
     ],

@@ -14,7 +14,7 @@ below explains *why*, so you can keep it, swap it, or turn it off.
 | File | Role |
 | --- | --- |
 | `CMakeLists.txt` | Top-level wiring. |
-| `ProjectOptions.cmake` | All `myproject_*` options and setup macros. |
+| `ProjectOptions.cmake` | All `vkgsplat_*` options and setup macros. |
 | `Dependencies.cmake` | CPM package fetch, gated by `if(NOT TARGET ...)`. |
 | `cmake/*.cmake` | One concern per file (warnings, sanitizers, hardening, ...). |
 
@@ -77,7 +77,7 @@ headers. Default set: fmt, spdlog, Catch2, CLI11, FTXUI, lefticus/tools.
 
 ## Targets and packaging
 
-`myproject_options` and `myproject_warnings` are `INTERFACE` libraries that
+`vkgsplat_options` and `vkgsplat_warnings` are `INTERFACE` libraries that
 hold flags. Real targets link them to inherit the configuration without
 touching global state. `CPack` package names embed compiler, version, and
 short Git SHA, so a binary maps to one build.
@@ -89,10 +89,10 @@ The default build type is `RelWithDebInfo` — debuggable and fast.
 
 ## Changing the defaults
 
-Every knob is a CMake option named `myproject_ENABLE_<feature>`. Flip it on
+Every knob is a CMake option named `vkgsplat_ENABLE_<feature>`. Flip it on
 the configure line, for example:
 
-    cmake -B build -S . -Dmyproject_ENABLE_CLANG_TIDY=OFF
+    cmake -B build -S . -Dvkgsplat_ENABLE_CLANG_TIDY=OFF
 
-The `myproject_` prefix is the placeholder the rename workflow replaces, so
+The `vkgsplat_` prefix is the placeholder the rename workflow replaces, so
 renaming the project is one search-and-replace.
