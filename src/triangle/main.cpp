@@ -3,12 +3,16 @@
 #include <cstdint>
 #include <cstdio>
 #include <exception>
+#include <expected>
 #include <fstream>
 #include <iostream>
 #include <print>
+#include <ranges>
 #include <string>
 #include <utility>
 #include <vector>
+
+#include "error.hpp"
 
 #include <vulkan/vulkan_core.h>
 
@@ -21,6 +25,17 @@
 #include "vkgsplat/example_config.h"
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
+
+namespace vkgsplat {
+
+template<typename Ok> auto VKBResultToExpected(vkb::Result<Ok> &&res) noexcept -> std::expected<Ok, Error>
+{
+  if (!res) {
+    auto message = res.detailed_failure_reasons() | std::views::join_with('\n') | std::ranges::to<std::string>();
+    return std::unexpected{ Error{ res.error(), message } };
+  }
+  return std::move(res).value();
+}
 
 struct Init
 {
@@ -704,4 +719,6 @@ void cleanup(Init &init, RenderData &data)
   return 0;
 }
 
-int main() { return run(); }
+}// namespace vkgsplat
+
+int main() { return vkgsplat::run(); }
