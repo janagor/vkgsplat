@@ -28,7 +28,7 @@ const int MAX_FRAMES_IN_FLIGHT = 2;
 
 namespace vkgsplat {
 
-template<typename Ok> auto VKBResultToExpected(vkb::Result<Ok> &&res) noexcept -> std::expected<Ok, Error>
+template<typename Ok> auto VKBResultToExpected(vkb::Result<Ok> &&res) -> std::expected<Ok, Error>
 {
   if (!res) {
     auto message = res.detailed_failure_reasons() | std::views::join_with('\n') | std::ranges::to<std::string>();
@@ -107,81 +107,56 @@ VkSurfaceKHR create_surface_glfw(VkInstance instance, GLFWwindow *window, VkAllo
   return surface;
 }
 
-int device_initialization(Init &init)
+auto device_initialization(Init &init) -> std::expected<void, Error>
 {
   init.window = create_window_glfw("Vulkan Triangle", true);
 
   vkb::InstanceBuilder instance_builder;
-  auto instance_ret = instance_builder.use_default_debug_messenger().request_validation_layers().build();
-  if (!instance_ret) {
-    std::cout << instance_ret.error().message() << "\n";
-    return -1;
-  }
-  init.instance = instance_ret.value();
+  return VKBResultToExpected(instance_builder.use_default_debug_messenger().request_validation_layers().build())
+    .and_then([&](vkb::Instance const &instance) {
+      init.instance = instance;
+      init.inst_disp = init.instance.make_table();
 
-  init.inst_disp = init.instance.make_table();
+      init.surface = create_surface_glfw(init.instance, init.window);
 
-  init.surface = create_surface_glfw(init.instance, init.window);
+      vkb::PhysicalDeviceSelector phys_device_selector(init.instance);
 
-  vkb::PhysicalDeviceSelector phys_device_selector(init.instance);
+      return VKBResultToExpected(phys_device_selector.set_surface(init.surface).select());
+    })
+    .and_then([&](vkb::PhysicalDevice const &physical_device) {
+      vkb::DeviceBuilder const device_builder{ physical_device };
 
-  auto phys_device_ret = phys_device_selector.set_surface(init.surface).select();
-  if (!phys_device_ret) {
-    std::cout << phys_device_ret.error().message() << "\n";
-    if (phys_device_ret.error() == vkb::PhysicalDeviceError::no_suitable_device) {
-      const auto &detailed_reasons = phys_device_ret.detailed_failure_reasons();
-      if (!detailed_reasons.empty()) {
-        std::cerr << "GPU Selection failure reasons:\n";
-        for (const std::string &reason : detailed_reasons) { std::cerr << reason << "\n"; }
-      }
-    }
-    return -1;
-  }
-  vkb::PhysicalDevice const &physical_device = phys_device_ret.value();
-
-  vkb::DeviceBuilder const device_builder{ physical_device };
-
-  auto device_ret = device_builder.build();
-  if (!device_ret) {
-    std::cout << device_ret.error().message() << "\n";
-    return -1;
-  }
-  init.device = device_ret.value();
-
-  init.disp = init.device.make_table();
-
-  return 0;
+      return VKBResultToExpected(device_builder.build());
+    })
+    .and_then([&](vkb::Device const &device) {
+      init.device = device;
+      init.disp = init.device.make_table();
+      return std::expected<void, Error>{};
+    });
 }
 
-int create_swapchain(Init &init)
+auto create_swapchain(Init &init) -> std::expected<void, Error>
 {
   vkb::SwapchainBuilder swapchain_builder{ init.device };
-  auto swap_ret = swapchain_builder.set_old_swapchain(init.swapchain).build();
-  if (!swap_ret) {
-    std::cout << swap_ret.error().message() << " " << swap_ret.vk_result() << "\n";
-    return -1;
-  }
-  vkb::destroy_swapchain(init.swapchain);
-  init.swapchain = swap_ret.value();
-  return 0;
+  return VKBResultToExpected(swapchain_builder.set_old_swapchain(init.swapchain).build())
+    .and_then([&](auto const &swapchain) {
+      vkb::destroy_swapchain(init.swapchain);
+      init.swapchain = swapchain;
+      return std::expected<void, Error>{};
+    });
 }
 
-int get_queues(Init &init, RenderData &data)
+auto get_queues(Init &init, RenderData &data) -> std::expected<void, Error>
 {
-  auto const graphics_queue = init.device.get_queue(vkb::QueueType::graphics);
-  if (!graphics_queue.has_value()) {
-    std::cout << "failed to get graphics queue: " << graphics_queue.error().message() << "\n";
-    return -1;
-  }
-  data.graphics_queue = graphics_queue.value();
-
-  auto const present_queue = init.device.get_queue(vkb::QueueType::present);
-  if (!present_queue.has_value()) {
-    std::cout << "failed to get present queue: " << present_queue.error().message() << "\n";
-    return -1;
-  }
-  data.present_queue = present_queue.value();
-  return 0;
+  return VKBResultToExpected(init.device.get_queue(vkb::QueueType::graphics))
+    .and_then([&](auto const &graphics_queue) {
+      data.graphics_queue = graphics_queue;
+      return VKBResultToExpected(init.device.get_queue(vkb::QueueType::present));
+    })
+    .and_then([&](auto const &present_queue) {
+      data.present_queue = present_queue;
+      return std::expected<void, Error>{};
+    });
 }
 
 int create_render_pass(Init &init, RenderData &data)
@@ -582,7 +557,7 @@ int recreate_swapchain(Init &init, RenderData &data)
 
   init.swapchain.destroy_image_views(data.swapchain_image_views);
 
-  if (0 != create_swapchain(init)) { return -1; }
+  if (!create_swapchain(init).has_value()) { return -1; }
   if (0 != create_framebuffers(init, data)) { return -1; }
   if (0 != create_command_pool(init, data)) { return -1; }
   if (0 != create_command_buffers(init, data)) { return -1; }
@@ -690,9 +665,9 @@ void cleanup(Init &init, RenderData &data)
     Init init;
     RenderData render_data;
 
-    if (0 != device_initialization(init)) { return -1; }
-    if (0 != create_swapchain(init)) { return -1; }
-    if (0 != get_queues(init, render_data)) { return -1; }
+    if (!device_initialization(init).has_value()) { return -1; }
+    if (!create_swapchain(init).has_value()) { return -1; }
+    if (!get_queues(init, render_data).has_value()) { return -1; }
     if (0 != create_render_pass(init, render_data)) { return -1; }
     if (0 != create_graphics_pipeline(init, render_data)) { return -1; }
     if (0 != create_framebuffers(init, render_data)) { return -1; }
