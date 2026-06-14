@@ -12,13 +12,11 @@ target_link_libraries(
 
 vkgsplat_configure_linker(triangle)
 
-configure_file (
-    "${PROJECT_SOURCE_DIR}/src/triangle/example_config.h.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/example_config.h"
-)
+configure_file(${PROJECT_SOURCE_DIR}/include/vkgsplat/example_config.h.in
+               ${PROJECT_BINARY_DIR}/include/vkgsplat/example_config.h)
 
-target_include_directories(triangle PRIVATE "${CMAKE_BINARY_DIR}/configured_files/include"
-"${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(triangle ${WARNING_GUARD} PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+                                                            $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>)
 
 # Apply WASM-specific configuration
 # if(EMSCRIPTEN)

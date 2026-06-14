@@ -18,7 +18,7 @@
 #include <VkBootstrap.h>
 #include <VkBootstrapDispatch.h>
 
-#include "example_config.h"
+#include "vkgsplat/example_config.h"
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
