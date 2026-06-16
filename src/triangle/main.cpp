@@ -563,6 +563,233 @@ int recreate_swapchain(Init &init, RenderData &data)
   if (0 != create_command_buffers(init, data)) { return -1; }
   return 0;
 }
+namespace compute {
+
+  auto create_ssbo(VkBuffer &buffer, VkDeviceMemory &memory, Init &init, VkDeviceSize buffer_size)
+  {
+    VkBufferCreateInfo buffer_info = {};
+    buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buffer_info.size = buffer_size;
+    buffer_info.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+    buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    init.disp.createBuffer(&buffer_info, nullptr, &buffer);
+
+    VkMemoryRequirements mem_reqs;
+    init.disp.getBufferMemoryRequirements(buffer, &mem_reqs);
+
+    VkPhysicalDeviceMemoryProperties const mem_props = init.device.physical_device.memory_properties;
+
+    uint32_t memory_type_index = 0;
+    VkMemoryPropertyFlags const properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    // NOLINTNEXTLINE
+    for (uint32_t i = 0; i < mem_props.memoryTypeCount; i++) {
+      // NOLINTNEXTLINE
+      if ((mem_reqs.memoryTypeBits & (1 << i))// NOLINTNEXTLINE
+          && (mem_props.memoryTypes[i].propertyFlags & properties) == properties) {
+        memory_type_index = i;
+        break;
+      }
+    }
+
+    VkMemoryAllocateInfo alloc_info = {};
+    alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    alloc_info.allocationSize = mem_reqs.size;
+    alloc_info.memoryTypeIndex = memory_type_index;
+
+    init.disp.allocateMemory(&alloc_info, nullptr, &memory);
+    init.disp.bindBufferMemory(buffer, memory, 0);
+  };
+
+  void run_compute_test(Init &init)
+  {
+    std::println("--- Rozpoczynam test Compute Shadera (Dodawanie 2 tablic) ---");
+
+    auto compute_queue_res = init.device.get_queue(vkb::QueueType::compute);
+    if (!compute_queue_res) {
+      std::println("Brak kolejki obliczeniowej!");
+      return;
+    }
+    VkQueue compute_queue = compute_queue_res.value();
+
+    const uint32_t element_count = 1024;
+    const VkDeviceSize buffer_size = element_count * sizeof(float);
+
+    // 1. Tworzymy 3 osobne bufory
+    VkBuffer bufferA = nullptr;
+    VkBuffer bufferB = nullptr;
+    VkBuffer bufferResult = nullptr;
+    VkDeviceMemory memoryA = nullptr;
+    VkDeviceMemory memoryB = nullptr;
+    VkDeviceMemory memoryResult = nullptr;
+    create_ssbo(bufferA, memoryA, init, buffer_size);
+    create_ssbo(bufferB, memoryB, init, buffer_size);
+    create_ssbo(bufferResult, memoryResult, init, buffer_size);
+
+    void *mapped_data = nullptr;
+    init.disp.mapMemory(memoryA, 0, buffer_size, 0, &mapped_data);
+    auto *data_A = static_cast<float *>(mapped_data);
+    for (uint32_t i = 0; i < element_count; i++) { data_A[i] = static_cast<float>(i); }// NOLINT
+    init.disp.unmapMemory(memoryA);
+
+    init.disp.mapMemory(memoryB, 0, buffer_size, 0, &mapped_data);
+    auto *data_B = static_cast<float *>(mapped_data);
+    for (uint32_t i = 0; i < element_count; i++) { data_B[i] = static_cast<float>(i); }// NOLINT
+    init.disp.unmapMemory(memoryB);
+
+    // 4. Deskryptory - Tym razem mamy 3 bindingi!
+    std::array<VkDescriptorSetLayoutBinding, 3> bindings = {};
+    for (size_t i = 0; i < 3; i++) {
+      bindings.at(i).binding = static_cast<uint32_t>(i);// Binding 0, 1, 2
+      bindings.at(i).descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+      bindings.at(i).descriptorCount = 1;
+      bindings.at(i).stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    }
+
+    VkDescriptorSetLayoutCreateInfo layout_info = {};
+    layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layout_info.bindingCount = 3;
+    layout_info.pBindings = bindings.data();
+
+    VkDescriptorSetLayout descriptor_layout = nullptr;
+    init.disp.createDescriptorSetLayout(&layout_info, nullptr, &descriptor_layout);
+
+    // Potrzebujemy puli na 3 deskryptory typu Storage Buffer
+    VkDescriptorPoolSize const pool_size = { .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = 3 };
+    VkDescriptorPoolCreateInfo pool_info = {};
+    pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    pool_info.maxSets = 1;
+    pool_info.poolSizeCount = 1;
+    pool_info.pPoolSizes = &pool_size;
+
+    VkDescriptorPool descriptor_pool = nullptr;
+    init.disp.createDescriptorPool(&pool_info, nullptr, &descriptor_pool);
+
+    VkDescriptorSetAllocateInfo set_alloc_info = {};
+    set_alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    set_alloc_info.descriptorPool = descriptor_pool;
+    set_alloc_info.descriptorSetCount = 1;
+    set_alloc_info.pSetLayouts = &descriptor_layout;
+
+    VkDescriptorSet descriptor_set = nullptr;
+    init.disp.allocateDescriptorSets(&set_alloc_info, &descriptor_set);
+
+    // Łączymy bufory z konkretnymi bindingami
+    std::array<VkDescriptorBufferInfo, 3> buffer_infos = {};
+    buffer_infos.at(0) = { .buffer = bufferA, .offset = 0, .range = buffer_size };
+    buffer_infos.at(1) = { .buffer = bufferB, .offset = 0, .range = buffer_size };
+    buffer_infos.at(2) = { .buffer = bufferResult, .offset = 0, .range = buffer_size };
+
+    std::array<VkWriteDescriptorSet, 3> writes = {};
+    for (uint32_t i = 0; i < 3; i++) {
+      writes.at(i).sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      writes.at(i).dstSet = descriptor_set;
+      writes.at(i).dstBinding = i;// Wpisujemy pod odpowiedni binding (0, 1, 2)
+      writes.at(i).descriptorCount = 1;
+      writes.at(i).descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+      writes.at(i).pBufferInfo = &buffer_infos.at(i);
+    }
+    init.disp.updateDescriptorSets(3, writes.data(), 0, nullptr);
+
+    // 5. Potok obliczeniowy (Pipeline)
+    // ZMIENIONO NAZWĘ PLIKU SHADERA
+    auto comp_code = readFile(std::string(EXAMPLE_SOURCE_DIRECTORY) + "/shaders/1plus1.comp.spv");
+    VkShaderModule comp_module = createShaderModule(init, comp_code);
+
+    VkPipelineLayoutCreateInfo pipeline_layout_info = {};
+    pipeline_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipeline_layout_info.setLayoutCount = 1;
+    pipeline_layout_info.pSetLayouts = &descriptor_layout;
+
+    VkPipelineLayout pipeline_layout = nullptr;
+    init.disp.createPipelineLayout(&pipeline_layout_info, nullptr, &pipeline_layout);
+
+    VkComputePipelineCreateInfo pipeline_info = {};// NOLINT
+    pipeline_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+    pipeline_info.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    pipeline_info.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+    pipeline_info.stage.module = comp_module;
+    pipeline_info.stage.pName = "main";
+    pipeline_info.layout = pipeline_layout;
+
+    VkPipeline compute_pipeline = nullptr;
+    init.disp.createComputePipelines(VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &compute_pipeline);
+
+    // 6. Nagrywanie i wywołanie komendy
+    uint32_t const compute_queue_index = init.device.get_queue_index(vkb::QueueType::compute).value();
+    VkCommandPoolCreateInfo cmd_pool_info = {};
+    cmd_pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    cmd_pool_info.queueFamilyIndex = compute_queue_index;
+
+    VkCommandPool command_pool = nullptr;
+    init.disp.createCommandPool(&cmd_pool_info, nullptr, &command_pool);
+
+    VkCommandBufferAllocateInfo cmd_alloc_info = {};
+    cmd_alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    cmd_alloc_info.commandPool = command_pool;
+    cmd_alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    cmd_alloc_info.commandBufferCount = 1;
+
+    VkCommandBuffer command_buffer = nullptr;
+    init.disp.allocateCommandBuffers(&cmd_alloc_info, &command_buffer);
+
+    VkCommandBufferBeginInfo begin_info = {};
+    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    init.disp.beginCommandBuffer(command_buffer, &begin_info);
+    init.disp.cmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute_pipeline);
+    init.disp.cmdBindDescriptorSets(
+      command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline_layout, 0, 1, &descriptor_set, 0, nullptr);
+
+    // ZMIANA: Shader określa `local_size_x = 64`.
+    // Chcemy przetworzyć 1024 elementy, więc odpalamy: 1024 / 64 = 16 grup roboczych.
+    init.disp.cmdDispatch(command_buffer, element_count / 64, 1, 1);// NOLINT
+
+    init.disp.endCommandBuffer(command_buffer);
+
+    VkSubmitInfo submit_info = {};
+    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit_info.commandBufferCount = 1;
+    submit_info.pCommandBuffers = &command_buffer;
+
+    init.disp.queueSubmit(compute_queue, 1, &submit_info, VK_NULL_HANDLE);
+    init.disp.queueWaitIdle(compute_queue);
+
+    // 7. Odczyt i weryfikacja z bufora wynikowego
+    init.disp.mapMemory(memoryResult, 0, buffer_size, 0, &mapped_data);
+    auto *data_Result = static_cast<float *>(mapped_data);
+
+    std::println("Wyniki dodawania (pierwsze 5 z 1024):");
+    for (size_t i{}; i < 5; i++) {// NOLINT
+      // Powinno wypisać:
+      // 0: 1.5 + 10.0 = 11.5
+      // 1: 2.5 + 20.0 = 22.5 ...itd
+      std::println("Index {}: wynik = {}", i, data_Result[i]);// NOLINT
+    }
+    init.disp.unmapMemory(memoryResult);
+
+    // 8. Sprzątanie
+    init.disp.destroyShaderModule(comp_module, nullptr);
+    init.disp.destroyPipeline(compute_pipeline, nullptr);
+    init.disp.destroyPipelineLayout(pipeline_layout, nullptr);
+    init.disp.destroyDescriptorPool(descriptor_pool, nullptr);
+    init.disp.destroyDescriptorSetLayout(descriptor_layout, nullptr);
+
+    // Zwalniamy wszystkie 3 bufory
+    init.disp.destroyBuffer(bufferA, nullptr);
+    init.disp.freeMemory(memoryA, nullptr);
+    init.disp.destroyBuffer(bufferB, nullptr);
+    init.disp.freeMemory(memoryB, nullptr);
+    init.disp.destroyBuffer(bufferResult, nullptr);
+    init.disp.freeMemory(memoryResult, nullptr);
+
+    init.disp.destroyCommandPool(command_pool, nullptr);
+
+    std::println("--- Test dodawania dwóch tablic zakończony ---");
+  }
+
+
+}// namespace compute
 
 int draw_frame(Init &init, RenderData &data)
 {
@@ -666,6 +893,7 @@ void cleanup(Init &init, RenderData &data)
     RenderData render_data;
 
     if (!device_initialization(init).has_value()) { return -1; }
+    compute::run_compute_test(init);
     if (!create_swapchain(init).has_value()) { return -1; }
     if (!get_queues(init, render_data).has_value()) { return -1; }
     if (0 != create_render_pass(init, render_data)) { return -1; }
