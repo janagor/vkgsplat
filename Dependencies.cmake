@@ -8,6 +8,14 @@ function(vkgsplat_setup_dependencies)
   # For each dependency, see if it's
   # already been provided to us by a parent project
 
+  if(NOT TARGET Vulkan::Vulkan)
+    find_package(Vulkan QUIET)
+    if(NOT Vulkan_FOUND)
+      find_package(PkgConfig REQUIRED)
+      pkg_check_modules(Vulkan REQUIRED IMPORTED_TARGET vulkan)
+      add_library(Vulkan::Vulkan ALIAS PkgConfig::Vulkan)
+    endif()
+  endif()
 
   if(NOT TARGET Vulkan::Headers)
     cpmaddpackage(
@@ -29,6 +37,18 @@ function(vkgsplat_setup_dependencies)
       "charles-lunarg/vk-bootstrap"
       GIT_TAG
       "v1.4.352"
+      SYSTEM
+      YES)
+  endif()
+
+  if(NOT TARGET GPUOpen::VulkanMemoryAllocator)
+    cpmaddpackage(
+      NAME
+      VulkanMemoryAllocator
+      GITHUB_REPOSITORY
+      "GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator"
+      GIT_TAG
+      "v3.4.352"
       SYSTEM
       YES)
   endif()

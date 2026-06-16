@@ -24,6 +24,8 @@
 
 #include "vkgsplat/example_config.h"
 
+#include <backend/vulkan/gpu_allocator.hpp>
+
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
 namespace vkgsplat {
@@ -46,6 +48,7 @@ struct Init
   vkb::Device device{};
   vkb::DispatchTable disp;
   vkb::Swapchain swapchain{};
+  vulkan::GPUAllocator gpu_allocator;
 };
 
 struct RenderData
@@ -112,7 +115,8 @@ auto device_initialization(Init &init) -> std::expected<void, Error>
   init.window = create_window_glfw("Vulkan Triangle", true);
 
   vkb::InstanceBuilder instance_builder;
-  return VKBResultToExpected(instance_builder.use_default_debug_messenger().request_validation_layers().build())
+  return VKBResultToExpected(
+    instance_builder.use_default_debug_messenger().request_validation_layers().require_api_version(1, 4, 0).build())
     .and_then([&](vkb::Instance const &instance) {
       init.instance = instance;
       init.inst_disp = init.instance.make_table();
@@ -565,41 +569,6 @@ int recreate_swapchain(Init &init, RenderData &data)
 }
 namespace compute {
 
-  auto create_ssbo(VkBuffer &buffer, VkDeviceMemory &memory, Init &init, VkDeviceSize buffer_size)
-  {
-    VkBufferCreateInfo buffer_info = {};
-    buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    buffer_info.size = buffer_size;
-    buffer_info.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-    buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    init.disp.createBuffer(&buffer_info, nullptr, &buffer);
-
-    VkMemoryRequirements mem_reqs;
-    init.disp.getBufferMemoryRequirements(buffer, &mem_reqs);
-
-    VkPhysicalDeviceMemoryProperties const mem_props = init.device.physical_device.memory_properties;
-
-    uint32_t memory_type_index = 0;
-    VkMemoryPropertyFlags const properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    // NOLINTNEXTLINE
-    for (uint32_t i = 0; i < mem_props.memoryTypeCount; i++) {
-      // NOLINTNEXTLINE
-      if ((mem_reqs.memoryTypeBits & (1 << i))// NOLINTNEXTLINE
-          && (mem_props.memoryTypes[i].propertyFlags & properties) == properties) {
-        memory_type_index = i;
-        break;
-      }
-    }
-
-    VkMemoryAllocateInfo alloc_info = {};
-    alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    alloc_info.allocationSize = mem_reqs.size;
-    alloc_info.memoryTypeIndex = memory_type_index;
-
-    init.disp.allocateMemory(&alloc_info, nullptr, &memory);
-    init.disp.bindBufferMemory(buffer, memory, 0);
-  };
-
   void run_compute_test(Init &init)
   {
     std::println("--- Rozpoczynam test Compute Shadera (Dodawanie 2 tablic) ---");
@@ -614,27 +583,31 @@ namespace compute {
     const uint32_t element_count = 1024;
     const VkDeviceSize buffer_size = element_count * sizeof(float);
 
-    // 1. Tworzymy 3 osobne bufory
-    VkBuffer bufferA = nullptr;
-    VkBuffer bufferB = nullptr;
-    VkBuffer bufferResult = nullptr;
-    VkDeviceMemory memoryA = nullptr;
-    VkDeviceMemory memoryB = nullptr;
-    VkDeviceMemory memoryResult = nullptr;
-    create_ssbo(bufferA, memoryA, init, buffer_size);
-    create_ssbo(bufferB, memoryB, init, buffer_size);
-    create_ssbo(bufferResult, memoryResult, init, buffer_size);
+    auto bufferA = init.gpu_allocator.create_storage_buffer(buffer_size);
+    auto bufferB = init.gpu_allocator.create_storage_buffer(buffer_size);
+    auto bufferResult = init.gpu_allocator.create_storage_buffer(buffer_size);
+    if (!bufferA || !bufferB || !bufferResult) {
+      std::println("Nie udało się utworzyć buforów!");
+      return;
+    }
 
-    void *mapped_data = nullptr;
-    init.disp.mapMemory(memoryA, 0, buffer_size, 0, &mapped_data);
-    auto *data_A = static_cast<float *>(mapped_data);
+    auto mappedA = init.gpu_allocator.map_buffer(*bufferA);
+    if (!mappedA) {
+      std::println("Nie udało się zmapować bufora A!");
+      return;
+    }
+    auto *data_A = static_cast<float *>(*mappedA);
     for (uint32_t i = 0; i < element_count; i++) { data_A[i] = static_cast<float>(i); }// NOLINT
-    init.disp.unmapMemory(memoryA);
+    init.gpu_allocator.unmap_buffer(*bufferA);
 
-    init.disp.mapMemory(memoryB, 0, buffer_size, 0, &mapped_data);
-    auto *data_B = static_cast<float *>(mapped_data);
+    auto mappedB = init.gpu_allocator.map_buffer(*bufferB);
+    if (!mappedB) {
+      std::println("Nie udało się zmapować bufora B!");
+      return;
+    }
+    auto *data_B = static_cast<float *>(*mappedB);
     for (uint32_t i = 0; i < element_count; i++) { data_B[i] = static_cast<float>(i); }// NOLINT
-    init.disp.unmapMemory(memoryB);
+    init.gpu_allocator.unmap_buffer(*bufferB);
 
     // 4. Deskryptory - Tym razem mamy 3 bindingi!
     std::array<VkDescriptorSetLayoutBinding, 3> bindings = {};
@@ -675,9 +648,9 @@ namespace compute {
 
     // Łączymy bufory z konkretnymi bindingami
     std::array<VkDescriptorBufferInfo, 3> buffer_infos = {};
-    buffer_infos.at(0) = { .buffer = bufferA, .offset = 0, .range = buffer_size };
-    buffer_infos.at(1) = { .buffer = bufferB, .offset = 0, .range = buffer_size };
-    buffer_infos.at(2) = { .buffer = bufferResult, .offset = 0, .range = buffer_size };
+    buffer_infos.at(0) = { .buffer = bufferA->handle, .offset = 0, .range = buffer_size };
+    buffer_infos.at(1) = { .buffer = bufferB->handle, .offset = 0, .range = buffer_size };
+    buffer_infos.at(2) = { .buffer = bufferResult->handle, .offset = 0, .range = buffer_size };
 
     std::array<VkWriteDescriptorSet, 3> writes = {};
     for (uint32_t i = 0; i < 3; i++) {
@@ -756,8 +729,12 @@ namespace compute {
     init.disp.queueWaitIdle(compute_queue);
 
     // 7. Odczyt i weryfikacja z bufora wynikowego
-    init.disp.mapMemory(memoryResult, 0, buffer_size, 0, &mapped_data);
-    auto *data_Result = static_cast<float *>(mapped_data);
+    auto mappedResult = init.gpu_allocator.map_buffer(*bufferResult);
+    if (!mappedResult) {
+      std::println("Nie udało się zmapować bufora wynikowego!");
+      return;
+    }
+    auto *data_Result = static_cast<float *>(*mappedResult);
 
     std::println("Wyniki dodawania (pierwsze 5 z 1024):");
     for (size_t i{}; i < 5; i++) {// NOLINT
@@ -766,7 +743,7 @@ namespace compute {
       // 1: 2.5 + 20.0 = 22.5 ...itd
       std::println("Index {}: wynik = {}", i, data_Result[i]);// NOLINT
     }
-    init.disp.unmapMemory(memoryResult);
+    init.gpu_allocator.unmap_buffer(*bufferResult);
 
     // 8. Sprzątanie
     init.disp.destroyShaderModule(comp_module, nullptr);
@@ -775,13 +752,9 @@ namespace compute {
     init.disp.destroyDescriptorPool(descriptor_pool, nullptr);
     init.disp.destroyDescriptorSetLayout(descriptor_layout, nullptr);
 
-    // Zwalniamy wszystkie 3 bufory
-    init.disp.destroyBuffer(bufferA, nullptr);
-    init.disp.freeMemory(memoryA, nullptr);
-    init.disp.destroyBuffer(bufferB, nullptr);
-    init.disp.freeMemory(memoryB, nullptr);
-    init.disp.destroyBuffer(bufferResult, nullptr);
-    init.disp.freeMemory(memoryResult, nullptr);
+    init.gpu_allocator.destroy_buffer(*bufferA);
+    init.gpu_allocator.destroy_buffer(*bufferB);
+    init.gpu_allocator.destroy_buffer(*bufferResult);
 
     init.disp.destroyCommandPool(command_pool, nullptr);
 
@@ -893,6 +866,14 @@ void cleanup(Init &init, RenderData &data)
     RenderData render_data;
 
     if (!device_initialization(init).has_value()) { return -1; }
+
+    auto gpu_allocator = vulkan::GPUAllocator::create(init.instance, init.device, init.device.physical_device);
+    if (!gpu_allocator) {
+      std::println("Nie udało się utworzyć alokatora GPU!");
+      return -1;
+    }
+    init.gpu_allocator = std::move(*gpu_allocator);
+
     compute::run_compute_test(init);
     if (!create_swapchain(init).has_value()) { return -1; }
     if (!get_queues(init, render_data).has_value()) { return -1; }

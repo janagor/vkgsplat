@@ -1,4 +1,8 @@
-add_executable(triangle main.cpp)
+add_executable(triangle
+         main.cpp
+         vma_usage.cpp
+         backend/vulkan/gpu_allocator.cpp
+)
 
 target_link_libraries(
   triangle
@@ -7,7 +11,9 @@ target_link_libraries(
 
           glfw::glfw
           Vulkan::Headers
+          Vulkan::Vulkan
           vk-bootstrap::vk-bootstrap
+          GPUOpen::VulkanMemoryAllocator
 )
 
 vkgsplat_configure_linker(triangle)
@@ -15,8 +21,9 @@ vkgsplat_configure_linker(triangle)
 configure_file(${PROJECT_SOURCE_DIR}/include/vkgsplat/example_config.h.in
                ${PROJECT_BINARY_DIR}/include/vkgsplat/example_config.h)
 
-target_include_directories(triangle ${WARNING_GUARD} PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
-                                                            $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>)
+target_include_directories(triangle ${WARNING_GUARD} PUBLIC  $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+                                                             $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>
+                                                     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # Apply WASM-specific configuration
 # if(EMSCRIPTEN)
