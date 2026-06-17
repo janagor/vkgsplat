@@ -4,7 +4,9 @@
 
 #include <backend/vulkan/gpu_allocator.hpp>
 
+#include <cstddef>
 #include <expected>
+#include <span>
 #include <utility>
 
 namespace vkgsplat::vulkan {
@@ -62,7 +64,7 @@ std::expected<Buffer, void *> GPUAllocator::create_storage_buffer(VkDeviceSize s
   alloc_info.flags =
     VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
 
-  Buffer buffer;
+  Buffer buffer{ .size = size };
   if (vmaCreateBuffer(allocator_, &buffer_info, &alloc_info, &buffer.handle, &buffer.allocation, nullptr)
       != VK_SUCCESS) {
     return std::unexpected(nullptr);
@@ -79,13 +81,23 @@ void GPUAllocator::destroy_buffer(Buffer &buffer) noexcept
   }
 }
 
-std::expected<void *, void *> GPUAllocator::map_buffer(Buffer const &buffer) noexcept
+std::expected<std::span<std::byte>, void *> GPUAllocator::map_buffer(Buffer const &buffer) noexcept
 {
   void *data = nullptr;
   if (vmaMapMemory(allocator_, buffer.allocation, &data) != VK_SUCCESS) { return std::unexpected(nullptr); }
-  return data;
+  return std::span<std::byte>(static_cast<std::byte *>(data), buffer.size);
 }
 
 void GPUAllocator::unmap_buffer(Buffer const &buffer) noexcept { vmaUnmapMemory(allocator_, buffer.allocation); }
+
+void GPUAllocator::flush_buffer(Buffer const &buffer) noexcept
+{
+  vmaFlushAllocation(allocator_, buffer.allocation, 0, VK_WHOLE_SIZE);
+}
+
+void GPUAllocator::invalidate_buffer(Buffer const &buffer) noexcept
+{
+  vmaInvalidateAllocation(allocator_, buffer.allocation, 0, VK_WHOLE_SIZE);
+}
 
 }// namespace vkgsplat::vulkan

@@ -8,6 +8,7 @@
 #include <iostream>
 #include <print>
 #include <ranges>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -591,23 +592,17 @@ namespace compute {
       return;
     }
 
-    auto mappedA = init.gpu_allocator.map_buffer(*bufferA);
-    if (!mappedA) {
-      std::println("Nie udało się zmapować bufora A!");
-      return;
-    }
-    auto *data_A = static_cast<float *>(*mappedA);
-    for (uint32_t i = 0; i < element_count; i++) { data_A[i] = static_cast<float>(i); }// NOLINT
-    init.gpu_allocator.unmap_buffer(*bufferA);
+    auto const input = std::views::iota(0U, element_count) | std::ranges::to<std::vector<float>>();
 
-    auto mappedB = init.gpu_allocator.map_buffer(*bufferB);
-    if (!mappedB) {
-      std::println("Nie udało się zmapować bufora B!");
+    if (!init.gpu_allocator.write_buffer(*bufferA, std::span{ input })) {
+      std::println("Nie udało się zapisać danych do bufora A!");
       return;
     }
-    auto *data_B = static_cast<float *>(*mappedB);
-    for (uint32_t i = 0; i < element_count; i++) { data_B[i] = static_cast<float>(i); }// NOLINT
-    init.gpu_allocator.unmap_buffer(*bufferB);
+
+    if (!init.gpu_allocator.write_buffer(*bufferB, std::span{ input })) {
+      std::println("Nie udało się zapisać danych do bufora B!");
+      return;
+    }
 
     // 4. Deskryptory - Tym razem mamy 3 bindingi!
     std::array<VkDescriptorSetLayoutBinding, 3> bindings = {};
@@ -729,21 +724,16 @@ namespace compute {
     init.disp.queueWaitIdle(compute_queue);
 
     // 7. Odczyt i weryfikacja z bufora wynikowego
-    auto mappedResult = init.gpu_allocator.map_buffer(*bufferResult);
-    if (!mappedResult) {
-      std::println("Nie udało się zmapować bufora wynikowego!");
+    auto output = init.gpu_allocator.read_buffer<float>(*bufferResult, element_count);
+    if (!output) {
+      std::println("Nie udało się odczytać bufora wynikowego!");
       return;
     }
-    auto *data_Result = static_cast<float *>(*mappedResult);
 
     std::println("Wyniki dodawania (pierwsze 5 z 1024):");
     for (size_t i{}; i < 5; i++) {// NOLINT
-      // Powinno wypisać:
-      // 0: 1.5 + 10.0 = 11.5
-      // 1: 2.5 + 20.0 = 22.5 ...itd
-      std::println("Index {}: wynik = {}", i, data_Result[i]);// NOLINT
+      std::println("Index {}: {} + {} = {}", i, input[i], input[i], output->at(i));// NOLINT
     }
-    init.gpu_allocator.unmap_buffer(*bufferResult);
 
     // 8. Sprzątanie
     init.disp.destroyShaderModule(comp_module, nullptr);

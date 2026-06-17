@@ -3,7 +3,12 @@
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan_core.h>
 
+#include <cstddef>
+#include <cstring>
 #include <expected>
+#include <span>
+#include <type_traits>
+#include <vector>
 
 namespace vkgsplat::vulkan {
 
@@ -11,6 +16,7 @@ struct Buffer
 {
   VkBuffer handle = VK_NULL_HANDLE;
   VmaAllocation allocation = VK_NULL_HANDLE;
+  VkDeviceSize size = 0;
 };
 
 class [[nodiscard]] GPUAllocator
@@ -30,13 +36,62 @@ public:
 
   auto create_storage_buffer(VkDeviceSize size) noexcept -> std::expected<Buffer, void *>;
   void destroy_buffer(Buffer &buffer) noexcept;
-  auto map_buffer(Buffer const &buffer) noexcept -> std::expected<void *, void *>;
+  auto map_buffer(Buffer const &buffer) noexcept -> std::expected<std::span<std::byte>, void *>;
   void unmap_buffer(Buffer const &buffer) noexcept;
+  void flush_buffer(Buffer const &buffer) noexcept;
+  void invalidate_buffer(Buffer const &buffer) noexcept;
+
+  template<typename T>
+    requires std::is_trivially_copyable_v<T>
+  auto write_buffer(Buffer const &buffer, std::span<const T> data) noexcept -> std::expected<void, void *>;
+
+  template<typename T>
+    requires std::is_trivially_copyable_v<T>
+  auto read_buffer(Buffer const &buffer, std::size_t count) noexcept -> std::expected<std::vector<T>, void *>;
 
 private:
   explicit GPUAllocator(VmaAllocator allocator) noexcept;
 
   VmaAllocator allocator_{ VK_NULL_HANDLE };
 };
+
+template<typename T>
+  requires std::is_trivially_copyable_v<T>
+auto GPUAllocator::write_buffer(Buffer const &buffer, std::span<const T> data) noexcept -> std::expected<void, void *>
+{
+  if (data.size_bytes() > buffer.size) { return std::unexpected(nullptr); }
+
+  void *mapped = nullptr;
+  if (vmaMapMemory(allocator_, buffer.allocation, &mapped) != VK_SUCCESS) {
+    return std::unexpected(nullptr);
+  }
+
+  std::memcpy(mapped, data.data(), data.size_bytes());
+  vmaUnmapMemory(allocator_, buffer.allocation);
+  flush_buffer(buffer);
+
+  return {};
+}
+
+template<typename T>
+  requires std::is_trivially_copyable_v<T>
+auto GPUAllocator::read_buffer(Buffer const &buffer, std::size_t count) noexcept
+  -> std::expected<std::vector<T>, void *>
+{
+  if (count * sizeof(T) > buffer.size) { return std::unexpected(nullptr); }
+
+  invalidate_buffer(buffer);
+
+  void *mapped = nullptr;
+  if (vmaMapMemory(allocator_, buffer.allocation, &mapped) != VK_SUCCESS) {
+    return std::unexpected(nullptr);
+  }
+
+  std::vector<T> result(count);
+  std::memcpy(result.data(), mapped, count * sizeof(T));
+  vmaUnmapMemory(allocator_, buffer.allocation);
+
+  return result;
+}
 
 }// namespace vkgsplat::vulkan
