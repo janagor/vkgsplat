@@ -48,7 +48,7 @@ function(vkgsplat_setup_dependencies)
       GITHUB_REPOSITORY
       "GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator"
       GIT_TAG
-      "v3.4.352"
+      "v3.4.0"
       SYSTEM
       YES)
   endif()
