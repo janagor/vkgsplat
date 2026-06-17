@@ -3,6 +3,7 @@
 #include <vulkan/vulkan_core.h>
 
 #include <backend/vulkan/gpu_allocator.hpp>
+#include <initializers.hpp>
 
 #include <cstddef>
 #include <expected>
@@ -53,11 +54,7 @@ GPUAllocator::GPUAllocator(VmaAllocator allocator) noexcept : allocator_{ alloca
 
 std::expected<Buffer, void *> GPUAllocator::create_storage_buffer(VkDeviceSize size) noexcept
 {
-  VkBufferCreateInfo buffer_info = {};
-  buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-  buffer_info.size = size;
-  buffer_info.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-  buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+  auto const buffer_info = initializers::BufferCreateInfo(size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
 
   VmaAllocationCreateInfo alloc_info = {};
   alloc_info.usage = VMA_MEMORY_USAGE_AUTO;

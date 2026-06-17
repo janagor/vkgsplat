@@ -14,6 +14,8 @@
 #include <vector>
 
 #include "error.hpp"
+#include "initializers.hpp"
+#include "types.hpp"
 
 #include <vulkan/vulkan_core.h>
 
@@ -201,17 +203,8 @@ int create_render_pass(Init &init, RenderData &data)
   dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
   dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
-  VkRenderPassCreateInfo const render_pass_info = {
-    .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-    .pNext = nullptr,
-    .flags = VK_FORMAT_UNDEFINED,
-    .attachmentCount = 1,
-    .pAttachments = &color_attachment,
-    .subpassCount = 1,
-    .pSubpasses = &subpass,
-    .dependencyCount = 1,
-    .pDependencies = &dependency,
-  };
+  auto const render_pass_info = initializers::RenderPassCreateInfo(
+    std::span{ &color_attachment, 1 }, std::span{ &subpass, 1 }, std::span{ &dependency, 1 });
 
   if (init.disp.createRenderPass(&render_pass_info, nullptr, &data.render_pass) != VK_SUCCESS) {
     std::cout << "failed to create render pass\n";
@@ -242,12 +235,9 @@ std::vector<char> readFile(const std::string &filename)
 
 VkShaderModule createShaderModule(Init &init, const std::vector<char> &code)
 {
-  VkShaderModuleCreateInfo create_info = {};
-  create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-  create_info.codeSize = code.size();
-  // TODO: replace this reinterpret_cast with someting else
   // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-  create_info.pCode = reinterpret_cast<const uint32_t *>(code.data());
+  auto const code_span = std::span{ reinterpret_cast<u32 const *>(code.data()), code.size() / sizeof(u32) };
+  auto const create_info = initializers::ShaderModuleCreateInfo(code_span);
 
   VkShaderModule shaderModule = nullptr;
   if (init.disp.createShaderModule(&create_info, nullptr, &shaderModule) != VK_SUCCESS) {
@@ -272,37 +262,18 @@ int create_graphics_pipeline(Init &init, RenderData &data)
     return -1;// failed to create shader modules
   }
 
-  VkPipelineShaderStageCreateInfo const vert_stage_info = {
-    .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-    .pNext = nullptr,
-    .flags = VK_FORMAT_UNDEFINED,
-    .stage = VK_SHADER_STAGE_VERTEX_BIT,
-    .module = vert_module,
-    .pName = "main",
-    .pSpecializationInfo = nullptr,
-  };
+  VkPipelineShaderStageCreateInfo const vert_stage_info =
+    initializers::PipelineShaderStageCreateInfo(VK_SHADER_STAGE_VERTEX_BIT, vert_module, "main");
 
-  VkPipelineShaderStageCreateInfo const frag_stage_info = {
-    .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-    .pNext = nullptr,
-    .flags = VK_FORMAT_UNDEFINED,
-    .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-    .module = frag_module,
-    .pName = "main",
-    .pSpecializationInfo = nullptr,
-  };
+  VkPipelineShaderStageCreateInfo const frag_stage_info =
+    initializers::PipelineShaderStageCreateInfo(VK_SHADER_STAGE_FRAGMENT_BIT, frag_module, "main");
 
   std::array<VkPipelineShaderStageCreateInfo, 2> shader_stages = { vert_stage_info, frag_stage_info };
 
-  VkPipelineVertexInputStateCreateInfo vertex_input_info = {};
-  vertex_input_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-  vertex_input_info.vertexBindingDescriptionCount = 0;
-  vertex_input_info.vertexAttributeDescriptionCount = 0;
+  auto const vertex_input_info = initializers::PipelineVertexInputStateCreateInfo({}, {});
 
-  VkPipelineInputAssemblyStateCreateInfo input_assembly = {};
-  input_assembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-  input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-  input_assembly.primitiveRestartEnable = VK_FALSE;
+  auto const input_assembly =
+    initializers::PipelineInputAssemblyStateCreateInfo(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_FALSE);
 
   VkViewport viewport = {};
   viewport.x = 0.0F;
@@ -316,46 +287,13 @@ int create_graphics_pipeline(Init &init, RenderData &data)
   scissor.offset = { .x = 0, .y = 0 };
   scissor.extent = init.swapchain.extent;
 
-  VkPipelineViewportStateCreateInfo const viewport_state = {
-    .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-    .pNext = nullptr,
-    .flags = VK_FORMAT_UNDEFINED,
-    .viewportCount = 1,
-    .pViewports = &viewport,
-    .scissorCount = 1,
-    .pScissors = &scissor,
-  };
+  auto const viewport_state = initializers::PipelineViewportStateCreateInfo(
+    std::span{ &viewport, 1 }, std::span{ &scissor, 1 });
 
-  VkPipelineRasterizationStateCreateInfo const rasterizer = {
-    .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-    .pNext = nullptr,
-    .flags = VK_FORMAT_UNDEFINED,
-    .depthClampEnable = VK_FALSE,
-    .rasterizerDiscardEnable = VK_FALSE,
-    .polygonMode = VK_POLYGON_MODE_FILL,
-    .cullMode = VK_CULL_MODE_BACK_BIT,
-    .frontFace = VK_FRONT_FACE_CLOCKWISE,
-    .depthBiasEnable = VK_FALSE,
+  auto const rasterizer = initializers::PipelineRasterizationStateCreateInfo(
+    VK_POLYGON_MODE_FILL, VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_CLOCKWISE);
 
-    .depthBiasConstantFactor = 0.0F,
-    .depthBiasClamp = 0.0F,
-    .depthBiasSlopeFactor = 0.0F,
-
-    .lineWidth = 1.0F,
-  };
-
-  VkPipelineMultisampleStateCreateInfo const multisampling = {
-    .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-    .pNext = nullptr,
-    .flags = VK_FORMAT_UNDEFINED,
-    .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
-    .sampleShadingEnable = VK_FALSE,
-
-    .minSampleShading = 1.0F,
-    .pSampleMask = nullptr,
-    .alphaToCoverageEnable = VK_FALSE,
-    .alphaToOneEnable = VK_FALSE,
-  };
+  auto const multisampling = initializers::PipelineMultisampleStateCreateInfo(VK_SAMPLE_COUNT_1_BIT);
 
   VkPipelineColorBlendAttachmentState colorBlendAttachment = {};
   // NOLINTBEGIN(hicpp-signed-bitwise)
@@ -364,21 +302,11 @@ int create_graphics_pipeline(Init &init, RenderData &data)
   // NOLINTEND(hicpp-signed-bitwise)
   colorBlendAttachment.blendEnable = VK_FALSE;
 
-  VkPipelineColorBlendStateCreateInfo color_blending = {};
-  color_blending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-  color_blending.logicOpEnable = VK_FALSE;
-  color_blending.logicOp = VK_LOGIC_OP_COPY;
-  color_blending.attachmentCount = 1;
-  color_blending.pAttachments = &colorBlendAttachment;
-  color_blending.blendConstants[0] = 0.0F;
-  color_blending.blendConstants[1] = 0.0F;
-  color_blending.blendConstants[2] = 0.0F;
-  color_blending.blendConstants[3] = 0.0F;
+  std::array<VkPipelineColorBlendAttachmentState, 1> color_blend_attachments = { colorBlendAttachment };
+  auto const color_blending =
+    initializers::PipelineColorBlendStateCreateInfo(color_blend_attachments, VK_FALSE, VK_LOGIC_OP_COPY);
 
-  VkPipelineLayoutCreateInfo pipeline_layout_info = {};
-  pipeline_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-  pipeline_layout_info.setLayoutCount = 0;
-  pipeline_layout_info.pushConstantRangeCount = 0;
+  auto const pipeline_layout_info = initializers::PipelineLayoutCreateInfo({}, {});
 
   if (init.disp.createPipelineLayout(&pipeline_layout_info, nullptr, &data.pipeline_layout) != VK_SUCCESS) {
     std::cout << "failed to create pipeline layout\n";
@@ -387,13 +315,9 @@ int create_graphics_pipeline(Init &init, RenderData &data)
 
   std::vector<VkDynamicState> dynamic_states = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
 
-  VkPipelineDynamicStateCreateInfo dynamic_info = {};
-  dynamic_info.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-  dynamic_info.dynamicStateCount = static_cast<uint32_t>(dynamic_states.size());
-  dynamic_info.pDynamicStates = dynamic_states.data();
+  auto dynamic_info = initializers::PipelineDynamicStateCreateInfo(dynamic_states);
 
-  VkGraphicsPipelineCreateInfo pipeline_info = {};
-  pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+  auto pipeline_info = initializers::GraphicsPipelineCreateInfo();
   pipeline_info.stageCount = 2;
   pipeline_info.pStages = shader_stages.data();
   pipeline_info.pVertexInputState = &vertex_input_info;
@@ -429,14 +353,8 @@ int create_framebuffers(Init &init, RenderData &data)
   for (size_t i = 0; i < data.swapchain_image_views.size(); i++) {
     std::array<VkImageView, 1> attachments = { data.swapchain_image_views.at(i) };
 
-    VkFramebufferCreateInfo framebuffer_info = {};
-    framebuffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-    framebuffer_info.renderPass = data.render_pass;
-    framebuffer_info.attachmentCount = 1;
-    framebuffer_info.pAttachments = attachments.data();
-    framebuffer_info.width = init.swapchain.extent.width;
-    framebuffer_info.height = init.swapchain.extent.height;
-    framebuffer_info.layers = 1;
+    auto const framebuffer_info =
+      initializers::FramebufferCreateInfo(data.render_pass, attachments, init.swapchain.extent, 1);
 
     if (init.disp.createFramebuffer(&framebuffer_info, nullptr, &data.framebuffers.at(i)) != VK_SUCCESS) {
       return -1;// failed to create framebuffer
@@ -447,9 +365,8 @@ int create_framebuffers(Init &init, RenderData &data)
 
 int create_command_pool(Init &init, RenderData &data)
 {
-  VkCommandPoolCreateInfo pool_info = {};
-  pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-  pool_info.queueFamilyIndex = init.device.get_queue_index(vkb::QueueType::graphics).value();
+  auto const pool_info = initializers::CommandPoolCreateInfo(
+    static_cast<u32>(init.device.get_queue_index(vkb::QueueType::graphics).value()));
 
   if (init.disp.createCommandPool(&pool_info, nullptr, &data.command_pool) != VK_SUCCESS) {
     std::cout << "failed to create command pool\n";
@@ -462,33 +379,24 @@ int create_command_buffers(Init &init, RenderData &data)
 {
   data.command_buffers.resize(data.framebuffers.size());
 
-  VkCommandBufferAllocateInfo allocInfo = {};
-  allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-  allocInfo.commandPool = data.command_pool;
-  allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-  allocInfo.commandBufferCount = static_cast<uint32_t>(data.command_buffers.size());
+  auto const alloc_info = initializers::CommandBufferAllocateInfo(
+    data.command_pool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, static_cast<u32>(data.command_buffers.size()));
 
-  if (init.disp.allocateCommandBuffers(&allocInfo, data.command_buffers.data()) != VK_SUCCESS) {
+  if (init.disp.allocateCommandBuffers(&alloc_info, data.command_buffers.data()) != VK_SUCCESS) {
     return -1;// failed to allocate command buffers;
   }
 
   for (size_t i = 0; i < data.command_buffers.size(); i++) {
-    VkCommandBufferBeginInfo begin_info = {};
-    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    auto const begin_info = initializers::CommandBufferBeginInfo();
 
     if (init.disp.beginCommandBuffer(data.command_buffers.at(i), &begin_info) != VK_SUCCESS) {
       return -1;// failed to begin recording command buffer
     }
 
-    VkRenderPassBeginInfo render_pass_info = {};
-    render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    render_pass_info.renderPass = data.render_pass;
-    render_pass_info.framebuffer = data.framebuffers.at(i);
-    render_pass_info.renderArea.offset = { .x = 0, .y = 0 };
-    render_pass_info.renderArea.extent = init.swapchain.extent;
-    VkClearValue const clearColor{ { { 0.0F, 0.0F, 0.0F, 1.0F } } };
-    render_pass_info.clearValueCount = 1;
-    render_pass_info.pClearValues = &clearColor;
+    VkClearValue const clear_color{ { { 0.0F, 0.0F, 0.0F, 1.0F } } };
+    VkRect2D const render_area{ .offset = { .x = 0, .y = 0 }, .extent = init.swapchain.extent };
+    auto const render_pass_info = initializers::RenderPassBeginInfo(
+      data.render_pass, data.framebuffers.at(i), render_area, std::span{ &clear_color, 1 });
 
     VkViewport viewport = {};
     viewport.x = 0.0F;
@@ -528,12 +436,8 @@ int create_sync_objects(Init &init, RenderData &data)
   data.in_flight_fences.resize(MAX_FRAMES_IN_FLIGHT);
   data.image_in_flight.resize(init.swapchain.image_count, VK_NULL_HANDLE);
 
-  VkSemaphoreCreateInfo semaphore_info = {};
-  semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
-  VkFenceCreateInfo fence_info = {};
-  fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-  fence_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+  auto const semaphore_info = initializers::SemaphoreCreateInfo();
+  auto const fence_info = initializers::FenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
 
   for (size_t i = 0; i < init.swapchain.image_count; i++) {
     if (init.disp.createSemaphore(&semaphore_info, nullptr, &data.finished_semaphore.at(i)) != VK_SUCCESS) {
@@ -613,30 +517,21 @@ namespace compute {
       bindings.at(i).stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
     }
 
-    VkDescriptorSetLayoutCreateInfo layout_info = {};
-    layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    layout_info.bindingCount = 3;
-    layout_info.pBindings = bindings.data();
+    auto const layout_info = initializers::DescriptorSetLayoutCreateInfo(bindings);
 
     VkDescriptorSetLayout descriptor_layout = nullptr;
     init.disp.createDescriptorSetLayout(&layout_info, nullptr, &descriptor_layout);
 
     // Potrzebujemy puli na 3 deskryptory typu Storage Buffer
     VkDescriptorPoolSize const pool_size = { .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = 3 };
-    VkDescriptorPoolCreateInfo pool_info = {};
-    pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    pool_info.maxSets = 1;
-    pool_info.poolSizeCount = 1;
-    pool_info.pPoolSizes = &pool_size;
+    std::array<VkDescriptorPoolSize, 1> pool_sizes = { pool_size };
+    auto const pool_info = initializers::DescriptorPoolCreateInfo(pool_sizes, 1);
 
     VkDescriptorPool descriptor_pool = nullptr;
     init.disp.createDescriptorPool(&pool_info, nullptr, &descriptor_pool);
 
-    VkDescriptorSetAllocateInfo set_alloc_info = {};
-    set_alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    set_alloc_info.descriptorPool = descriptor_pool;
-    set_alloc_info.descriptorSetCount = 1;
-    set_alloc_info.pSetLayouts = &descriptor_layout;
+    std::array<VkDescriptorSetLayout, 1> descriptor_layouts = { descriptor_layout };
+    auto const set_alloc_info = initializers::DescriptorSetAllocateInfo(descriptor_pool, descriptor_layouts);
 
     VkDescriptorSet descriptor_set = nullptr;
     init.disp.allocateDescriptorSets(&set_alloc_info, &descriptor_set);
@@ -648,13 +543,9 @@ namespace compute {
     buffer_infos.at(2) = { .buffer = bufferResult->handle, .offset = 0, .range = buffer_size };
 
     std::array<VkWriteDescriptorSet, 3> writes = {};
-    for (uint32_t i = 0; i < 3; i++) {
-      writes.at(i).sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-      writes.at(i).dstSet = descriptor_set;
-      writes.at(i).dstBinding = i;// Wpisujemy pod odpowiedni binding (0, 1, 2)
-      writes.at(i).descriptorCount = 1;
-      writes.at(i).descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-      writes.at(i).pBufferInfo = &buffer_infos.at(i);
+    for (u32 i = 0; i < 3; i++) {
+      writes.at(i) = initializers::WriteDescriptorSet(
+        descriptor_set, i, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, std::span{ &buffer_infos.at(i), 1 });
     }
     init.disp.updateDescriptorSets(3, writes.data(), 0, nullptr);
 
@@ -663,20 +554,15 @@ namespace compute {
     auto comp_code = readFile(std::string(EXAMPLE_SOURCE_DIRECTORY) + "/shaders/1plus1.comp.spv");
     VkShaderModule comp_module = createShaderModule(init, comp_code);
 
-    VkPipelineLayoutCreateInfo pipeline_layout_info = {};
-    pipeline_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipeline_layout_info.setLayoutCount = 1;
-    pipeline_layout_info.pSetLayouts = &descriptor_layout;
+    auto const pipeline_layout_info = initializers::PipelineLayoutCreateInfo(descriptor_layouts, {});
 
     VkPipelineLayout pipeline_layout = nullptr;
     init.disp.createPipelineLayout(&pipeline_layout_info, nullptr, &pipeline_layout);
 
     VkComputePipelineCreateInfo pipeline_info = {};// NOLINT
     pipeline_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-    pipeline_info.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    pipeline_info.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-    pipeline_info.stage.module = comp_module;
-    pipeline_info.stage.pName = "main";
+    pipeline_info.stage =
+      initializers::PipelineShaderStageCreateInfo(VK_SHADER_STAGE_COMPUTE_BIT, comp_module, "main");
     pipeline_info.layout = pipeline_layout;
 
     VkPipeline compute_pipeline = nullptr;
@@ -684,25 +570,17 @@ namespace compute {
 
     // 6. Nagrywanie i wywołanie komendy
     uint32_t const compute_queue_index = init.device.get_queue_index(vkb::QueueType::compute).value();
-    VkCommandPoolCreateInfo cmd_pool_info = {};
-    cmd_pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    cmd_pool_info.queueFamilyIndex = compute_queue_index;
+    auto const cmd_pool_info = initializers::CommandPoolCreateInfo(compute_queue_index);
 
     VkCommandPool command_pool = nullptr;
     init.disp.createCommandPool(&cmd_pool_info, nullptr, &command_pool);
 
-    VkCommandBufferAllocateInfo cmd_alloc_info = {};
-    cmd_alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    cmd_alloc_info.commandPool = command_pool;
-    cmd_alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    cmd_alloc_info.commandBufferCount = 1;
+    auto const cmd_alloc_info = initializers::CommandBufferAllocateInfo(command_pool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1);
 
     VkCommandBuffer command_buffer = nullptr;
     init.disp.allocateCommandBuffers(&cmd_alloc_info, &command_buffer);
 
-    VkCommandBufferBeginInfo begin_info = {};
-    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    auto const begin_info = initializers::CommandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
     init.disp.beginCommandBuffer(command_buffer, &begin_info);
     init.disp.cmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute_pipeline);
@@ -715,10 +593,7 @@ namespace compute {
 
     init.disp.endCommandBuffer(command_buffer);
 
-    VkSubmitInfo submit_info = {};
-    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submit_info.commandBufferCount = 1;
-    submit_info.pCommandBuffers = &command_buffer;
+    auto const submit_info = initializers::SubmitInfo({}, {}, std::span{ &command_buffer, 1 }, {});
 
     init.disp.queueSubmit(compute_queue, 1, &submit_info, VK_NULL_HANDLE);
     init.disp.queueWaitIdle(compute_queue);
@@ -774,41 +649,26 @@ int draw_frame(Init &init, RenderData &data)
   }
   data.image_in_flight.at(image_index) = data.in_flight_fences.at(data.current_frame);
 
-  VkSubmitInfo submitInfo = {};
-  submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-
   std::array<VkSemaphore, 1> wait_semaphores = { data.available_semaphores.at(data.current_frame) };
   std::array<VkPipelineStageFlags, 1> wait_stages = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-  submitInfo.waitSemaphoreCount = 1;
-  submitInfo.pWaitSemaphores = wait_semaphores.data();
-  submitInfo.pWaitDstStageMask = wait_stages.data();
-
-  submitInfo.commandBufferCount = 1;
-  submitInfo.pCommandBuffers = &data.command_buffers.at(image_index);
-
   std::array<VkSemaphore, 1> signal_semaphores = { data.finished_semaphore.at(image_index) };
-  submitInfo.signalSemaphoreCount = 1;
-  submitInfo.pSignalSemaphores = signal_semaphores.data();
+
+  auto const submit_info = initializers::SubmitInfo(wait_semaphores,
+    wait_stages,
+    std::span{ &data.command_buffers.at(image_index), 1 },
+    signal_semaphores);
 
   init.disp.resetFences(1, &data.in_flight_fences.at(data.current_frame));
 
-  if (init.disp.queueSubmit(data.graphics_queue, 1, &submitInfo, data.in_flight_fences.at(data.current_frame))
+  if (init.disp.queueSubmit(data.graphics_queue, 1, &submit_info, data.in_flight_fences.at(data.current_frame))
       != VK_SUCCESS) {
     std::cout << "failed to submit draw command buffer\n";
     return -1;//"failed to submit draw command buffer
   }
 
-  VkPresentInfoKHR present_info = {};
-  present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-
-  present_info.waitSemaphoreCount = 1;
-  present_info.pWaitSemaphores = signal_semaphores.data();
-
-  std::array<VkSwapchainKHR, 1> const swapChains = { init.swapchain };
-  present_info.swapchainCount = 1;
-  present_info.pSwapchains = swapChains.data();
-
-  present_info.pImageIndices = &image_index;
+  std::array<VkSwapchainKHR, 1> const swap_chains = { init.swapchain };
+  auto const present_info =
+    initializers::PresentInfoKHR(signal_semaphores, swap_chains, std::span{ &image_index, 1 });
 
   result = init.disp.queuePresentKHR(data.present_queue, &present_info);
   if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
