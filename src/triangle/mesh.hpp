@@ -20,6 +20,8 @@ struct Mesh
   [[nodiscard]] u32 draw_vertex_count() const;
 
   [[nodiscard]] static Mesh make_default_triangle();
+
+  [[nodiscard]] static Mesh make_triangle_grid();
 };
 
 }// namespace vkgsplat

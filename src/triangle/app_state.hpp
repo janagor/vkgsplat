@@ -20,6 +20,12 @@ namespace vkgsplat {
 inline constexpr int k_max_frames_in_flight = 2;
 inline constexpr size_t k_mesh_buffer_min_vertex_capacity = 16;
 
+inline constexpr u32 k_grid_cols = 12;
+inline constexpr u32 k_grid_rows = 12;
+inline constexpr u32 k_triangle_count = k_grid_cols * k_grid_rows;
+inline constexpr u32 k_sort_size = 256;
+inline constexpr size_t k_sort_entry_size = sizeof(f32) + sizeof(u32);
+
 struct Init
 {
   GLFWwindow *window{};
@@ -46,11 +52,19 @@ struct RenderData
 
   vulkan::Buffer position_buffer{};
   vulkan::Buffer color_buffer{};
+  vulkan::Buffer sorted_indices_buffer{};
+  vulkan::Buffer sort_entries_buffer{};
   vulkan::Buffer descriptor_heap_buffer{};
+  vulkan::Buffer sort_descriptor_heap_buffer{};
   VkDeviceSize descriptor_heap_size{};
+  VkDeviceSize sort_descriptor_heap_size{};
   VkDeviceSize reserved_range_offset{};
   VkDeviceSize reserved_range_size{};
+  VkDeviceSize sort_reserved_range_offset{};
+  VkDeviceSize sort_reserved_range_size{};
   size_t descriptor_stride{};
+
+  VkPipeline sort_compute_pipeline{};
 
   Mesh mesh{};
   size_t mesh_buffer_vertex_capacity = 0;

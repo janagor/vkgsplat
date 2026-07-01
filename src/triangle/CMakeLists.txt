@@ -10,7 +10,7 @@ add_executable(triangle
          graphics_pipeline.cpp
          swapchain.cpp
          renderer.cpp
-         compute_test.cpp
+         triangle_sort.cpp
          vma_usage.cpp
          backend/vulkan/gpu_allocator.cpp
 )

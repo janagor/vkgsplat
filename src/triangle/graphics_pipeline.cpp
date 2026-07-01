@@ -38,7 +38,7 @@ auto create_graphics_pipeline(Init &init, RenderData &data) -> int
     .pNext = nullptr,
     .descriptorSet = 0,
     .firstBinding = 0,
-    .bindingCount = 2,
+    .bindingCount = 3,
     .resourceMask = VK_SPIRV_RESOURCE_TYPE_READ_ONLY_STORAGE_BUFFER_BIT_EXT,
     .source = VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_CONSTANT_OFFSET_EXT,
     .sourceData = { .constantOffset = { .heapOffset = 0,

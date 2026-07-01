@@ -13,6 +13,7 @@
 #include "initializers.hpp"
 #include "mesh_gpu.hpp"
 #include "swapchain.hpp"
+#include "triangle_sort.hpp"
 #include "types.hpp"
 #include "vulkan_bootstrap.hpp"
 #include "window.hpp"
@@ -27,6 +28,8 @@ namespace {
 
 void record_triangle_draw(Init const &init, RenderData const &data, VkCommandBuffer command_buffer, size_t image_index)
 {
+  dispatch_triangle_sort(init, data, command_buffer);
+
   VkImageSubresourceRange const color_subresource_range = {
     .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
     .baseMipLevel = 0,
@@ -181,6 +184,7 @@ auto sync_mesh_to_gpu(Init &init, RenderData &data) -> bool
   init.disp.deviceWaitIdle();
 
   if (!upload_mesh_buffers(init, data)) { return false; }
+  if (!refresh_mesh_descriptor_heap(init, data)) { return false; }
 
   init.disp.destroyCommandPool(data.command_pool, nullptr);
   data.command_buffers.clear();
@@ -279,6 +283,7 @@ void cleanup(Init &init, RenderData &data)
   init.disp.destroyCommandPool(data.command_pool, nullptr);
 
   destroy_mesh_buffers(init, data);
+  destroy_triangle_sort(init, data);
 
   init.disp.destroyPipeline(data.graphics_pipeline, nullptr);
 
