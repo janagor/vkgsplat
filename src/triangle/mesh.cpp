@@ -78,7 +78,7 @@ Mesh Mesh::make_triangle_grid()
   for (u32 row = 0; row < k_grid_rows; ++row) {
     for (u32 col = 0; col < k_grid_cols; ++col) {
       f32 const x0 = -1.0F + (static_cast<f32>(col) * cell_w);
-      f32 const y0 = -1.0F + (static_cast<f32>(row) * cell_h);
+      f32 const y0 = 1.0F - (static_cast<f32>(row + 1) * cell_h);
       auto const color = random_color(rng);
 
       mesh.add_vertex({ x0, y0 }, color);
