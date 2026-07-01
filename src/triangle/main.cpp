@@ -33,6 +33,19 @@
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
+
+static constexpr std::array<std::array<float, 2>, 3> positions = { {
+  { 0.0, -0.5 },
+  { 0.5, 0.5 },
+  { -0.5, 0.5 },
+} };
+
+static constexpr std::array<std::array<float, 3>, 3> colors = { {
+  { 1.0, 0.0, 0.0 },
+  { 0.0, 1.0, 0.0 },
+  { 0.0, 0.0, 1.0 },
+} };
+
 namespace vkgsplat {
 
 template<typename Ok> auto VKBResultToExpected(vkb::Result<Ok> &&res) -> std::expected<Ok, Error>
@@ -68,8 +81,15 @@ struct RenderData
   std::vector<VkFramebuffer> framebuffers;
 
   VkRenderPass render_pass{};
-  VkPipelineLayout pipeline_layout{};
   VkPipeline graphics_pipeline{};
+
+  vulkan::Buffer position_buffer{};
+  vulkan::Buffer color_buffer{};
+  vulkan::Buffer descriptor_heap_buffer{};
+  VkDeviceSize descriptor_heap_size{};
+  VkDeviceSize reserved_range_offset{};
+  VkDeviceSize reserved_range_size{};
+  size_t descriptor_stride{};
 
   VkCommandPool command_pool{};
   std::vector<VkCommandBuffer> command_buffers;
@@ -80,6 +100,123 @@ struct RenderData
   std::vector<VkFence> image_in_flight;
   size_t current_frame = {};
 };
+
+namespace {
+
+auto align_up(VkDeviceSize value, VkDeviceSize alignment) -> VkDeviceSize
+{ return (value + alignment - 1) / alignment * alignment; }
+
+auto write_storage_buffer_descriptor(Init &init,
+  VkDeviceAddress buffer_address,
+  VkDeviceSize buffer_size,
+  std::span<std::byte> destination) -> bool
+{
+  VkDeviceAddressRangeEXT const address_range = { .address = buffer_address, .size = buffer_size };
+  VkResourceDescriptorInfoEXT resource_info{};
+  resource_info.sType = VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT;
+  resource_info.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+  resource_info.data.pAddressRange = &address_range;
+
+  VkHostAddressRangeEXT const host_range = { .address = destination.data(), .size = destination.size() };
+
+  return init.write_resource_descriptors(init.device, 1, &resource_info, &host_range) == VK_SUCCESS;
+}
+
+auto create_triangle_buffers(Init &init, RenderData &data) -> bool
+{
+  auto const position_buffer_size = static_cast<VkDeviceSize>(positions.size() * sizeof(positions.front()));
+  auto const color_buffer_size = static_cast<VkDeviceSize>(colors.size() * sizeof(colors.front()));
+
+  auto position_buffer = init.gpu_allocator.create_storage_buffer(position_buffer_size);
+  auto color_buffer = init.gpu_allocator.create_storage_buffer(color_buffer_size);
+  if (!position_buffer || !color_buffer) {
+    std::println("Failed to create triangle vertex buffers!");
+    return false;
+  }
+
+  std::span<const std::array<f32, 2>> const position_span{ positions };
+  if (!init.gpu_allocator.write_buffer(*position_buffer, position_span)) {
+    std::println("Failed to upload position buffer!");
+    return false;
+  }
+
+  std::span<const std::array<f32, 3>> const color_span{ colors };
+  if (!init.gpu_allocator.write_buffer(*color_buffer, color_span)) {
+    std::println("Failed to upload color buffer!");
+    return false;
+  }
+
+  VkPhysicalDeviceDescriptorHeapPropertiesEXT heap_props{};
+  heap_props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_PROPERTIES_EXT;
+
+  VkPhysicalDeviceProperties2 props2 = {
+    .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+    .pNext = &heap_props,
+    .properties = init.device.physical_device.properties,
+  };
+  init.inst_disp.getPhysicalDeviceProperties2(init.device.physical_device, &props2);
+
+  auto const descriptor_size = static_cast<size_t>(heap_props.bufferDescriptorSize);
+  data.descriptor_stride =
+    static_cast<size_t>(align_up(heap_props.bufferDescriptorSize, heap_props.bufferDescriptorAlignment));
+  VkDeviceSize const descriptor_region_size = data.descriptor_stride * 2;
+  data.reserved_range_offset = align_up(descriptor_region_size, heap_props.resourceHeapAlignment);
+  data.reserved_range_size = heap_props.minResourceHeapReservedRange;
+  data.descriptor_heap_size = data.reserved_range_offset + data.reserved_range_size;
+
+  auto descriptor_heap_buffer = init.gpu_allocator.create_heap_buffer(data.descriptor_heap_size);
+  if (!descriptor_heap_buffer) {
+    std::println("Failed to create triangle descriptor heap buffer!");
+    return false;
+  }
+
+  std::vector<std::byte> descriptor_data(data.descriptor_stride * 2);
+  std::array<VkDeviceAddressRangeEXT, 2> address_ranges = {
+    VkDeviceAddressRangeEXT{
+      .address = init.gpu_allocator.get_buffer_device_address(*position_buffer),
+      .size = position_buffer_size,
+    },
+    VkDeviceAddressRangeEXT{
+      .address = init.gpu_allocator.get_buffer_device_address(*color_buffer),
+      .size = color_buffer_size,
+    },
+  };
+
+  for (size_t i = 0; i < 2; ++i) {
+    if (!write_storage_buffer_descriptor(init,
+          address_ranges.at(i).address,
+          address_ranges.at(i).size,
+          std::span{ descriptor_data }.subspan(i * data.descriptor_stride, descriptor_size))) {
+      std::println("Failed to write triangle buffer descriptor {}!", i);
+      return false;
+    }
+  }
+
+  if (!init.gpu_allocator.write_buffer<std::byte>(*descriptor_heap_buffer, std::span{ descriptor_data })) {
+    std::println("Failed to upload triangle descriptor heap!");
+    return false;
+  }
+
+  data.position_buffer = *position_buffer;
+  data.color_buffer = *color_buffer;
+  data.descriptor_heap_buffer = *descriptor_heap_buffer;
+  return true;
+}
+
+auto bind_triangle_descriptor_heap(Init const &init, RenderData const &data, VkCommandBuffer command_buffer) -> void
+{
+  VkDeviceAddress const heap_address = init.gpu_allocator.get_buffer_device_address(data.descriptor_heap_buffer);
+  VkBindHeapInfoEXT const bind_heap_info = {
+    .sType = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
+    .pNext = nullptr,
+    .heapRange = { .address = heap_address, .size = data.descriptor_heap_size },
+    .reservedRangeOffset = data.reserved_range_offset,
+    .reservedRangeSize = data.reserved_range_size,
+  };
+  init.cmd_bind_resource_heap(command_buffer, &bind_heap_info);
+}
+
+}// namespace
 
 GLFWwindow *create_window_glfw(const char *window_name = "", bool resize = true)
 {
@@ -160,8 +297,8 @@ auto device_initialization(Init &init) -> std::expected<void, Error>
       init.write_resource_descriptors = reinterpret_cast<PFN_vkWriteResourceDescriptorsEXT>(
         vkGetDeviceProcAddr(init.device, "vkWriteResourceDescriptorsEXT"));
       // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-      init.cmd_bind_resource_heap =
-        reinterpret_cast<PFN_vkCmdBindResourceHeapEXT>(vkGetDeviceProcAddr(init.device, "vkCmdBindResourceHeapEXT"));
+      init.cmd_bind_resource_heap = reinterpret_cast<PFN_vkCmdBindResourceHeapEXT>(
+        vkGetDeviceProcAddr(init.device, "vkCmdBindResourceHeapEXT"));
 
       if (init.write_resource_descriptors == nullptr || init.cmd_bind_resource_heap == nullptr) {
         return std::unexpected{ Error{ std::make_error_code(std::errc::function_not_supported),
@@ -292,8 +429,32 @@ int create_graphics_pipeline(Init &init, RenderData &data)
     return -1;// failed to create shader modules
   }
 
-  VkPipelineShaderStageCreateInfo const vert_stage_info =
+  VkPipelineShaderStageCreateInfo vert_stage_info =
     initializers::PipelineShaderStageCreateInfo(VK_SHADER_STAGE_VERTEX_BIT, vert_module, "main");
+
+  std::array<VkDescriptorSetAndBindingMappingEXT, 1> vertex_mappings = { VkDescriptorSetAndBindingMappingEXT{
+    .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_AND_BINDING_MAPPING_EXT,
+    .pNext = nullptr,
+    .descriptorSet = 0,
+    .firstBinding = 0,
+    .bindingCount = 2,
+    .resourceMask = VK_SPIRV_RESOURCE_TYPE_READ_ONLY_STORAGE_BUFFER_BIT_EXT,
+    .source = VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_CONSTANT_OFFSET_EXT,
+    .sourceData = { .constantOffset = { .heapOffset = 0,
+                      .heapArrayStride = static_cast<uint32_t>(data.descriptor_stride),
+                      .pEmbeddedSampler = nullptr,
+                      .samplerHeapOffset = 0,
+                      .samplerHeapArrayStride = 0 } },
+  } };
+
+  VkShaderDescriptorSetAndBindingMappingInfoEXT vertex_mapping_info = {
+    .sType = VK_STRUCTURE_TYPE_SHADER_DESCRIPTOR_SET_AND_BINDING_MAPPING_INFO_EXT,
+    .pNext = nullptr,
+    .mappingCount = static_cast<uint32_t>(vertex_mappings.size()),
+    .pMappings = vertex_mappings.data(),
+  };
+
+  vert_stage_info.pNext = &vertex_mapping_info;
 
   VkPipelineShaderStageCreateInfo const frag_stage_info =
     initializers::PipelineShaderStageCreateInfo(VK_SHADER_STAGE_FRAGMENT_BIT, frag_module, "main");
@@ -336,18 +497,17 @@ int create_graphics_pipeline(Init &init, RenderData &data)
   auto const color_blending =
     initializers::PipelineColorBlendStateCreateInfo(color_blend_attachments, VK_FALSE, VK_LOGIC_OP_COPY);
 
-  auto const pipeline_layout_info = initializers::PipelineLayoutCreateInfo({}, {});
-
-  if (init.disp.createPipelineLayout(&pipeline_layout_info, nullptr, &data.pipeline_layout) != VK_SUCCESS) {
-    std::cout << "failed to create pipeline layout\n";
-    return -1;// failed to create pipeline layout
-  }
-
   std::vector<VkDynamicState> dynamic_states = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
 
   auto dynamic_info = initializers::PipelineDynamicStateCreateInfo(dynamic_states);
 
   auto pipeline_info = initializers::GraphicsPipelineCreateInfo();
+  VkPipelineCreateFlags2CreateInfo pipeline_flags = {
+    .sType = VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO,
+    .pNext = nullptr,
+    .flags = VK_PIPELINE_CREATE_2_DESCRIPTOR_HEAP_BIT_EXT,
+  };
+  pipeline_info.pNext = &pipeline_flags;
   pipeline_info.stageCount = 2;
   pipeline_info.pStages = shader_stages.data();
   pipeline_info.pVertexInputState = &vertex_input_info;
@@ -357,7 +517,7 @@ int create_graphics_pipeline(Init &init, RenderData &data)
   pipeline_info.pMultisampleState = &multisampling;
   pipeline_info.pColorBlendState = &color_blending;
   pipeline_info.pDynamicState = &dynamic_info;
-  pipeline_info.layout = data.pipeline_layout;
+  pipeline_info.layout = VK_NULL_HANDLE;
   pipeline_info.renderPass = data.render_pass;
   pipeline_info.subpass = 0;
   pipeline_info.basePipelineHandle = VK_NULL_HANDLE;
@@ -446,6 +606,8 @@ int create_command_buffers(Init &init, RenderData &data)
     init.disp.cmdBeginRenderPass(data.command_buffers.at(i), &render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
 
     init.disp.cmdBindPipeline(data.command_buffers.at(i), VK_PIPELINE_BIND_POINT_GRAPHICS, data.graphics_pipeline);
+
+    bind_triangle_descriptor_heap(init, data, data.command_buffers.at(i));
 
     init.disp.cmdDraw(data.command_buffers.at(i), 3, 1, 0, 0);
 
@@ -805,10 +967,13 @@ void cleanup(Init &init, RenderData &data)
 
   init.disp.destroyCommandPool(data.command_pool, nullptr);
 
+  init.gpu_allocator.destroy_buffer(data.position_buffer);
+  init.gpu_allocator.destroy_buffer(data.color_buffer);
+  init.gpu_allocator.destroy_buffer(data.descriptor_heap_buffer);
+
   for (auto *framebuffer : data.framebuffers) { init.disp.destroyFramebuffer(framebuffer, nullptr); }
 
   init.disp.destroyPipeline(data.graphics_pipeline, nullptr);
-  init.disp.destroyPipelineLayout(data.pipeline_layout, nullptr);
   init.disp.destroyRenderPass(data.render_pass, nullptr);
 
   init.swapchain.destroy_image_views(data.swapchain_image_views);
@@ -842,6 +1007,7 @@ void cleanup(Init &init, RenderData &data)
     compute::run_compute_test(init);
     if (!create_swapchain(init).has_value()) { return -1; }
     if (!get_queues(init, render_data).has_value()) { return -1; }
+    if (!create_triangle_buffers(init, render_data)) { return -1; }
     if (0 != create_render_pass(init, render_data)) { return -1; }
     if (0 != create_graphics_pipeline(init, render_data)) { return -1; }
     if (0 != create_framebuffers(init, render_data)) { return -1; }
