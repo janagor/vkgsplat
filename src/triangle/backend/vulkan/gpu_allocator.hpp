@@ -35,6 +35,8 @@ public:
     -> std::expected<GPUAllocator, void *>;
 
   auto create_storage_buffer(VkDeviceSize size) noexcept -> std::expected<Buffer, void *>;
+  auto create_heap_buffer(VkDeviceSize size) noexcept -> std::expected<Buffer, void *>;
+  auto get_buffer_device_address(Buffer const &buffer) const noexcept -> VkDeviceAddress;
   void destroy_buffer(Buffer &buffer) noexcept;
   auto map_buffer(Buffer const &buffer) noexcept -> std::expected<std::span<std::byte>, void *>;
   void unmap_buffer(Buffer const &buffer) noexcept;
@@ -50,9 +52,11 @@ public:
   auto read_buffer(Buffer const &buffer, std::size_t count) noexcept -> std::expected<std::vector<T>, void *>;
 
 private:
-  explicit GPUAllocator(VmaAllocator allocator) noexcept;
+  explicit GPUAllocator(VmaAllocator allocator, VkDevice device, PFN_vkGetBufferDeviceAddress get_buffer_device_address) noexcept;
 
   VmaAllocator allocator_{ VK_NULL_HANDLE };
+  VkDevice device_{ VK_NULL_HANDLE };
+  PFN_vkGetBufferDeviceAddress get_buffer_device_address_{ nullptr };
 };
 
 template<typename T>

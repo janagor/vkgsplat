@@ -1,5 +1,6 @@
 // based on https://github.com/charles-lunarg/vk-bootstrap/blob/main/example/triangle.cpp
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <exception>
@@ -10,6 +11,7 @@
 #include <ranges>
 #include <span>
 #include <string>
+#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -52,6 +54,8 @@ struct Init
   vkb::DispatchTable disp;
   vkb::Swapchain swapchain{};
   vulkan::GPUAllocator gpu_allocator;
+  PFN_vkWriteResourceDescriptorsEXT write_resource_descriptors{};
+  PFN_vkCmdBindResourceHeapEXT cmd_bind_resource_heap{};
 };
 
 struct RenderData
@@ -117,6 +121,14 @@ auto device_initialization(Init &init) -> std::expected<void, Error>
 {
   init.window = create_window_glfw("Vulkan Triangle", true);
 
+  VkPhysicalDeviceDescriptorHeapFeaturesEXT descriptor_heap_features{};
+  descriptor_heap_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_FEATURES_EXT;
+  descriptor_heap_features.descriptorHeap = VK_TRUE;
+
+  VkPhysicalDeviceBufferDeviceAddressFeatures buffer_device_address_features{};
+  buffer_device_address_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
+  buffer_device_address_features.bufferDeviceAddress = VK_TRUE;
+
   vkb::InstanceBuilder instance_builder;
   return VKBResultToExpected(
     instance_builder.use_default_debug_messenger().request_validation_layers().require_api_version(1, 4, 0).build())
@@ -128,17 +140,35 @@ auto device_initialization(Init &init) -> std::expected<void, Error>
 
       vkb::PhysicalDeviceSelector phys_device_selector(init.instance);
 
-      return VKBResultToExpected(phys_device_selector.set_surface(init.surface).select());
+      return VKBResultToExpected(phys_device_selector.set_surface(init.surface)
+          .add_required_extension("VK_EXT_descriptor_heap")
+          .add_required_extension("VK_KHR_buffer_device_address")
+          .add_required_extension_features(descriptor_heap_features)
+          .add_required_extension_features(buffer_device_address_features)
+          .select());
     })
     .and_then([&](vkb::PhysicalDevice const &physical_device) {
       vkb::DeviceBuilder const device_builder{ physical_device };
 
       return VKBResultToExpected(device_builder.build());
     })
-    .and_then([&](vkb::Device const &device) {
+    .and_then([&](vkb::Device const &device) -> std::expected<void, Error> {
       init.device = device;
       init.disp = init.device.make_table();
-      return std::expected<void, Error>{};
+
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+      init.write_resource_descriptors = reinterpret_cast<PFN_vkWriteResourceDescriptorsEXT>(
+        vkGetDeviceProcAddr(init.device, "vkWriteResourceDescriptorsEXT"));
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+      init.cmd_bind_resource_heap =
+        reinterpret_cast<PFN_vkCmdBindResourceHeapEXT>(vkGetDeviceProcAddr(init.device, "vkCmdBindResourceHeapEXT"));
+
+      if (init.write_resource_descriptors == nullptr || init.cmd_bind_resource_heap == nullptr) {
+        return std::unexpected{ Error{ std::make_error_code(std::errc::function_not_supported),
+          "VK_EXT_descriptor_heap entry points are unavailable" } };
+      }
+
+      return {};
     });
 }
 
@@ -287,8 +317,8 @@ int create_graphics_pipeline(Init &init, RenderData &data)
   scissor.offset = { .x = 0, .y = 0 };
   scissor.extent = init.swapchain.extent;
 
-  auto const viewport_state = initializers::PipelineViewportStateCreateInfo(
-    std::span{ &viewport, 1 }, std::span{ &scissor, 1 });
+  auto const viewport_state =
+    initializers::PipelineViewportStateCreateInfo(std::span{ &viewport, 1 }, std::span{ &scissor, 1 });
 
   auto const rasterizer = initializers::PipelineRasterizationStateCreateInfo(
     VK_POLYGON_MODE_FILL, VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_CLOCKWISE);
@@ -474,6 +504,25 @@ int recreate_swapchain(Init &init, RenderData &data)
 }
 namespace compute {
 
+  auto align_up(VkDeviceSize value, VkDeviceSize alignment) -> VkDeviceSize
+  { return (value + alignment - 1) / alignment * alignment; }
+
+  auto write_storage_buffer_descriptor(Init &init,
+    VkDeviceAddress buffer_address,
+    VkDeviceSize buffer_size,
+    std::span<std::byte> destination) -> bool
+  {
+    VkDeviceAddressRangeEXT const address_range = { .address = buffer_address, .size = buffer_size };
+    VkResourceDescriptorInfoEXT resource_info{};
+    resource_info.sType = VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT;
+    resource_info.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    resource_info.data.pAddressRange = &address_range;
+
+    VkHostAddressRangeEXT const host_range = { .address = destination.data(), .size = destination.size() };
+
+    return init.write_resource_descriptors(init.device, 1, &resource_info, &host_range) == VK_SUCCESS;
+  }
+
   void run_compute_test(Init &init)
   {
     std::println("--- Rozpoczynam test Compute Shadera (Dodawanie 2 tablic) ---");
@@ -485,8 +534,8 @@ namespace compute {
     }
     VkQueue compute_queue = compute_queue_res.value();
 
-    const uint32_t element_count = 1024;
-    const VkDeviceSize buffer_size = element_count * sizeof(float);
+    uint32_t const element_count = 1024;
+    VkDeviceSize const buffer_size = element_count * sizeof(float);
 
     auto bufferA = init.gpu_allocator.create_storage_buffer(buffer_size);
     auto bufferB = init.gpu_allocator.create_storage_buffer(buffer_size);
@@ -508,89 +557,156 @@ namespace compute {
       return;
     }
 
-    // 4. Deskryptory - Tym razem mamy 3 bindingi!
-    std::array<VkDescriptorSetLayoutBinding, 3> bindings = {};
-    for (size_t i = 0; i < 3; i++) {
-      bindings.at(i).binding = static_cast<uint32_t>(i);// Binding 0, 1, 2
-      bindings.at(i).descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-      bindings.at(i).descriptorCount = 1;
-      bindings.at(i).stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    VkPhysicalDeviceDescriptorHeapPropertiesEXT heap_props{};
+    heap_props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_PROPERTIES_EXT;
+
+    VkPhysicalDeviceProperties2 props2 = {
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+      .pNext = &heap_props,
+      .properties = init.device.physical_device.properties,
+    };
+    init.inst_disp.getPhysicalDeviceProperties2(init.device.physical_device, &props2);
+
+    auto const descriptor_size = static_cast<size_t>(heap_props.bufferDescriptorSize);
+    auto const descriptor_stride =
+      static_cast<size_t>(align_up(heap_props.bufferDescriptorSize, heap_props.bufferDescriptorAlignment));
+    VkDeviceSize const descriptor_region_size = descriptor_stride * 3;
+    VkDeviceSize const reserved_range_offset = align_up(descriptor_region_size, heap_props.resourceHeapAlignment);
+    VkDeviceSize const reserved_range_size = heap_props.minResourceHeapReservedRange;
+    VkDeviceSize const heap_size = reserved_range_offset + reserved_range_size;
+
+    auto bufferHeap = init.gpu_allocator.create_heap_buffer(heap_size);
+    if (!bufferHeap) {
+      std::println("Failed to create a heap buffer!");
+      return;
     }
 
-    auto const layout_info = initializers::DescriptorSetLayoutCreateInfo(bindings);
+    std::vector<std::byte> descriptor_data(descriptor_stride * 3);
+    std::array<VkDeviceAddressRangeEXT, 3> address_ranges = {
+      VkDeviceAddressRangeEXT{ .address = init.gpu_allocator.get_buffer_device_address(*bufferA), .size = buffer_size },
+      VkDeviceAddressRangeEXT{ .address = init.gpu_allocator.get_buffer_device_address(*bufferB), .size = buffer_size },
+      VkDeviceAddressRangeEXT{
+        .address = init.gpu_allocator.get_buffer_device_address(*bufferResult), .size = buffer_size },
+    };
 
-    VkDescriptorSetLayout descriptor_layout = nullptr;
-    init.disp.createDescriptorSetLayout(&layout_info, nullptr, &descriptor_layout);
-
-    // Potrzebujemy puli na 3 deskryptory typu Storage Buffer
-    VkDescriptorPoolSize const pool_size = { .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = 3 };
-    std::array<VkDescriptorPoolSize, 1> pool_sizes = { pool_size };
-    auto const pool_info = initializers::DescriptorPoolCreateInfo(pool_sizes, 1);
-
-    VkDescriptorPool descriptor_pool = nullptr;
-    init.disp.createDescriptorPool(&pool_info, nullptr, &descriptor_pool);
-
-    std::array<VkDescriptorSetLayout, 1> descriptor_layouts = { descriptor_layout };
-    auto const set_alloc_info = initializers::DescriptorSetAllocateInfo(descriptor_pool, descriptor_layouts);
-
-    VkDescriptorSet descriptor_set = nullptr;
-    init.disp.allocateDescriptorSets(&set_alloc_info, &descriptor_set);
-
-    // Łączymy bufory z konkretnymi bindingami
-    std::array<VkDescriptorBufferInfo, 3> buffer_infos = {};
-    buffer_infos.at(0) = { .buffer = bufferA->handle, .offset = 0, .range = buffer_size };
-    buffer_infos.at(1) = { .buffer = bufferB->handle, .offset = 0, .range = buffer_size };
-    buffer_infos.at(2) = { .buffer = bufferResult->handle, .offset = 0, .range = buffer_size };
-
-    std::array<VkWriteDescriptorSet, 3> writes = {};
-    for (u32 i = 0; i < 3; i++) {
-      writes.at(i) = initializers::WriteDescriptorSet(
-        descriptor_set, i, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, std::span{ &buffer_infos.at(i), 1 });
+    for (size_t i = 0; i < 3; ++i) {
+      if (!write_storage_buffer_descriptor(init,
+            address_ranges.at(i).address,
+            address_ranges.at(i).size,
+            std::span{ descriptor_data }.subspan(i * descriptor_stride, descriptor_size))) {
+        std::println("Nie udało się zapisać deskryptora {}!", i);
+        return;
+      }
     }
-    init.disp.updateDescriptorSets(3, writes.data(), 0, nullptr);
 
-    // 5. Potok obliczeniowy (Pipeline)
-    // ZMIENIONO NAZWĘ PLIKU SHADERA
+    if (!init.gpu_allocator.write_buffer<std::byte>(*bufferHeap, std::span{ descriptor_data })) {
+      std::println("Nie udało się przesłać sterty deskryptorów na GPU!");
+      return;
+    }
+
     auto comp_code = readFile(std::string(EXAMPLE_SOURCE_DIRECTORY) + "/shaders/1plus1.comp.spv");
     VkShaderModule comp_module = createShaderModule(init, comp_code);
+    if (comp_module == VK_NULL_HANDLE) {
+      std::println("Nie udało się utworzyć modułu shadera!");
+      return;
+    }
 
-    auto const pipeline_layout_info = initializers::PipelineLayoutCreateInfo(descriptor_layouts, {});
+    std::array<VkDescriptorSetAndBindingMappingEXT, 1> mappings = { VkDescriptorSetAndBindingMappingEXT{
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_AND_BINDING_MAPPING_EXT,
+      .pNext = nullptr,
+      .descriptorSet = 0,
+      .firstBinding = 0,
+      .bindingCount = 3,
+      .resourceMask = VK_SPIRV_RESOURCE_TYPE_READ_ONLY_STORAGE_BUFFER_BIT_EXT
+                      | VK_SPIRV_RESOURCE_TYPE_READ_WRITE_STORAGE_BUFFER_BIT_EXT,
+      .source = VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_CONSTANT_OFFSET_EXT,
+      .sourceData = { .constantOffset = { .heapOffset = 0,
+                        .heapArrayStride = static_cast<uint32_t>(descriptor_stride),
+                        .pEmbeddedSampler = nullptr,
+                        .samplerHeapOffset = 0,
+                        .samplerHeapArrayStride = 0 } },
+    } };
 
-    VkPipelineLayout pipeline_layout = nullptr;
-    init.disp.createPipelineLayout(&pipeline_layout_info, nullptr, &pipeline_layout);
+    VkShaderDescriptorSetAndBindingMappingInfoEXT mapping_info = {
+      .sType = VK_STRUCTURE_TYPE_SHADER_DESCRIPTOR_SET_AND_BINDING_MAPPING_INFO_EXT,
+      .pNext = nullptr,
+      .mappingCount = static_cast<uint32_t>(mappings.size()),
+      .pMappings = mappings.data(),
+    };
 
-    VkComputePipelineCreateInfo pipeline_info = {};// NOLINT
-    pipeline_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-    pipeline_info.stage =
+    VkPipelineShaderStageCreateInfo const comp_stage =
       initializers::PipelineShaderStageCreateInfo(VK_SHADER_STAGE_COMPUTE_BIT, comp_module, "main");
-    pipeline_info.layout = pipeline_layout;
+    VkPipelineShaderStageCreateInfo stage = comp_stage;
+    stage.pNext = &mapping_info;
 
-    VkPipeline compute_pipeline = nullptr;
-    init.disp.createComputePipelines(VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &compute_pipeline);
+    VkPipelineCreateFlags2CreateInfo pipeline_flags = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO,
+      .pNext = nullptr,
+      .flags = VK_PIPELINE_CREATE_2_DESCRIPTOR_HEAP_BIT_EXT,
+    };
 
-    // 6. Nagrywanie i wywołanie komendy
-    uint32_t const compute_queue_index = init.device.get_queue_index(vkb::QueueType::compute).value();
-    auto const cmd_pool_info = initializers::CommandPoolCreateInfo(compute_queue_index);
+    VkComputePipelineCreateInfo const pipeline_info = {
+      .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+      .pNext = &pipeline_flags,
+      .flags = 0,
+      .stage = stage,
+      .layout = VK_NULL_HANDLE,
+      .basePipelineHandle = VK_NULL_HANDLE,
+      .basePipelineIndex = -1,
+    };
 
-    VkCommandPool command_pool = nullptr;
-    init.disp.createCommandPool(&cmd_pool_info, nullptr, &command_pool);
+    VkPipeline compute_pipeline = VK_NULL_HANDLE;
+    if (init.disp.createComputePipelines(VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &compute_pipeline) != VK_SUCCESS) {
+      std::println("Nie udało się utworzyć potoku obliczeniowego!");
+      init.disp.destroyShaderModule(comp_module, nullptr);
+      return;
+    }
 
-    auto const cmd_alloc_info = initializers::CommandBufferAllocateInfo(command_pool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1);
+    auto const compute_queue_index_res = init.device.get_queue_index(vkb::QueueType::compute);
+    if (!compute_queue_index_res) {
+      std::println("Brak indeksu kolejki obliczeniowej!");
+      init.disp.destroyPipeline(compute_pipeline, nullptr);
+      init.disp.destroyShaderModule(comp_module, nullptr);
+      return;
+    }
 
-    VkCommandBuffer command_buffer = nullptr;
-    init.disp.allocateCommandBuffers(&cmd_alloc_info, &command_buffer);
+    auto const cmd_pool_info = initializers::CommandPoolCreateInfo(compute_queue_index_res.value());
+
+    VkCommandPool command_pool = VK_NULL_HANDLE;
+    if (init.disp.createCommandPool(&cmd_pool_info, nullptr, &command_pool) != VK_SUCCESS) {
+      std::println("Nie udało się utworzyć puli komend!");
+      init.disp.destroyPipeline(compute_pipeline, nullptr);
+      init.disp.destroyShaderModule(comp_module, nullptr);
+      return;
+    }
+
+    auto const cmd_alloc_info =
+      initializers::CommandBufferAllocateInfo(command_pool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1);
+
+    VkCommandBuffer command_buffer = VK_NULL_HANDLE;
+    if (init.disp.allocateCommandBuffers(&cmd_alloc_info, &command_buffer) != VK_SUCCESS) {
+      std::println("Nie udało się zaalokować bufora komend!");
+      init.disp.destroyCommandPool(command_pool, nullptr);
+      init.disp.destroyPipeline(compute_pipeline, nullptr);
+      init.disp.destroyShaderModule(comp_module, nullptr);
+      return;
+    }
+
+    VkDeviceAddress const heap_address = init.gpu_allocator.get_buffer_device_address(*bufferHeap);
+    VkBindHeapInfoEXT const bind_heap_info = {
+      .sType = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
+      .pNext = nullptr,
+      .heapRange = { .address = heap_address, .size = heap_size },
+      .reservedRangeOffset = reserved_range_offset,
+      .reservedRangeSize = reserved_range_size,
+    };
 
     auto const begin_info = initializers::CommandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
     init.disp.beginCommandBuffer(command_buffer, &begin_info);
+    init.cmd_bind_resource_heap(command_buffer, &bind_heap_info);
     init.disp.cmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute_pipeline);
-    init.disp.cmdBindDescriptorSets(
-      command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline_layout, 0, 1, &descriptor_set, 0, nullptr);
-
-    // ZMIANA: Shader określa `local_size_x = 64`.
-    // Chcemy przetworzyć 1024 elementy, więc odpalamy: 1024 / 64 = 16 grup roboczych.
     init.disp.cmdDispatch(command_buffer, element_count / 64, 1, 1);// NOLINT
-
     init.disp.endCommandBuffer(command_buffer);
 
     auto const submit_info = initializers::SubmitInfo({}, {}, std::span{ &command_buffer, 1 }, {});
@@ -598,10 +714,12 @@ namespace compute {
     init.disp.queueSubmit(compute_queue, 1, &submit_info, VK_NULL_HANDLE);
     init.disp.queueWaitIdle(compute_queue);
 
-    // 7. Odczyt i weryfikacja z bufora wynikowego
     auto output = init.gpu_allocator.read_buffer<float>(*bufferResult, element_count);
     if (!output) {
       std::println("Nie udało się odczytać bufora wynikowego!");
+      init.disp.destroyCommandPool(command_pool, nullptr);
+      init.disp.destroyPipeline(compute_pipeline, nullptr);
+      init.disp.destroyShaderModule(comp_module, nullptr);
       return;
     }
 
@@ -610,18 +728,14 @@ namespace compute {
       std::println("Index {}: {} + {} = {}", i, input[i], input[i], output->at(i));// NOLINT
     }
 
-    // 8. Sprzątanie
     init.disp.destroyShaderModule(comp_module, nullptr);
     init.disp.destroyPipeline(compute_pipeline, nullptr);
-    init.disp.destroyPipelineLayout(pipeline_layout, nullptr);
-    init.disp.destroyDescriptorPool(descriptor_pool, nullptr);
-    init.disp.destroyDescriptorSetLayout(descriptor_layout, nullptr);
+    init.disp.destroyCommandPool(command_pool, nullptr);
 
     init.gpu_allocator.destroy_buffer(*bufferA);
     init.gpu_allocator.destroy_buffer(*bufferB);
     init.gpu_allocator.destroy_buffer(*bufferResult);
-
-    init.disp.destroyCommandPool(command_pool, nullptr);
+    init.gpu_allocator.destroy_buffer(*bufferHeap);
 
     std::println("--- Test dodawania dwóch tablic zakończony ---");
   }
@@ -653,10 +767,8 @@ int draw_frame(Init &init, RenderData &data)
   std::array<VkPipelineStageFlags, 1> wait_stages = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
   std::array<VkSemaphore, 1> signal_semaphores = { data.finished_semaphore.at(image_index) };
 
-  auto const submit_info = initializers::SubmitInfo(wait_semaphores,
-    wait_stages,
-    std::span{ &data.command_buffers.at(image_index), 1 },
-    signal_semaphores);
+  auto const submit_info = initializers::SubmitInfo(
+    wait_semaphores, wait_stages, std::span{ &data.command_buffers.at(image_index), 1 }, signal_semaphores);
 
   init.disp.resetFences(1, &data.in_flight_fences.at(data.current_frame));
 
@@ -667,8 +779,7 @@ int draw_frame(Init &init, RenderData &data)
   }
 
   std::array<VkSwapchainKHR, 1> const swap_chains = { init.swapchain };
-  auto const present_info =
-    initializers::PresentInfoKHR(signal_semaphores, swap_chains, std::span{ &image_index, 1 });
+  auto const present_info = initializers::PresentInfoKHR(signal_semaphores, swap_chains, std::span{ &image_index, 1 });
 
   result = init.disp.queuePresentKHR(data.present_queue, &present_info);
   if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
@@ -715,7 +826,11 @@ void cleanup(Init &init, RenderData &data)
     Init init;
     RenderData render_data;
 
-    if (!device_initialization(init).has_value()) { return -1; }
+    auto const init_result = device_initialization(init);
+    if (!init_result.has_value()) {
+      std::println("Inicjalizacja urządzenia nie powiodła się: {}", init_result.error().message());
+      return -1;
+    }
 
     auto gpu_allocator = vulkan::GPUAllocator::create(init.instance, init.device, init.device.physical_device);
     if (!gpu_allocator) {
