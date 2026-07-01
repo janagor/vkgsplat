@@ -1,5 +1,16 @@
 add_executable(triangle
          main.cpp
+         application.cpp
+         mesh.cpp
+         descriptor_heap.cpp
+         mesh_gpu.cpp
+         window.cpp
+         device.cpp
+         shader.cpp
+         graphics_pipeline.cpp
+         swapchain.cpp
+         renderer.cpp
+         compute_test.cpp
          vma_usage.cpp
          backend/vulkan/gpu_allocator.cpp
 )
@@ -32,4 +43,3 @@ target_include_directories(triangle ${WARNING_GUARD} PUBLIC  $<BUILD_INTERFACE:$
 #     DESCRIPTION "FTXUI-based terminal application"
 #   )
 # endif()
-

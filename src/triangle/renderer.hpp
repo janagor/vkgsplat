@@ -1,0 +1,24 @@
+#pragma once
+
+#include <expected>
+
+#include "app_state.hpp"
+#include "error.hpp"
+
+namespace vkgsplat {
+
+[[nodiscard]] auto get_queues(Init &init, RenderData &data) -> std::expected<void, Error>;
+
+[[nodiscard]] auto create_command_pool(Init &init, RenderData &data) -> int;
+
+[[nodiscard]] auto create_command_buffers(Init &init, RenderData &data) -> int;
+
+[[nodiscard]] auto sync_mesh_to_gpu(Init &init, RenderData &data) -> bool;
+
+[[nodiscard]] auto create_sync_objects(Init &init, RenderData &data) -> int;
+
+[[nodiscard]] auto draw_frame(Init &init, RenderData &data) -> int;
+
+void cleanup(Init &init, RenderData &data);
+
+}// namespace vkgsplat
