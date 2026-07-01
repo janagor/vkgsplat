@@ -1,4 +1,5 @@
 // based on https://github.com/charles-lunarg/vk-bootstrap/blob/main/example/triangle.cpp
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -32,21 +33,60 @@
 #include <backend/vulkan/gpu_allocator.hpp>
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
-
-
-static constexpr std::array<std::array<float, 2>, 3> positions = { {
-  { 0.0, -0.5 },
-  { 0.5, 0.5 },
-  { -0.5, 0.5 },
-} };
-
-static constexpr std::array<std::array<float, 3>, 3> colors = { {
-  { 1.0, 0.0, 0.0 },
-  { 0.0, 1.0, 0.0 },
-  { 0.0, 0.0, 1.0 },
-} };
+static constexpr size_t k_mesh_buffer_min_vertex_capacity = 16;
 
 namespace vkgsplat {
+
+struct Mesh
+{
+  std::vector<std::array<f32, 2>> positions;
+  std::vector<std::array<f32, 3>> colors;
+
+  void add_vertex(std::array<f32, 2> position, std::array<f32, 3> color)
+  {
+    positions.push_back(position);
+    colors.push_back(color);
+  }
+
+  void remove_vertex(size_t index)
+  {
+    if (index >= positions.size()) { return; }
+    auto const offset = static_cast<std::ptrdiff_t>(index);
+    positions.erase(positions.begin() + offset);
+    colors.erase(colors.begin() + offset);
+  }
+
+  [[nodiscard]] size_t vertex_count() const { return positions.size(); }
+
+  // TRIANGLE_FAN: first vertex is the pivot; needs at least 3 vertices to draw.
+  [[nodiscard]] u32 draw_vertex_count() const { return static_cast<u32>(positions.size()); }
+
+  [[nodiscard]] static Mesh make_default_triangle()
+  {
+    static constexpr std::array<std::array<f32, 2>, 6> k_default_positions = { {
+      { 0.75F, 0.75F },
+      { -0.75F, 0.75F },
+      { -0.75F, -0.75F },
+      { 0.75F, 0.75F },
+      { -0.75F, -0.75F },
+      { 0.75F, -0.75F },
+    } };
+    static constexpr std::array<std::array<f32, 3>, 6> k_default_colors = { {
+      { 0.0F, 0.0F, 0.0F },
+      { 1.0F, 0.0F, 0.0F },
+      { 0.0F, 1.0F, 0.0F },
+      { 0.0F, 0.0F, 0.0F },
+      { 0.0F, 1.0F, 0.0F },
+      { 0.0F, 0.0F, 1.0F },
+    } };
+
+    Mesh mesh{};
+    for (size_t i = 0; i < k_default_positions.size(); ++i) {
+      mesh.add_vertex(k_default_positions.at(i), k_default_colors.at(i));
+    }
+    return mesh;
+  }
+};
 
 template<typename Ok> auto VKBResultToExpected(vkb::Result<Ok> &&res) -> std::expected<Ok, Error>
 {
@@ -89,6 +129,10 @@ struct RenderData
   VkDeviceSize reserved_range_size{};
   size_t descriptor_stride{};
 
+  Mesh mesh{};
+
+  size_t mesh_buffer_vertex_capacity = 0;
+
   VkCommandPool command_pool{};
   std::vector<VkCommandBuffer> command_buffers;
 
@@ -120,26 +164,52 @@ auto write_storage_buffer_descriptor(Init &init,
   return init.write_resource_descriptors(init.device, 1, &resource_info, &host_range) == VK_SUCCESS;
 }
 
-auto create_triangle_buffers(Init &init, RenderData &data) -> bool
+auto destroy_mesh_buffers(Init &init, RenderData &data) -> void
 {
-  auto const position_buffer_size = static_cast<VkDeviceSize>(positions.size() * sizeof(positions.front()));
-  auto const color_buffer_size = static_cast<VkDeviceSize>(colors.size() * sizeof(colors.front()));
+  init.gpu_allocator.destroy_buffer(data.position_buffer);
+  init.gpu_allocator.destroy_buffer(data.color_buffer);
+  init.gpu_allocator.destroy_buffer(data.descriptor_heap_buffer);
+  data.position_buffer = {};
+  data.color_buffer = {};
+  data.descriptor_heap_buffer = {};
+}
+
+auto upload_mesh_buffers(Init &init, RenderData &data) -> bool
+{
+  destroy_mesh_buffers(init, data);
+
+  if (data.mesh.vertex_count() == 0) { return true; }
+
+  if (data.mesh.positions.size() != data.mesh.colors.size()) {
+    std::println("Mesh positions/colors size mismatch!");
+    return false;
+  }
+
+  auto const vertex_count = data.mesh.vertex_count();
+  if (data.mesh_buffer_vertex_capacity < vertex_count) {
+    data.mesh_buffer_vertex_capacity =
+      std::max({ vertex_count, data.mesh_buffer_vertex_capacity * 2, k_mesh_buffer_min_vertex_capacity });
+  }
+
+  auto const position_buffer_size = static_cast<VkDeviceSize>(
+    data.mesh_buffer_vertex_capacity * sizeof(data.mesh.positions.front()));
+  auto const color_buffer_size =
+    static_cast<VkDeviceSize>(data.mesh_buffer_vertex_capacity * sizeof(data.mesh.colors.front()));
 
   auto position_buffer = init.gpu_allocator.create_storage_buffer(position_buffer_size);
   auto color_buffer = init.gpu_allocator.create_storage_buffer(color_buffer_size);
   if (!position_buffer || !color_buffer) {
-    std::println("Failed to create triangle vertex buffers!");
+    std::println("Failed to create mesh vertex buffers!");
     return false;
   }
 
-  std::span<const std::array<f32, 2>> const position_span{ positions };
-  if (!init.gpu_allocator.write_buffer(*position_buffer, position_span)) {
+  if (!init.gpu_allocator.write_buffer(
+        *position_buffer, std::span<const std::array<f32, 2>>{ data.mesh.positions })) {
     std::println("Failed to upload position buffer!");
     return false;
   }
 
-  std::span<const std::array<f32, 3>> const color_span{ colors };
-  if (!init.gpu_allocator.write_buffer(*color_buffer, color_span)) {
+  if (!init.gpu_allocator.write_buffer(*color_buffer, std::span<const std::array<f32, 3>>{ data.mesh.colors })) {
     std::println("Failed to upload color buffer!");
     return false;
   }
@@ -164,7 +234,7 @@ auto create_triangle_buffers(Init &init, RenderData &data) -> bool
 
   auto descriptor_heap_buffer = init.gpu_allocator.create_heap_buffer(data.descriptor_heap_size);
   if (!descriptor_heap_buffer) {
-    std::println("Failed to create triangle descriptor heap buffer!");
+    std::println("Failed to create mesh descriptor heap buffer!");
     return false;
   }
 
@@ -185,13 +255,13 @@ auto create_triangle_buffers(Init &init, RenderData &data) -> bool
           address_ranges.at(i).address,
           address_ranges.at(i).size,
           std::span{ descriptor_data }.subspan(i * data.descriptor_stride, descriptor_size))) {
-      std::println("Failed to write triangle buffer descriptor {}!", i);
+      std::println("Failed to write mesh buffer descriptor {}!", i);
       return false;
     }
   }
 
   if (!init.gpu_allocator.write_buffer<std::byte>(*descriptor_heap_buffer, std::span{ descriptor_data })) {
-    std::println("Failed to upload triangle descriptor heap!");
+    std::println("Failed to upload mesh descriptor heap!");
     return false;
   }
 
@@ -287,7 +357,10 @@ auto record_triangle_draw(Init const &init, RenderData const &data, VkCommandBuf
   init.disp.cmdSetScissor(command_buffer, 0, 1, &scissor);
   init.disp.cmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, data.graphics_pipeline);
   bind_triangle_descriptor_heap(init, data, command_buffer);
-  init.disp.cmdDraw(command_buffer, 3, 1, 0, 0);
+
+  auto const vertex_count = data.mesh.draw_vertex_count();
+  if (vertex_count >= 3) { init.disp.cmdDraw(command_buffer, vertex_count, 1, 0, 0); }
+
   init.disp.cmdEndRendering(command_buffer);
 
   auto present_barrier = initializers::ImageMemoryBarrier(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -640,6 +713,19 @@ int create_command_buffers(Init &init, RenderData &data)
   return 0;
 }
 
+auto sync_mesh_to_gpu(Init &init, RenderData &data) -> bool
+{
+  init.disp.deviceWaitIdle();
+
+  if (!upload_mesh_buffers(init, data)) { return false; }
+
+  init.disp.destroyCommandPool(data.command_pool, nullptr);
+  data.command_buffers.clear();
+
+  if (0 != create_command_pool(init, data)) { return false; }
+  return create_command_buffers(init, data) == 0;
+}
+
 int create_sync_objects(Init &init, RenderData &data)
 {
   data.available_semaphores.resize(MAX_FRAMES_IN_FLIGHT);
@@ -986,9 +1072,7 @@ void cleanup(Init &init, RenderData &data)
 
   init.disp.destroyCommandPool(data.command_pool, nullptr);
 
-  init.gpu_allocator.destroy_buffer(data.position_buffer);
-  init.gpu_allocator.destroy_buffer(data.color_buffer);
-  init.gpu_allocator.destroy_buffer(data.descriptor_heap_buffer);
+  destroy_mesh_buffers(init, data);
 
   init.disp.destroyPipeline(data.graphics_pipeline, nullptr);
 
@@ -1023,7 +1107,8 @@ void cleanup(Init &init, RenderData &data)
     compute::run_compute_test(init);
     if (!create_swapchain(init).has_value()) { return -1; }
     if (!get_queues(init, render_data).has_value()) { return -1; }
-    if (!create_triangle_buffers(init, render_data)) { return -1; }
+    render_data.mesh = Mesh::make_default_triangle();
+    if (!upload_mesh_buffers(init, render_data)) { return -1; }
     if (0 != create_graphics_pipeline(init, render_data)) { return -1; }
     if (0 != create_swapchain_images(init, render_data)) { return -1; }
     if (0 != create_command_pool(init, render_data)) { return -1; }
