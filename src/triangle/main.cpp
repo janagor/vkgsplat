@@ -78,9 +78,7 @@ struct RenderData
 
   std::vector<VkImage> swapchain_images;
   std::vector<VkImageView> swapchain_image_views;
-  std::vector<VkFramebuffer> framebuffers;
 
-  VkRenderPass render_pass{};
   VkPipeline graphics_pipeline{};
 
   vulkan::Buffer position_buffer{};
@@ -216,6 +214,100 @@ auto bind_triangle_descriptor_heap(Init const &init, RenderData const &data, VkC
   init.cmd_bind_resource_heap(command_buffer, &bind_heap_info);
 }
 
+auto record_triangle_draw(Init const &init, RenderData const &data, VkCommandBuffer command_buffer, size_t image_index)
+  -> void
+{
+  VkImageSubresourceRange const color_subresource_range = {
+    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+    .baseMipLevel = 0,
+    .levelCount = 1,
+    .baseArrayLayer = 0,
+    .layerCount = 1,
+  };
+
+  auto color_barrier = initializers::ImageMemoryBarrier(VK_IMAGE_LAYOUT_UNDEFINED,
+    VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+    data.swapchain_images.at(image_index),
+    color_subresource_range);
+  color_barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+  init.disp.cmdPipelineBarrier(command_buffer,
+    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+    0,
+    0,
+    nullptr,
+    0,
+    nullptr,
+    1,
+    &color_barrier);
+
+  VkClearValue const clear_color{ { { 0.0F, 0.0F, 0.0F, 1.0F } } };
+  VkRenderingAttachmentInfo const color_attachment = {
+    .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+    .pNext = nullptr,
+    .imageView = data.swapchain_image_views.at(image_index),
+    .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+    .resolveMode = VK_RESOLVE_MODE_NONE,
+    .resolveImageView = VK_NULL_HANDLE,
+    .resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+    .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+    .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+    .clearValue = clear_color,
+  };
+
+  VkRect2D const render_area{ .offset = { .x = 0, .y = 0 }, .extent = init.swapchain.extent };
+  VkRenderingInfo const rendering_info = {
+    .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+    .pNext = nullptr,
+    .flags = 0,
+    .renderArea = render_area,
+    .layerCount = 1,
+    .viewMask = 0,
+    .colorAttachmentCount = 1,
+    .pColorAttachments = &color_attachment,
+    .pDepthAttachment = nullptr,
+    .pStencilAttachment = nullptr,
+  };
+
+  VkViewport viewport = {};
+  viewport.x = 0.0F;
+  viewport.y = 0.0F;
+  viewport.width = static_cast<float>(init.swapchain.extent.width);
+  viewport.height = static_cast<float>(init.swapchain.extent.height);
+  viewport.minDepth = 0.0F;
+  viewport.maxDepth = 1.0F;
+
+  VkRect2D scissor = {};
+  scissor.offset = { .x = 0, .y = 0 };
+  scissor.extent = init.swapchain.extent;
+
+  init.disp.cmdBeginRendering(command_buffer, &rendering_info);
+  init.disp.cmdSetViewport(command_buffer, 0, 1, &viewport);
+  init.disp.cmdSetScissor(command_buffer, 0, 1, &scissor);
+  init.disp.cmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, data.graphics_pipeline);
+  bind_triangle_descriptor_heap(init, data, command_buffer);
+  init.disp.cmdDraw(command_buffer, 3, 1, 0, 0);
+  init.disp.cmdEndRendering(command_buffer);
+
+  auto present_barrier = initializers::ImageMemoryBarrier(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+    VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+    data.swapchain_images.at(image_index),
+    color_subresource_range);
+  present_barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+  init.disp.cmdPipelineBarrier(command_buffer,
+    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+    VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+    0,
+    0,
+    nullptr,
+    0,
+    nullptr,
+    1,
+    &present_barrier);
+}
+
 }// namespace
 
 GLFWwindow *create_window_glfw(const char *window_name = "", bool resize = true)
@@ -262,9 +354,13 @@ auto device_initialization(Init &init) -> std::expected<void, Error>
   descriptor_heap_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_FEATURES_EXT;
   descriptor_heap_features.descriptorHeap = VK_TRUE;
 
-  VkPhysicalDeviceBufferDeviceAddressFeatures buffer_device_address_features{};
-  buffer_device_address_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
-  buffer_device_address_features.bufferDeviceAddress = VK_TRUE;
+  VkPhysicalDeviceVulkan12Features features_12{};
+  features_12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+  features_12.bufferDeviceAddress = VK_TRUE;
+
+  VkPhysicalDeviceVulkan13Features features_13{};
+  features_13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+  features_13.dynamicRendering = VK_TRUE;
 
   vkb::InstanceBuilder instance_builder;
   return VKBResultToExpected(
@@ -281,7 +377,8 @@ auto device_initialization(Init &init) -> std::expected<void, Error>
           .add_required_extension("VK_EXT_descriptor_heap")
           .add_required_extension("VK_KHR_buffer_device_address")
           .add_required_extension_features(descriptor_heap_features)
-          .add_required_extension_features(buffer_device_address_features)
+          .set_required_features_12(features_12)
+          .set_required_features_13(features_13)
           .select());
     })
     .and_then([&](vkb::PhysicalDevice const &physical_device) {
@@ -331,53 +428,6 @@ auto get_queues(Init &init, RenderData &data) -> std::expected<void, Error>
       data.present_queue = present_queue;
       return std::expected<void, Error>{};
     });
-}
-
-int create_render_pass(Init &init, RenderData &data)
-{
-  VkAttachmentDescription const color_attachment = {
-    .flags = VK_FORMAT_UNDEFINED,
-    .format = init.swapchain.image_format,
-    .samples = VK_SAMPLE_COUNT_1_BIT,
-    .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-    .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-    .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-    .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-    .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-    .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-  };
-
-  VkAttachmentReference color_attachment_ref = {};
-  color_attachment_ref.attachment = 0;
-  color_attachment_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-  VkSubpassDescription const subpass = { .flags = VK_FORMAT_UNDEFINED,
-    .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-    .inputAttachmentCount = 0,
-    .pInputAttachments = nullptr,
-    .colorAttachmentCount = 1,
-    .pColorAttachments = &color_attachment_ref,
-    .pResolveAttachments = nullptr,
-    .pDepthStencilAttachment = nullptr,
-    .preserveAttachmentCount = 0,
-    .pPreserveAttachments = nullptr };
-
-  VkSubpassDependency dependency = {};
-  dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-  dependency.dstSubpass = 0;
-  dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-  dependency.srcAccessMask = 0;
-  dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-  dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-
-  auto const render_pass_info = initializers::RenderPassCreateInfo(
-    std::span{ &color_attachment, 1 }, std::span{ &subpass, 1 }, std::span{ &dependency, 1 });
-
-  if (init.disp.createRenderPass(&render_pass_info, nullptr, &data.render_pass) != VK_SUCCESS) {
-    std::cout << "failed to create render pass\n";
-    return -1;// failed to create render pass!
-  }
-  return 0;
 }
 
 std::vector<char> readFile(const std::string &filename)
@@ -501,10 +551,20 @@ int create_graphics_pipeline(Init &init, RenderData &data)
 
   auto dynamic_info = initializers::PipelineDynamicStateCreateInfo(dynamic_states);
 
+  VkPipelineRenderingCreateInfo pipeline_rendering_info = {
+    .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+    .pNext = nullptr,
+    .viewMask = 0,
+    .colorAttachmentCount = 1,
+    .pColorAttachmentFormats = &init.swapchain.image_format,
+    .depthAttachmentFormat = VK_FORMAT_UNDEFINED,
+    .stencilAttachmentFormat = VK_FORMAT_UNDEFINED,
+  };
+
   auto pipeline_info = initializers::GraphicsPipelineCreateInfo();
   VkPipelineCreateFlags2CreateInfo pipeline_flags = {
     .sType = VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO,
-    .pNext = nullptr,
+    .pNext = &pipeline_rendering_info,
     .flags = VK_PIPELINE_CREATE_2_DESCRIPTOR_HEAP_BIT_EXT,
   };
   pipeline_info.pNext = &pipeline_flags;
@@ -518,7 +578,7 @@ int create_graphics_pipeline(Init &init, RenderData &data)
   pipeline_info.pColorBlendState = &color_blending;
   pipeline_info.pDynamicState = &dynamic_info;
   pipeline_info.layout = VK_NULL_HANDLE;
-  pipeline_info.renderPass = data.render_pass;
+  pipeline_info.renderPass = VK_NULL_HANDLE;
   pipeline_info.subpass = 0;
   pipeline_info.basePipelineHandle = VK_NULL_HANDLE;
 
@@ -533,23 +593,10 @@ int create_graphics_pipeline(Init &init, RenderData &data)
   return 0;
 }
 
-int create_framebuffers(Init &init, RenderData &data)
+int create_swapchain_images(Init &init, RenderData &data)
 {
   data.swapchain_images = init.swapchain.get_images().value();
   data.swapchain_image_views = init.swapchain.get_image_views().value();
-
-  data.framebuffers.resize(data.swapchain_image_views.size());
-
-  for (size_t i = 0; i < data.swapchain_image_views.size(); i++) {
-    std::array<VkImageView, 1> attachments = { data.swapchain_image_views.at(i) };
-
-    auto const framebuffer_info =
-      initializers::FramebufferCreateInfo(data.render_pass, attachments, init.swapchain.extent, 1);
-
-    if (init.disp.createFramebuffer(&framebuffer_info, nullptr, &data.framebuffers.at(i)) != VK_SUCCESS) {
-      return -1;// failed to create framebuffer
-    }
-  }
   return 0;
 }
 
@@ -567,7 +614,7 @@ int create_command_pool(Init &init, RenderData &data)
 
 int create_command_buffers(Init &init, RenderData &data)
 {
-  data.command_buffers.resize(data.framebuffers.size());
+  data.command_buffers.resize(data.swapchain_image_views.size());
 
   auto const alloc_info = initializers::CommandBufferAllocateInfo(
     data.command_pool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, static_cast<u32>(data.command_buffers.size()));
@@ -583,35 +630,7 @@ int create_command_buffers(Init &init, RenderData &data)
       return -1;// failed to begin recording command buffer
     }
 
-    VkClearValue const clear_color{ { { 0.0F, 0.0F, 0.0F, 1.0F } } };
-    VkRect2D const render_area{ .offset = { .x = 0, .y = 0 }, .extent = init.swapchain.extent };
-    auto const render_pass_info = initializers::RenderPassBeginInfo(
-      data.render_pass, data.framebuffers.at(i), render_area, std::span{ &clear_color, 1 });
-
-    VkViewport viewport = {};
-    viewport.x = 0.0F;
-    viewport.y = 0.0F;
-    viewport.width = static_cast<float>(init.swapchain.extent.width);
-    viewport.height = static_cast<float>(init.swapchain.extent.height);
-    viewport.minDepth = 0.0F;
-    viewport.maxDepth = 1.0F;
-
-    VkRect2D scissor = {};
-    scissor.offset = { .x = 0, .y = 0 };
-    scissor.extent = init.swapchain.extent;
-
-    init.disp.cmdSetViewport(data.command_buffers.at(i), 0, 1, &viewport);
-    init.disp.cmdSetScissor(data.command_buffers.at(i), 0, 1, &scissor);
-
-    init.disp.cmdBeginRenderPass(data.command_buffers.at(i), &render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
-
-    init.disp.cmdBindPipeline(data.command_buffers.at(i), VK_PIPELINE_BIND_POINT_GRAPHICS, data.graphics_pipeline);
-
-    bind_triangle_descriptor_heap(init, data, data.command_buffers.at(i));
-
-    init.disp.cmdDraw(data.command_buffers.at(i), 3, 1, 0, 0);
-
-    init.disp.cmdEndRenderPass(data.command_buffers.at(i));
+    record_triangle_draw(init, data, data.command_buffers.at(i), i);
 
     if (init.disp.endCommandBuffer(data.command_buffers.at(i)) != VK_SUCCESS) {
       std::cout << "failed to record command buffer\n";
@@ -653,13 +672,13 @@ int recreate_swapchain(Init &init, RenderData &data)
   init.disp.deviceWaitIdle();
 
   init.disp.destroyCommandPool(data.command_pool, nullptr);
-
-  for (auto *framebuffer : data.framebuffers) { init.disp.destroyFramebuffer(framebuffer, nullptr); }
+  init.disp.destroyPipeline(data.graphics_pipeline, nullptr);
 
   init.swapchain.destroy_image_views(data.swapchain_image_views);
 
   if (!create_swapchain(init).has_value()) { return -1; }
-  if (0 != create_framebuffers(init, data)) { return -1; }
+  if (0 != create_graphics_pipeline(init, data)) { return -1; }
+  if (0 != create_swapchain_images(init, data)) { return -1; }
   if (0 != create_command_pool(init, data)) { return -1; }
   if (0 != create_command_buffers(init, data)) { return -1; }
   return 0;
@@ -971,10 +990,7 @@ void cleanup(Init &init, RenderData &data)
   init.gpu_allocator.destroy_buffer(data.color_buffer);
   init.gpu_allocator.destroy_buffer(data.descriptor_heap_buffer);
 
-  for (auto *framebuffer : data.framebuffers) { init.disp.destroyFramebuffer(framebuffer, nullptr); }
-
   init.disp.destroyPipeline(data.graphics_pipeline, nullptr);
-  init.disp.destroyRenderPass(data.render_pass, nullptr);
 
   init.swapchain.destroy_image_views(data.swapchain_image_views);
 
@@ -1008,9 +1024,8 @@ void cleanup(Init &init, RenderData &data)
     if (!create_swapchain(init).has_value()) { return -1; }
     if (!get_queues(init, render_data).has_value()) { return -1; }
     if (!create_triangle_buffers(init, render_data)) { return -1; }
-    if (0 != create_render_pass(init, render_data)) { return -1; }
     if (0 != create_graphics_pipeline(init, render_data)) { return -1; }
-    if (0 != create_framebuffers(init, render_data)) { return -1; }
+    if (0 != create_swapchain_images(init, render_data)) { return -1; }
     if (0 != create_command_pool(init, render_data)) { return -1; }
     if (0 != create_command_buffers(init, render_data)) { return -1; }
     if (0 != create_sync_objects(init, render_data)) { return -1; }
