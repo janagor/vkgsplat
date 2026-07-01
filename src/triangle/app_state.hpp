@@ -55,13 +55,9 @@ struct RenderData
   vulkan::Buffer sorted_indices_buffer{};
   vulkan::Buffer sort_entries_buffer{};
   vulkan::Buffer descriptor_heap_buffer{};
-  vulkan::Buffer sort_descriptor_heap_buffer{};
   VkDeviceSize descriptor_heap_size{};
-  VkDeviceSize sort_descriptor_heap_size{};
   VkDeviceSize reserved_range_offset{};
   VkDeviceSize reserved_range_size{};
-  VkDeviceSize sort_reserved_range_offset{};
-  VkDeviceSize sort_reserved_range_size{};
   size_t descriptor_stride{};
 
   VkPipeline sort_compute_pipeline{};

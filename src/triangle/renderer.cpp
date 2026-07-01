@@ -28,6 +28,7 @@ namespace {
 
 void record_triangle_draw(Init const &init, RenderData const &data, VkCommandBuffer command_buffer, size_t image_index)
 {
+  bind_descriptor_heap(init, data, command_buffer);
   dispatch_triangle_sort(init, data, command_buffer);
 
   VkImageSubresourceRange const color_subresource_range = {
@@ -99,7 +100,6 @@ void record_triangle_draw(Init const &init, RenderData const &data, VkCommandBuf
   init.disp.cmdSetViewport(command_buffer, 0, 1, &viewport);
   init.disp.cmdSetScissor(command_buffer, 0, 1, &scissor);
   init.disp.cmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, data.graphics_pipeline);
-  bind_mesh_descriptor_heap(init, data, command_buffer);
 
   auto const vertex_count = data.mesh.draw_vertex_count();
   if (vertex_count >= 3) { init.disp.cmdDraw(command_buffer, vertex_count, 1, 0, 0); }
@@ -184,7 +184,7 @@ auto sync_mesh_to_gpu(Init &init, RenderData &data) -> bool
   init.disp.deviceWaitIdle();
 
   if (!upload_mesh_buffers(init, data)) { return false; }
-  if (!refresh_mesh_descriptor_heap(init, data)) { return false; }
+  if (!refresh_descriptor_heap(init, data)) { return false; }
 
   init.disp.destroyCommandPool(data.command_pool, nullptr);
   data.command_buffers.clear();
@@ -284,6 +284,7 @@ void cleanup(Init &init, RenderData &data)
 
   destroy_mesh_buffers(init, data);
   destroy_triangle_sort(init, data);
+  destroy_descriptor_heap(init, data);
 
   init.disp.destroyPipeline(data.graphics_pipeline, nullptr);
 

@@ -15,6 +15,19 @@ add_executable(triangle
          backend/vulkan/gpu_allocator.cpp
 )
 
+include(${CMAKE_SOURCE_DIR}/cmake/CompileShaders.cmake)
+
+set(SHADER_DIRECTORY "${CMAKE_BINARY_DIR}/shaders")
+
+vkgsplat_compile_shaders(
+  TARGET triangle
+  OUTPUT_DIR "${SHADER_DIRECTORY}"
+  SOURCES
+    shaders/triangle.vert
+    shaders/triangle.frag
+    shaders/sort_triangles.comp
+)
+
 target_link_libraries(
   triangle
   PRIVATE vkgsplat::vkgsplat_options

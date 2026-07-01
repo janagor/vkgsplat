@@ -6,17 +6,17 @@ layout(std430, binding = 0) readonly buffer ColorBuffer {
 	float colors[];
 };
 
+layout(std430, binding = 1) writeonly buffer SortedIndices {
+	uint indices[];
+};
+
 struct SortEntry {
 	float luminance;
 	uint index;
 };
 
-layout(std430, binding = 1) buffer SortBuffer {
+layout(std430, binding = 2) buffer SortBuffer {
 	SortEntry entries[];
-};
-
-layout(std430, binding = 2) writeonly buffer SortedIndices {
-	uint indices[];
 };
 
 const uint TRIANGLE_COUNT = 144u;

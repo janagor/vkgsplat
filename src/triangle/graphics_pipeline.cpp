@@ -9,6 +9,7 @@
 
 #include "app_state.hpp"
 #include "initializers.hpp"
+#include "descriptor_heap.hpp"
 #include "shader.hpp"
 
 #include <vulkan/vulkan_core.h>
@@ -19,8 +20,8 @@ namespace vkgsplat {
 
 auto create_graphics_pipeline(Init &init, RenderData &data) -> int
 {
-  auto const vert_code = read_file(std::string(EXAMPLE_SOURCE_DIRECTORY) + "/shaders/triangle.vert.spv");
-  auto const frag_code = read_file(std::string(EXAMPLE_SOURCE_DIRECTORY) + "/shaders/triangle.frag.spv");
+  auto const vert_code = read_file(std::string(SHADER_DIRECTORY) + "/triangle.vert.spv");
+  auto const frag_code = read_file(std::string(SHADER_DIRECTORY) + "/triangle.frag.spv");
 
   VkShaderModule vert_module = create_shader_module(init, vert_code);
   VkShaderModule frag_module = create_shader_module(init, frag_code);
@@ -41,7 +42,7 @@ auto create_graphics_pipeline(Init &init, RenderData &data) -> int
     .bindingCount = 3,
     .resourceMask = VK_SPIRV_RESOURCE_TYPE_READ_ONLY_STORAGE_BUFFER_BIT_EXT,
     .source = VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_CONSTANT_OFFSET_EXT,
-    .sourceData = { .constantOffset = { .heapOffset = 0,
+    .sourceData = { .constantOffset = { .heapOffset = heap_slot_byte_offset(data, HeapSlot::Position),
                       .heapArrayStride = static_cast<uint32_t>(data.descriptor_stride),
                       .pEmbeddedSampler = nullptr,
                       .samplerHeapOffset = 0,

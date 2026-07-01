@@ -69,6 +69,7 @@
               pkg-config
               include-what-you-use
               llvm.clang-tools
+              glslang
             ]
             ++ project_packages;
 
@@ -89,6 +90,7 @@
               pkg-config
               include-what-you-use
               llvm.clang-tools
+              glslang
 
               mold
             ]
