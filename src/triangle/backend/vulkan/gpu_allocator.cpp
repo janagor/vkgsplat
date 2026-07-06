@@ -37,10 +37,11 @@ GPUAllocator &GPUAllocator::operator=(GPUAllocator &&other) noexcept
 std::expected<GPUAllocator, void *>
   GPUAllocator::create(VkInstance instance, VkDevice device, VkPhysicalDevice physical_device) noexcept
 {
-  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-  auto const get_buffer_device_address_fn = reinterpret_cast<PFN_vkGetBufferDeviceAddress>(
-    vkGetDeviceProcAddr(device, "vkGetBufferDeviceAddress"));
+  // NOLINTBEGIN(cppcoreguidelines-pro-type-reinterpret-cast)
+  auto const get_buffer_device_address_fn =
+    reinterpret_cast<PFN_vkGetBufferDeviceAddress>(vkGetDeviceProcAddr(device, "vkGetBufferDeviceAddress"));
   if (get_buffer_device_address_fn == nullptr) { return std::unexpected(nullptr); }
+  // NOLINTEND(cppcoreguidelines-pro-type-reinterpret-cast)
 
   VmaAllocatorCreateInfo info = {};
   info.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
@@ -58,8 +59,9 @@ std::expected<GPUAllocator, void *>
 }
 
 
-GPUAllocator::GPUAllocator(
-  VmaAllocator allocator, VkDevice device, PFN_vkGetBufferDeviceAddress get_buffer_device_address) noexcept
+GPUAllocator::GPUAllocator(VmaAllocator allocator,
+  VkDevice device,
+  PFN_vkGetBufferDeviceAddress get_buffer_device_address) noexcept
   : allocator_{ allocator }, device_{ device }, get_buffer_device_address_{ get_buffer_device_address }
 {}
 
