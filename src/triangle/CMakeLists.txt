@@ -2,7 +2,6 @@ add_executable(triangle
          main.cpp
          application.cpp
          mesh.cpp
-         descriptor_heap.cpp
          mesh_gpu.cpp
          window.cpp
          device.cpp
@@ -12,6 +11,7 @@ add_executable(triangle
          renderer.cpp
          triangle_sort.cpp
          vma_usage.cpp
+         descriptor/descriptor_heap.cpp
          backend/vulkan/gpu_allocator.cpp
 )
 

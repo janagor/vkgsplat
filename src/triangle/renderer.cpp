@@ -8,7 +8,7 @@
 #include <span>
 
 #include "app_state.hpp"
-#include "descriptor_heap.hpp"
+#include "descriptor/descriptor_heap.hpp"
 #include "error.hpp"
 #include "initializers.hpp"
 #include "mesh_gpu.hpp"
