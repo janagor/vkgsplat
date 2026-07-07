@@ -4,8 +4,9 @@
 #include "compute/algorithm.hpp"
 #include "compute/op_tensor_sync_device.hpp"
 #include "compute/op_algo_dispatch.hpp"
-#include "compute/sort_entry.hpp"
+#include "compute/param.hpp"
 #include "compute/tensor.hpp"
+#include "compute/sort_entry.hpp"
 
 #include <array>
 #include <cstdint>
@@ -13,7 +14,6 @@
 #include <print>
 #include <string>
 #include <utility>
-#include <vector>
 
 #include "app_state.hpp"
 #include "descriptor/descriptor_heap.hpp"
@@ -43,23 +43,13 @@ auto init_triangle_sort(Init &init, RenderData &data) -> bool
 
   if (!query_descriptor_heap_layout(init, data)) { return false; }
 
-  std::vector<compute::DescriptorMapping> mappings = {
-    {
-      .binding = 0,
-      .heap_offset = heap_slot_byte_offset(data, HeapSlot::Color),
-    },
-    {
-      .binding = 1,
-      .heap_offset = heap_slot_byte_offset(data, HeapSlot::SortedIndices),
-    },
-    {
-      .binding = 2,
-      .heap_offset = heap_slot_byte_offset(data, HeapSlot::SortEntries),
-    },
-  };
+  compute::ParamList sort_params;
+  sort_params.add(data.color_buffer, HeapSlot::Color)
+    .add(data.sorted_indices, HeapSlot::SortedIndices)
+    .add(data.sort_entries, HeapSlot::SortEntries);
 
   std::string const shader_path = std::string(SHADER_DIRECTORY) + "/sort_triangles.comp.spv";
-  if (!data.sort_algorithm.init(init, data, shader_path, mappings)) { return false; }
+  if (!data.sort_algorithm.init(init, data, shader_path, sort_params)) { return false; }
 
   auto sync_device = std::make_shared<compute::OpTensorSyncDevice>();
   sync_device->add(data.sort_entries);

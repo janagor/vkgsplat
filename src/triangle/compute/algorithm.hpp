@@ -11,6 +11,8 @@ struct RenderData;
 
 namespace compute {
 
+  class ParamList;
+
   struct DescriptorMapping
   {
     uint32_t binding;
@@ -32,6 +34,11 @@ namespace compute {
       RenderData const &data,
       std::string const &shader_path,
       std::span<DescriptorMapping const> mappings) -> bool;
+
+    [[nodiscard]] auto init(Init &init,
+      RenderData const &data,
+      std::string const &shader_path,
+      ParamList const &params) -> bool;
 
     void destroy(Init &init);
 

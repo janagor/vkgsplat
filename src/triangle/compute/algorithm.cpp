@@ -1,5 +1,6 @@
 #include "app_state.hpp"
 #include "compute/algorithm.hpp"
+#include "compute/param.hpp"
 #include "initializers.hpp"
 #include "shader.hpp"
 #include "types.hpp"
@@ -21,6 +22,15 @@ Algorithm &Algorithm::operator=(Algorithm &&other) noexcept
 {
   if (this != &other) { pipeline_ = std::exchange(other.pipeline_, VK_NULL_HANDLE); }
   return *this;
+}
+
+auto Algorithm::init(Init &init,
+  RenderData const &data,
+  std::string const &shader_path,
+  ParamList const &params) -> bool
+{
+  auto const mappings = params.descriptor_mappings(data);
+  return this->init(init, data, shader_path, std::span<DescriptorMapping const>{ mappings });
 }
 
 auto Algorithm::init(Init &init,
