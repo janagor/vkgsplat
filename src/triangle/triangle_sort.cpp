@@ -3,12 +3,15 @@
 
 #include "compute/algorithm.hpp"
 #include "compute/op_algo_dispatch.hpp"
+#include "compute/sort_entry.hpp"
+#include "compute/tensor.hpp"
 
 #include <array>
 #include <cstdint>
 #include <memory>
 #include <print>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "app_state.hpp"
@@ -26,19 +29,16 @@ namespace vkgsplat {
 
 auto init_triangle_sort(Init &init, RenderData &data) -> bool
 {
-  auto const sort_entries_buffer_size = static_cast<VkDeviceSize>(k_sort_size * k_sort_entry_size);
-  auto const sorted_indices_buffer_size = static_cast<VkDeviceSize>(k_triangle_count * sizeof(u32));
+  auto sort_entries = compute::tensor<compute::SortEntry>(init, k_sort_size);
+  auto sorted_indices = compute::tensor<u32>(init, k_triangle_count, 0U);
 
-  auto sort_entries_buffer = init.gpu_allocator.create_storage_buffer(sort_entries_buffer_size);
-  auto sorted_indices_buffer = init.gpu_allocator.create_storage_buffer(sorted_indices_buffer_size);
-
-  if (!sort_entries_buffer || !sorted_indices_buffer) {
-    std::println("Failed to create triangle sort buffers!");
+  if (!sort_entries || !sorted_indices) {
+    std::println("Failed to create triangle sort tensors!");
     return false;
   }
 
-  data.sort_entries_buffer = *sort_entries_buffer;
-  data.sorted_indices_buffer = *sorted_indices_buffer;
+  data.sort_entries = std::move(*sort_entries);
+  data.sorted_indices = std::move(*sorted_indices);
 
   if (!query_descriptor_heap_layout(init, data)) { return false; }
 
@@ -74,11 +74,8 @@ void destroy_triangle_sort(Init &init, RenderData &data)
   data.compute_sequence.clear();
   data.sort_algorithm.destroy(init);
 
-  init.gpu_allocator.destroy_buffer(data.sort_entries_buffer);
-  init.gpu_allocator.destroy_buffer(data.sorted_indices_buffer);
-
-  data.sort_entries_buffer = {};
-  data.sorted_indices_buffer = {};
+  data.sort_entries.destroy(init);
+  data.sorted_indices.destroy(init);
 }
 
 }// namespace vkgsplat

@@ -6,6 +6,8 @@
 #include "mesh.hpp"
 #include "compute/algorithm.hpp"
 #include "compute/sequence.hpp"
+#include "compute/sort_entry.hpp"
+#include "compute/tensor.hpp"
 
 #include <vulkan/vulkan_core.h>
 
@@ -38,8 +40,8 @@ struct RenderData
 
   vulkan::Buffer position_buffer{};
   vulkan::Buffer color_buffer{};
-  vulkan::Buffer sorted_indices_buffer{};
-  vulkan::Buffer sort_entries_buffer{};
+  compute::Tensor<u32> sorted_indices{};
+  compute::Tensor<compute::SortEntry> sort_entries{};
   vulkan::Buffer descriptor_heap_buffer{};
   VkDeviceSize descriptor_heap_size{};
   VkDeviceSize reserved_range_offset{};

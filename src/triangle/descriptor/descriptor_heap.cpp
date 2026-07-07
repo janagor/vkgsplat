@@ -9,7 +9,6 @@
 
 #include "app_state.hpp"
 #include "vulkan_context.hpp"
-#include "types.hpp"
 
 #include <vulkan/vulkan_core.h>
 
@@ -70,7 +69,8 @@ auto refresh_descriptor_heap(Init &init, RenderData &data) -> bool
   destroy_descriptor_heap(init, data);
 
   if (data.position_buffer.handle == VK_NULL_HANDLE || data.color_buffer.handle == VK_NULL_HANDLE
-      || data.sorted_indices_buffer.handle == VK_NULL_HANDLE || data.sort_entries_buffer.handle == VK_NULL_HANDLE) {
+      || data.sorted_indices.buffer().handle == VK_NULL_HANDLE
+      || data.sort_entries.buffer().handle == VK_NULL_HANDLE) {
     return true;
   }
 
@@ -85,8 +85,8 @@ auto refresh_descriptor_heap(Init &init, RenderData &data) -> bool
     data.mesh_buffer_vertex_capacity * sizeof(data.mesh.positions.front()));
   auto const color_buffer_size =
     static_cast<VkDeviceSize>(data.mesh_buffer_vertex_capacity * sizeof(data.mesh.colors.front()));
-  auto const sorted_indices_buffer_size = static_cast<VkDeviceSize>(k_triangle_count * sizeof(u32));
-  auto const sort_entries_buffer_size = static_cast<VkDeviceSize>(k_sort_size * k_sort_entry_size);
+  auto const sorted_indices_buffer_size = data.sorted_indices.byte_size();
+  auto const sort_entries_buffer_size = data.sort_entries.byte_size();
 
   std::vector<std::byte> descriptor_data(data.descriptor_stride * k_heap_descriptor_count);
   std::array<VkDeviceAddressRangeEXT, k_heap_descriptor_count> address_ranges = {
@@ -99,11 +99,11 @@ auto refresh_descriptor_heap(Init &init, RenderData &data) -> bool
       .size = color_buffer_size,
     },
     VkDeviceAddressRangeEXT{
-      .address = init.gpu_allocator.get_buffer_device_address(data.sorted_indices_buffer),
+      .address = init.gpu_allocator.get_buffer_device_address(data.sorted_indices.buffer()),
       .size = sorted_indices_buffer_size,
     },
     VkDeviceAddressRangeEXT{
-      .address = init.gpu_allocator.get_buffer_device_address(data.sort_entries_buffer),
+      .address = init.gpu_allocator.get_buffer_device_address(data.sort_entries.buffer()),
       .size = sort_entries_buffer_size,
     },
   };
