@@ -1,15 +1,15 @@
 add_executable(triangle
          main.cpp
          application.cpp
-         mesh.cpp
          mesh_gpu.cpp
+         depth_buffer.cpp
          window.cpp
          device.cpp
          shader.cpp
          graphics_pipeline.cpp
          swapchain.cpp
          renderer.cpp
-         triangle_sort.cpp
+         sphere_setup.cpp
          vma_usage.cpp
          backend/vulkan/gpu_allocator.cpp
          compute/algorithm.cpp
@@ -28,9 +28,9 @@ vkgsplat_compile_shaders(
   TARGET triangle
   OUTPUT_DIR "${SHADER_DIRECTORY}"
   SOURCES
-    shaders/triangle.vert
-    shaders/triangle.frag
-    shaders/sort_triangles.comp
+    shaders/sphere.vert
+    shaders/sphere.frag
+    shaders/init_spheres.comp
 )
 
 target_link_libraries(

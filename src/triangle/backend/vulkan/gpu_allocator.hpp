@@ -36,6 +36,7 @@ public:
 
   auto create_storage_buffer(VkDeviceSize size) noexcept -> std::expected<Buffer, void *>;
   auto create_heap_buffer(VkDeviceSize size) noexcept -> std::expected<Buffer, void *>;
+  [[nodiscard]] auto vma_allocator() const noexcept -> VmaAllocator { return allocator_; }
   auto get_buffer_device_address(Buffer const &buffer) const noexcept -> VkDeviceAddress;
   void destroy_buffer(Buffer &buffer) noexcept;
   auto map_buffer(Buffer const &buffer) noexcept -> std::expected<std::span<std::byte>, void *>;

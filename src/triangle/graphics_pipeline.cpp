@@ -21,8 +21,8 @@ namespace vkgsplat {
 
 auto create_graphics_pipeline(Init &init, RenderData &data) -> int
 {
-  auto const vert_code = read_file(std::string(SHADER_DIRECTORY) + "/triangle.vert.spv");
-  auto const frag_code = read_file(std::string(SHADER_DIRECTORY) + "/triangle.frag.spv");
+  auto const vert_code = read_file(std::string(SHADER_DIRECTORY) + "/sphere.vert.spv");
+  auto const frag_code = read_file(std::string(SHADER_DIRECTORY) + "/sphere.frag.spv");
 
   VkShaderModule vert_module = create_shader_module(init, vert_code);
   VkShaderModule frag_module = create_shader_module(init, frag_code);
@@ -85,9 +85,12 @@ auto create_graphics_pipeline(Init &init, RenderData &data) -> int
     initializers::PipelineViewportStateCreateInfo(std::span{ &viewport, 1 }, std::span{ &scissor, 1 });
 
   auto const rasterizer = initializers::PipelineRasterizationStateCreateInfo(
-    VK_POLYGON_MODE_FILL, VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_CLOCKWISE);
+    VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE);
 
   auto const multisampling = initializers::PipelineMultisampleStateCreateInfo(VK_SAMPLE_COUNT_1_BIT);
+
+  auto const depth_stencil =
+    initializers::PipelineDepthStencilStateCreateInfo(VK_TRUE, VK_TRUE, VK_COMPARE_OP_LESS);
 
   VkPipelineColorBlendAttachmentState color_blend_attachment = {};
   // NOLINTBEGIN(hicpp-signed-bitwise)
@@ -110,7 +113,7 @@ auto create_graphics_pipeline(Init &init, RenderData &data) -> int
     .viewMask = 0,
     .colorAttachmentCount = 1,
     .pColorAttachmentFormats = &init.swapchain.image_format,
-    .depthAttachmentFormat = VK_FORMAT_UNDEFINED,
+    .depthAttachmentFormat = data.depth_format,
     .stencilAttachmentFormat = VK_FORMAT_UNDEFINED,
   };
 
@@ -128,6 +131,7 @@ auto create_graphics_pipeline(Init &init, RenderData &data) -> int
   pipeline_info.pViewportState = &viewport_state;
   pipeline_info.pRasterizationState = &rasterizer;
   pipeline_info.pMultisampleState = &multisampling;
+  pipeline_info.pDepthStencilState = &depth_stencil;
   pipeline_info.pColorBlendState = &color_blending;
   pipeline_info.pDynamicState = &dynamic_info;
   pipeline_info.layout = VK_NULL_HANDLE;

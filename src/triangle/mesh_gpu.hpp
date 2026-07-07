@@ -5,8 +5,8 @@
 
 namespace vkgsplat {
 
-void destroy_mesh_buffers(Init &init, RenderData &data);
+void destroy_sphere_buffers(Init &init, RenderData &data);
 
-[[nodiscard]] auto upload_mesh_buffers(Init &init, RenderData &data) -> bool;
+[[nodiscard]] auto create_sphere_buffers(Init &init, RenderData &data) -> bool;
 
 }// namespace vkgsplat

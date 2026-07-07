@@ -14,8 +14,6 @@ namespace vkgsplat {
 
 [[nodiscard]] auto create_command_buffers(Init &init, RenderData &data) -> int;
 
-[[nodiscard]] auto sync_mesh_to_gpu(Init &init, RenderData &data) -> bool;
-
 [[nodiscard]] auto create_sync_objects(Init &init, RenderData &data) -> int;
 
 [[nodiscard]] auto draw_frame(Init &init, RenderData &data) -> int;

@@ -1,12 +1,11 @@
-#include "triangle_sort.hpp"
-
+#include "sphere_setup.hpp"
 
 #include "compute/algorithm.hpp"
-#include "compute/op_tensor_sync_device.hpp"
 #include "compute/op_algo_dispatch.hpp"
+#include "compute/op_tensor_sync_device.hpp"
 #include "compute/param.hpp"
-#include "compute/tensor.hpp"
 #include "compute/sort_entry.hpp"
+#include "compute/tensor.hpp"
 
 #include <array>
 #include <cstdint>
@@ -17,8 +16,6 @@
 
 #include "app_state.hpp"
 #include "descriptor/descriptor_heap.hpp"
-// #include "initializers.hpp"
-// #include "shader.hpp"
 #include "types.hpp"
 #include "vulkan_context.hpp"
 
@@ -28,13 +25,13 @@
 
 namespace vkgsplat {
 
-auto init_triangle_sort(Init &init, RenderData &data) -> bool
+auto init_sphere_setup(Init &init, RenderData &data) -> bool
 {
   auto sort_entries = compute::tensor<compute::SortEntry>(init, k_sort_size);
-  auto sorted_indices = compute::tensor<u32>(init, k_triangle_count, 0U);
+  auto sorted_indices = compute::tensor<u32>(init, k_sphere_count, 0U);
 
   if (!sort_entries || !sorted_indices) {
-    std::println("Failed to create triangle sort tensors!");
+    std::println("Failed to create sphere sort tensors!");
     return false;
   }
 
@@ -43,32 +40,37 @@ auto init_triangle_sort(Init &init, RenderData &data) -> bool
 
   if (!query_descriptor_heap_layout(init, data)) { return false; }
 
-  compute::ParamList sort_params;
-  sort_params.add(data.color_buffer, HeapSlot::Color)
+  auto const position_buffer_size = static_cast<VkDeviceSize>(k_sphere_count * sizeof(std::array<f32, 3>));
+  auto const color_buffer_size = static_cast<VkDeviceSize>(k_sphere_count * sizeof(f32));
+
+  compute::ParamList setup_params;
+  setup_params.add(data.position_buffer, position_buffer_size, HeapSlot::Position)
+    .add(data.color_buffer, color_buffer_size, HeapSlot::Color)
     .add(data.sorted_indices, HeapSlot::SortedIndices)
     .add(data.sort_entries, HeapSlot::SortEntries);
 
-  std::string const shader_path = std::string(SHADER_DIRECTORY) + "/sort_triangles.comp.spv";
-  if (!data.sort_algorithm.init(init, data, shader_path, sort_params)) { return false; }
+  std::string const shader_path = std::string(SHADER_DIRECTORY) + "/init_spheres.comp.spv";
+  if (!data.sphere_setup_algorithm.init(init, data, shader_path, setup_params)) { return false; }
 
   auto sync_device = std::make_shared<compute::OpTensorSyncDevice>();
   sync_device->add(data.sort_entries);
   sync_device->add(data.sorted_indices);
   data.compute_sequence.record(sync_device);
 
-  auto dispatch_op = std::make_shared<compute::OpAlgoDispatch>(data.sort_algorithm, std::array<uint32_t, 3>{ 1, 1, 1 });
+  auto dispatch_op =
+    std::make_shared<compute::OpAlgoDispatch>(data.sphere_setup_algorithm, std::array<uint32_t, 3>{ 1, 1, 1 });
   data.compute_sequence.record(dispatch_op);
 
   return refresh_descriptor_heap(init, data);
 }
 
-void dispatch_triangle_sort(Init &init, RenderData const &data, VkCommandBuffer command_buffer)
+void dispatch_sphere_setup(Init &init, RenderData const &data, VkCommandBuffer command_buffer)
 { data.compute_sequence.eval(init, data, command_buffer); }
 
-void destroy_triangle_sort(Init &init, RenderData &data)
+void destroy_sphere_setup(Init &init, RenderData &data)
 {
   data.compute_sequence.clear();
-  data.sort_algorithm.destroy(init);
+  data.sphere_setup_algorithm.destroy(init);
 
   data.sort_entries.destroy(init);
   data.sorted_indices.destroy(init);

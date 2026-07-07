@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "app_state.hpp"
+#include "types.hpp"
 #include "vulkan_context.hpp"
 
 #include <vulkan/vulkan_core.h>
@@ -81,10 +82,8 @@ auto refresh_descriptor_heap(Init &init, RenderData &data) -> bool
   }
 
   auto const descriptor_size = data.descriptor_stride;
-  auto const position_buffer_size = static_cast<VkDeviceSize>(
-    data.mesh_buffer_vertex_capacity * sizeof(data.mesh.positions.front()));
-  auto const color_buffer_size =
-    static_cast<VkDeviceSize>(data.mesh_buffer_vertex_capacity * sizeof(data.mesh.colors.front()));
+  auto const position_buffer_size = static_cast<VkDeviceSize>(k_sphere_count * sizeof(std::array<f32, 3>));
+  auto const color_buffer_size = static_cast<VkDeviceSize>(k_sphere_count * sizeof(f32));
   auto const sorted_indices_buffer_size = data.sorted_indices.byte_size();
   auto const sort_entries_buffer_size = data.sort_entries.byte_size();
 

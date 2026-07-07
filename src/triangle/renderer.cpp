@@ -9,12 +9,13 @@
 
 #include "app_state.hpp"
 #include "vulkan_context.hpp"
+#include "depth_buffer.hpp"
 #include "descriptor/descriptor_heap.hpp"
 #include "error.hpp"
 #include "initializers.hpp"
 #include "mesh_gpu.hpp"
+#include "sphere_setup.hpp"
 #include "swapchain.hpp"
-#include "triangle_sort.hpp"
 #include "types.hpp"
 #include "vulkan_bootstrap.hpp"
 #include "window.hpp"
@@ -27,13 +28,21 @@ namespace vkgsplat {
 
 namespace {
 
-void record_triangle_draw(Init &init, RenderData const &data, VkCommandBuffer command_buffer, size_t image_index)
+void record_sphere_draw(Init &init, RenderData const &data, VkCommandBuffer command_buffer, size_t image_index)
 {
   bind_descriptor_heap(init, data, command_buffer);
-  dispatch_triangle_sort(init, data, command_buffer);
+  dispatch_sphere_setup(init, data, command_buffer);
 
   VkImageSubresourceRange const color_subresource_range = {
     .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+    .baseMipLevel = 0,
+    .levelCount = 1,
+    .baseArrayLayer = 0,
+    .layerCount = 1,
+  };
+
+  VkImageSubresourceRange const depth_subresource_range = {
+    .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
     .baseMipLevel = 0,
     .levelCount = 1,
     .baseArrayLayer = 0,
@@ -46,18 +55,27 @@ void record_triangle_draw(Init &init, RenderData const &data, VkCommandBuffer co
     color_subresource_range);
   color_barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
+  auto depth_barrier = initializers::ImageMemoryBarrier(VK_IMAGE_LAYOUT_UNDEFINED,
+    VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+    data.depth_image,
+    depth_subresource_range);
+  depth_barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+
+  std::array<VkImageMemoryBarrier, 2> barriers = { color_barrier, depth_barrier };
   init.disp.cmdPipelineBarrier(command_buffer,
     VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
     0,
     0,
     nullptr,
     0,
     nullptr,
-    1,
-    &color_barrier);
+    static_cast<uint32_t>(barriers.size()),
+    barriers.data());
 
-  VkClearValue const clear_color{ { { 0.0F, 0.0F, 0.0F, 1.0F } } };
+  VkClearValue const clear_color{ { { 0.02F, 0.02F, 0.05F, 1.0F } } };
+  VkClearValue const clear_depth{ { { 1.0F, 0.0F } } };
+
   VkRenderingAttachmentInfo const color_attachment = {
     .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
     .pNext = nullptr,
@@ -71,6 +89,19 @@ void record_triangle_draw(Init &init, RenderData const &data, VkCommandBuffer co
     .clearValue = clear_color,
   };
 
+  VkRenderingAttachmentInfo const depth_attachment = {
+    .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+    .pNext = nullptr,
+    .imageView = data.depth_image_view,
+    .imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+    .resolveMode = VK_RESOLVE_MODE_NONE,
+    .resolveImageView = VK_NULL_HANDLE,
+    .resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+    .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+    .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+    .clearValue = clear_depth,
+  };
+
   VkRect2D const render_area{ .offset = { .x = 0, .y = 0 }, .extent = init.swapchain.extent };
   VkRenderingInfo const rendering_info = {
     .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
@@ -81,7 +112,7 @@ void record_triangle_draw(Init &init, RenderData const &data, VkCommandBuffer co
     .viewMask = 0,
     .colorAttachmentCount = 1,
     .pColorAttachments = &color_attachment,
-    .pDepthAttachment = nullptr,
+    .pDepthAttachment = &depth_attachment,
     .pStencilAttachment = nullptr,
   };
 
@@ -102,8 +133,7 @@ void record_triangle_draw(Init &init, RenderData const &data, VkCommandBuffer co
   init.disp.cmdSetScissor(command_buffer, 0, 1, &scissor);
   init.disp.cmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, data.graphics_pipeline);
 
-  auto const vertex_count = data.mesh.draw_vertex_count();
-  if (vertex_count >= 3) { init.disp.cmdDraw(command_buffer, vertex_count, 1, 0, 0); }
+  init.disp.cmdDraw(command_buffer, k_verts_per_sphere, k_sphere_count, 0, 0);
 
   init.disp.cmdEndRendering(command_buffer);
 
@@ -170,7 +200,7 @@ auto create_command_buffers(Init &init, RenderData &data) -> int
       return -1;
     }
 
-    record_triangle_draw(init, data, data.command_buffers.at(i), i);
+    record_sphere_draw(init, data, data.command_buffers.at(i), i);
 
     if (init.disp.endCommandBuffer(data.command_buffers.at(i)) != VK_SUCCESS) {
       std::cout << "failed to record command buffer\n";
@@ -178,20 +208,6 @@ auto create_command_buffers(Init &init, RenderData &data) -> int
     }
   }
   return 0;
-}
-
-auto sync_mesh_to_gpu(Init &init, RenderData &data) -> bool
-{
-  init.disp.deviceWaitIdle();
-
-  if (!upload_mesh_buffers(init, data)) { return false; }
-  if (!refresh_descriptor_heap(init, data)) { return false; }
-
-  init.disp.destroyCommandPool(data.command_pool, nullptr);
-  data.command_buffers.clear();
-
-  if (0 != create_command_pool(init, data)) { return false; }
-  return create_command_buffers(init, data) == 0;
 }
 
 auto create_sync_objects(Init &init, RenderData &data) -> int
@@ -283,8 +299,9 @@ void cleanup(Init &init, RenderData &data)
 
   init.disp.destroyCommandPool(data.command_pool, nullptr);
 
-  destroy_mesh_buffers(init, data);
-  destroy_triangle_sort(init, data);
+  destroy_depth_buffer(init, data);
+  destroy_sphere_buffers(init, data);
+  destroy_sphere_setup(init, data);
   destroy_descriptor_heap(init, data);
 
   init.disp.destroyPipeline(data.graphics_pipeline, nullptr);

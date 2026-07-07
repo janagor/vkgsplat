@@ -1,12 +1,12 @@
-#include "swapchain.hpp"
+#include "renderer.hpp"
 
 #include <expected>
 
 #include "app_state.hpp"
 #include "vulkan_context.hpp"
+#include "depth_buffer.hpp"
 #include "error.hpp"
 #include "graphics_pipeline.hpp"
-#include "renderer.hpp"
 #include "vulkan_bootstrap.hpp"
 
 #include <VkBootstrap.h>
@@ -39,10 +39,12 @@ auto recreate_swapchain(Init &init, RenderData &data) -> int
   init.disp.destroyPipeline(data.graphics_pipeline, nullptr);
 
   init.swapchain.destroy_image_views(data.swapchain_image_views);
+  destroy_depth_buffer(init, data);
 
   if (!create_swapchain(init).has_value()) { return -1; }
   if (0 != create_graphics_pipeline(init, data)) { return -1; }
   if (0 != create_swapchain_images(init, data)) { return -1; }
+  if (!create_depth_buffer(init, data)) { return -1; }
   if (0 != create_command_pool(init, data)) { return -1; }
   if (0 != create_command_buffers(init, data)) { return -1; }
   return 0;

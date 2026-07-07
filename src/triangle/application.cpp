@@ -10,13 +10,13 @@
 
 #include "app_state.hpp"
 #include "vulkan_context.hpp"
+#include "depth_buffer.hpp"
 #include "device.hpp"
 #include "graphics_pipeline.hpp"
-#include "mesh.hpp"
 #include "mesh_gpu.hpp"
 #include "renderer.hpp"
+#include "sphere_setup.hpp"
 #include "swapchain.hpp"
-#include "triangle_sort.hpp"
 
 #include <backend/vulkan/gpu_allocator.hpp>
 
@@ -43,11 +43,11 @@ auto run() noexcept -> int
 
     if (!create_swapchain(init).has_value()) { return -1; }
     if (!get_queues(init, render_data).has_value()) { return -1; }
-    render_data.mesh = Mesh::make_triangle_grid();
-    if (!upload_mesh_buffers(init, render_data)) { return -1; }
-    if (!init_triangle_sort(init, render_data)) { return -1; }
+    if (!create_sphere_buffers(init, render_data)) { return -1; }
+    if (!init_sphere_setup(init, render_data)) { return -1; }
     if (0 != create_graphics_pipeline(init, render_data)) { return -1; }
     if (0 != create_swapchain_images(init, render_data)) { return -1; }
+    if (!create_depth_buffer(init, render_data)) { return -1; }
     if (0 != create_command_pool(init, render_data)) { return -1; }
     if (0 != create_command_buffers(init, render_data)) { return -1; }
     if (0 != create_sync_objects(init, render_data)) { return -1; }

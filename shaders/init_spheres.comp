@@ -1,0 +1,93 @@
+#version 450
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(std430, binding = 0) writeonly buffer PositionBuffer {
+	vec3 positions[];
+};
+
+layout(std430, binding = 1) buffer ColorBuffer {
+	float colors[];
+};
+
+layout(std430, binding = 2) writeonly buffer SortedIndices {
+	uint indices[];
+};
+
+struct SortEntry {
+	float luminance;
+	uint index;
+};
+
+layout(std430, binding = 3) buffer SortBuffer {
+	SortEntry entries[];
+};
+
+const uint SPHERE_COUNT = 64u;
+const uint SORT_SIZE = 64u;
+
+uint hash_u32(uint x)
+{
+	x ^= x >> 16u;
+	x *= 0x7feb352du;
+	x ^= x >> 15u;
+	x *= 0x846ca68bu;
+	x ^= x >> 16u;
+	return x;
+}
+
+float hash_f01(uint x) { return float(hash_u32(x)) / 4294967295.0; }
+
+float random_gray(uint seed)
+{
+	return mix(0.05, 1.0, hash_f01(seed * 1664525u + 1013904223u));
+}
+
+float sphere_luminance(float c) { return c; }
+
+void main()
+{
+	uint id = gl_GlobalInvocationID.x;
+
+	if (id < SPHERE_COUNT) {
+		colors[id] = random_gray(id);
+		entries[id].luminance = sphere_luminance(colors[id]);
+		entries[id].index = id;
+	} else if (id < SORT_SIZE) {
+		entries[id].luminance = 1.0e10;
+		entries[id].index = 0u;
+	}
+
+	memoryBarrierBuffer();
+	barrier();
+
+	for (uint k = 2u; k <= SORT_SIZE; k <<= 1u) {
+		for (uint j = k >> 1u; j > 0u; j >>= 1u) {
+			uint i = id;
+			uint ixj = i ^ j;
+			if (ixj > i) {
+				bool ascending = ((i & k) == 0u);
+				bool should_swap = ascending
+					? (entries[i].luminance > entries[ixj].luminance)
+					: (entries[i].luminance < entries[ixj].luminance);
+				if (should_swap) {
+					SortEntry tmp = entries[i];
+					entries[i] = entries[ixj];
+					entries[ixj] = tmp;
+				}
+			}
+			memoryBarrierBuffer();
+			barrier();
+		}
+	}
+
+	if (id < SPHERE_COUNT) {
+		indices[id] = entries[id].index;
+
+		float t = float(id) / float(SPHERE_COUNT - 1u);
+		float x = mix(-4.0, 4.0, t);
+		float y = mix(-1.5, 1.5, hash_f01(id * 48271u + 3u));
+		float z = mix(-2.0, 2.0, hash_f01(id * 69621u + 11u));
+		positions[id] = vec3(x, y, z);
+	}
+}

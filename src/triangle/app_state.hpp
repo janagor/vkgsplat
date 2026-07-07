@@ -3,12 +3,13 @@
 #include <cstddef>
 #include <vector>
 
-#include "mesh.hpp"
+#include "types.hpp"
 #include "compute/algorithm.hpp"
 #include "compute/sequence.hpp"
 #include "compute/sort_entry.hpp"
 #include "compute/tensor.hpp"
 
+#include <vk_mem_alloc.h>
 #include <vulkan/vulkan_core.h>
 
 #include <VkBootstrap.h>
@@ -19,14 +20,11 @@
 namespace vkgsplat {
 
 constexpr int k_max_frames_in_flight = 2;
-constexpr size_t k_mesh_buffer_min_vertex_capacity = 16;
 
-constexpr u32 k_grid_cols = 12;
-constexpr u32 k_grid_rows = 12;
-constexpr u32 k_triangle_count = k_grid_cols * k_grid_rows;
-constexpr u32 k_sort_size = 256;
+constexpr u32 k_sphere_count = 64;
+constexpr u32 k_sort_size = 64;
+constexpr u32 k_verts_per_sphere = 6;
 constexpr size_t k_sort_entry_size = sizeof(f32) + sizeof(u32);
-
 
 struct RenderData
 {
@@ -48,11 +46,13 @@ struct RenderData
   VkDeviceSize reserved_range_size{};
   size_t descriptor_stride{};
 
-  compute::Algorithm sort_algorithm{};
+  compute::Algorithm sphere_setup_algorithm{};
   compute::Sequence compute_sequence{};
 
-  Mesh mesh{};
-  size_t mesh_buffer_vertex_capacity = {};
+  VkImage depth_image{};
+  VmaAllocation depth_allocation{};
+  VkImageView depth_image_view{};
+  VkFormat depth_format{ VK_FORMAT_D32_SFLOAT };
 
   VkCommandPool command_pool{};
   std::vector<VkCommandBuffer> command_buffers;
