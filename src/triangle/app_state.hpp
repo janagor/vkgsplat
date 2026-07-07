@@ -4,6 +4,8 @@
 #include <vector>
 
 #include "mesh.hpp"
+#include "compute/algorithm.hpp"
+#include "compute/sequence.hpp"
 
 #include <vulkan/vulkan_core.h>
 
@@ -44,7 +46,8 @@ struct RenderData
   VkDeviceSize reserved_range_size{};
   size_t descriptor_stride{};
 
-  VkPipeline sort_compute_pipeline{};
+  compute::Algorithm sort_algorithm{};
+  compute::Sequence compute_sequence{};
 
   Mesh mesh{};
   size_t mesh_buffer_vertex_capacity = {};

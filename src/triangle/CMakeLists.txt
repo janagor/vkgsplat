@@ -11,8 +11,10 @@ add_executable(triangle
          renderer.cpp
          triangle_sort.cpp
          vma_usage.cpp
-         descriptor/descriptor_heap.cpp
          backend/vulkan/gpu_allocator.cpp
+         compute/algorithm.cpp
+         compute/op_algo_dispatch.cpp
+         descriptor/descriptor_heap.cpp
 )
 
 include(${CMAKE_SOURCE_DIR}/cmake/CompileShaders.cmake)
