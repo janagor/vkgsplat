@@ -2,6 +2,7 @@
 
 
 #include "compute/algorithm.hpp"
+#include "compute/op_tensor_sync_device.hpp"
 #include "compute/op_algo_dispatch.hpp"
 #include "compute/sort_entry.hpp"
 #include "compute/tensor.hpp"
@@ -60,13 +61,18 @@ auto init_triangle_sort(Init &init, RenderData &data) -> bool
   std::string const shader_path = std::string(SHADER_DIRECTORY) + "/sort_triangles.comp.spv";
   if (!data.sort_algorithm.init(init, data, shader_path, mappings)) { return false; }
 
+  auto sync_device = std::make_shared<compute::OpTensorSyncDevice>();
+  sync_device->add(data.sort_entries);
+  sync_device->add(data.sorted_indices);
+  data.compute_sequence.record(sync_device);
+
   auto dispatch_op = std::make_shared<compute::OpAlgoDispatch>(data.sort_algorithm, std::array<uint32_t, 3>{ 1, 1, 1 });
   data.compute_sequence.record(dispatch_op);
 
   return refresh_descriptor_heap(init, data);
 }
 
-void dispatch_triangle_sort(Init const &init, RenderData const &data, VkCommandBuffer command_buffer)
+void dispatch_triangle_sort(Init &init, RenderData const &data, VkCommandBuffer command_buffer)
 { data.compute_sequence.eval(init, data, command_buffer); }
 
 void destroy_triangle_sort(Init &init, RenderData &data)

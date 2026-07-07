@@ -14,6 +14,8 @@ add_executable(triangle
          backend/vulkan/gpu_allocator.cpp
          compute/algorithm.cpp
          compute/op_algo_dispatch.cpp
+         compute/op_tensor_sync_device.cpp
+         compute/op_tensor_sync_local.cpp
          descriptor/descriptor_heap.cpp
 )
 

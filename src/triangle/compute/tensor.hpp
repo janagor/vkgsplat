@@ -38,6 +38,7 @@ public:
   { return static_cast<VkDeviceSize>(host_data_.size() * sizeof(T)); }
 
   [[nodiscard]] auto sync_to_device(Init &init) const noexcept -> bool;
+  [[nodiscard]] auto sync_from_device(Init &init) noexcept -> bool;
 
 private:
   std::vector<T> host_data_;

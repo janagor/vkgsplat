@@ -13,14 +13,14 @@ namespace compute {
   public:
     virtual ~Operation() = default;
 
-    virtual void pre_eval([[maybe_unused]] Init const &init,
+    virtual void pre_eval([[maybe_unused]] Init &init,
       [[maybe_unused]] RenderData const &data,
       [[maybe_unused]] VkCommandBuffer cmd)
     {}
     virtual void record([[maybe_unused]] Init const &init,
       [[maybe_unused]] RenderData const &data,
       [[maybe_unused]] VkCommandBuffer cmd) = 0;
-    virtual void post_eval([[maybe_unused]] Init const &init,
+    virtual void post_eval([[maybe_unused]] Init &init,
       [[maybe_unused]] RenderData const &data,
       [[maybe_unused]] VkCommandBuffer cmd)
     {}

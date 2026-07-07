@@ -15,7 +15,7 @@ namespace compute {
   public:
     void record(std::shared_ptr<Operation> op) { operations_.push_back(std::move(op)); }
 
-    void eval(Init const &init, RenderData const &data, VkCommandBuffer cmd) const
+    void eval(Init &init, RenderData const &data, VkCommandBuffer cmd) const
     {
       for (auto const &op : operations_) { op->pre_eval(init, data, cmd); }
       for (auto const &op : operations_) { op->record(init, data, cmd); }

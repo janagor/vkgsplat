@@ -53,4 +53,17 @@ auto Tensor<T>::sync_to_device(Init &init) const noexcept -> bool
   return static_cast<bool>(init.gpu_allocator.write_buffer(buffer_, std::span<const T>{ host_data_ }));
 }
 
+template<typename T>
+  requires std::is_trivially_copyable_v<T>
+auto Tensor<T>::sync_from_device(Init &init) noexcept -> bool
+{
+  if (buffer_.handle == VK_NULL_HANDLE) { return false; }
+
+  auto const host_values = init.gpu_allocator.read_buffer<T>(buffer_, host_data_.size());
+  if (!host_values) { return false; }
+
+  host_data_ = std::move(*host_values);
+  return true;
+}
+
 }// namespace vkgsplat::compute

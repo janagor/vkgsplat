@@ -27,7 +27,7 @@ namespace vkgsplat {
 
 namespace {
 
-void record_triangle_draw(Init const &init, RenderData const &data, VkCommandBuffer command_buffer, size_t image_index)
+void record_triangle_draw(Init &init, RenderData const &data, VkCommandBuffer command_buffer, size_t image_index)
 {
   bind_descriptor_heap(init, data, command_buffer);
   dispatch_triangle_sort(init, data, command_buffer);
