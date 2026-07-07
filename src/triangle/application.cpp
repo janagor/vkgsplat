@@ -9,6 +9,7 @@
 #include <GLFW/glfw3.h>
 
 #include "app_state.hpp"
+#include "vulkan_context.hpp"
 #include "device.hpp"
 #include "graphics_pipeline.hpp"
 #include "mesh.hpp"

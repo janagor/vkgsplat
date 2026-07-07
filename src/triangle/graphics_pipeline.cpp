@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "app_state.hpp"
+#include "vulkan_context.hpp"
 #include "descriptor/descriptor_heap.hpp"
 #include "initializers.hpp"
 #include "shader.hpp"

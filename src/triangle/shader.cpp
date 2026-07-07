@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-#include "app_state.hpp"
+#include "vulkan_context.hpp"
 #include "initializers.hpp"
 #include "types.hpp"
 

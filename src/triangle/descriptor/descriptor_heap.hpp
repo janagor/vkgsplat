@@ -2,10 +2,10 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <cstdint>
 #include <span>
 
 #include "app_state.hpp"
+#include "vulkan_context.hpp"
 
 #include <vulkan/vulkan_core.h>
 

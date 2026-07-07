@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "app_state.hpp"
+#include "vulkan_context.hpp"
 
 #include <vulkan/vulkan_core.h>
 

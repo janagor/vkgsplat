@@ -3,6 +3,7 @@
 #include <expected>
 
 #include "app_state.hpp"
+#include "vulkan_context.hpp"
 #include "error.hpp"
 
 namespace vkgsplat {

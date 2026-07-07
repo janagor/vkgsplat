@@ -8,6 +8,7 @@
 #include <span>
 
 #include "app_state.hpp"
+#include "vulkan_context.hpp"
 #include "descriptor/descriptor_heap.hpp"
 #include "error.hpp"
 #include "initializers.hpp"
