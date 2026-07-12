@@ -19,8 +19,18 @@
 
 namespace vkgsplat {
 
+void destroy_graphics_pipeline(Init &init, RenderData &data)
+{
+  if (data.graphics_pipeline != VK_NULL_HANDLE) {
+    init.disp.destroyPipeline(data.graphics_pipeline, nullptr);
+    data.graphics_pipeline = VK_NULL_HANDLE;
+  }
+}
+
 auto create_graphics_pipeline(Init &init, RenderData &data) -> int
 {
+  destroy_graphics_pipeline(init, data);
+
   auto const vert_code = read_file(std::string(SHADER_DIRECTORY) + "/sphere.vert.spv");
   auto const frag_code = read_file(std::string(SHADER_DIRECTORY) + "/sphere.frag.spv");
 

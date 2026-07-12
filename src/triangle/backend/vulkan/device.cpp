@@ -64,8 +64,12 @@ auto device_initialization(Init &init) -> std::expected<void, Error>
       // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
       init.cmd_bind_resource_heap = reinterpret_cast<PFN_vkCmdBindResourceHeapEXT>(
         vkGetDeviceProcAddr(init.device, "vkCmdBindResourceHeapEXT"));
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+      init.cmd_push_data = reinterpret_cast<PFN_vkCmdPushDataEXT>(
+        vkGetDeviceProcAddr(init.device, "vkCmdPushDataEXT"));
 
-      if (init.write_resource_descriptors == nullptr || init.cmd_bind_resource_heap == nullptr) {
+      if (init.write_resource_descriptors == nullptr || init.cmd_bind_resource_heap == nullptr
+          || init.cmd_push_data == nullptr) {
         return std::unexpected{ Error{ std::make_error_code(std::errc::function_not_supported),
           "VK_EXT_descriptor_heap entry points are unavailable" } };
       }

@@ -3,6 +3,7 @@
 #include <expected>
 
 #include "app_state.hpp"
+#include "camera.hpp"
 #include "vulkan_context.hpp"
 #include "error.hpp"
 
@@ -16,7 +17,7 @@ namespace vkgsplat {
 
 [[nodiscard]] auto recreate_swapchain(Init &init, RenderData &data) -> int;
 
-[[nodiscard]] auto draw_frame(Init &init, RenderData &data) -> int;
+[[nodiscard]] auto draw_frame(Init &init, RenderData &data, Camera const &camera) -> int;
 
 void cleanup(Init &init, RenderData &data);
 

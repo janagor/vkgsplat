@@ -69,6 +69,17 @@ function(vkgsplat_setup_dependencies)
     add_library(glfw::glfw ALIAS glfw)
   endif()
 
+  if(NOT TARGET glm::glm)
+    cpmaddpackage(
+      NAME
+      glm
+      GITHUB_REPOSITORY
+      "g-truc/glm"
+      GIT_TAG
+      "1.0.3"
+      SYSTEM
+      YES)
+  endif()
 
   if(NOT TARGET fmtlib::fmtlib)
     cpmaddpackage(

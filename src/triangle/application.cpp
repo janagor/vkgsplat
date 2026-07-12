@@ -11,6 +11,7 @@
 #include <GLFW/glfw3.h>
 
 #include "app_state.hpp"
+#include "camera.hpp"
 #include "backend/vulkan/device.hpp"
 #include "backend/vulkan/depth_buffer.hpp"
 #include "backend/vulkan/graphics_pipeline.hpp"
@@ -55,9 +56,12 @@ auto run() noexcept -> int
     if (0 != create_command_resources(init, render_data)) { return -1; }
     if (0 != create_sync_objects(init, render_data)) { return -1; }
 
+    // NOLINTNEXTLINE(misc-const-correctness) -- updated by input handlers once wired up
+    Camera camera{ k_default_camera_position };
+
     while (0 == glfwWindowShouldClose(init.window)) {
       glfwPollEvents();
-      int const res = draw_frame(init, render_data);
+      int const res = draw_frame(init, render_data, camera);
       if (res != 0) {
         std::cout << "failed to draw frame \n";
         return -1;

@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "app_state.hpp"
+#include "camera.hpp"
 #include "vulkan_context.hpp"
 #include "backend/vulkan/depth_buffer.hpp"
 #include "backend/vulkan/descriptor/descriptor_heap.hpp"
@@ -35,7 +36,12 @@ namespace vkgsplat {
 
 namespace {
 
-void record_sphere_draw(Init &init, RenderData const &data, VkCommandBuffer command_buffer, size_t image_index)
+void record_sphere_draw(Init &init,
+  RenderData const &data,
+  Camera const &camera,
+  f64 aspect_ratio,
+  VkCommandBuffer command_buffer,
+  size_t image_index)
 {
   bind_descriptor_heap(init, data, command_buffer);
   dispatch_sphere_setup(init, data, command_buffer);
@@ -139,9 +145,23 @@ void record_sphere_draw(Init &init, RenderData const &data, VkCommandBuffer comm
     command_buffer,
     rendering_info,
     [&](vkb::DispatchTable &disp, VkCommandBuffer cmd) {
+      CameraPushConstants const push_constants{
+        .view = camera.view_matrix(),
+        .projection = camera.projection_matrix(aspect_ratio),
+      };
+
       disp.cmdSetViewport(cmd, 0, 1, &viewport);
       disp.cmdSetScissor(cmd, 0, 1, &scissor);
       disp.cmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, data.graphics_pipeline);
+
+      VkPushDataInfoEXT const push_info = {
+        .sType = VK_STRUCTURE_TYPE_PUSH_DATA_INFO_EXT,
+        .pNext = nullptr,
+        .offset = 0,
+        .data = { .address = &push_constants, .size = sizeof(CameraPushConstants) },
+      };
+      init.cmd_push_data(cmd, &push_info);
+
       disp.cmdDraw(cmd, k_verts_per_sphere, k_sphere_count, 0, 0);
     });
 
@@ -184,7 +204,8 @@ auto create_command_resources(Init &init, RenderData &data) -> int
   data.command_pool.reset();
 
   auto pool = vulkan::CommandPool::create(std::ref(init.disp),
-    static_cast<u32>(init.device.get_queue_index(vkb::QueueType::graphics).value()));
+    static_cast<u32>(init.device.get_queue_index(vkb::QueueType::graphics).value()),
+    VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
   if (!pool) {
     std::cout << "failed to create command pool\n";
     return -1;
@@ -194,16 +215,6 @@ auto create_command_resources(Init &init, RenderData &data) -> int
   auto buffers = data.command_pool->allocate_buffers(static_cast<u32>(init.swapchain->image_views().size()));
   if (!buffers) { return -1; }
   data.command_buffers = std::move(*buffers);
-
-  for (size_t i = 0; i < data.command_buffers.size(); i++) {
-    auto recorded = vulkan::with_command(std::ref(init.disp),
-      data.command_buffers.at(i).handle(),
-      [&](vkb::DispatchTable &, VkCommandBuffer cmd) { record_sphere_draw(init, data, cmd, i); });
-    if (!recorded) {
-      std::cout << "failed to record command buffer\n";
-      return -1;
-    }
-  }
   return 0;
 }
 
@@ -252,7 +263,7 @@ auto recreate_swapchain(Init &init, RenderData &data) -> int
   data.command_buffers.clear();
   data.command_pool.reset();
 
-  init.disp.destroyPipeline(data.graphics_pipeline, nullptr);
+  destroy_graphics_pipeline(init, data);
 
   destroy_depth_buffer(init, data);
 
@@ -264,8 +275,11 @@ auto recreate_swapchain(Init &init, RenderData &data) -> int
   return 0;
 }
 
-auto draw_frame(Init &init, RenderData &data) -> int
+auto draw_frame(Init &init, RenderData &data, Camera const &camera) -> int
 {
+  auto const aspect_ratio = static_cast<f64>(init.swapchain->extent().width)
+    / static_cast<f64>(init.swapchain->extent().height);
+
   auto *in_flight_fence = data.in_flight_fences.at(data.current_frame).handle();
   init.disp.waitForFences(1, &in_flight_fence, VK_TRUE, UINT64_MAX);
 
@@ -285,6 +299,16 @@ auto draw_frame(Init &init, RenderData &data) -> int
     init.disp.waitForFences(1, &data.image_in_flight.at(image_index), VK_TRUE, UINT64_MAX);
   }
   data.image_in_flight.at(image_index) = in_flight_fence;
+
+  auto recorded = vulkan::with_command(std::ref(init.disp),
+    data.command_buffers.at(image_index).handle(),
+    [&](vkb::DispatchTable &, VkCommandBuffer cmd) {
+      record_sphere_draw(init, data, camera, aspect_ratio, cmd, image_index);
+    });
+  if (!recorded) {
+    std::cout << "failed to record command buffer\n";
+    return -1;
+  }
 
   std::array<VkSemaphore, 1> wait_semaphores = { available_semaphore };
   std::array<VkPipelineStageFlags, 1> wait_stages = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
@@ -331,7 +355,7 @@ void cleanup(Init &init, RenderData &data)
   destroy_sphere_setup(init, data);
   destroy_descriptor_heap(init, data);
 
-  init.disp.destroyPipeline(data.graphics_pipeline, nullptr);
+  destroy_graphics_pipeline(init, data);
 
   init.swapchain.reset();
 

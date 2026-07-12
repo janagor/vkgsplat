@@ -46,6 +46,7 @@ target_link_libraries(
           Vulkan::Vulkan
           vk-bootstrap::vk-bootstrap
           GPUOpen::VulkanMemoryAllocator
+          glm::glm
 )
 
 vkgsplat_configure_linker(triangle)

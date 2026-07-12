@@ -27,6 +27,7 @@ struct Init
   vulkan::GPUAllocator gpu_allocator;
   PFN_vkWriteResourceDescriptorsEXT write_resource_descriptors{};
   PFN_vkCmdBindResourceHeapEXT cmd_bind_resource_heap{};
+  PFN_vkCmdPushDataEXT cmd_push_data{};
 };
 
 
