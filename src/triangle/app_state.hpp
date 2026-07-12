@@ -1,6 +1,8 @@
 #pragma once
 
-#include <cstddef>
+#include <expected>
+#include <functional>
+#include <optional>
 #include <vector>
 
 #include "types.hpp"
@@ -17,6 +19,8 @@
 #include <VkBootstrap.h>
 #include <VkBootstrapDispatch.h>
 
+#include <backend/vulkan/command/buffer.hpp>
+#include <backend/vulkan/command/pool.hpp>
 #include <backend/vulkan/gpu_allocator.hpp>
 
 namespace vkgsplat {
@@ -53,8 +57,8 @@ struct RenderData
   VkImageView depth_image_view{};
   VkFormat depth_format{ VK_FORMAT_D32_SFLOAT };
 
-  VkCommandPool command_pool{};
-  std::vector<VkCommandBuffer> command_buffers;
+  std::optional<vulkan::CommandPool> command_pool;
+  std::vector<vulkan::CommandBuffer> command_buffers;
 
   std::vector<Semaphore> available_semaphores;
   std::vector<Semaphore> finished_semaphore;

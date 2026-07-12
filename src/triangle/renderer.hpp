@@ -10,9 +10,7 @@ namespace vkgsplat {
 
 [[nodiscard]] auto get_queues(Init &init, RenderData &data) -> std::expected<void, Error>;
 
-[[nodiscard]] auto create_command_pool(Init &init, RenderData &data) -> int;
-
-[[nodiscard]] auto create_command_buffers(Init &init, RenderData &data) -> int;
+[[nodiscard]] auto create_command_resources(Init &init, RenderData &data) -> int;
 
 [[nodiscard]] auto create_sync_objects(Init &init, RenderData &data) -> int;
 

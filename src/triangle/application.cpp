@@ -52,8 +52,7 @@ auto run() noexcept -> int
     if (!init_sphere_setup(init, render_data)) { return -1; }
     if (0 != create_graphics_pipeline(init, render_data)) { return -1; }
     if (!create_depth_buffer(init, render_data)) { return -1; }
-    if (0 != create_command_pool(init, render_data)) { return -1; }
-    if (0 != create_command_buffers(init, render_data)) { return -1; }
+    if (0 != create_command_resources(init, render_data)) { return -1; }
     if (0 != create_sync_objects(init, render_data)) { return -1; }
 
     while (0 == glfwWindowShouldClose(init.window)) {

@@ -15,6 +15,8 @@
 #include "descriptor/descriptor_heap.hpp"
 #include "error.hpp"
 #include "graphics_pipeline.hpp"
+#include "backend/vulkan/command/command.hpp"
+#include "backend/vulkan/command/pool.hpp"
 #include "backend/vulkan/initializers.hpp"
 #include "backend/vulkan/rendering.hpp"
 #include "mesh_gpu.hpp"
@@ -176,39 +178,28 @@ auto get_queues(Init &init, RenderData &data) -> std::expected<void, Error>
     });
 }
 
-auto create_command_pool(Init &init, RenderData &data) -> int
+auto create_command_resources(Init &init, RenderData &data) -> int
 {
-  auto const pool_info = initializers::CommandPoolCreateInfo(
-    static_cast<u32>(init.device.get_queue_index(vkb::QueueType::graphics).value()));
+  data.command_buffers.clear();
+  data.command_pool.reset();
 
-  if (init.disp.createCommandPool(&pool_info, nullptr, &data.command_pool) != VK_SUCCESS) {
+  auto pool = vulkan::CommandPool::create(std::ref(init.disp),
+    static_cast<u32>(init.device.get_queue_index(vkb::QueueType::graphics).value()));
+  if (!pool) {
     std::cout << "failed to create command pool\n";
     return -1;
   }
-  return 0;
-}
+  data.command_pool = std::move(*pool);
 
-auto create_command_buffers(Init &init, RenderData &data) -> int
-{
-  data.command_buffers.resize(init.swapchain->image_views().size());
-
-  auto const alloc_info = initializers::CommandBufferAllocateInfo(
-    data.command_pool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, static_cast<u32>(data.command_buffers.size()));
-
-  if (init.disp.allocateCommandBuffers(&alloc_info, data.command_buffers.data()) != VK_SUCCESS) {
-    return -1;
-  }
+  auto buffers = data.command_pool->allocate_buffers(static_cast<u32>(init.swapchain->image_views().size()));
+  if (!buffers) { return -1; }
+  data.command_buffers = std::move(*buffers);
 
   for (size_t i = 0; i < data.command_buffers.size(); i++) {
-    auto const begin_info = initializers::CommandBufferBeginInfo();
-
-    if (init.disp.beginCommandBuffer(data.command_buffers.at(i), &begin_info) != VK_SUCCESS) {
-      return -1;
-    }
-
-    record_sphere_draw(init, data, data.command_buffers.at(i), i);
-
-    if (init.disp.endCommandBuffer(data.command_buffers.at(i)) != VK_SUCCESS) {
+    auto recorded = vulkan::with_command(std::ref(init.disp),
+      data.command_buffers.at(i).handle(),
+      [&](vkb::DispatchTable &, VkCommandBuffer cmd) { record_sphere_draw(init, data, cmd, i); });
+    if (!recorded) {
       std::cout << "failed to record command buffer\n";
       return -1;
     }
@@ -258,7 +249,9 @@ auto recreate_swapchain(Init &init, RenderData &data) -> int
 {
   init.disp.deviceWaitIdle();
 
-  init.disp.destroyCommandPool(data.command_pool, nullptr);
+  data.command_buffers.clear();
+  data.command_pool.reset();
+
   init.disp.destroyPipeline(data.graphics_pipeline, nullptr);
 
   destroy_depth_buffer(init, data);
@@ -267,8 +260,7 @@ auto recreate_swapchain(Init &init, RenderData &data) -> int
   if (!init.swapchain->recreate(init.device, init.window).has_value()) { return -1; }
   if (0 != create_graphics_pipeline(init, data)) { return -1; }
   if (!create_depth_buffer(init, data)) { return -1; }
-  if (0 != create_command_pool(init, data)) { return -1; }
-  if (0 != create_command_buffers(init, data)) { return -1; }
+  if (0 != create_command_resources(init, data)) { return -1; }
   return 0;
 }
 
@@ -299,8 +291,9 @@ auto draw_frame(Init &init, RenderData &data) -> int
   auto *finished_semaphore = data.finished_semaphore.at(image_index).handle();
   std::array<VkSemaphore, 1> signal_semaphores = { finished_semaphore };
 
+  auto *command_buffer = data.command_buffers.at(image_index).handle();
   auto const submit_info = initializers::SubmitInfo(
-    wait_semaphores, wait_stages, std::span{ &data.command_buffers.at(image_index), 1 }, signal_semaphores);
+    wait_semaphores, wait_stages, std::span{ &command_buffer, 1 }, signal_semaphores);
 
   init.disp.resetFences(1, &in_flight_fence);
 
@@ -330,7 +323,8 @@ void cleanup(Init &init, RenderData &data)
   data.finished_semaphore.clear();
   data.in_flight_fences.clear();
 
-  init.disp.destroyCommandPool(data.command_pool, nullptr);
+  data.command_buffers.clear();
+  data.command_pool.reset();
 
   destroy_depth_buffer(init, data);
   destroy_sphere_buffers(init, data);
