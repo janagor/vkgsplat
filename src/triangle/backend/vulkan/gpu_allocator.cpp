@@ -3,7 +3,7 @@
 #include <vulkan/vulkan_core.h>
 
 #include <backend/vulkan/gpu_allocator.hpp>
-#include <initializers.hpp>
+#include <backend/vulkan/initializers.hpp>
 
 #include <cstddef>
 #include <expected>

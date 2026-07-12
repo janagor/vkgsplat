@@ -3,7 +3,7 @@
 #include <print>
 
 #include "app_state.hpp"
-#include "initializers.hpp"
+#include "backend/vulkan/initializers.hpp"
 #include "vulkan_context.hpp"
 
 #include <vk_mem_alloc.h>

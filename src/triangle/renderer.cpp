@@ -15,7 +15,7 @@
 #include "descriptor/descriptor_heap.hpp"
 #include "error.hpp"
 #include "graphics_pipeline.hpp"
-#include "initializers.hpp"
+#include "backend/vulkan/initializers.hpp"
 #include "mesh_gpu.hpp"
 #include "sphere_setup.hpp"
 #include "sync_objects/fence.hpp"

@@ -7,9 +7,9 @@
 #include <string>
 #include <vector>
 
-#include "vulkan_context.hpp"
-#include "initializers.hpp"
+#include "backend/vulkan/initializers.hpp"
 #include "types.hpp"
+#include "vulkan_context.hpp"
 
 #include <vulkan/vulkan_core.h>
 
@@ -42,9 +42,7 @@ auto create_shader_module(Init &init, std::vector<char> const &code) -> VkShader
   auto const create_info = initializers::ShaderModuleCreateInfo(code_span);
 
   VkShaderModule shader_module = nullptr;
-  if (init.disp.createShaderModule(&create_info, nullptr, &shader_module) != VK_SUCCESS) {
-    return VK_NULL_HANDLE;
-  }
+  if (init.disp.createShaderModule(&create_info, nullptr, &shader_module) != VK_SUCCESS) { return VK_NULL_HANDLE; }
 
   return shader_module;
 }
