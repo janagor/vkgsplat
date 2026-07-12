@@ -16,6 +16,7 @@
 #include "error.hpp"
 #include "graphics_pipeline.hpp"
 #include "backend/vulkan/initializers.hpp"
+#include "backend/vulkan/rendering.hpp"
 #include "mesh_gpu.hpp"
 #include "sphere_setup.hpp"
 #include "sync_objects/fence.hpp"
@@ -132,14 +133,15 @@ void record_sphere_draw(Init &init, RenderData const &data, VkCommandBuffer comm
   scissor.offset = { .x = 0, .y = 0 };
   scissor.extent = init.swapchain->extent();
 
-  init.disp.cmdBeginRendering(command_buffer, &rendering_info);
-  init.disp.cmdSetViewport(command_buffer, 0, 1, &viewport);
-  init.disp.cmdSetScissor(command_buffer, 0, 1, &scissor);
-  init.disp.cmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, data.graphics_pipeline);
-
-  init.disp.cmdDraw(command_buffer, k_verts_per_sphere, k_sphere_count, 0, 0);
-
-  init.disp.cmdEndRendering(command_buffer);
+  vulkan::with_rendering(std::ref(init.disp),
+    command_buffer,
+    rendering_info,
+    [&](vkb::DispatchTable &disp, VkCommandBuffer cmd) {
+      disp.cmdSetViewport(cmd, 0, 1, &viewport);
+      disp.cmdSetScissor(cmd, 0, 1, &scissor);
+      disp.cmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, data.graphics_pipeline);
+      disp.cmdDraw(cmd, k_verts_per_sphere, k_sphere_count, 0, 0);
+    });
 
   auto present_barrier = initializers::ImageMemoryBarrier(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
     VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
