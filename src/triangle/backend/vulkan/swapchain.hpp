@@ -1,0 +1,55 @@
+#pragma once
+
+#include <expected>
+#include <functional>
+#include <vector>
+
+#include "error.hpp"
+#include "types.hpp"
+
+#include <VkBootstrap.h>
+#include <VkBootstrapDispatch.h>
+#include <vulkan/vulkan_core.h>
+
+struct GLFWwindow;
+
+namespace vkgsplat::vulkan {
+
+class Swapchain
+{
+public:
+  Swapchain() = delete;
+  ~Swapchain();
+
+  Swapchain(Swapchain const &) = delete;
+  auto operator=(Swapchain const &) -> Swapchain & = delete;
+
+  Swapchain(Swapchain &&other) noexcept;
+  auto operator=(Swapchain &&other) noexcept -> Swapchain &;
+
+  [[nodiscard]] static auto create(vkb::Device const &device,
+    GLFWwindow *window,
+    std::reference_wrapper<vkb::DispatchTable> disp) -> std::expected<Swapchain, Error>;
+
+  [[nodiscard]] auto recreate(vkb::Device const &device, GLFWwindow *window) -> std::expected<void, Error>;
+
+  [[nodiscard]] auto handle() const noexcept -> VkSwapchainKHR { return swapchain_.swapchain; }
+  [[nodiscard]] auto format() const noexcept -> VkFormat { return swapchain_.image_format; }
+  [[nodiscard]] auto extent() const noexcept -> VkExtent2D const & { return swapchain_.extent; }
+  [[nodiscard]] auto image_count() const noexcept -> u32 { return swapchain_.image_count; }
+  [[nodiscard]] auto images() const noexcept -> std::vector<VkImage> const & { return images_; }
+  [[nodiscard]] auto image_views() const noexcept -> std::vector<VkImageView> const & { return image_views_; }
+
+private:
+  Swapchain(vkb::Swapchain swapchain, std::reference_wrapper<vkb::DispatchTable> disp) noexcept;
+
+  void cleanup() noexcept;
+  [[nodiscard]] auto init_images_and_views() -> std::expected<void, Error>;
+
+  vkb::Swapchain swapchain_;
+  std::vector<VkImage> images_;
+  std::vector<VkImageView> image_views_;
+  std::reference_wrapper<vkb::DispatchTable> disp_;
+};
+
+}// namespace vkgsplat::vulkan

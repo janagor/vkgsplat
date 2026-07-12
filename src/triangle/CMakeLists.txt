@@ -7,7 +7,7 @@ add_executable(triangle
          device.cpp
          shader.cpp
          graphics_pipeline.cpp
-         swapchain.cpp
+         backend/vulkan/swapchain.cpp
          renderer.cpp
          sync_objects/fence.cpp
          sync_objects/semaphore.cpp

@@ -1,7 +1,9 @@
 #include "application.hpp"
 
 #include <exception>
+#include <functional>
 #include <iostream>
+#include <memory>
 #include <print>
 #include <utility>
 
@@ -16,9 +18,9 @@
 #include "mesh_gpu.hpp"
 #include "renderer.hpp"
 #include "sphere_setup.hpp"
-#include "swapchain.hpp"
 
 #include <backend/vulkan/gpu_allocator.hpp>
+#include <backend/vulkan/swapchain.hpp>
 
 namespace vkgsplat {
 
@@ -41,12 +43,14 @@ auto run() noexcept -> int
     }
     init.gpu_allocator = std::move(*gpu_allocator);
 
-    if (!create_swapchain(init).has_value()) { return -1; }
+    auto swapchain = vulkan::Swapchain::create(init.device, init.window, std::ref(init.disp));
+    if (!swapchain) { return -1; }
+    init.swapchain = std::make_unique<vulkan::Swapchain>(std::move(*swapchain));
+
     if (!get_queues(init, render_data).has_value()) { return -1; }
     if (!create_sphere_buffers(init, render_data)) { return -1; }
     if (!init_sphere_setup(init, render_data)) { return -1; }
     if (0 != create_graphics_pipeline(init, render_data)) { return -1; }
-    if (0 != create_swapchain_images(init, render_data)) { return -1; }
     if (!create_depth_buffer(init, render_data)) { return -1; }
     if (0 != create_command_pool(init, render_data)) { return -1; }
     if (0 != create_command_buffers(init, render_data)) { return -1; }

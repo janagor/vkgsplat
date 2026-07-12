@@ -16,6 +16,8 @@ namespace vkgsplat {
 
 [[nodiscard]] auto create_sync_objects(Init &init, RenderData &data) -> int;
 
+[[nodiscard]] auto recreate_swapchain(Init &init, RenderData &data) -> int;
+
 [[nodiscard]] auto draw_frame(Init &init, RenderData &data) -> int;
 
 void cleanup(Init &init, RenderData &data);

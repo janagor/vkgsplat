@@ -33,9 +33,6 @@ struct RenderData
   VkQueue graphics_queue{};
   VkQueue present_queue{};
 
-  std::vector<VkImage> swapchain_images;
-  std::vector<VkImageView> swapchain_image_views;
-
   VkPipeline graphics_pipeline{};
 
   vulkan::Buffer position_buffer{};

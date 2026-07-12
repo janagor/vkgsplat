@@ -32,7 +32,9 @@ auto create_depth_buffer(Init &init, RenderData &data) -> bool
   auto image_info = initializers::ImageCreateInfo();
   image_info.imageType = VK_IMAGE_TYPE_2D;
   image_info.format = data.depth_format;
-  image_info.extent = { .width = init.swapchain.extent.width, .height = init.swapchain.extent.height, .depth = 1 };
+  image_info.extent = { .width = init.swapchain->extent().width,
+    .height = init.swapchain->extent().height,
+    .depth = 1 };
   image_info.mipLevels = 1;
   image_info.arrayLayers = 1;
   image_info.samples = VK_SAMPLE_COUNT_1_BIT;

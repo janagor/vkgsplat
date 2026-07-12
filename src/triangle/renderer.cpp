@@ -14,10 +14,10 @@
 #include "depth_buffer.hpp"
 #include "descriptor/descriptor_heap.hpp"
 #include "error.hpp"
+#include "graphics_pipeline.hpp"
 #include "initializers.hpp"
 #include "mesh_gpu.hpp"
 #include "sphere_setup.hpp"
-#include "swapchain.hpp"
 #include "sync_objects/fence.hpp"
 #include "sync_objects/semaphore.hpp"
 #include "types.hpp"
@@ -55,7 +55,7 @@ void record_sphere_draw(Init &init, RenderData const &data, VkCommandBuffer comm
 
   auto color_barrier = initializers::ImageMemoryBarrier(VK_IMAGE_LAYOUT_UNDEFINED,
     VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-    data.swapchain_images.at(image_index),
+    init.swapchain->images().at(image_index),
     color_subresource_range);
   color_barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
@@ -83,7 +83,7 @@ void record_sphere_draw(Init &init, RenderData const &data, VkCommandBuffer comm
   VkRenderingAttachmentInfo const color_attachment = {
     .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
     .pNext = nullptr,
-    .imageView = data.swapchain_image_views.at(image_index),
+    .imageView = init.swapchain->image_views().at(image_index),
     .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
     .resolveMode = VK_RESOLVE_MODE_NONE,
     .resolveImageView = VK_NULL_HANDLE,
@@ -106,7 +106,7 @@ void record_sphere_draw(Init &init, RenderData const &data, VkCommandBuffer comm
     .clearValue = clear_depth,
   };
 
-  VkRect2D const render_area{ .offset = { .x = 0, .y = 0 }, .extent = init.swapchain.extent };
+  VkRect2D const render_area{ .offset = { .x = 0, .y = 0 }, .extent = init.swapchain->extent() };
   VkRenderingInfo const rendering_info = {
     .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
     .pNext = nullptr,
@@ -123,14 +123,14 @@ void record_sphere_draw(Init &init, RenderData const &data, VkCommandBuffer comm
   VkViewport viewport = {};
   viewport.x = 0.0F;
   viewport.y = 0.0F;
-  viewport.width = static_cast<float>(init.swapchain.extent.width);
-  viewport.height = static_cast<float>(init.swapchain.extent.height);
+  viewport.width = static_cast<float>(init.swapchain->extent().width);
+  viewport.height = static_cast<float>(init.swapchain->extent().height);
   viewport.minDepth = 0.0F;
   viewport.maxDepth = 1.0F;
 
   VkRect2D scissor = {};
   scissor.offset = { .x = 0, .y = 0 };
-  scissor.extent = init.swapchain.extent;
+  scissor.extent = init.swapchain->extent();
 
   init.disp.cmdBeginRendering(command_buffer, &rendering_info);
   init.disp.cmdSetViewport(command_buffer, 0, 1, &viewport);
@@ -143,7 +143,7 @@ void record_sphere_draw(Init &init, RenderData const &data, VkCommandBuffer comm
 
   auto present_barrier = initializers::ImageMemoryBarrier(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
     VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-    data.swapchain_images.at(image_index),
+    init.swapchain->images().at(image_index),
     color_subresource_range);
   present_barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
@@ -188,7 +188,7 @@ auto create_command_pool(Init &init, RenderData &data) -> int
 
 auto create_command_buffers(Init &init, RenderData &data) -> int
 {
-  data.command_buffers.resize(data.swapchain_image_views.size());
+  data.command_buffers.resize(init.swapchain->image_views().size());
 
   auto const alloc_info = initializers::CommandBufferAllocateInfo(
     data.command_pool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, static_cast<u32>(data.command_buffers.size()));
@@ -219,13 +219,13 @@ auto create_sync_objects(Init &init, RenderData &data) -> int
   data.available_semaphores.clear();
   data.finished_semaphore.clear();
   data.in_flight_fences.clear();
-  data.image_in_flight.assign(init.swapchain.image_count, VK_NULL_HANDLE);
+  data.image_in_flight.assign(init.swapchain->image_count(), VK_NULL_HANDLE);
 
   data.available_semaphores.reserve(k_max_frames_in_flight);
-  data.finished_semaphore.reserve(init.swapchain.image_count);
+  data.finished_semaphore.reserve(init.swapchain->image_count());
   data.in_flight_fences.reserve(k_max_frames_in_flight);
 
-  for (size_t i = 0; i < init.swapchain.image_count; i++) {
+  for (size_t i = 0; i < init.swapchain->image_count(); i++) {
     auto semaphore = Semaphore::create(std::ref(init.disp));
     if (!semaphore) {
       std::cout << "failed to create sync objects\n";
@@ -252,6 +252,24 @@ auto create_sync_objects(Init &init, RenderData &data) -> int
   return 0;
 }
 
+auto recreate_swapchain(Init &init, RenderData &data) -> int
+{
+  init.disp.deviceWaitIdle();
+
+  init.disp.destroyCommandPool(data.command_pool, nullptr);
+  init.disp.destroyPipeline(data.graphics_pipeline, nullptr);
+
+  destroy_depth_buffer(init, data);
+
+  if (init.swapchain == nullptr) { return -1; }
+  if (!init.swapchain->recreate(init.device, init.window).has_value()) { return -1; }
+  if (0 != create_graphics_pipeline(init, data)) { return -1; }
+  if (!create_depth_buffer(init, data)) { return -1; }
+  if (0 != create_command_pool(init, data)) { return -1; }
+  if (0 != create_command_buffers(init, data)) { return -1; }
+  return 0;
+}
+
 auto draw_frame(Init &init, RenderData &data) -> int
 {
   auto *in_flight_fence = data.in_flight_fences.at(data.current_frame).handle();
@@ -260,7 +278,7 @@ auto draw_frame(Init &init, RenderData &data) -> int
   uint32_t image_index = 0;
   auto *available_semaphore = data.available_semaphores.at(data.current_frame).handle();
   VkResult result = init.disp.acquireNextImageKHR(
-    init.swapchain, UINT64_MAX, available_semaphore, VK_NULL_HANDLE, &image_index);
+    init.swapchain->handle(), UINT64_MAX, available_semaphore, VK_NULL_HANDLE, &image_index);
 
   if (result == VK_ERROR_OUT_OF_DATE_KHR) {
     return recreate_swapchain(init, data);
@@ -289,7 +307,7 @@ auto draw_frame(Init &init, RenderData &data) -> int
     return -1;
   }
 
-  std::array<VkSwapchainKHR, 1> const swap_chains = { init.swapchain };
+  std::array<VkSwapchainKHR, 1> const swap_chains = { init.swapchain->handle() };
   auto const present_info = initializers::PresentInfoKHR(signal_semaphores, swap_chains, std::span{ &image_index, 1 });
 
   result = init.disp.queuePresentKHR(data.present_queue, &present_info);
@@ -319,9 +337,8 @@ void cleanup(Init &init, RenderData &data)
 
   init.disp.destroyPipeline(data.graphics_pipeline, nullptr);
 
-  init.swapchain.destroy_image_views(data.swapchain_image_views);
+  init.swapchain.reset();
 
-  vkb::destroy_swapchain(init.swapchain);
   vkb::destroy_device(init.device);
   vkb::destroy_surface(init.instance, init.surface);
   vkb::destroy_instance(init.instance);

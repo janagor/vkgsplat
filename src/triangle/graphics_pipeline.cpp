@@ -72,14 +72,14 @@ auto create_graphics_pipeline(Init &init, RenderData &data) -> int
   VkViewport viewport = {};
   viewport.x = 0.0F;
   viewport.y = 0.0F;
-  viewport.width = static_cast<float>(init.swapchain.extent.width);
-  viewport.height = static_cast<float>(init.swapchain.extent.height);
+  viewport.width = static_cast<float>(init.swapchain->extent().width);
+  viewport.height = static_cast<float>(init.swapchain->extent().height);
   viewport.minDepth = 0.0F;
   viewport.maxDepth = 1.0F;
 
   VkRect2D scissor = {};
   scissor.offset = { .x = 0, .y = 0 };
-  scissor.extent = init.swapchain.extent;
+  scissor.extent = init.swapchain->extent();
 
   auto const viewport_state =
     initializers::PipelineViewportStateCreateInfo(std::span{ &viewport, 1 }, std::span{ &scissor, 1 });
@@ -107,12 +107,13 @@ auto create_graphics_pipeline(Init &init, RenderData &data) -> int
 
   auto dynamic_info = initializers::PipelineDynamicStateCreateInfo(dynamic_states);
 
+  VkFormat const swapchain_format = init.swapchain->format();
   VkPipelineRenderingCreateInfo pipeline_rendering_info = {
     .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
     .pNext = nullptr,
     .viewMask = 0,
     .colorAttachmentCount = 1,
-    .pColorAttachmentFormats = &init.swapchain.image_format,
+    .pColorAttachmentFormats = &swapchain_format,
     .depthAttachmentFormat = data.depth_format,
     .stencilAttachmentFormat = VK_FORMAT_UNDEFINED,
   };

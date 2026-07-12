@@ -1,6 +1,7 @@
 #pragma once
 
 
+#include <memory>
 #include <vulkan/vulkan_core.h>
 
 #define GLFW_INCLUDE_NONE
@@ -10,6 +11,7 @@
 #include <VkBootstrapDispatch.h>
 
 #include <backend/vulkan/gpu_allocator.hpp>
+#include <backend/vulkan/swapchain.hpp>
 
 namespace vkgsplat {
 
@@ -21,7 +23,7 @@ struct Init
   VkSurfaceKHR surface{};
   vkb::Device device{};
   vkb::DispatchTable disp;
-  vkb::Swapchain swapchain{};
+  std::unique_ptr<vulkan::Swapchain> swapchain;
   vulkan::GPUAllocator gpu_allocator;
   PFN_vkWriteResourceDescriptorsEXT write_resource_descriptors{};
   PFN_vkCmdBindResourceHeapEXT cmd_bind_resource_heap{};
