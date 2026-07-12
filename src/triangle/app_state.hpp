@@ -5,13 +5,16 @@
 #include <optional>
 #include <vector>
 
-#include "types.hpp"
-#include "sync_objects/fence.hpp"
-#include "sync_objects/semaphore.hpp"
+#include "backend/vulkan/command/buffer.hpp"
+#include "backend/vulkan/command/pool.hpp"
+#include "backend/vulkan/gpu_allocator.hpp"
+#include "backend/vulkan/sync_objects/fence.hpp"
+#include "backend/vulkan/sync_objects/semaphore.hpp"
 #include "compute/algorithm.hpp"
 #include "compute/sequence.hpp"
 #include "compute/sort_entry.hpp"
 #include "compute/tensor.hpp"
+#include "types.hpp"
 
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan_core.h>
@@ -19,9 +22,6 @@
 #include <VkBootstrap.h>
 #include <VkBootstrapDispatch.h>
 
-#include <backend/vulkan/command/buffer.hpp>
-#include <backend/vulkan/command/pool.hpp>
-#include <backend/vulkan/gpu_allocator.hpp>
 
 namespace vkgsplat {
 

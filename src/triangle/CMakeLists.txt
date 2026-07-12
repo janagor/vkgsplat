@@ -10,8 +10,8 @@ add_executable(triangle
          backend/vulkan/swapchain.cpp
          backend/vulkan/command/pool.cpp
          backend/vulkan/renderer.cpp
-         sync_objects/fence.cpp
-         sync_objects/semaphore.cpp
+         backend/vulkan/sync_objects/fence.cpp
+         backend/vulkan/sync_objects/semaphore.cpp
          sphere_setup.cpp
          vma_usage.cpp
          backend/vulkan/gpu_allocator.cpp

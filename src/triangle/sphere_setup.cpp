@@ -1,11 +1,15 @@
 #include "sphere_setup.hpp"
 
+#include "app_state.hpp"
 #include "compute/algorithm.hpp"
 #include "compute/op_algo_dispatch.hpp"
 #include "compute/op_tensor_sync_device.hpp"
 #include "compute/param.hpp"
 #include "compute/sort_entry.hpp"
 #include "compute/tensor.hpp"
+#include "descriptor/descriptor_heap.hpp"
+#include "types.hpp"
+#include "vulkan_context.hpp"
 
 #include <array>
 #include <cstdint>
@@ -14,10 +18,6 @@
 #include <string>
 #include <utility>
 
-#include "app_state.hpp"
-#include "descriptor/descriptor_heap.hpp"
-#include "types.hpp"
-#include "vulkan_context.hpp"
 
 #include <vulkan/vulkan_core.h>
 

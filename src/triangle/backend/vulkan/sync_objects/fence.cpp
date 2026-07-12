@@ -1,4 +1,4 @@
-#include "sync_objects/fence.hpp"
+#include "backend/vulkan/sync_objects/fence.hpp"
 
 #include <expected>
 #include <functional>

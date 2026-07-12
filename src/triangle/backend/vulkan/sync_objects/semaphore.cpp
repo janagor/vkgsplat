@@ -1,12 +1,12 @@
-#include "sync_objects/semaphore.hpp"
+#include "backend/vulkan/sync_objects/semaphore.hpp"
 
 #include <expected>
 #include <functional>
 #include <system_error>
 #include <utility>
 
-#include "error.hpp"
 #include "backend/vulkan/initializers.hpp"
+#include "error.hpp"
 
 #include <VkBootstrapDispatch.h>
 #include <vulkan/vulkan_core.h>
