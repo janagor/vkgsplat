@@ -10,7 +10,7 @@
 
 #include "error.hpp"
 #include "types.hpp"
-#include "vulkan_bootstrap.hpp"
+#include "backend/vulkan/vulkan_bootstrap.hpp"
 
 #include <VkBootstrap.h>
 #include <VkBootstrapDispatch.h>

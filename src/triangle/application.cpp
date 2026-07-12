@@ -12,10 +12,10 @@
 
 #include "app_state.hpp"
 #include "backend/vulkan/device.hpp"
-#include "depth_buffer.hpp"
-#include "graphics_pipeline.hpp"
+#include "backend/vulkan/depth_buffer.hpp"
+#include "backend/vulkan/graphics_pipeline.hpp"
 #include "mesh_gpu.hpp"
-#include "renderer.hpp"
+#include "backend/vulkan/renderer.hpp"
 #include "sphere_setup.hpp"
 #include "vulkan_context.hpp"
 

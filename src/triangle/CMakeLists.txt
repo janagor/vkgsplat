@@ -2,14 +2,14 @@ add_executable(triangle
          main.cpp
          application.cpp
          mesh_gpu.cpp
-         depth_buffer.cpp
          window.cpp
          backend/vulkan/device.cpp
          shader.cpp
-         graphics_pipeline.cpp
+         backend/vulkan/depth_buffer.cpp
+         backend/vulkan/graphics_pipeline.cpp
          backend/vulkan/swapchain.cpp
          backend/vulkan/command/pool.cpp
-         renderer.cpp
+         backend/vulkan/renderer.cpp
          sync_objects/fence.cpp
          sync_objects/semaphore.cpp
          sphere_setup.cpp

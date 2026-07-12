@@ -1,4 +1,4 @@
-#include "renderer.hpp"
+#include "backend/vulkan/renderer.hpp"
 
 #include <array>
 #include <cstddef>
@@ -11,10 +11,10 @@
 
 #include "app_state.hpp"
 #include "vulkan_context.hpp"
-#include "depth_buffer.hpp"
+#include "backend/vulkan/depth_buffer.hpp"
 #include "descriptor/descriptor_heap.hpp"
 #include "error.hpp"
-#include "graphics_pipeline.hpp"
+#include "backend/vulkan/graphics_pipeline.hpp"
 #include "backend/vulkan/command/command.hpp"
 #include "backend/vulkan/command/pool.hpp"
 #include "backend/vulkan/initializers.hpp"
@@ -24,7 +24,7 @@
 #include "sync_objects/fence.hpp"
 #include "sync_objects/semaphore.hpp"
 #include "types.hpp"
-#include "vulkan_bootstrap.hpp"
+#include "backend/vulkan/vulkan_bootstrap.hpp"
 #include "window.hpp"
 
 #include <vulkan/vulkan_core.h>
