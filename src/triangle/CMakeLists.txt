@@ -9,6 +9,8 @@ add_executable(triangle
          graphics_pipeline.cpp
          swapchain.cpp
          renderer.cpp
+         sync_objects/fence.cpp
+         sync_objects/semaphore.cpp
          sphere_setup.cpp
          vma_usage.cpp
          backend/vulkan/gpu_allocator.cpp

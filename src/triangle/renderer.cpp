@@ -4,8 +4,10 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <functional>
 #include <iostream>
 #include <span>
+#include <utility>
 
 #include "app_state.hpp"
 #include "vulkan_context.hpp"
@@ -16,6 +18,8 @@
 #include "mesh_gpu.hpp"
 #include "sphere_setup.hpp"
 #include "swapchain.hpp"
+#include "sync_objects/fence.hpp"
+#include "sync_objects/semaphore.hpp"
 #include "types.hpp"
 #include "vulkan_bootstrap.hpp"
 #include "window.hpp"
@@ -212,38 +216,51 @@ auto create_command_buffers(Init &init, RenderData &data) -> int
 
 auto create_sync_objects(Init &init, RenderData &data) -> int
 {
-  data.available_semaphores.resize(k_max_frames_in_flight);
-  data.finished_semaphore.resize(init.swapchain.image_count);
-  data.in_flight_fences.resize(k_max_frames_in_flight);
-  data.image_in_flight.resize(init.swapchain.image_count, VK_NULL_HANDLE);
+  data.available_semaphores.clear();
+  data.finished_semaphore.clear();
+  data.in_flight_fences.clear();
+  data.image_in_flight.assign(init.swapchain.image_count, VK_NULL_HANDLE);
 
-  auto const semaphore_info = initializers::SemaphoreCreateInfo();
-  auto const fence_info = initializers::FenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
+  data.available_semaphores.reserve(k_max_frames_in_flight);
+  data.finished_semaphore.reserve(init.swapchain.image_count);
+  data.in_flight_fences.reserve(k_max_frames_in_flight);
 
   for (size_t i = 0; i < init.swapchain.image_count; i++) {
-    if (init.disp.createSemaphore(&semaphore_info, nullptr, &data.finished_semaphore.at(i)) != VK_SUCCESS) {
+    auto semaphore = Semaphore::create(std::ref(init.disp));
+    if (!semaphore) {
       std::cout << "failed to create sync objects\n";
       return -1;
     }
+    data.finished_semaphore.push_back(std::move(*semaphore));
   }
 
   for (size_t i = 0; i < k_max_frames_in_flight; i++) {
-    if (init.disp.createSemaphore(&semaphore_info, nullptr, &data.available_semaphores.at(i)) != VK_SUCCESS
-        || init.disp.createFence(&fence_info, nullptr, &data.in_flight_fences.at(i)) != VK_SUCCESS) {
+    auto available = Semaphore::create(std::ref(init.disp));
+    if (!available) {
       std::cout << "failed to create sync objects\n";
       return -1;
     }
+    data.available_semaphores.push_back(std::move(*available));
+
+    auto fence = Fence::create(std::ref(init.disp), VK_FENCE_CREATE_SIGNALED_BIT);
+    if (!fence) {
+      std::cout << "failed to create sync objects\n";
+      return -1;
+    }
+    data.in_flight_fences.push_back(std::move(*fence));
   }
   return 0;
 }
 
 auto draw_frame(Init &init, RenderData &data) -> int
 {
-  init.disp.waitForFences(1, &data.in_flight_fences.at(data.current_frame), VK_TRUE, UINT64_MAX);
+  auto *in_flight_fence = data.in_flight_fences.at(data.current_frame).handle();
+  init.disp.waitForFences(1, &in_flight_fence, VK_TRUE, UINT64_MAX);
 
   uint32_t image_index = 0;
+  auto *available_semaphore = data.available_semaphores.at(data.current_frame).handle();
   VkResult result = init.disp.acquireNextImageKHR(
-    init.swapchain, UINT64_MAX, data.available_semaphores.at(data.current_frame), VK_NULL_HANDLE, &image_index);
+    init.swapchain, UINT64_MAX, available_semaphore, VK_NULL_HANDLE, &image_index);
 
   if (result == VK_ERROR_OUT_OF_DATE_KHR) {
     return recreate_swapchain(init, data);
@@ -255,19 +272,19 @@ auto draw_frame(Init &init, RenderData &data) -> int
   if (data.image_in_flight.at(image_index) != VK_NULL_HANDLE) {
     init.disp.waitForFences(1, &data.image_in_flight.at(image_index), VK_TRUE, UINT64_MAX);
   }
-  data.image_in_flight.at(image_index) = data.in_flight_fences.at(data.current_frame);
+  data.image_in_flight.at(image_index) = in_flight_fence;
 
-  std::array<VkSemaphore, 1> wait_semaphores = { data.available_semaphores.at(data.current_frame) };
+  std::array<VkSemaphore, 1> wait_semaphores = { available_semaphore };
   std::array<VkPipelineStageFlags, 1> wait_stages = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-  std::array<VkSemaphore, 1> signal_semaphores = { data.finished_semaphore.at(image_index) };
+  auto *finished_semaphore = data.finished_semaphore.at(image_index).handle();
+  std::array<VkSemaphore, 1> signal_semaphores = { finished_semaphore };
 
   auto const submit_info = initializers::SubmitInfo(
     wait_semaphores, wait_stages, std::span{ &data.command_buffers.at(image_index), 1 }, signal_semaphores);
 
-  init.disp.resetFences(1, &data.in_flight_fences.at(data.current_frame));
+  init.disp.resetFences(1, &in_flight_fence);
 
-  if (init.disp.queueSubmit(data.graphics_queue, 1, &submit_info, data.in_flight_fences.at(data.current_frame))
-      != VK_SUCCESS) {
+  if (init.disp.queueSubmit(data.graphics_queue, 1, &submit_info, in_flight_fence) != VK_SUCCESS) {
     std::cout << "failed to submit draw command buffer\n";
     return -1;
   }
@@ -289,13 +306,9 @@ auto draw_frame(Init &init, RenderData &data) -> int
 
 void cleanup(Init &init, RenderData &data)
 {
-  for (size_t i = 0; i < init.swapchain.image_count; i++) {
-    init.disp.destroySemaphore(data.finished_semaphore.at(i), nullptr);
-  }
-  for (size_t i = 0; i < k_max_frames_in_flight; i++) {
-    init.disp.destroySemaphore(data.available_semaphores.at(i), nullptr);
-    init.disp.destroyFence(data.in_flight_fences.at(i), nullptr);
-  }
+  data.available_semaphores.clear();
+  data.finished_semaphore.clear();
+  data.in_flight_fences.clear();
 
   init.disp.destroyCommandPool(data.command_pool, nullptr);
 

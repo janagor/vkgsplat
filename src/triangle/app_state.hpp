@@ -4,6 +4,8 @@
 #include <vector>
 
 #include "types.hpp"
+#include "sync_objects/fence.hpp"
+#include "sync_objects/semaphore.hpp"
 #include "compute/algorithm.hpp"
 #include "compute/sequence.hpp"
 #include "compute/sort_entry.hpp"
@@ -57,9 +59,9 @@ struct RenderData
   VkCommandPool command_pool{};
   std::vector<VkCommandBuffer> command_buffers;
 
-  std::vector<VkSemaphore> available_semaphores;
-  std::vector<VkSemaphore> finished_semaphore;
-  std::vector<VkFence> in_flight_fences;
+  std::vector<Semaphore> available_semaphores;
+  std::vector<Semaphore> finished_semaphore;
+  std::vector<Fence> in_flight_fences;
   std::vector<VkFence> image_in_flight;
   size_t current_frame = {};
 };
