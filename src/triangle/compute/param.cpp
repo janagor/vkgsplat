@@ -2,7 +2,7 @@
 
 #include "app_state.hpp"
 #include "compute/algorithm.hpp"
-#include "descriptor/descriptor_heap.hpp"
+#include "backend/vulkan/descriptor/descriptor_heap.hpp"
 
 #include <cstdint>
 #include <vector>

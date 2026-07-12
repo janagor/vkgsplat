@@ -20,7 +20,7 @@ add_executable(triangle
          compute/op_algo_dispatch.cpp
          compute/op_tensor_sync_device.cpp
          compute/op_tensor_sync_local.cpp
-         descriptor/descriptor_heap.cpp
+         backend/vulkan/descriptor/descriptor_heap.cpp
 )
 
 include(${CMAKE_SOURCE_DIR}/cmake/CompileShaders.cmake)

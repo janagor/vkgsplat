@@ -2,7 +2,7 @@
 
 #include "backend/vulkan/gpu_allocator.hpp"
 #include "compute/tensor.hpp"
-#include "descriptor/descriptor_heap.hpp"
+#include "backend/vulkan/descriptor/descriptor_heap.hpp"
 #include "types.hpp"
 
 #include <cstdint>

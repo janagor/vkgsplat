@@ -7,7 +7,7 @@
 #include "compute/param.hpp"
 #include "compute/sort_entry.hpp"
 #include "compute/tensor.hpp"
-#include "descriptor/descriptor_heap.hpp"
+#include "backend/vulkan/descriptor/descriptor_heap.hpp"
 #include "types.hpp"
 #include "vulkan_context.hpp"
 

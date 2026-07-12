@@ -12,7 +12,7 @@
 #include "app_state.hpp"
 #include "vulkan_context.hpp"
 #include "backend/vulkan/depth_buffer.hpp"
-#include "descriptor/descriptor_heap.hpp"
+#include "backend/vulkan/descriptor/descriptor_heap.hpp"
 #include "error.hpp"
 #include "backend/vulkan/graphics_pipeline.hpp"
 #include "backend/vulkan/command/command.hpp"
