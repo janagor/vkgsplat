@@ -4,7 +4,7 @@ add_executable(triangle
          mesh_gpu.cpp
          depth_buffer.cpp
          window.cpp
-         device.cpp
+         backend/vulkan/device.cpp
          shader.cpp
          graphics_pipeline.cpp
          backend/vulkan/swapchain.cpp

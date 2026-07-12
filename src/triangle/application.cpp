@@ -11,13 +11,13 @@
 #include <GLFW/glfw3.h>
 
 #include "app_state.hpp"
-#include "vulkan_context.hpp"
+#include "backend/vulkan/device.hpp"
 #include "depth_buffer.hpp"
-#include "device.hpp"
 #include "graphics_pipeline.hpp"
 #include "mesh_gpu.hpp"
 #include "renderer.hpp"
 #include "sphere_setup.hpp"
+#include "vulkan_context.hpp"
 
 #include <backend/vulkan/gpu_allocator.hpp>
 #include <backend/vulkan/swapchain.hpp>
