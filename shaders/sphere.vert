@@ -31,7 +31,7 @@ void main()
 {
 	uint display_slot = gl_InstanceIndex;
 	uint src_sphere = sorted_indices[display_slot];
-	vec3 center = positions[display_slot];
+	vec3 center = positions[src_sphere];
 	vec2 local = QUAD_VERTS[gl_VertexIndex] * SPHERE_RADIUS;
 
 	vec3 world_pos = center + vec3(local, 0.0);

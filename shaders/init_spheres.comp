@@ -2,7 +2,7 @@
 
 layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 
-layout(std430, binding = 0) writeonly buffer PositionBuffer {
+layout(std430, binding = 0) buffer PositionBuffer {
 	vec3 positions[];
 };
 
@@ -23,8 +23,9 @@ layout(std430, binding = 3) buffer SortBuffer {
 	SortEntry entries[];
 };
 
-const uint SPHERE_COUNT = 64u;
-const uint SORT_SIZE = 64u;
+layout(constant_id = 0) const uint SPHERE_COUNT = 1u;
+layout(constant_id = 1) const uint SORT_SIZE = 1u;
+layout(constant_id = 2) const uint PROCEDURAL = 0u;
 
 uint hash_u32(uint x)
 {
@@ -50,7 +51,15 @@ void main()
 	uint id = gl_GlobalInvocationID.x;
 
 	if (id < SPHERE_COUNT) {
-		colors[id] = random_gray(id);
+		if (PROCEDURAL != 0u) {
+			colors[id] = random_gray(id);
+			float t = float(id) / float(max(SPHERE_COUNT, 2u) - 1u);
+			float x = mix(-4.0, 4.0, t);
+			float y = mix(-1.5, 1.5, hash_f01(id * 48271u + 3u));
+			float z = mix(-2.0, 2.0, hash_f01(id * 69621u + 11u));
+			positions[id] = vec3(x, y, z);
+		}
+
 		entries[id].luminance = sphere_luminance(colors[id]);
 		entries[id].index = id;
 	} else if (id < SORT_SIZE) {
@@ -81,13 +90,5 @@ void main()
 		}
 	}
 
-	if (id < SPHERE_COUNT) {
-		indices[id] = entries[id].index;
-
-		float t = float(id) / float(SPHERE_COUNT - 1u);
-		float x = mix(-4.0, 4.0, t);
-		float y = mix(-1.5, 1.5, hash_f01(id * 48271u + 3u));
-		float z = mix(-2.0, 2.0, hash_f01(id * 69621u + 11u));
-		positions[id] = vec3(x, y, z);
-	}
+	if (id < SPHERE_COUNT) { indices[id] = entries[id].index; }
 }

@@ -22,6 +22,10 @@ auto device_initialization(Init &init) -> std::expected<void, Error>
   descriptor_heap_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_FEATURES_EXT;
   descriptor_heap_features.descriptorHeap = VK_TRUE;
 
+  VkPhysicalDeviceShaderUntypedPointersFeaturesKHR untyped_pointers_features{};
+  untyped_pointers_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_UNTYPED_POINTERS_FEATURES_KHR;
+  untyped_pointers_features.shaderUntypedPointers = VK_TRUE;
+
   VkPhysicalDeviceVulkan12Features features_12{};
   features_12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
   features_12.bufferDeviceAddress = VK_TRUE;
@@ -42,9 +46,11 @@ auto device_initialization(Init &init) -> std::expected<void, Error>
       vkb::PhysicalDeviceSelector phys_device_selector(init.instance);
 
       return VKBResultToExpected(phys_device_selector.set_surface(init.surface)
-          .add_required_extension("VK_EXT_descriptor_heap")
-          .add_required_extension("VK_KHR_buffer_device_address")
+          .add_required_extension(VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME)
+          .add_required_extension(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME)
+          .add_required_extension(VK_KHR_SHADER_UNTYPED_POINTERS_EXTENSION_NAME)
           .add_required_extension_features(descriptor_heap_features)
+          .add_required_extension_features(untyped_pointers_features)
           .set_required_features_12(features_12)
           .set_required_features_13(features_13)
           .select());
