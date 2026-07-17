@@ -1,11 +1,13 @@
 add_executable(triangle
   main.cpp
   application.cpp
+  app_config.cpp
   mesh_gpu.cpp
   window.cpp
   backend/vulkan/device.cpp
   shader.cpp
   io/ply/miniply.cpp
+  io/ply/load_splats.cpp
   backend/vulkan/depth_buffer.cpp
   backend/vulkan/graphics_pipeline.cpp
   backend/vulkan/swapchain.cpp
@@ -51,6 +53,8 @@ target_link_libraries(
 )
 
 vkgsplat_configure_linker(triangle)
+
+target_compile_definitions(triangle PRIVATE VKGSPLAT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
 add_executable(ply_load_test ply_load_test.cpp io/ply/miniply.cpp)
 target_include_directories(ply_load_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

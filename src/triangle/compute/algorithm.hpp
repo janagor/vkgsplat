@@ -33,12 +33,14 @@ namespace compute {
     [[nodiscard]] auto init(Init &init,
       RenderData const &data,
       std::string const &shader_path,
-      std::span<DescriptorMapping const> mappings) -> bool;
+      std::span<DescriptorMapping const> mappings,
+      std::span<const uint32_t> specialization_constants = {}) -> bool;
 
     [[nodiscard]] auto init(Init &init,
       RenderData const &data,
       std::string const &shader_path,
-      ParamList const &params) -> bool;
+      ParamList const &params,
+      std::span<const uint32_t> specialization_constants = {}) -> bool;
 
     void destroy(Init &init);
 

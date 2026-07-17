@@ -27,13 +27,14 @@ namespace vkgsplat {
 
 constexpr int k_max_frames_in_flight = 2;
 
-constexpr u32 k_sphere_count = 64;
-constexpr u32 k_sort_size = 64;
 constexpr u32 k_verts_per_sphere = 6;
 constexpr size_t k_sort_entry_size = sizeof(f32) + sizeof(u32);
 
 struct RenderData
 {
+  u32 splat_count = 0;
+  u32 sort_size = 0;
+  bool procedural = true;
   VkQueue graphics_queue{};
   VkQueue present_queue{};
 

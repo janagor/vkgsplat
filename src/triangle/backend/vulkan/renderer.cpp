@@ -162,7 +162,7 @@ void record_sphere_draw(Init &init,
       };
       init.cmd_push_data(cmd, &push_info);
 
-      disp.cmdDraw(cmd, k_verts_per_sphere, k_sphere_count, 0, 0);
+      disp.cmdDraw(cmd, k_verts_per_sphere, data.splat_count, 0, 0);
     });
 
   auto present_barrier = initializers::ImageMemoryBarrier(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,

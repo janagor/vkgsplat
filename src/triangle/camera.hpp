@@ -20,8 +20,7 @@
 
 namespace vkgsplat {
 
-enum class CameraMovement : u8
-{
+enum class CameraMovement : u8 {
   Forward,
   Backward,
   Left,
@@ -38,7 +37,7 @@ constexpr f64 k_camera_default_zoom = 45.0;
 constexpr f64 k_camera_min_zoom = 1.0;
 constexpr f64 k_camera_max_zoom = 45.0;
 
-inline constexpr glm::dvec3 k_default_camera_position{ 0.0, 1.5, 8.0 };
+inline constexpr glm::dvec3 k_default_camera_position{ 0.0, 1.5, 10.0 };
 
 struct CameraPushConstants
 {
@@ -77,10 +76,8 @@ public:
 
   [[nodiscard]] auto projection_matrix(f64 aspect_ratio) const -> glm::mat4
   {
-    auto proj = glm::perspective(glm::radians(static_cast<float>(zoom_)),
-      static_cast<float>(aspect_ratio),
-      0.1F,
-      100.0F);
+    auto proj =
+      glm::perspective(glm::radians(static_cast<float>(zoom_)), static_cast<float>(aspect_ratio), 0.1F, 100.0F);
     proj[1][1] *= -1.0F;
     return proj;
   }

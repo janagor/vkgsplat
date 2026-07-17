@@ -1,10 +1,12 @@
-#include "app_state.hpp"
 #include "compute/algorithm.hpp"
 #include "compute/param.hpp"
 #include "backend/vulkan/initializers.hpp"
 #include "shader.hpp"
 #include "types.hpp"
 #include "vulkan_context.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
 #include <print>
 #include <span>
 #include <string>
@@ -27,16 +29,18 @@ Algorithm &Algorithm::operator=(Algorithm &&other) noexcept
 auto Algorithm::init(Init &init,
   RenderData const &data,
   std::string const &shader_path,
-  ParamList const &params) -> bool
+  ParamList const &params,
+  std::span<const uint32_t> specialization_constants) -> bool
 {
   auto const mappings = params.descriptor_mappings(data);
-  return this->init(init, data, shader_path, std::span<DescriptorMapping const>{ mappings });
+  return this->init(init, data, shader_path, std::span<DescriptorMapping const>{ mappings }, specialization_constants);
 }
 
 auto Algorithm::init(Init &init,
   RenderData const &data,
   std::string const &shader_path,
-  std::span<DescriptorMapping const> mappings) -> bool
+  std::span<DescriptorMapping const> mappings,
+  std::span<const uint32_t> specialization_constants) -> bool
 {
 
   auto const comp_code = read_file(shader_path);
@@ -76,6 +80,23 @@ auto Algorithm::init(Init &init,
   VkPipelineShaderStageCreateInfo stage =
     initializers::PipelineShaderStageCreateInfo(VK_SHADER_STAGE_COMPUTE_BIT, comp_module, "main");
   stage.pNext = &mapping_info;
+
+  VkSpecializationInfo specialization_info{};
+  std::array<VkSpecializationMapEntry, 3> specialization_map{};
+  if (!specialization_constants.empty()) {
+    for (size_t i = 0; i < specialization_constants.size() && i < specialization_map.size(); ++i) {
+      specialization_map.at(i) = VkSpecializationMapEntry{
+        .constantID = static_cast<uint32_t>(i),
+        .offset = static_cast<uint32_t>(i * sizeof(uint32_t)),
+        .size = sizeof(uint32_t),
+      };
+    }
+    specialization_info.mapEntryCount = static_cast<uint32_t>(specialization_constants.size());
+    specialization_info.pMapEntries = specialization_map.data();
+    specialization_info.dataSize = specialization_constants.size_bytes();
+    specialization_info.pData = specialization_constants.data();
+    stage.pSpecializationInfo = &specialization_info;
+  }
 
   VkPipelineCreateFlags2CreateInfo pipeline_flags = {
     .sType = VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO,

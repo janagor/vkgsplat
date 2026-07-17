@@ -27,8 +27,13 @@ namespace vkgsplat {
 
 auto init_sphere_setup(Init &init, RenderData &data) -> bool
 {
-  auto sort_entries = compute::tensor<compute::SortEntry>(init, k_sort_size);
-  auto sorted_indices = compute::tensor<u32>(init, k_sphere_count, 0U);
+  if (data.splat_count == 0 || data.sort_size == 0) {
+    std::println("Sphere setup requires non-zero splat_count and sort_size!");
+    return false;
+  }
+
+  auto sort_entries = compute::tensor<compute::SortEntry>(init, data.sort_size);
+  auto sorted_indices = compute::tensor<u32>(init, data.splat_count, 0U);
 
   if (!sort_entries || !sorted_indices) {
     std::println("Failed to create sphere sort tensors!");
@@ -40,8 +45,9 @@ auto init_sphere_setup(Init &init, RenderData &data) -> bool
 
   if (!query_descriptor_heap_layout(init, data)) { return false; }
 
-  auto const position_buffer_size = static_cast<VkDeviceSize>(k_sphere_count * sizeof(std::array<f32, 3>));
-  auto const color_buffer_size = static_cast<VkDeviceSize>(k_sphere_count * sizeof(f32));
+  auto const position_buffer_size =
+    static_cast<VkDeviceSize>(data.splat_count * sizeof(std::array<f32, 3>));
+  auto const color_buffer_size = static_cast<VkDeviceSize>(data.splat_count * sizeof(f32));
 
   compute::ParamList setup_params;
   setup_params.add(data.position_buffer, position_buffer_size, HeapSlot::Position)
@@ -49,16 +55,26 @@ auto init_sphere_setup(Init &init, RenderData &data) -> bool
     .add(data.sorted_indices, HeapSlot::SortedIndices)
     .add(data.sort_entries, HeapSlot::SortEntries);
 
+  std::array<uint32_t, 3> const specialization_constants{
+    data.splat_count,
+    data.sort_size,
+    data.procedural ? 1U : 0U,
+  };
+
   std::string const shader_path = std::string(SHADER_DIRECTORY) + "/init_spheres.comp.spv";
-  if (!data.sphere_setup_algorithm.init(init, data, shader_path, setup_params)) { return false; }
+  if (!data.sphere_setup_algorithm.init(
+        init, data, shader_path, setup_params, std::span{ specialization_constants })) {
+    return false;
+  }
 
   auto sync_device = std::make_shared<compute::OpTensorSyncDevice>();
   sync_device->add(data.sort_entries);
   sync_device->add(data.sorted_indices);
   data.compute_sequence.record(sync_device);
 
-  auto dispatch_op =
-    std::make_shared<compute::OpAlgoDispatch>(data.sphere_setup_algorithm, std::array<uint32_t, 3>{ 1, 1, 1 });
+  uint32_t const workgroup_count = (data.sort_size + 63U) / 64U;
+  auto dispatch_op = std::make_shared<compute::OpAlgoDispatch>(
+    data.sphere_setup_algorithm, std::array<uint32_t, 3>{ workgroup_count, 1U, 1U });
   data.compute_sequence.record(dispatch_op);
 
   return refresh_descriptor_heap(init, data);
