@@ -4,7 +4,6 @@
 #include "compute/algorithm.hpp"
 #include "compute/op_algo_dispatch.hpp"
 #include "compute/op_tensor_sync_device.hpp"
-#include "compute/param.hpp"
 #include "compute/sort_entry.hpp"
 #include "compute/tensor.hpp"
 #include "backend/vulkan/descriptor/descriptor_heap.hpp"
@@ -17,7 +16,6 @@
 #include <print>
 #include <string>
 #include <utility>
-
 
 #include <vulkan/vulkan_core.h>
 
@@ -45,16 +43,6 @@ auto init_sphere_setup(Init &init, RenderData &data) -> bool
 
   if (!query_descriptor_heap_layout(init, data)) { return false; }
 
-  auto const position_buffer_size =
-    static_cast<VkDeviceSize>(data.splat_count * sizeof(std::array<f32, 3>));
-  auto const color_buffer_size = static_cast<VkDeviceSize>(data.splat_count * sizeof(f32));
-
-  compute::ParamList setup_params;
-  setup_params.add(data.position_buffer, position_buffer_size, HeapSlot::Position)
-    .add(data.color_buffer, color_buffer_size, HeapSlot::Color)
-    .add(data.sorted_indices, HeapSlot::SortedIndices)
-    .add(data.sort_entries, HeapSlot::SortEntries);
-
   std::array<uint32_t, 3> const specialization_constants{
     data.splat_count,
     data.sort_size,
@@ -62,8 +50,7 @@ auto init_sphere_setup(Init &init, RenderData &data) -> bool
   };
 
   std::string const shader_path = std::string(SHADER_DIRECTORY) + "/init_spheres.comp.spv";
-  if (!data.sphere_setup_algorithm.init(
-        init, data, shader_path, setup_params, std::span{ specialization_constants })) {
+  if (!data.sphere_setup_algorithm.init(init, shader_path, std::span{ specialization_constants })) {
     return false;
   }
 

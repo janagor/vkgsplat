@@ -47,8 +47,12 @@ auto query_descriptor_heap_layout(Init const &init, RenderData &data) -> bool
   init.inst_disp.getPhysicalDeviceProperties2(init.device.physical_device, &props2);
 
   auto const descriptor_size = static_cast<size_t>(heap_props.bufferDescriptorSize);
-  data.descriptor_stride =
-    static_cast<size_t>(align_up(heap_props.bufferDescriptorSize, heap_props.bufferDescriptorAlignment));
+  if (descriptor_size == 0
+      || (heap_props.bufferDescriptorAlignment != 0
+          && heap_props.bufferDescriptorSize % heap_props.bufferDescriptorAlignment != 0)) {
+    return false;
+  }
+  data.descriptor_stride = descriptor_size;
   auto const descriptor_region_size = data.descriptor_stride * k_heap_descriptor_count;
   data.reserved_range_offset = align_up(descriptor_region_size, heap_props.resourceHeapAlignment);
   data.reserved_range_size = heap_props.minResourceHeapReservedRange;

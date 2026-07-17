@@ -1,27 +1,35 @@
-#version 450
+#version 460
+#extension GL_EXT_descriptor_heap : require
+#extension GL_EXT_nonuniform_qualifier : enable
 
 layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 
-layout(std430, binding = 0) buffer PositionBuffer {
+// Heap slot indices must match HeapSlot in descriptor_heap.hpp.
+const uint HEAP_POSITION = 0u;
+const uint HEAP_COLOR = 1u;
+const uint HEAP_SORTED_INDICES = 2u;
+const uint HEAP_SORT_ENTRIES = 3u;
+
+layout(descriptor_heap, std430) buffer PositionBuffer {
 	vec3 positions[];
-};
+} position_buffers[];
 
-layout(std430, binding = 1) buffer ColorBuffer {
+layout(descriptor_heap, std430) buffer ColorBuffer {
 	float colors[];
-};
+} color_buffers[];
 
-layout(std430, binding = 2) writeonly buffer SortedIndices {
+layout(descriptor_heap, std430) writeonly buffer SortedIndices {
 	uint indices[];
-};
+} sorted_index_buffers[];
 
 struct SortEntry {
 	float luminance;
 	uint index;
 };
 
-layout(std430, binding = 3) buffer SortBuffer {
+layout(descriptor_heap, std430) buffer SortBuffer {
 	SortEntry entries[];
-};
+} sort_buffers[];
 
 layout(constant_id = 0) const uint SPHERE_COUNT = 1u;
 layout(constant_id = 1) const uint SORT_SIZE = 1u;
@@ -52,19 +60,20 @@ void main()
 
 	if (id < SPHERE_COUNT) {
 		if (PROCEDURAL != 0u) {
-			colors[id] = random_gray(id);
+			color_buffers[HEAP_COLOR].colors[id] = random_gray(id);
 			float t = float(id) / float(max(SPHERE_COUNT, 2u) - 1u);
 			float x = mix(-4.0, 4.0, t);
 			float y = mix(-1.5, 1.5, hash_f01(id * 48271u + 3u));
 			float z = mix(-2.0, 2.0, hash_f01(id * 69621u + 11u));
-			positions[id] = vec3(x, y, z);
+			position_buffers[HEAP_POSITION].positions[id] = vec3(x, y, z);
 		}
 
-		entries[id].luminance = sphere_luminance(colors[id]);
-		entries[id].index = id;
+		sort_buffers[HEAP_SORT_ENTRIES].entries[id].luminance =
+			sphere_luminance(color_buffers[HEAP_COLOR].colors[id]);
+		sort_buffers[HEAP_SORT_ENTRIES].entries[id].index = id;
 	} else if (id < SORT_SIZE) {
-		entries[id].luminance = 1.0e10;
-		entries[id].index = 0u;
+		sort_buffers[HEAP_SORT_ENTRIES].entries[id].luminance = 1.0e10;
+		sort_buffers[HEAP_SORT_ENTRIES].entries[id].index = 0u;
 	}
 
 	memoryBarrierBuffer();
@@ -75,14 +84,17 @@ void main()
 			uint i = id;
 			uint ixj = i ^ j;
 			if (ixj > i) {
+				float lum_i = sort_buffers[HEAP_SORT_ENTRIES].entries[i].luminance;
+				float lum_j = sort_buffers[HEAP_SORT_ENTRIES].entries[ixj].luminance;
 				bool ascending = ((i & k) == 0u);
-				bool should_swap = ascending
-					? (entries[i].luminance > entries[ixj].luminance)
-					: (entries[i].luminance < entries[ixj].luminance);
+				bool should_swap = ascending ? (lum_i > lum_j) : (lum_i < lum_j);
 				if (should_swap) {
-					SortEntry tmp = entries[i];
-					entries[i] = entries[ixj];
-					entries[ixj] = tmp;
+					uint idx_i = sort_buffers[HEAP_SORT_ENTRIES].entries[i].index;
+					uint idx_j = sort_buffers[HEAP_SORT_ENTRIES].entries[ixj].index;
+					sort_buffers[HEAP_SORT_ENTRIES].entries[i].luminance = lum_j;
+					sort_buffers[HEAP_SORT_ENTRIES].entries[i].index = idx_j;
+					sort_buffers[HEAP_SORT_ENTRIES].entries[ixj].luminance = lum_i;
+					sort_buffers[HEAP_SORT_ENTRIES].entries[ixj].index = idx_i;
 				}
 			}
 			memoryBarrierBuffer();
@@ -90,5 +102,8 @@ void main()
 		}
 	}
 
-	if (id < SPHERE_COUNT) { indices[id] = entries[id].index; }
+	if (id < SPHERE_COUNT) {
+		sorted_index_buffers[HEAP_SORTED_INDICES].indices[id] =
+			sort_buffers[HEAP_SORT_ENTRIES].entries[id].index;
+	}
 }

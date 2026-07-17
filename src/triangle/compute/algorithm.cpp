@@ -1,8 +1,6 @@
 #include "compute/algorithm.hpp"
-#include "compute/param.hpp"
 #include "backend/vulkan/initializers.hpp"
 #include "shader.hpp"
-#include "types.hpp"
 #include "vulkan_context.hpp"
 #include <array>
 #include <cstddef>
@@ -10,10 +8,7 @@
 #include <print>
 #include <span>
 #include <string>
-#include <ranges>
 #include <utility>
-#include <vector>
-#include <vulkan/vulkan.h>//NOLINT
 #include <vulkan/vulkan_core.h>
 
 namespace vkgsplat::compute {
@@ -27,22 +22,9 @@ Algorithm &Algorithm::operator=(Algorithm &&other) noexcept
 }
 
 auto Algorithm::init(Init &init,
-  RenderData const &data,
   std::string const &shader_path,
-  ParamList const &params,
   std::span<const uint32_t> specialization_constants) -> bool
 {
-  auto const mappings = params.descriptor_mappings(data);
-  return this->init(init, data, shader_path, std::span<DescriptorMapping const>{ mappings }, specialization_constants);
-}
-
-auto Algorithm::init(Init &init,
-  RenderData const &data,
-  std::string const &shader_path,
-  std::span<DescriptorMapping const> mappings,
-  std::span<const uint32_t> specialization_constants) -> bool
-{
-
   auto const comp_code = read_file(shader_path);
   VkShaderModule comp_module = create_shader_module(init, comp_code);
   if (comp_module == VK_NULL_HANDLE) {
@@ -50,36 +32,8 @@ auto Algorithm::init(Init &init,
     return false;
   }
 
-  std::vector<VkDescriptorSetAndBindingMappingEXT> vk_mappings =
-    mappings | std::views::transform([&data](auto const &mapping) {
-      return VkDescriptorSetAndBindingMappingEXT{
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_AND_BINDING_MAPPING_EXT,
-        .pNext = nullptr,
-        .descriptorSet = 0,
-        .firstBinding = mapping.binding,
-        .bindingCount = 1,
-        .resourceMask = VK_SPIRV_RESOURCE_TYPE_READ_ONLY_STORAGE_BUFFER_BIT_EXT
-                        | VK_SPIRV_RESOURCE_TYPE_READ_WRITE_STORAGE_BUFFER_BIT_EXT,
-        .source = VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_CONSTANT_OFFSET_EXT,
-        .sourceData = { .constantOffset = { .heapOffset = mapping.heap_offset,
-                          .heapArrayStride = static_cast<u32>(data.descriptor_stride),
-                          .pEmbeddedSampler = nullptr,
-                          .samplerHeapOffset = 0,
-                          .samplerHeapArrayStride = 0 } },
-      };
-    })
-    | std::ranges::to<std::vector>();
-
-  VkShaderDescriptorSetAndBindingMappingInfoEXT mapping_info = {
-    .sType = VK_STRUCTURE_TYPE_SHADER_DESCRIPTOR_SET_AND_BINDING_MAPPING_INFO_EXT,
-    .pNext = nullptr,
-    .mappingCount = static_cast<u32>(vk_mappings.size()),
-    .pMappings = vk_mappings.data(),
-  };
-
   VkPipelineShaderStageCreateInfo stage =
     initializers::PipelineShaderStageCreateInfo(VK_SHADER_STAGE_COMPUTE_BIT, comp_module, "main");
-  stage.pNext = &mapping_info;
 
   VkSpecializationInfo specialization_info{};
   std::array<VkSpecializationMapEntry, 3> specialization_map{};

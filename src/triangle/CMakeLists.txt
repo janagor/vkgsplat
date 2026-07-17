@@ -19,7 +19,6 @@ add_executable(triangle
   vma_usage.cpp
   backend/vulkan/gpu_allocator.cpp
   compute/algorithm.cpp
-  compute/param.cpp
   compute/op_algo_dispatch.cpp
   compute/op_tensor_sync_device.cpp
   compute/op_tensor_sync_local.cpp

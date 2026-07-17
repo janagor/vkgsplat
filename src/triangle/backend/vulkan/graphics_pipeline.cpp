@@ -1,7 +1,6 @@
 #include "backend/vulkan/graphics_pipeline.hpp"
 
 #include <array>
-#include <cstdint>
 #include <iostream>
 #include <span>
 #include <string>
@@ -9,7 +8,6 @@
 
 #include "app_state.hpp"
 #include "vulkan_context.hpp"
-#include "backend/vulkan/descriptor/descriptor_heap.hpp"
 #include "backend/vulkan/initializers.hpp"
 #include "shader.hpp"
 
@@ -42,32 +40,8 @@ auto create_graphics_pipeline(Init &init, RenderData &data) -> int
     return -1;
   }
 
-  VkPipelineShaderStageCreateInfo vert_stage_info =
+  VkPipelineShaderStageCreateInfo const vert_stage_info =
     initializers::PipelineShaderStageCreateInfo(VK_SHADER_STAGE_VERTEX_BIT, vert_module, "main");
-
-  std::array<VkDescriptorSetAndBindingMappingEXT, 1> vertex_mappings = { VkDescriptorSetAndBindingMappingEXT{
-    .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_AND_BINDING_MAPPING_EXT,
-    .pNext = nullptr,
-    .descriptorSet = 0,
-    .firstBinding = 0,
-    .bindingCount = 3,
-    .resourceMask = VK_SPIRV_RESOURCE_TYPE_READ_ONLY_STORAGE_BUFFER_BIT_EXT,
-    .source = VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_CONSTANT_OFFSET_EXT,
-    .sourceData = { .constantOffset = { .heapOffset = heap_slot_byte_offset(data, HeapSlot::Position),
-                      .heapArrayStride = static_cast<uint32_t>(data.descriptor_stride),
-                      .pEmbeddedSampler = nullptr,
-                      .samplerHeapOffset = 0,
-                      .samplerHeapArrayStride = 0 } },
-  } };
-
-  VkShaderDescriptorSetAndBindingMappingInfoEXT vertex_mapping_info = {
-    .sType = VK_STRUCTURE_TYPE_SHADER_DESCRIPTOR_SET_AND_BINDING_MAPPING_INFO_EXT,
-    .pNext = nullptr,
-    .mappingCount = static_cast<uint32_t>(vertex_mappings.size()),
-    .pMappings = vertex_mappings.data(),
-  };
-
-  vert_stage_info.pNext = &vertex_mapping_info;
 
   VkPipelineShaderStageCreateInfo const frag_stage_info =
     initializers::PipelineShaderStageCreateInfo(VK_SHADER_STAGE_FRAGMENT_BIT, frag_module, "main");

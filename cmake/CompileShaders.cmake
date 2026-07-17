@@ -53,14 +53,14 @@ function(vkgsplat_compile_shaders)
     if(VKGSPLAT_SHADER_COMPILER_TYPE STREQUAL "glslc")
       add_custom_command(
         OUTPUT "${_spirv}"
-        COMMAND "${VKGSPLAT_SHADER_COMPILER}" "${_shader}" -o "${_spirv}"
+        COMMAND "${VKGSPLAT_SHADER_COMPILER}" --target-env=vulkan1.4 "${_shader}" -o "${_spirv}"
         DEPENDS "${_shader}"
         COMMENT "Compiling shader ${_shader_name}"
         VERBATIM)
     else()
       add_custom_command(
         OUTPUT "${_spirv}"
-        COMMAND "${VKGSPLAT_SHADER_COMPILER}" -V "${_shader}" -o "${_spirv}"
+        COMMAND "${VKGSPLAT_SHADER_COMPILER}" -V --target-env vulkan1.4 "${_shader}" -o "${_spirv}"
         DEPENDS "${_shader}"
         COMMENT "Compiling shader ${_shader_name}"
         VERBATIM)
