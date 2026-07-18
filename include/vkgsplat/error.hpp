@@ -24,4 +24,4 @@ private:
 };
 
 }// namespace vkgsplat
-#include "error.ipp"
+#include <vkgsplat/error.ipp>

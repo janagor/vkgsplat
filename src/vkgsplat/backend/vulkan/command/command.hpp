@@ -7,7 +7,7 @@
 #include <utility>
 
 #include "backend/vulkan/initializers.hpp"
-#include "error.hpp"
+#include <vkgsplat/error.hpp>
 
 #include <VkBootstrapDispatch.h>
 #include <vulkan/vulkan_core.h>

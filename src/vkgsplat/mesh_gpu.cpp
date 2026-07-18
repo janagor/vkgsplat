@@ -10,7 +10,7 @@
 #include "io/ply/load_splats.hpp"
 #include "app_state.hpp"
 #include "vulkan_context.hpp"
-#include "types.hpp"
+#include <vkgsplat/types.hpp>
 
 #include <vulkan/vulkan_core.h>
 

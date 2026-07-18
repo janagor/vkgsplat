@@ -6,7 +6,7 @@
 #include <string_view>
 #include <vector>
 
-#include "types.hpp"
+#include <vkgsplat/types.hpp>
 
 namespace vkgsplat {
 

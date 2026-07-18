@@ -9,8 +9,8 @@
 
 #include "backend/vulkan/command/buffer.hpp"
 #include "backend/vulkan/initializers.hpp"
-#include "error.hpp"
-#include "types.hpp"
+#include <vkgsplat/error.hpp>
+#include <vkgsplat/types.hpp>
 
 #include <VkBootstrapDispatch.h>
 #include <vulkan/vulkan_core.h>

@@ -3,7 +3,7 @@
 #include <expected>
 #include <system_error>
 
-#include "error.hpp"
+#include <vkgsplat/error.hpp>
 #include "vulkan_context.hpp"
 #include "backend/vulkan/vulkan_bootstrap.hpp"
 #include "window.hpp"

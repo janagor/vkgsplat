@@ -5,7 +5,7 @@
 #include <random>
 
 #include "app_state.hpp"
-#include "types.hpp"
+#include <vkgsplat/types.hpp>
 
 namespace vkgsplat {
 

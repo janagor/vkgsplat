@@ -16,7 +16,7 @@
 #include <glm/gtc/quaternion.hpp>
 #include <glm/trigonometric.hpp>
 
-#include "types.hpp"
+#include <vkgsplat/types.hpp>
 
 namespace vkgsplat {
 

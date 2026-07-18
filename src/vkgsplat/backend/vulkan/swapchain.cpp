@@ -8,8 +8,8 @@
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
-#include "error.hpp"
-#include "types.hpp"
+#include <vkgsplat/error.hpp>
+#include <vkgsplat/types.hpp>
 #include "backend/vulkan/vulkan_bootstrap.hpp"
 
 #include <VkBootstrap.h>

@@ -3,9 +3,9 @@
 #include <expected>
 
 #include "app_state.hpp"
-#include "camera.hpp"
+#include <vkgsplat/camera.hpp>
 #include "vulkan_context.hpp"
-#include "error.hpp"
+#include <vkgsplat/error.hpp>
 
 namespace vkgsplat {
 

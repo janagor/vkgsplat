@@ -1,6 +1,6 @@
 #pragma once
 
-#include "error.hpp"// NOLINT(misc-header-include-cycle)
+#include <vkgsplat/error.hpp>// NOLINT(misc-header-include-cycle)
 
 #include <source_location>
 #include <string>

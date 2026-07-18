@@ -10,11 +10,11 @@
 #include <utility>
 
 #include "app_state.hpp"
-#include "camera.hpp"
+#include <vkgsplat/camera.hpp>
 #include "vulkan_context.hpp"
 #include "backend/vulkan/depth_buffer.hpp"
 #include "backend/vulkan/descriptor/descriptor_heap.hpp"
-#include "error.hpp"
+#include <vkgsplat/error.hpp>
 #include "backend/vulkan/graphics_pipeline.hpp"
 #include "backend/vulkan/command/command.hpp"
 #include "backend/vulkan/command/pool.hpp"
@@ -24,7 +24,7 @@
 #include "sphere_setup.hpp"
 #include "sync_objects/fence.hpp"
 #include "sync_objects/semaphore.hpp"
-#include "types.hpp"
+#include <vkgsplat/types.hpp>
 #include "backend/vulkan/vulkan_bootstrap.hpp"
 #include "window.hpp"
 

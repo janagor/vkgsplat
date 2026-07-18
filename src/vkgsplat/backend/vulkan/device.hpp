@@ -4,7 +4,7 @@
 
 #include "app_state.hpp"
 #include "vulkan_context.hpp"
-#include "error.hpp"
+#include <vkgsplat/error.hpp>
 
 namespace vkgsplat {
 

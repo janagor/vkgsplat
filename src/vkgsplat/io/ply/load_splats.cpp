@@ -1,7 +1,7 @@
 #include "io/ply/load_splats.hpp"
 
 #include "io/ply/miniply.hpp"
-#include "types.hpp"
+#include <vkgsplat/types.hpp>
 
 #include <algorithm>
 #include <array>

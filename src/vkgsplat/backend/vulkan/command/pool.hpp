@@ -5,8 +5,8 @@
 #include <vector>
 
 #include "backend/vulkan/command/buffer.hpp"
-#include "error.hpp"
-#include "types.hpp"
+#include <vkgsplat/error.hpp>
+#include <vkgsplat/types.hpp>
 
 #include <VkBootstrapDispatch.h>
 #include <vulkan/vulkan_core.h>

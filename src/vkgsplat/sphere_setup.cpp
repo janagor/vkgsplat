@@ -7,7 +7,7 @@
 #include "compute/sort_entry.hpp"
 #include "compute/tensor.hpp"
 #include "backend/vulkan/descriptor/descriptor_heap.hpp"
-#include "types.hpp"
+#include <vkgsplat/types.hpp>
 #include "vulkan_context.hpp"
 
 #include <array>
