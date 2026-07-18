@@ -1,4 +1,4 @@
-add_executable(triangle
+add_executable(vkgsplat
   main.cpp
   application.cpp
   app_config.cpp
@@ -30,7 +30,7 @@ include(${CMAKE_SOURCE_DIR}/cmake/CompileShaders.cmake)
 set(SHADER_DIRECTORY "${CMAKE_BINARY_DIR}/shaders")
 
 vkgsplat_compile_shaders(
-  TARGET triangle
+  TARGET vkgsplat
   OUTPUT_DIR "${SHADER_DIRECTORY}"
   SOURCES
     shaders/sphere.vert
@@ -39,7 +39,7 @@ vkgsplat_compile_shaders(
 )
 
 target_link_libraries(
-  triangle
+  vkgsplat
   PRIVATE vkgsplat::vkgsplat_options
           vkgsplat::vkgsplat_warnings
 
@@ -51,9 +51,9 @@ target_link_libraries(
           glm::glm
 )
 
-vkgsplat_configure_linker(triangle)
+vkgsplat_configure_linker(vkgsplat)
 
-target_compile_definitions(triangle PRIVATE VKGSPLAT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+target_compile_definitions(vkgsplat PRIVATE VKGSPLAT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
 add_executable(ply_load_test ply_load_test.cpp io/ply/miniply.cpp)
 target_include_directories(ply_load_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
@@ -67,7 +67,7 @@ vkgsplat_configure_linker(ply_load_test)
 configure_file(${PROJECT_SOURCE_DIR}/include/vkgsplat/example_config.h.in
                ${PROJECT_BINARY_DIR}/include/vkgsplat/example_config.h)
 
-target_include_directories(triangle ${WARNING_GUARD} PUBLIC  $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+target_include_directories(vkgsplat ${WARNING_GUARD} PUBLIC  $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
                                                              $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>
                                                      PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
