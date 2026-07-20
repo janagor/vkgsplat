@@ -18,13 +18,12 @@ namespace {
 
 constexpr f32 k_sh_c0 = 0.28209479177387814F;
 
-[[nodiscard]] auto f_dc_to_grayscale(f32 f_dc_0, f32 f_dc_1, f32 f_dc_2) -> f32
+[[nodiscard]] auto f_dc_to_rgb(f32 f_dc_0, f32 f_dc_1, f32 f_dc_2) -> std::array<f32, 3>
 {
-  f32 const red = 0.5F + (k_sh_c0 * f_dc_0);
-  f32 const green = 0.5F + (k_sh_c0 * f_dc_1);
-  f32 const blue = 0.5F + (k_sh_c0 * f_dc_2);
-  f32 const gray = (0.299F * red) + (0.587F * green) + (0.114F * blue);
-  return std::clamp(gray, 0.0F, 1.0F);
+  f32 const red = std::clamp(0.5F + (k_sh_c0 * f_dc_0), 0.0F, 1.0F);
+  f32 const green = std::clamp(0.5F + (k_sh_c0 * f_dc_1), 0.0F, 1.0F);
+  f32 const blue = std::clamp(0.5F + (k_sh_c0 * f_dc_2), 0.0F, 1.0F);
+  return { red, green, blue };
 }
 
 }// namespace
@@ -73,14 +72,13 @@ auto load_splats_from_ply(std::string_view ply_path, u32 count) -> std::expected
 
     SplatCpuData splats{};
     splats.positions.reserve(splat_count);
-    splats.gray_colors.reserve(splat_count);
+    splats.colors.reserve(splat_count);
 
     for (u32 splat_idx = 0; splat_idx < splat_count; ++splat_idx) {
       size_t const base = static_cast<size_t>(splat_idx) * 3U;
       splats.positions.push_back(
         { positions.at(base), positions.at(base + 1U), positions.at(base + 2U) });
-      splats.gray_colors.push_back(
-        f_dc_to_grayscale(f_dc.at(base), f_dc.at(base + 1U), f_dc.at(base + 2U)));
+      splats.colors.push_back(f_dc_to_rgb(f_dc.at(base), f_dc.at(base + 1U), f_dc.at(base + 2U)));
     }
 
     return splats;

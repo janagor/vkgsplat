@@ -33,7 +33,7 @@ auto create_sphere_buffers(Init &init,
 
   if (cpu_data) {
     auto const &splats = cpu_data->get();
-    if (splats.positions.size() != splats.gray_colors.size() || splats.positions.empty()) {
+    if (splats.positions.size() != splats.colors.size() || splats.positions.empty()) {
       std::println("Invalid splat CPU data!");
       return false;
     }
@@ -48,7 +48,8 @@ auto create_sphere_buffers(Init &init,
 
   auto const position_buffer_size =
     static_cast<VkDeviceSize>(data.splat_count * sizeof(std::array<f32, 3>));
-  auto const color_buffer_size = static_cast<VkDeviceSize>(data.splat_count * sizeof(f32));
+  auto const color_buffer_size =
+    static_cast<VkDeviceSize>(data.splat_count * sizeof(std::array<f32, 3>));
 
   auto position_buffer = init.gpu_allocator.create_storage_buffer(position_buffer_size);
   auto color_buffer = init.gpu_allocator.create_storage_buffer(color_buffer_size);
@@ -67,15 +68,15 @@ auto create_sphere_buffers(Init &init,
       return false;
     }
 
-    if (!init.gpu_allocator.write_buffer(*color_buffer, std::span{ splats.gray_colors })) {
+    if (!init.gpu_allocator.write_buffer(*color_buffer, std::span{ splats.colors })) {
       std::println("Failed to upload splat colors!");
       return false;
     }
     return true;
   }
 
-  std::vector<f32> const zero_colors(data.splat_count, 0.0F);
-  if (!init.gpu_allocator.write_buffer(*color_buffer, std::span<const f32>{ zero_colors })) {
+  std::vector<std::array<f32, 3>> const zero_colors(data.splat_count, std::array<f32, 3>{ 0.0F, 0.0F, 0.0F });
+  if (!init.gpu_allocator.write_buffer(*color_buffer, std::span{ zero_colors })) {
     std::println("Failed to zero-initialize color buffer!");
     return false;
   }

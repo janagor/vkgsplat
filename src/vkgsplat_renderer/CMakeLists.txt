@@ -12,6 +12,10 @@ target_link_libraries(
 
 vkgsplat_configure_linker(vkgsplat_renderer)
 
-target_compile_definitions(vkgsplat_renderer PRIVATE VKGSPLAT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+target_compile_definitions(
+  vkgsplat_renderer
+  PRIVATE VKGSPLAT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
-target_include_directories(vkgsplat_renderer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(
+  vkgsplat_renderer
+  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

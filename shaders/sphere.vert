@@ -20,7 +20,7 @@ layout(descriptor_heap, std430) readonly buffer PositionBuffer {
 } position_buffers[];
 
 layout(descriptor_heap, std430) readonly buffer ColorBuffer {
-	float colors[];
+	vec3 colors[];
 } color_buffers[];
 
 layout(descriptor_heap, std430) readonly buffer SortedIndices {
@@ -42,6 +42,6 @@ void main()
 
 	vec3 world_pos = center + vec3(local, 0.0);
 	gl_Position = camera.proj * camera.view * vec4(world_pos, 1.0);
-	fragColor = vec3(color_buffers[HEAP_COLOR].colors[src_sphere]);
+	fragColor = color_buffers[HEAP_COLOR].colors[src_sphere];
 	fragLocal = QUAD_VERTS[gl_VertexIndex];
 }

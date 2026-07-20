@@ -11,8 +11,7 @@ void main()
 	float dist_sq = dot(fragLocal, fragLocal);
 	if (dist_sq > 1.0) { discard; }
 
-	float gray = fragColor.r;
 	float shade = sqrt(max(0.0, 1.0 - dist_sq));
-	float lit = gray * (0.35 + 0.65 * shade);
-	outColor = vec4(vec3(lit), 1.0);
+	vec3 lit = fragColor * (0.35 + 0.65 * shade);
+	outColor = vec4(lit, 1.0);
 }

@@ -15,7 +15,7 @@ layout(descriptor_heap, std430) buffer PositionBuffer {
 } position_buffers[];
 
 layout(descriptor_heap, std430) buffer ColorBuffer {
-	float colors[];
+	vec3 colors[];
 } color_buffers[];
 
 layout(descriptor_heap, std430) writeonly buffer SortedIndices {
@@ -47,12 +47,18 @@ uint hash_u32(uint x)
 
 float hash_f01(uint x) { return float(hash_u32(x)) / 4294967295.0; }
 
-float random_gray(uint seed)
+vec3 random_color(uint seed)
 {
-	return mix(0.05, 1.0, hash_f01(seed * 1664525u + 1013904223u));
+	return vec3(
+		mix(0.05, 1.0, hash_f01(seed * 1664525u + 1013904223u)),
+		mix(0.05, 1.0, hash_f01(seed * 22695477u + 1u)),
+		mix(0.05, 1.0, hash_f01(seed * 1103515245u + 12345u)));
 }
 
-float sphere_luminance(float c) { return c; }
+float sphere_luminance(vec3 c)
+{
+	return dot(c, vec3(0.299, 0.587, 0.114));
+}
 
 void main()
 {
@@ -60,7 +66,7 @@ void main()
 
 	if (id < SPHERE_COUNT) {
 		if (PROCEDURAL != 0u) {
-			color_buffers[HEAP_COLOR].colors[id] = random_gray(id);
+			color_buffers[HEAP_COLOR].colors[id] = random_color(id);
 			float t = float(id) / float(max(SPHERE_COUNT, 2u) - 1u);
 			float x = mix(-4.0, 4.0, t);
 			float y = mix(-1.5, 1.5, hash_f01(id * 48271u + 3u));
