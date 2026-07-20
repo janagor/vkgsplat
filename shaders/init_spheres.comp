@@ -11,11 +11,11 @@ const uint HEAP_SORTED_INDICES = 2u;
 const uint HEAP_SORT_ENTRIES = 3u;
 
 layout(descriptor_heap, std430) buffer PositionBuffer {
-	vec3 positions[];
+	float positions[];
 } position_buffers[];
 
 layout(descriptor_heap, std430) buffer ColorBuffer {
-	vec3 colors[];
+	float colors[];
 } color_buffers[];
 
 layout(descriptor_heap, std430) writeonly buffer SortedIndices {
@@ -65,17 +65,27 @@ void main()
 	uint id = gl_GlobalInvocationID.x;
 
 	if (id < SPHERE_COUNT) {
+		uint color_base = id * 3u;
 		if (PROCEDURAL != 0u) {
-			color_buffers[HEAP_COLOR].colors[id] = random_color(id);
+			vec3 color = random_color(id);
+			color_buffers[HEAP_COLOR].colors[color_base] = color.r;
+			color_buffers[HEAP_COLOR].colors[color_base + 1u] = color.g;
+			color_buffers[HEAP_COLOR].colors[color_base + 2u] = color.b;
 			float t = float(id) / float(max(SPHERE_COUNT, 2u) - 1u);
 			float x = mix(-4.0, 4.0, t);
 			float y = mix(-1.5, 1.5, hash_f01(id * 48271u + 3u));
 			float z = mix(-2.0, 2.0, hash_f01(id * 69621u + 11u));
-			position_buffers[HEAP_POSITION].positions[id] = vec3(x, y, z);
+			uint pos_base = id * 3u;
+			position_buffers[HEAP_POSITION].positions[pos_base] = x;
+			position_buffers[HEAP_POSITION].positions[pos_base + 1u] = y;
+			position_buffers[HEAP_POSITION].positions[pos_base + 2u] = z;
 		}
 
-		sort_buffers[HEAP_SORT_ENTRIES].entries[id].luminance =
-			sphere_luminance(color_buffers[HEAP_COLOR].colors[id]);
+		vec3 color = vec3(
+			color_buffers[HEAP_COLOR].colors[color_base],
+			color_buffers[HEAP_COLOR].colors[color_base + 1u],
+			color_buffers[HEAP_COLOR].colors[color_base + 2u]);
+		sort_buffers[HEAP_SORT_ENTRIES].entries[id].luminance = sphere_luminance(color);
 		sort_buffers[HEAP_SORT_ENTRIES].entries[id].index = id;
 	} else if (id < SORT_SIZE) {
 		sort_buffers[HEAP_SORT_ENTRIES].entries[id].luminance = 1.0e10;

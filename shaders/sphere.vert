@@ -16,11 +16,11 @@ const uint HEAP_COLOR = 1u;
 const uint HEAP_SORTED_INDICES = 2u;
 
 layout(descriptor_heap, std430) readonly buffer PositionBuffer {
-	vec3 positions[];
+	float positions[];
 } position_buffers[];
 
 layout(descriptor_heap, std430) readonly buffer ColorBuffer {
-	vec3 colors[];
+	float colors[];
 } color_buffers[];
 
 layout(descriptor_heap, std430) readonly buffer SortedIndices {
@@ -37,11 +37,19 @@ void main()
 {
 	uint display_slot = gl_InstanceIndex;
 	uint src_sphere = sorted_index_buffers[HEAP_SORTED_INDICES].sorted_indices[display_slot];
-	vec3 center = position_buffers[HEAP_POSITION].positions[src_sphere];
+	uint pos_base = src_sphere * 3u;
+	uint color_base = src_sphere * 3u;
+	vec3 center = vec3(
+		position_buffers[HEAP_POSITION].positions[pos_base],
+		position_buffers[HEAP_POSITION].positions[pos_base + 1u],
+		position_buffers[HEAP_POSITION].positions[pos_base + 2u]);
 	vec2 local = QUAD_VERTS[gl_VertexIndex] * SPHERE_RADIUS;
 
 	vec3 world_pos = center + vec3(local, 0.0);
 	gl_Position = camera.proj * camera.view * vec4(world_pos, 1.0);
-	fragColor = color_buffers[HEAP_COLOR].colors[src_sphere];
+	fragColor = vec3(
+		color_buffers[HEAP_COLOR].colors[color_base],
+		color_buffers[HEAP_COLOR].colors[color_base + 1u],
+		color_buffers[HEAP_COLOR].colors[color_base + 2u]);
 	fragLocal = QUAD_VERTS[gl_VertexIndex];
 }
