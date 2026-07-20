@@ -79,6 +79,22 @@ static_assert(alignof(GaussianProjected) == alignof(f32));
 static_assert(std::is_trivially_copyable_v<GaussianProjected>);
 static_assert(std::is_standard_layout_v<GaussianProjected>);
 
+// Stage 2 tile binning.
+inline constexpr u32 k_tile_size = 16;
+// Conservative upper bound on tiles touched per splat (16x16 tile grid).
+inline constexpr u32 k_max_tiles_per_splat = 64;
+
+// 64-bit sort key: high = tile_id, low = depth bit pattern (front-to-back within tile).
+struct BinningKey
+{
+  u32 tile_id{};
+  u32 depth_bits{};
+};
+
+static_assert(sizeof(BinningKey) == 8U);
+static_assert(std::is_trivially_copyable_v<BinningKey>);
+static_assert(std::is_standard_layout_v<BinningKey>);
+
 [[nodiscard]] inline auto sigmoid(f32 x) -> f32 { return 1.0F / (1.0F + std::exp(-x)); }
 
 [[nodiscard]] inline auto sh0_to_rgb(std::array<f32, 3> const &f_dc) -> std::array<f32, 3>

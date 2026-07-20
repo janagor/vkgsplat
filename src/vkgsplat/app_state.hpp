@@ -43,6 +43,10 @@ struct RenderData
   vulkan::Buffer geometry_buffer{};
   vulkan::Buffer appearance_buffer{};
   vulkan::Buffer projected_buffer{};
+  vulkan::Buffer unsorted_keys_buffer{};
+  vulkan::Buffer unsorted_values_buffer{};
+  vulkan::Buffer instance_count_buffer{};
+  u32 max_bin_instances = 0;
   compute::Tensor<u32> sorted_indices{};
   compute::Tensor<compute::SortEntry> sort_entries{};
   vulkan::Buffer descriptor_heap_buffer{};
@@ -53,6 +57,7 @@ struct RenderData
 
   compute::Algorithm sphere_setup_algorithm{};
   compute::Algorithm project_algorithm{};
+  compute::Algorithm bin_algorithm{};
   compute::Sequence compute_sequence{};
 
   VkImage depth_image{};

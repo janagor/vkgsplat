@@ -26,6 +26,7 @@
 #include "backend/vulkan/swapchain.hpp"
 #include "io/ply/load_splats.hpp"
 #include "mesh_gpu.hpp"
+#include "bin_gaussians.hpp"
 #include "project_gaussians.hpp"
 #include "sphere_setup.hpp"
 #include "vulkan_context.hpp"
@@ -108,6 +109,9 @@ auto Renderer::create(RendererConfig const &config) -> std::expected<Renderer, E
   impl->render_data.sort_size = next_power_of_2(impl->render_data.splat_count);
   if (!init_sphere_setup(impl->init, impl->render_data)) {
     return std::unexpected(make_error("Failed to initialize sphere setup"));
+  }
+  if (!init_bin_gaussians(impl->init, impl->render_data)) {
+    return std::unexpected(make_error("Failed to initialize gaussian binning"));
   }
   if (!init_project_gaussians(impl->init, impl->render_data)) {
     return std::unexpected(make_error("Failed to initialize gaussian projection"));

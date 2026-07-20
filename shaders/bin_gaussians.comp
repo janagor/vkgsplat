@@ -1,0 +1,97 @@
+#version 460
+#extension GL_EXT_descriptor_heap : require
+#extension GL_EXT_nonuniform_qualifier : enable
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+// Heap slot indices must match HeapSlot in descriptor_heap.hpp.
+const uint HEAP_PROJECTED = 4u;
+const uint HEAP_UNSORTED_KEYS = 5u;
+const uint HEAP_UNSORTED_VALUES = 6u;
+const uint HEAP_INSTANCE_COUNT = 7u;
+
+// Flat packing must match GaussianProjected / BinningKey in gaussian_splat.hpp.
+const uint PROJECTED_STRIDE = 7u;
+const uint PROJ_MEAN = 0u;
+const uint PROJ_DEPTH = 5u;
+const uint PROJ_RADIUS = 6u;
+
+const uint KEY_STRIDE = 2u;
+const uint KEY_TILE = 0u;
+const uint KEY_DEPTH = 1u;
+
+layout(descriptor_heap, std430) readonly buffer ProjectedBuffer {
+	float data[];
+} projected_buffers[];
+
+layout(descriptor_heap, std430) writeonly buffer UnsortedKeysBuffer {
+	uint data[];
+} unsorted_keys_buffers[];
+
+layout(descriptor_heap, std430) writeonly buffer UnsortedValuesBuffer {
+	uint data[];
+} unsorted_values_buffers[];
+
+layout(descriptor_heap, std430) buffer InstanceCountBuffer {
+	uint count;
+} instance_count_buffers[];
+
+layout(push_constant) uniform BinningPush {
+	uvec2 viewport;
+	uint max_instances;
+	uint tile_size;
+} binning;
+
+layout(constant_id = 0) const uint SPLAT_COUNT = 1u;
+
+void main()
+{
+	uint id = gl_GlobalInvocationID.x;
+	if (id >= SPLAT_COUNT) {
+		return;
+	}
+
+	uint proj_base = id * PROJECTED_STRIDE;
+	float radius = projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_RADIUS];
+	if (radius < 1.0) {
+		return;
+	}
+
+	vec2 mean = vec2(
+		projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_MEAN],
+		projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_MEAN + 1u]);
+	float depth = projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_DEPTH];
+
+	float width = float(binning.viewport.x);
+	float height = float(binning.viewport.y);
+	float min_x = clamp(mean.x - radius, 0.0, width - 1.0);
+	float max_x = clamp(mean.x + radius, 0.0, width - 1.0);
+	float min_y = clamp(mean.y - radius, 0.0, height - 1.0);
+	float max_y = clamp(mean.y + radius, 0.0, height - 1.0);
+
+	uint tiles_x = (binning.viewport.x + binning.tile_size - 1u) / binning.tile_size;
+	uint tiles_y = (binning.viewport.y + binning.tile_size - 1u) / binning.tile_size;
+
+	uint min_tile_x = uint(min_x) / binning.tile_size;
+	uint min_tile_y = uint(min_y) / binning.tile_size;
+	uint max_tile_x = min(uint(max_x) / binning.tile_size, tiles_x - 1u);
+	uint max_tile_y = min(uint(max_y) / binning.tile_size, tiles_y - 1u);
+
+	// Positive view-space depth: float bits sort ascending front-to-back.
+	uint depth_bits = floatBitsToUint(depth);
+
+	for (uint tile_y = min_tile_y; tile_y <= max_tile_y; ++tile_y) {
+		for (uint tile_x = min_tile_x; tile_x <= max_tile_x; ++tile_x) {
+			uint slot = atomicAdd(instance_count_buffers[HEAP_INSTANCE_COUNT].count, 1u);
+			if (slot >= binning.max_instances) {
+				return;
+			}
+
+			uint tile_id = tile_y * tiles_x + tile_x;
+			uint key_base = slot * KEY_STRIDE;
+			unsorted_keys_buffers[HEAP_UNSORTED_KEYS].data[key_base + KEY_TILE] = tile_id;
+			unsorted_keys_buffers[HEAP_UNSORTED_KEYS].data[key_base + KEY_DEPTH] = depth_bits;
+			unsorted_values_buffers[HEAP_UNSORTED_VALUES].data[slot] = id;
+		}
+	}
+}

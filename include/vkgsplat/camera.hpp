@@ -10,6 +10,7 @@
 #include <glm/ext/quaternion_geometric.hpp>
 #include <glm/ext/quaternion_trigonometric.hpp>
 #include <glm/ext/vector_double3.hpp>
+#include <glm/ext/vector_uint2.hpp>
 #include <glm/fwd.hpp>
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -57,6 +58,16 @@ struct ProjectPushConstants
 };
 
 static_assert(sizeof(ProjectPushConstants) == 144);
+
+// Push data for Stage 2 tile binning.
+struct BinPushConstants
+{
+  glm::uvec2 viewport{};// width, height in pixels
+  u32 max_instances{};
+  u32 tile_size{ 16 };
+};
+
+static_assert(sizeof(BinPushConstants) == 16);
 
 class Camera
 {

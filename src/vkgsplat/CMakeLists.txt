@@ -17,6 +17,7 @@ add_library(vkgsplat
   backend/vulkan/sync_objects/semaphore.cpp
   sphere_setup.cpp
   project_gaussians.cpp
+  bin_gaussians.cpp
   vma_usage.cpp
   backend/vulkan/gpu_allocator.cpp
   compute/algorithm.cpp
@@ -40,6 +41,7 @@ vkgsplat_compile_shaders(
     shaders/sphere.frag
     shaders/init_spheres.comp
     shaders/project_gaussians.comp
+    shaders/bin_gaussians.comp
 )
 
 target_link_libraries(

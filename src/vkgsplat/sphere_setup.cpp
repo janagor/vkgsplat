@@ -64,7 +64,7 @@ auto init_sphere_setup(Init &init, RenderData &data) -> bool
     data.sphere_setup_algorithm, std::array<uint32_t, 3>{ workgroup_count, 1U, 1U });
   data.compute_sequence.record(dispatch_op);
 
-  return refresh_descriptor_heap(init, data);
+  return true;
 }
 
 void dispatch_sphere_setup(Init &init, RenderData const &data, VkCommandBuffer command_buffer)
