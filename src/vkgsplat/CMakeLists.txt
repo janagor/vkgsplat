@@ -18,6 +18,7 @@ add_library(vkgsplat
   sphere_setup.cpp
   project_gaussians.cpp
   bin_gaussians.cpp
+  sort_gaussians.cpp
   vma_usage.cpp
   backend/vulkan/gpu_allocator.cpp
   compute/algorithm.cpp
@@ -42,6 +43,9 @@ vkgsplat_compile_shaders(
     shaders/init_spheres.comp
     shaders/project_gaussians.comp
     shaders/bin_gaussians.comp
+    shaders/prepare_gaussian_sort.comp
+    shaders/sort_gaussians.comp
+    shaders/identify_tile_ranges.comp
 )
 
 target_link_libraries(

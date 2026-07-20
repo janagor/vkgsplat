@@ -78,6 +78,9 @@ auto refresh_descriptor_heap(Init &init, RenderData &data) -> bool
       || data.projected_buffer.handle == VK_NULL_HANDLE
       || data.unsorted_keys_buffer.handle == VK_NULL_HANDLE
       || data.unsorted_values_buffer.handle == VK_NULL_HANDLE
+      || data.sorted_keys_buffer.handle == VK_NULL_HANDLE
+      || data.sorted_values_buffer.handle == VK_NULL_HANDLE
+      || data.tile_ranges_buffer.handle == VK_NULL_HANDLE
       || data.sorted_indices.buffer().handle == VK_NULL_HANDLE
       || data.sort_entries.buffer().handle == VK_NULL_HANDLE) {
     return true;
@@ -100,6 +103,12 @@ auto refresh_descriptor_heap(Init &init, RenderData &data) -> bool
     static_cast<VkDeviceSize>(data.max_bin_instances * sizeof(BinningKey));
   auto const unsorted_values_buffer_size =
     static_cast<VkDeviceSize>(data.max_bin_instances * sizeof(u32));
+  auto const sorted_keys_buffer_size =
+    static_cast<VkDeviceSize>(data.gaussian_sort_size * sizeof(BinningKey));
+  auto const sorted_values_buffer_size =
+    static_cast<VkDeviceSize>(data.gaussian_sort_size * sizeof(u32));
+  auto const tile_ranges_buffer_size =
+    static_cast<VkDeviceSize>(data.tile_count * sizeof(TileRange));
   auto const sorted_indices_buffer_size = data.sorted_indices.byte_size();
   auto const sort_entries_buffer_size = data.sort_entries.byte_size();
 
@@ -132,6 +141,18 @@ auto refresh_descriptor_heap(Init &init, RenderData &data) -> bool
     VkDeviceAddressRangeEXT{
       .address = init.gpu_allocator.get_buffer_device_address(data.unsorted_values_buffer),
       .size = unsorted_values_buffer_size,
+    },
+    VkDeviceAddressRangeEXT{
+      .address = init.gpu_allocator.get_buffer_device_address(data.sorted_keys_buffer),
+      .size = sorted_keys_buffer_size,
+    },
+    VkDeviceAddressRangeEXT{
+      .address = init.gpu_allocator.get_buffer_device_address(data.sorted_values_buffer),
+      .size = sorted_values_buffer_size,
+    },
+    VkDeviceAddressRangeEXT{
+      .address = init.gpu_allocator.get_buffer_device_address(data.tile_ranges_buffer),
+      .size = tile_ranges_buffer_size,
     },
   };
 

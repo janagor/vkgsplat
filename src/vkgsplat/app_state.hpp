@@ -46,7 +46,12 @@ struct RenderData
   vulkan::Buffer unsorted_keys_buffer{};
   vulkan::Buffer unsorted_values_buffer{};
   vulkan::Buffer instance_count_buffer{};
+  vulkan::Buffer sorted_keys_buffer{};
+  vulkan::Buffer sorted_values_buffer{};
+  vulkan::Buffer tile_ranges_buffer{};
   u32 max_bin_instances = 0;
+  u32 gaussian_sort_size = 0;
+  u32 tile_count = 0;
   compute::Tensor<u32> sorted_indices{};
   compute::Tensor<compute::SortEntry> sort_entries{};
   vulkan::Buffer descriptor_heap_buffer{};
@@ -58,6 +63,9 @@ struct RenderData
   compute::Algorithm sphere_setup_algorithm{};
   compute::Algorithm project_algorithm{};
   compute::Algorithm bin_algorithm{};
+  compute::Algorithm prepare_sort_algorithm{};
+  compute::Algorithm gaussian_sort_algorithm{};
+  compute::Algorithm identify_ranges_algorithm{};
   compute::Sequence compute_sequence{};
 
   VkImage depth_image{};

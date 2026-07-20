@@ -24,6 +24,7 @@
 #include "mesh_gpu.hpp"
 #include "bin_gaussians.hpp"
 #include "project_gaussians.hpp"
+#include "sort_gaussians.hpp"
 #include "sphere_setup.hpp"
 #include "sync_objects/fence.hpp"
 #include "sync_objects/semaphore.hpp"
@@ -66,6 +67,14 @@ void record_sphere_draw(Init &init,
       init.gpu_allocator.get_buffer_device_address(data.instance_count_buffer),
   };
   dispatch_bin_gaussians(init, data, bin_push, command_buffer);
+
+  SortPushConstants const sort_push{
+    .instance_count_address =
+      init.gpu_allocator.get_buffer_device_address(data.instance_count_buffer),
+    .sort_size = data.gaussian_sort_size,
+    .tile_count = data.tile_count,
+  };
+  dispatch_sort_gaussians(init, data, sort_push, command_buffer);
 
   VkImageSubresourceRange const color_subresource_range = {
     .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -373,6 +382,7 @@ void cleanup(Init &init, RenderData &data)
 
   destroy_depth_buffer(init, data);
   destroy_sphere_buffers(init, data);
+  destroy_sort_gaussians(init, data);
   destroy_bin_gaussians(init, data);
   destroy_project_gaussians(init, data);
   destroy_sphere_setup(init, data);

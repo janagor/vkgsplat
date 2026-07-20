@@ -36,7 +36,8 @@ auto Algorithm::init(Init &init,
     initializers::PipelineShaderStageCreateInfo(VK_SHADER_STAGE_COMPUTE_BIT, comp_module, "main");
 
   VkSpecializationInfo specialization_info{};
-  std::array<VkSpecializationMapEntry, 3> specialization_map{};
+  constexpr size_t k_max_specialization_constants = 8;
+  std::array<VkSpecializationMapEntry, k_max_specialization_constants> specialization_map{};
   if (!specialization_constants.empty()) {
     for (size_t i = 0; i < specialization_constants.size() && i < specialization_map.size(); ++i) {
       specialization_map.at(i) = VkSpecializationMapEntry{

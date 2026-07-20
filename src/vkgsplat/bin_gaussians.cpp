@@ -1,7 +1,6 @@
 #include "bin_gaussians.hpp"
 
 #include "app_state.hpp"
-#include "backend/vulkan/descriptor/descriptor_heap.hpp"
 #include "gaussian_splat.hpp"
 #include "vulkan_context.hpp"
 
@@ -93,7 +92,7 @@ auto init_bin_gaussians(Init &init, RenderData &data) -> bool
     return false;
   }
 
-  return refresh_descriptor_heap(init, data);
+  return true;
 }
 
 void dispatch_bin_gaussians(Init const &init,

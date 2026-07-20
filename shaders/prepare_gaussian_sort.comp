@@ -1,0 +1,70 @@
+#version 460
+#extension GL_EXT_descriptor_heap : require
+#extension GL_EXT_nonuniform_qualifier : enable
+#extension GL_EXT_buffer_reference : require
+#extension GL_EXT_buffer_reference_uvec2 : require
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+const uint HEAP_UNSORTED_KEYS = 5u;
+const uint HEAP_UNSORTED_VALUES = 6u;
+const uint HEAP_SORTED_KEYS = 7u;
+const uint HEAP_SORTED_VALUES = 8u;
+
+const uint KEY_STRIDE = 2u;
+const uint KEY_TILE = 0u;
+const uint KEY_DEPTH = 1u;
+const uint SENTINEL = 0xFFFFFFFFu;
+
+layout(descriptor_heap, std430) readonly buffer UnsortedKeysBuffer {
+	uint data[];
+} unsorted_keys_buffers[];
+
+layout(descriptor_heap, std430) readonly buffer UnsortedValuesBuffer {
+	uint data[];
+} unsorted_values_buffers[];
+
+layout(descriptor_heap, std430) writeonly buffer SortedKeysBuffer {
+	uint data[];
+} sorted_keys_buffers[];
+
+layout(descriptor_heap, std430) writeonly buffer SortedValuesBuffer {
+	uint data[];
+} sorted_values_buffers[];
+
+layout(buffer_reference, std430, buffer_reference_align = 4) buffer InstanceCountRef {
+	uint count;
+};
+
+layout(push_constant) uniform SortPush {
+	uvec2 instance_count_addr;
+	uint sort_size;
+	uint tile_count;
+} push;
+
+layout(constant_id = 0) const uint SORT_SIZE = 1u;
+
+void main()
+{
+	uint id = gl_GlobalInvocationID.x;
+	if (id >= SORT_SIZE) {
+		return;
+	}
+
+	InstanceCountRef instance_count = InstanceCountRef(push.instance_count_addr);
+	uint live_count = min(instance_count.count, push.sort_size);
+	uint key_base = id * KEY_STRIDE;
+
+	if (id < live_count) {
+		sorted_keys_buffers[HEAP_SORTED_KEYS].data[key_base + KEY_TILE] =
+			unsorted_keys_buffers[HEAP_UNSORTED_KEYS].data[key_base + KEY_TILE];
+		sorted_keys_buffers[HEAP_SORTED_KEYS].data[key_base + KEY_DEPTH] =
+			unsorted_keys_buffers[HEAP_UNSORTED_KEYS].data[key_base + KEY_DEPTH];
+		sorted_values_buffers[HEAP_SORTED_VALUES].data[id] =
+			unsorted_values_buffers[HEAP_UNSORTED_VALUES].data[id];
+	} else {
+		sorted_keys_buffers[HEAP_SORTED_KEYS].data[key_base + KEY_TILE] = SENTINEL;
+		sorted_keys_buffers[HEAP_SORTED_KEYS].data[key_base + KEY_DEPTH] = SENTINEL;
+		sorted_values_buffers[HEAP_SORTED_VALUES].data[id] = 0u;
+	}
+}

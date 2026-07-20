@@ -95,6 +95,21 @@ static_assert(sizeof(BinningKey) == 8U);
 static_assert(std::is_trivially_copyable_v<BinningKey>);
 static_assert(std::is_standard_layout_v<BinningKey>);
 
+// Stage 3: per-tile start/end into the sorted instance list.
+struct TileRange
+{
+  u32 start{};// inclusive
+  u32 end{};// exclusive; empty when start == end
+};
+
+static_assert(sizeof(TileRange) == 8U);
+static_assert(std::is_trivially_copyable_v<TileRange>);
+static_assert(std::is_standard_layout_v<TileRange>);
+
+// Max tile grid supported for tile_ranges allocation (16px tiles → up to 4096² viewport).
+inline constexpr u32 k_max_tile_grid_dim = 256;
+inline constexpr u32 k_max_tiles = k_max_tile_grid_dim * k_max_tile_grid_dim;
+
 [[nodiscard]] inline auto sigmoid(f32 x) -> f32 { return 1.0F / (1.0F + std::exp(-x)); }
 
 [[nodiscard]] inline auto sh0_to_rgb(std::array<f32, 3> const &f_dc) -> std::array<f32, 3>

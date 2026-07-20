@@ -70,6 +70,27 @@ struct BinPushConstants
 
 static_assert(sizeof(BinPushConstants) == 24);
 
+// Push data for Stage 3 prepare / identify passes.
+struct SortPushConstants
+{
+  u64 instance_count_address{};
+  u32 sort_size{};
+  u32 tile_count{};
+};
+
+static_assert(sizeof(SortPushConstants) == 16);
+
+// One bitonic compare-exchange stage (host loops over all (k, j) phases).
+struct BitonicPushConstants
+{
+  u32 sort_size{};
+  u32 k{};
+  u32 j{};
+  u32 pad{};
+};
+
+static_assert(sizeof(BitonicPushConstants) == 16);
+
 class Camera
 {
 public:

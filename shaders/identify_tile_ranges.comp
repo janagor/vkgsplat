@@ -1,0 +1,71 @@
+#version 460
+#extension GL_EXT_descriptor_heap : require
+#extension GL_EXT_nonuniform_qualifier : enable
+#extension GL_EXT_buffer_reference : require
+#extension GL_EXT_buffer_reference_uvec2 : require
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+const uint HEAP_SORTED_KEYS = 7u;
+const uint HEAP_TILE_RANGES = 9u;
+
+const uint KEY_STRIDE = 2u;
+const uint KEY_TILE = 0u;
+const uint RANGE_STRIDE = 2u;
+const uint RANGE_START = 0u;
+const uint RANGE_END = 1u;
+const uint SENTINEL = 0xFFFFFFFFu;
+
+layout(descriptor_heap, std430) readonly buffer SortedKeysBuffer {
+	uint data[];
+} sorted_keys_buffers[];
+
+layout(descriptor_heap, std430) buffer TileRangesBuffer {
+	uint data[];
+} tile_ranges_buffers[];
+
+layout(buffer_reference, std430, buffer_reference_align = 4) buffer InstanceCountRef {
+	uint count;
+};
+
+layout(push_constant) uniform SortPush {
+	uvec2 instance_count_addr;
+	uint sort_size;
+	uint tile_count;
+} push;
+
+void main()
+{
+	uint id = gl_GlobalInvocationID.x;
+	InstanceCountRef instance_count = InstanceCountRef(push.instance_count_addr);
+	uint live_count = min(instance_count.count, push.sort_size);
+
+	if (id >= live_count || live_count == 0u) {
+		return;
+	}
+
+	uint key_base = id * KEY_STRIDE;
+	uint tile_id = sorted_keys_buffers[HEAP_SORTED_KEYS].data[key_base + KEY_TILE];
+	if (tile_id == SENTINEL || tile_id >= push.tile_count) {
+		return;
+	}
+
+	uint prev_tile = SENTINEL;
+	if (id > 0u) {
+		prev_tile = sorted_keys_buffers[HEAP_SORTED_KEYS].data[(id - 1u) * KEY_STRIDE + KEY_TILE];
+	}
+
+	if (tile_id != prev_tile) {
+		uint range_base = tile_id * RANGE_STRIDE;
+		tile_ranges_buffers[HEAP_TILE_RANGES].data[range_base + RANGE_START] = id;
+		if (prev_tile != SENTINEL && prev_tile < push.tile_count) {
+			uint prev_base = prev_tile * RANGE_STRIDE;
+			tile_ranges_buffers[HEAP_TILE_RANGES].data[prev_base + RANGE_END] = id;
+		}
+	}
+
+	if (id + 1u == live_count) {
+		uint range_base = tile_id * RANGE_STRIDE;
+		tile_ranges_buffers[HEAP_TILE_RANGES].data[range_base + RANGE_END] = live_count;
+	}
+}
