@@ -33,6 +33,7 @@ auto device_initialization(Init &init) -> std::expected<void, Error>
   VkPhysicalDeviceVulkan13Features features_13{};
   features_13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
   features_13.dynamicRendering = VK_TRUE;
+  features_13.shaderDemoteToHelperInvocation = VK_TRUE;
 
   vkb::InstanceBuilder instance_builder;
   return VKBResultToExpected(
