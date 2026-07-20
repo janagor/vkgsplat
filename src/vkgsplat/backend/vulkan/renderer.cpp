@@ -44,6 +44,8 @@
 
 namespace vkgsplat {
 
+using namespace gs;
+
 namespace {
 
 void record_sphere_draw(Init &init,

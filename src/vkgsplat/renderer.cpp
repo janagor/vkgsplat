@@ -35,6 +35,8 @@
 
 namespace vkgsplat {
 
+using namespace gs;
+
 namespace {
 
 [[nodiscard]] auto next_power_of_2(u32 value) -> u32

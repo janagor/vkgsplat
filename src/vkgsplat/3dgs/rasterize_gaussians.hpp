@@ -6,7 +6,7 @@
 
 #include <vulkan/vulkan_core.h>
 
-namespace vkgsplat {
+namespace vkgsplat::gs {
 
 [[nodiscard]] auto init_rasterize_gaussians(Init &init, RenderData &data) -> bool;
 
@@ -20,4 +20,4 @@ void dispatch_rasterize_gaussians(Init const &init,
 
 void destroy_rasterize_gaussians(Init &init, RenderData &data);
 
-}// namespace vkgsplat
+}// namespace vkgsplat::gs

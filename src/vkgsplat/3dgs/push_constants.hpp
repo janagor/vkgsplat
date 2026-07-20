@@ -7,7 +7,7 @@
 
 #include <vkgsplat/types.hpp>
 
-namespace vkgsplat {
+namespace vkgsplat::gs {
 
 // Stage 1 projection compute (view/proj + viewport in pixels).
 struct ProjectPushConstants
@@ -69,4 +69,4 @@ struct RasterPushConstants
 
 static_assert(sizeof(RasterPushConstants) == 64);
 
-}// namespace vkgsplat
+}// namespace vkgsplat::gs

@@ -16,6 +16,8 @@
 
 namespace vkgsplat {
 
+using namespace gs;
+
 auto align_up(VkDeviceSize value, VkDeviceSize alignment) -> VkDeviceSize
 { return (value + alignment - 1) / alignment * alignment; }
 

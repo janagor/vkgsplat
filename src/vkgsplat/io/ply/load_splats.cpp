@@ -18,6 +18,10 @@ namespace vkgsplat {
 
 namespace {
 
+using gs::GaussianSplat;
+using gs::k_sh_dc_coeffs;
+using gs::k_sh_rest_coeffs;
+
 struct ExtractedSplatAttributes
 {
   std::vector<f32> positions;

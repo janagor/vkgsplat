@@ -8,7 +8,7 @@
 
 #include <vkgsplat/types.hpp>
 
-namespace vkgsplat {
+namespace vkgsplat::gs {
 
 // 3DGS SH degree 3: (degree + 1)^2 = 16 coeffs/channel × 3 channels = 48.
 // Stored as DC (f_dc_0..2) plus higher-order rest (f_rest_0..44).
@@ -126,4 +126,4 @@ inline constexpr u32 k_max_tiles = k_max_tile_grid_dim * k_max_tile_grid_dim;
   return { std::exp(log_scale[0]), std::exp(log_scale[1]), std::exp(log_scale[2]) };
 }
 
-}// namespace vkgsplat
+}// namespace vkgsplat::gs

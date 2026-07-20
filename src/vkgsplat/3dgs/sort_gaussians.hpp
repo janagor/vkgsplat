@@ -6,7 +6,7 @@
 
 #include <vulkan/vulkan_core.h>
 
-namespace vkgsplat {
+namespace vkgsplat::gs {
 
 [[nodiscard]] auto init_sort_gaussians(Init &init, RenderData &data) -> bool;
 
@@ -17,4 +17,4 @@ void dispatch_sort_gaussians(Init const &init,
 
 void destroy_sort_gaussians(Init &init, RenderData &data);
 
-}// namespace vkgsplat
+}// namespace vkgsplat::gs

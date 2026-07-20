@@ -14,7 +14,7 @@
 
 #include "vkgsplat/example_config.h"
 
-namespace vkgsplat {
+namespace vkgsplat::gs {
 
 auto init_project_gaussians(Init &init, RenderData &data) -> bool
 {
@@ -66,4 +66,4 @@ void dispatch_project_gaussians(Init const &init,
 
 void destroy_project_gaussians(Init &init, RenderData &data) { data.project_algorithm.destroy(init); }
 
-}// namespace vkgsplat
+}// namespace vkgsplat::gs

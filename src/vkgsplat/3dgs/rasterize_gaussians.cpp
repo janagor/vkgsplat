@@ -21,7 +21,7 @@
 
 #include "vkgsplat/example_config.h"
 
-namespace vkgsplat {
+namespace vkgsplat::gs {
 
 namespace {
 
@@ -294,4 +294,4 @@ void destroy_rasterize_gaussians(Init &init, RenderData &data)
   destroy_color_target(init, data);
 }
 
-}// namespace vkgsplat
+}// namespace vkgsplat::gs

@@ -16,6 +16,8 @@
 
 namespace vkgsplat {
 
+using namespace gs;
+
 void destroy_sphere_buffers(Init &init, RenderData &data)
 {
   init.gpu_allocator.destroy_buffer(data.geometry_buffer);

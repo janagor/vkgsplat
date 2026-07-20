@@ -18,7 +18,7 @@
 
 #include "vkgsplat/example_config.h"
 
-namespace vkgsplat {
+namespace vkgsplat::gs {
 
 namespace {
 
@@ -157,4 +157,4 @@ void destroy_bin_gaussians(Init &init, RenderData &data)
   destroy_bin_buffers(init, data);
 }
 
-}// namespace vkgsplat
+}// namespace vkgsplat::gs
