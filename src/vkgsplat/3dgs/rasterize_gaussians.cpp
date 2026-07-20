@@ -1,12 +1,12 @@
-#include "rasterize_gaussians.hpp"
+#include "3dgs/rasterize_gaussians.hpp"
 
 #include "app_state.hpp"
 #include "backend/vulkan/descriptor/descriptor_heap.hpp"
 #include "backend/vulkan/initializers.hpp"
-#include "gaussian_splat.hpp"
+#include "3dgs/gaussian_splat.hpp"
+#include "3dgs/push_constants.hpp"
 #include "vulkan_context.hpp"
 
-#include <vkgsplat/camera.hpp>
 #include <vkgsplat/types.hpp>
 
 #include <array>

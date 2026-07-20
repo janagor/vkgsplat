@@ -1,9 +1,8 @@
-#include "project_gaussians.hpp"
+#include "3dgs/project_gaussians.hpp"
 
+#include "3dgs/push_constants.hpp"
 #include "app_state.hpp"
 #include "vulkan_context.hpp"
-
-#include <vkgsplat/camera.hpp>
 
 #include <array>
 #include <cstdint>

@@ -1,11 +1,11 @@
-#include "sort_gaussians.hpp"
+#include "3dgs/sort_gaussians.hpp"
 
 #include "app_state.hpp"
 #include "backend/vulkan/descriptor/descriptor_heap.hpp"
-#include "gaussian_splat.hpp"
+#include "3dgs/gaussian_splat.hpp"
+#include "3dgs/push_constants.hpp"
 #include "vulkan_context.hpp"
 
-#include <vkgsplat/camera.hpp>
 #include <vkgsplat/types.hpp>
 
 #include <array>

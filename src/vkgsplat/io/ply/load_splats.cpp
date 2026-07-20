@@ -1,6 +1,6 @@
 #include "io/ply/load_splats.hpp"
 
-#include "gaussian_splat.hpp"
+#include "3dgs/gaussian_splat.hpp"
 #include "io/ply/miniply.hpp"
 #include <vkgsplat/types.hpp>
 
