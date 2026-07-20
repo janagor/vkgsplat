@@ -5,7 +5,7 @@
 #include <string_view>
 #include <vector>
 
-#include "3dgs/gaussian_splat.hpp"
+#include "gs/gaussian_splat.hpp"
 #include <vkgsplat/types.hpp>
 
 namespace vkgsplat {

@@ -7,7 +7,7 @@
 #include <vector>
 
 #include "app_state.hpp"
-#include "3dgs/gaussian_splat.hpp"
+#include "gs/gaussian_splat.hpp"
 #include "io/ply/load_splats.hpp"
 #include "vulkan_context.hpp"
 #include <vkgsplat/types.hpp>

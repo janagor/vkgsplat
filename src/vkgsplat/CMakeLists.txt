@@ -16,10 +16,10 @@ add_library(vkgsplat
   backend/vulkan/sync_objects/fence.cpp
   backend/vulkan/sync_objects/semaphore.cpp
   sphere_setup.cpp
-  3dgs/project_gaussians.cpp
-  3dgs/bin_gaussians.cpp
-  3dgs/sort_gaussians.cpp
-  3dgs/rasterize_gaussians.cpp
+  gs/project_gaussians.cpp
+  gs/bin_gaussians.cpp
+  gs/sort_gaussians.cpp
+  gs/rasterize_gaussians.cpp
   vma_usage.cpp
   backend/vulkan/gpu_allocator.cpp
   compute/algorithm.cpp
@@ -42,12 +42,12 @@ vkgsplat_compile_shaders(
     shaders/sphere.vert
     shaders/sphere.frag
     shaders/init_spheres.comp
-    shaders/3dgs/project_gaussians.comp
-    shaders/3dgs/bin_gaussians.comp
-    shaders/3dgs/prepare_gaussian_sort.comp
-    shaders/3dgs/sort_gaussians.comp
-    shaders/3dgs/identify_tile_ranges.comp
-    shaders/3dgs/rasterize_gaussians.comp
+    shaders/gs/project_gaussians.comp
+    shaders/gs/bin_gaussians.comp
+    shaders/gs/prepare_gaussian_sort.comp
+    shaders/gs/sort_gaussians.comp
+    shaders/gs/identify_tile_ranges.comp
+    shaders/gs/rasterize_gaussians.comp
 )
 
 target_link_libraries(

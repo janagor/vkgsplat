@@ -1,7 +1,7 @@
 #pragma once
 
 #include "app_state.hpp"
-#include "3dgs/push_constants.hpp"
+#include "gs/push_constants.hpp"
 #include "vulkan_context.hpp"
 
 #include <vulkan/vulkan_core.h>

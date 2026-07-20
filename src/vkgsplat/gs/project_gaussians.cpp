@@ -1,6 +1,6 @@
-#include "3dgs/project_gaussians.hpp"
+#include "gs/project_gaussians.hpp"
 
-#include "3dgs/push_constants.hpp"
+#include "gs/push_constants.hpp"
 #include "app_state.hpp"
 #include "vulkan_context.hpp"
 
