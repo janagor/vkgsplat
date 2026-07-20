@@ -131,6 +131,36 @@ void push_bitonic_constants(Init const &init,
   init.cmd_push_data(command_buffer, &push_info);
 }
 
+// Flatten a large 1D thread count into a 2D workgroup grid within device limits.
+// Shaders must recover: id = gx + gy * (NumWorkGroups.x * WorkGroupSize.x).
+struct Dispatch2D
+{
+  u32 group_count_x{};
+  u32 group_count_y{};
+};
+
+[[nodiscard]] auto dispatch_2d_for_threads(Init const &init, u32 thread_count, u32 local_size_x)
+  -> Dispatch2D
+{
+  u32 const groups = (thread_count + local_size_x - 1U) / local_size_x;
+  u32 const max_x = init.device.physical_device.properties.limits.maxComputeWorkGroupCount[0];
+  u32 const max_y = init.device.physical_device.properties.limits.maxComputeWorkGroupCount[1];
+  if (groups <= max_x) { return { .group_count_x = groups, .group_count_y = 1U }; }
+
+  u32 const group_count_x = max_x;
+  u32 const group_count_y = (groups + max_x - 1U) / max_x;
+  if (group_count_y > max_y) {
+    std::println(
+      "Sort dispatch needs {}x{} groups but device max is {}x{}", group_count_x, group_count_y, max_x, max_y);
+  }
+  return { .group_count_x = group_count_x, .group_count_y = group_count_y };
+}
+
+void dispatch_compute_2d(Init const &init, VkCommandBuffer command_buffer, Dispatch2D const grid)
+{
+  init.disp.cmdDispatch(command_buffer, grid.group_count_x, grid.group_count_y, 1U);
+}
+
 }// namespace
 
 auto init_sort_gaussians(Init &init, RenderData &data) -> bool
@@ -157,12 +187,14 @@ void dispatch_sort_gaussians(Init const &init,
   SortPushConstants const &push_constants,
   VkCommandBuffer command_buffer)
 {
-  uint32_t const sort_groups = (data.gaussian_sort_size + 63U) / 64U;
+  constexpr u32 k_local_size_x = 64U;
+  Dispatch2D const sort_grid =
+    dispatch_2d_for_threads(init, data.gaussian_sort_size, k_local_size_x);
 
   init.disp.cmdBindPipeline(
     command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, data.prepare_sort_algorithm.pipeline());
   push_sort_constants(init, push_constants, command_buffer);
-  init.disp.cmdDispatch(command_buffer, sort_groups, 1U, 1U);
+  dispatch_compute_2d(init, command_buffer, sort_grid);
   compute_barrier(init, command_buffer);
 
   init.disp.cmdBindPipeline(
@@ -176,7 +208,7 @@ void dispatch_sort_gaussians(Init const &init,
         .pad = 0U,
       };
       push_bitonic_constants(init, bitonic_push, command_buffer);
-      init.disp.cmdDispatch(command_buffer, sort_groups, 1U, 1U);
+      dispatch_compute_2d(init, command_buffer, sort_grid);
       compute_barrier(init, command_buffer);
     }
   }
@@ -206,7 +238,7 @@ void dispatch_sort_gaussians(Init const &init,
   init.disp.cmdBindPipeline(
     command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, data.identify_ranges_algorithm.pipeline());
   push_sort_constants(init, push_constants, command_buffer);
-  init.disp.cmdDispatch(command_buffer, sort_groups, 1U, 1U);
+  dispatch_compute_2d(init, command_buffer, sort_grid);
 
   VkMemoryBarrier const done_barrier = {
     .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,

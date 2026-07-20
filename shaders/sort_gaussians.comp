@@ -64,9 +64,15 @@ void swap_entries(uint a, uint b)
 	sorted_values_buffers[HEAP_SORTED_VALUES].data[b] = a_value;
 }
 
+uint flat_invocation_id()
+{
+	return gl_GlobalInvocationID.x
+		+ gl_GlobalInvocationID.y * (gl_NumWorkGroups.x * gl_WorkGroupSize.x);
+}
+
 void main()
 {
-	uint i = gl_GlobalInvocationID.x;
+	uint i = flat_invocation_id();
 	if (i >= SORT_SIZE) {
 		return;
 	}

@@ -44,9 +44,15 @@ layout(push_constant) uniform SortPush {
 
 layout(constant_id = 0) const uint SORT_SIZE = 1u;
 
+uint flat_invocation_id()
+{
+	return gl_GlobalInvocationID.x
+		+ gl_GlobalInvocationID.y * (gl_NumWorkGroups.x * gl_WorkGroupSize.x);
+}
+
 void main()
 {
-	uint id = gl_GlobalInvocationID.x;
+	uint id = flat_invocation_id();
 	if (id >= SORT_SIZE) {
 		return;
 	}

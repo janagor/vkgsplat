@@ -34,9 +34,15 @@ layout(push_constant) uniform SortPush {
 	uint tile_count;
 } push;
 
+uint flat_invocation_id()
+{
+	return gl_GlobalInvocationID.x
+		+ gl_GlobalInvocationID.y * (gl_NumWorkGroups.x * gl_WorkGroupSize.x);
+}
+
 void main()
 {
-	uint id = gl_GlobalInvocationID.x;
+	uint id = flat_invocation_id();
 	InstanceCountRef instance_count = InstanceCountRef(push.instance_count_addr);
 	uint live_count = min(instance_count.count, push.sort_size);
 
