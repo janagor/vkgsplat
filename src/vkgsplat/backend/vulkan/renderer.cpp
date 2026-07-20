@@ -62,6 +62,8 @@ void record_sphere_draw(Init &init,
     .viewport = { init.swapchain->extent().width, init.swapchain->extent().height },
     .max_instances = data.max_bin_instances,
     .tile_size = k_tile_size,
+    .instance_count_address =
+      init.gpu_allocator.get_buffer_device_address(data.instance_count_buffer),
   };
   dispatch_bin_gaussians(init, data, bin_push, command_buffer);
 

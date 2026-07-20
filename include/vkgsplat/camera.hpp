@@ -65,9 +65,10 @@ struct BinPushConstants
   glm::uvec2 viewport{};// width, height in pixels
   u32 max_instances{};
   u32 tile_size{ 16 };
+  u64 instance_count_address{};// BDA for atomic counter (Mesa heap atomics are broken)
 };
 
-static_assert(sizeof(BinPushConstants) == 16);
+static_assert(sizeof(BinPushConstants) == 24);
 
 class Camera
 {

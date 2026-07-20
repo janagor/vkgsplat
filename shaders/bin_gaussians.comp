@@ -1,6 +1,8 @@
 #version 460
 #extension GL_EXT_descriptor_heap : require
 #extension GL_EXT_nonuniform_qualifier : enable
+#extension GL_EXT_buffer_reference : require
+#extension GL_EXT_buffer_reference_uvec2 : require
 
 layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 
@@ -8,7 +10,6 @@ layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 const uint HEAP_PROJECTED = 4u;
 const uint HEAP_UNSORTED_KEYS = 5u;
 const uint HEAP_UNSORTED_VALUES = 6u;
-const uint HEAP_INSTANCE_COUNT = 7u;
 
 // Flat packing must match GaussianProjected / BinningKey in gaussian_splat.hpp.
 const uint PROJECTED_STRIDE = 7u;
@@ -32,14 +33,16 @@ layout(descriptor_heap, std430) writeonly buffer UnsortedValuesBuffer {
 	uint data[];
 } unsorted_values_buffers[];
 
-layout(descriptor_heap, std430) buffer InstanceCountBuffer {
+// Atomcs through descriptor-heap buffers break Mesa NIR; use BDA instead.
+layout(buffer_reference, std430, buffer_reference_align = 4) buffer InstanceCountRef {
 	uint count;
-} instance_count_buffers[];
+};
 
 layout(push_constant) uniform BinningPush {
 	uvec2 viewport;
 	uint max_instances;
 	uint tile_size;
+	uvec2 instance_count_addr;
 } binning;
 
 layout(constant_id = 0) const uint SPLAT_COUNT = 1u;
@@ -64,6 +67,10 @@ void main()
 
 	float width = float(binning.viewport.x);
 	float height = float(binning.viewport.y);
+	if (width < 1.0 || height < 1.0 || binning.tile_size == 0u) {
+		return;
+	}
+
 	float min_x = clamp(mean.x - radius, 0.0, width - 1.0);
 	float max_x = clamp(mean.x + radius, 0.0, width - 1.0);
 	float min_y = clamp(mean.y - radius, 0.0, height - 1.0);
@@ -77,12 +84,12 @@ void main()
 	uint max_tile_x = min(uint(max_x) / binning.tile_size, tiles_x - 1u);
 	uint max_tile_y = min(uint(max_y) / binning.tile_size, tiles_y - 1u);
 
-	// Positive view-space depth: float bits sort ascending front-to-back.
 	uint depth_bits = floatBitsToUint(depth);
+	InstanceCountRef instance_count = InstanceCountRef(binning.instance_count_addr);
 
 	for (uint tile_y = min_tile_y; tile_y <= max_tile_y; ++tile_y) {
 		for (uint tile_x = min_tile_x; tile_x <= max_tile_x; ++tile_x) {
-			uint slot = atomicAdd(instance_count_buffers[HEAP_INSTANCE_COUNT].count, 1u);
+			uint slot = atomicAdd(instance_count.count, 1u);
 			if (slot >= binning.max_instances) {
 				return;
 			}
