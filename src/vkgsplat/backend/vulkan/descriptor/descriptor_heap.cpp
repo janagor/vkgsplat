@@ -74,6 +74,7 @@ auto refresh_descriptor_heap(Init &init, RenderData &data) -> bool
   destroy_descriptor_heap(init, data);
 
   if (data.geometry_buffer.handle == VK_NULL_HANDLE || data.appearance_buffer.handle == VK_NULL_HANDLE
+      || data.projected_buffer.handle == VK_NULL_HANDLE
       || data.sorted_indices.buffer().handle == VK_NULL_HANDLE
       || data.sort_entries.buffer().handle == VK_NULL_HANDLE) {
     return true;
@@ -90,6 +91,8 @@ auto refresh_descriptor_heap(Init &init, RenderData &data) -> bool
     static_cast<VkDeviceSize>(data.splat_count * sizeof(GaussianGeometry));
   auto const appearance_buffer_size =
     static_cast<VkDeviceSize>(data.splat_count * sizeof(GaussianAppearance));
+  auto const projected_buffer_size =
+    static_cast<VkDeviceSize>(data.splat_count * sizeof(GaussianProjected));
   auto const sorted_indices_buffer_size = data.sorted_indices.byte_size();
   auto const sort_entries_buffer_size = data.sort_entries.byte_size();
 
@@ -110,6 +113,10 @@ auto refresh_descriptor_heap(Init &init, RenderData &data) -> bool
     VkDeviceAddressRangeEXT{
       .address = init.gpu_allocator.get_buffer_device_address(data.sort_entries.buffer()),
       .size = sort_entries_buffer_size,
+    },
+    VkDeviceAddressRangeEXT{
+      .address = init.gpu_allocator.get_buffer_device_address(data.projected_buffer),
+      .size = projected_buffer_size,
     },
   };
 

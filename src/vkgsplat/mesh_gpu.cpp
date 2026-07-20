@@ -20,8 +20,10 @@ void destroy_sphere_buffers(Init &init, RenderData &data)
 {
   init.gpu_allocator.destroy_buffer(data.geometry_buffer);
   init.gpu_allocator.destroy_buffer(data.appearance_buffer);
+  init.gpu_allocator.destroy_buffer(data.projected_buffer);
   data.geometry_buffer = {};
   data.appearance_buffer = {};
+  data.projected_buffer = {};
 }
 
 auto create_sphere_buffers(Init &init,
@@ -50,16 +52,26 @@ auto create_sphere_buffers(Init &init,
     static_cast<VkDeviceSize>(data.splat_count * sizeof(GaussianGeometry));
   auto const appearance_buffer_size =
     static_cast<VkDeviceSize>(data.splat_count * sizeof(GaussianAppearance));
+  auto const projected_buffer_size =
+    static_cast<VkDeviceSize>(data.splat_count * sizeof(GaussianProjected));
 
   auto geometry_buffer = init.gpu_allocator.create_storage_buffer(geometry_buffer_size);
   auto appearance_buffer = init.gpu_allocator.create_storage_buffer(appearance_buffer_size);
-  if (!geometry_buffer || !appearance_buffer) {
+  auto projected_buffer = init.gpu_allocator.create_storage_buffer(projected_buffer_size);
+  if (!geometry_buffer || !appearance_buffer || !projected_buffer) {
     std::println("Failed to create gaussian buffers!");
     return false;
   }
 
   data.geometry_buffer = *geometry_buffer;
   data.appearance_buffer = *appearance_buffer;
+  data.projected_buffer = *projected_buffer;
+
+  std::vector<GaussianProjected> const zero_projected(data.splat_count);
+  if (!init.gpu_allocator.write_buffer(*projected_buffer, std::span{ zero_projected })) {
+    std::println("Failed to zero-initialize projected buffer!");
+    return false;
+  }
 
   if (cpu_data) {
     auto const &splats = cpu_data->get();

@@ -47,6 +47,17 @@ struct CameraPushConstants
 
 static_assert(sizeof(CameraPushConstants) == 128);
 
+// Push data for Stage 1 projection compute (view/proj + viewport in pixels).
+struct ProjectPushConstants
+{
+  glm::mat4 view{};
+  glm::mat4 projection{};
+  glm::vec2 viewport{};// width, height
+  glm::vec2 padding{};
+};
+
+static_assert(sizeof(ProjectPushConstants) == 144);
+
 class Camera
 {
 public:

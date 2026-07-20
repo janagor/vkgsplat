@@ -1,0 +1,177 @@
+#version 460
+#extension GL_EXT_descriptor_heap : require
+#extension GL_EXT_nonuniform_qualifier : enable
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+// Heap slot indices must match HeapSlot in descriptor_heap.hpp.
+const uint HEAP_GEOMETRY = 0u;
+const uint HEAP_PROJECTED = 4u;
+
+// Flat packing must match GaussianGeometry / GaussianProjected in gaussian_splat.hpp.
+const uint GEOMETRY_STRIDE = 11u;
+const uint GEOM_POS = 0u;
+const uint GEOM_SCALE = 3u;
+const uint GEOM_ROT = 6u;
+
+const uint PROJECTED_STRIDE = 7u;
+const uint PROJ_MEAN = 0u;
+const uint PROJ_CONIC = 2u;
+const uint PROJ_DEPTH = 5u;
+const uint PROJ_RADIUS = 6u;
+
+layout(descriptor_heap, std430) readonly buffer GeometryBuffer {
+	float data[];
+} geometry_buffers[];
+
+layout(descriptor_heap, std430) writeonly buffer ProjectedBuffer {
+	float data[];
+} projected_buffers[];
+
+layout(push_constant) uniform ProjectCamera {
+	mat4 view;
+	mat4 proj;
+	vec2 viewport;
+	vec2 _pad;
+} camera;
+
+layout(constant_id = 0) const uint SPLAT_COUNT = 1u;
+
+const float NEAR_PLANE = 0.2;
+const float COV_FILTER = 0.3;
+const float RADIUS_SCALE = 3.0;
+
+mat3 quat_to_rotmat(vec4 q)
+{
+	// PLY / GaussianGeometry store (w, x, y, z). GLSL mat3 is column-major.
+	float w = q.x;
+	float x = q.y;
+	float y = q.z;
+	float z = q.w;
+	return mat3(
+		1.0 - 2.0 * (y * y + z * z), 2.0 * (x * y + w * z), 2.0 * (x * z - w * y),
+		2.0 * (x * y - w * z), 1.0 - 2.0 * (x * x + z * z), 2.0 * (y * z + w * x),
+		2.0 * (x * z + w * y), 2.0 * (y * z - w * x), 1.0 - 2.0 * (x * x + y * y));
+}
+
+void write_culled(uint base)
+{
+	projected_buffers[HEAP_PROJECTED].data[base + PROJ_MEAN] = 0.0;
+	projected_buffers[HEAP_PROJECTED].data[base + PROJ_MEAN + 1u] = 0.0;
+	projected_buffers[HEAP_PROJECTED].data[base + PROJ_CONIC] = 0.0;
+	projected_buffers[HEAP_PROJECTED].data[base + PROJ_CONIC + 1u] = 0.0;
+	projected_buffers[HEAP_PROJECTED].data[base + PROJ_CONIC + 2u] = 0.0;
+	projected_buffers[HEAP_PROJECTED].data[base + PROJ_DEPTH] = 0.0;
+	projected_buffers[HEAP_PROJECTED].data[base + PROJ_RADIUS] = 0.0;
+}
+
+void main()
+{
+	uint id = gl_GlobalInvocationID.x;
+	if (id >= SPLAT_COUNT) {
+		return;
+	}
+
+	uint geom_base = id * GEOMETRY_STRIDE;
+	uint proj_base = id * PROJECTED_STRIDE;
+
+	vec3 mean = vec3(
+		geometry_buffers[HEAP_GEOMETRY].data[geom_base + GEOM_POS],
+		geometry_buffers[HEAP_GEOMETRY].data[geom_base + GEOM_POS + 1u],
+		geometry_buffers[HEAP_GEOMETRY].data[geom_base + GEOM_POS + 2u]);
+	vec3 log_scale = vec3(
+		geometry_buffers[HEAP_GEOMETRY].data[geom_base + GEOM_SCALE],
+		geometry_buffers[HEAP_GEOMETRY].data[geom_base + GEOM_SCALE + 1u],
+		geometry_buffers[HEAP_GEOMETRY].data[geom_base + GEOM_SCALE + 2u]);
+	vec4 rotation = vec4(
+		geometry_buffers[HEAP_GEOMETRY].data[geom_base + GEOM_ROT],
+		geometry_buffers[HEAP_GEOMETRY].data[geom_base + GEOM_ROT + 1u],
+		geometry_buffers[HEAP_GEOMETRY].data[geom_base + GEOM_ROT + 2u],
+		geometry_buffers[HEAP_GEOMETRY].data[geom_base + GEOM_ROT + 3u]);
+
+	vec4 mean_view_h = camera.view * vec4(mean, 1.0);
+	vec3 mean_view = mean_view_h.xyz;
+	if (mean_view.z <= NEAR_PLANE) {
+		write_culled(proj_base);
+		return;
+	}
+
+	vec4 mean_clip = camera.proj * mean_view_h;
+	float inv_w = 1.0 / (mean_clip.w + 1e-7);
+	vec3 mean_ndc = mean_clip.xyz * inv_w;
+
+	// Outside NDC frustum (with small margin for splat extent handled later via radius).
+	if (mean_ndc.z < 0.0 || mean_ndc.z > 1.0 || abs(mean_ndc.x) > 1.3 || abs(mean_ndc.y) > 1.3) {
+		write_culled(proj_base);
+		return;
+	}
+
+	vec3 scale = exp(log_scale);
+	mat3 R = quat_to_rotmat(normalize(rotation));
+	mat3 S = mat3(scale.x, 0.0, 0.0, 0.0, scale.y, 0.0, 0.0, 0.0, scale.z);
+	mat3 M = R * S;
+	mat3 Sigma = M * transpose(M);
+
+	float width = camera.viewport.x;
+	float height = camera.viewport.y;
+	float focal_x = 0.5 * width * camera.proj[0][0];
+	float focal_y = 0.5 * height * abs(camera.proj[1][1]);
+	float tan_fovx = width / (2.0 * focal_x);
+	float tan_fovy = height / (2.0 * focal_y);
+
+	vec3 t = mean_view;
+	float limx = 1.3 * tan_fovx;
+	float limy = 1.3 * tan_fovy;
+	float txtz = t.x / t.z;
+	float tytz = t.y / t.z;
+	t.x = clamp(txtz, -limx, limx) * t.z;
+	t.y = clamp(tytz, -limy, limy) * t.z;
+
+	float tz = t.z;
+	float tz2 = tz * tz;
+	mat3 J = mat3(
+		focal_x / tz, 0.0, -(focal_x * t.x) / tz2,
+		0.0, focal_y / tz, -(focal_y * t.y) / tz2,
+		0.0, 0.0, 0.0);
+
+	mat3 W = mat3(camera.view);
+	mat3 T = J * W;
+	mat3 cov3 = T * Sigma * transpose(T);
+
+	float cov_xx = cov3[0][0] + COV_FILTER;
+	float cov_yy = cov3[1][1] + COV_FILTER;
+	float cov_xy = cov3[0][1];
+
+	float det = cov_xx * cov_yy - cov_xy * cov_xy;
+	if (det <= 1e-10) {
+		write_culled(proj_base);
+		return;
+	}
+
+	float inv_det = 1.0 / det;
+	float conic_xx = cov_yy * inv_det;
+	float conic_yy = cov_xx * inv_det;
+	float conic_xy = -cov_xy * inv_det;
+
+	float mid = 0.5 * (cov_xx + cov_yy);
+	float lambda_delta = sqrt(max(0.1, mid * mid - det));
+	float lambda1 = mid + lambda_delta;
+	float lambda2 = mid - lambda_delta;
+	float radius = ceil(RADIUS_SCALE * sqrt(max(lambda1, lambda2)));
+	if (radius < 1.0) {
+		write_culled(proj_base);
+		return;
+	}
+
+	vec2 screen = vec2(
+		(mean_ndc.x * 0.5 + 0.5) * width,
+		(mean_ndc.y * 0.5 + 0.5) * height);
+
+	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_MEAN] = screen.x;
+	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_MEAN + 1u] = screen.y;
+	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_CONIC] = conic_xx;
+	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_CONIC + 1u] = conic_yy;
+	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_CONIC + 2u] = conic_xy;
+	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_DEPTH] = mean_view.z;
+	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_RADIUS] = radius;
+}

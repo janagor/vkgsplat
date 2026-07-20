@@ -21,6 +21,7 @@
 #include "backend/vulkan/initializers.hpp"
 #include "backend/vulkan/rendering.hpp"
 #include "mesh_gpu.hpp"
+#include "project_gaussians.hpp"
 #include "sphere_setup.hpp"
 #include "sync_objects/fence.hpp"
 #include "sync_objects/semaphore.hpp"
@@ -45,6 +46,15 @@ void record_sphere_draw(Init &init,
 {
   bind_descriptor_heap(init, data, command_buffer);
   dispatch_sphere_setup(init, data, command_buffer);
+
+  ProjectPushConstants const project_push{
+    .view = camera.view_matrix(),
+    .projection = camera.projection_matrix(aspect_ratio),
+    .viewport = { static_cast<float>(init.swapchain->extent().width),
+      static_cast<float>(init.swapchain->extent().height) },
+    .padding = {},
+  };
+  dispatch_project_gaussians(init, data, project_push, command_buffer);
 
   VkImageSubresourceRange const color_subresource_range = {
     .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -352,6 +362,7 @@ void cleanup(Init &init, RenderData &data)
 
   destroy_depth_buffer(init, data);
   destroy_sphere_buffers(init, data);
+  destroy_project_gaussians(init, data);
   destroy_sphere_setup(init, data);
   destroy_descriptor_heap(init, data);
 

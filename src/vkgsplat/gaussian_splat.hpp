@@ -63,6 +63,22 @@ static_assert(sizeof(GaussianSplat) == sizeof(GaussianGeometry) + sizeof(Gaussia
 static_assert(std::is_trivially_copyable_v<GaussianSplat>);
 static_assert(std::is_standard_layout_v<GaussianSplat>);
 
+// Stage 1 projection output (AoS). radius == 0 marks a culled splat.
+inline constexpr u32 k_projected_floats = 7;
+
+struct GaussianProjected
+{
+  std::array<f32, 2> screen_position{};// pixel-space mean
+  std::array<f32, 3> conic{};// Σ₂D⁻¹ as (xx, yy, xy)
+  f32 depth{};// view-space z
+  f32 radius{};// screen-space extent in pixels
+};
+
+static_assert(sizeof(GaussianProjected) == k_projected_floats * sizeof(f32));
+static_assert(alignof(GaussianProjected) == alignof(f32));
+static_assert(std::is_trivially_copyable_v<GaussianProjected>);
+static_assert(std::is_standard_layout_v<GaussianProjected>);
+
 [[nodiscard]] inline auto sigmoid(f32 x) -> f32 { return 1.0F / (1.0F + std::exp(-x)); }
 
 [[nodiscard]] inline auto sh0_to_rgb(std::array<f32, 3> const &f_dc) -> std::array<f32, 3>
