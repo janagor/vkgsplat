@@ -73,7 +73,7 @@ auto Renderer::create(RendererConfig const &config) -> std::expected<Renderer, E
     auto loaded = load_splats_from_ply(config.ply_path, config.splat_count);
     if (!loaded) { return std::unexpected(make_error(std::move(loaded.error()))); }
     splats = std::move(*loaded);
-    std::println("Loaded {} splats from {}", splats->positions.size(), config.ply_path);
+    std::println("Loaded {} splats from {}", splats->geometries.size(), config.ply_path);
   } else {
     std::println("Using procedural mode with {} spheres", config.splat_count);
   }

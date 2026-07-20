@@ -8,7 +8,7 @@
 #include <vector>
 
 #include "app_state.hpp"
-#include <vkgsplat/types.hpp>
+#include "gaussian_splat.hpp"
 #include "vulkan_context.hpp"
 
 #include <vulkan/vulkan_core.h>
@@ -73,7 +73,7 @@ auto refresh_descriptor_heap(Init &init, RenderData &data) -> bool
 
   destroy_descriptor_heap(init, data);
 
-  if (data.position_buffer.handle == VK_NULL_HANDLE || data.color_buffer.handle == VK_NULL_HANDLE
+  if (data.geometry_buffer.handle == VK_NULL_HANDLE || data.appearance_buffer.handle == VK_NULL_HANDLE
       || data.sorted_indices.buffer().handle == VK_NULL_HANDLE
       || data.sort_entries.buffer().handle == VK_NULL_HANDLE) {
     return true;
@@ -86,22 +86,22 @@ auto refresh_descriptor_heap(Init &init, RenderData &data) -> bool
   }
 
   auto const descriptor_size = data.descriptor_stride;
-  auto const position_buffer_size =
-    static_cast<VkDeviceSize>(data.splat_count * sizeof(std::array<f32, 3>));
-  auto const color_buffer_size =
-    static_cast<VkDeviceSize>(data.splat_count * sizeof(std::array<f32, 3>));
+  auto const geometry_buffer_size =
+    static_cast<VkDeviceSize>(data.splat_count * sizeof(GaussianGeometry));
+  auto const appearance_buffer_size =
+    static_cast<VkDeviceSize>(data.splat_count * sizeof(GaussianAppearance));
   auto const sorted_indices_buffer_size = data.sorted_indices.byte_size();
   auto const sort_entries_buffer_size = data.sort_entries.byte_size();
 
   std::vector<std::byte> descriptor_data(data.descriptor_stride * k_heap_descriptor_count);
   std::array<VkDeviceAddressRangeEXT, k_heap_descriptor_count> address_ranges = {
     VkDeviceAddressRangeEXT{
-      .address = init.gpu_allocator.get_buffer_device_address(data.position_buffer),
-      .size = position_buffer_size,
+      .address = init.gpu_allocator.get_buffer_device_address(data.geometry_buffer),
+      .size = geometry_buffer_size,
     },
     VkDeviceAddressRangeEXT{
-      .address = init.gpu_allocator.get_buffer_device_address(data.color_buffer),
-      .size = color_buffer_size,
+      .address = init.gpu_allocator.get_buffer_device_address(data.appearance_buffer),
+      .size = appearance_buffer_size,
     },
     VkDeviceAddressRangeEXT{
       .address = init.gpu_allocator.get_buffer_device_address(data.sorted_indices.buffer()),

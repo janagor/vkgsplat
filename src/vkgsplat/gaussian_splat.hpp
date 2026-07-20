@@ -1,6 +1,8 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <type_traits>
 
@@ -15,18 +17,24 @@ inline constexpr u32 k_sh_dc_coeffs = 3;
 inline constexpr u32 k_sh_rest_coeffs = 45;
 inline constexpr u32 k_sh_total_coeffs = k_sh_dc_coeffs + k_sh_rest_coeffs;
 
+// Y_0^0 normalization constant used by 3DGS SH0 → RGB.
+inline constexpr f32 k_sh_c0 = 0.28209479177387814F;
+
+inline constexpr u32 k_geometry_floats = 11;
+inline constexpr u32 k_appearance_floats = k_sh_total_coeffs;
+
 // Geometry buffer element: pose, shape, and opacity (PLY: x/y/z, scale_*, rot_*, opacity).
 // Packed AoS layout for a dedicated geometry storage buffer.
 struct GaussianGeometry
 {
   std::array<f32, 3> position{};
-  std::array<f32, 3> scale{};
+  std::array<f32, 3> scale{};// log-space scales (exp in shaders)
   // PLY order rot_0..3 → (w, x, y, z).
   std::array<f32, 4> rotation{ 1.0F, 0.0F, 0.0F, 0.0F };
-  f32 opacity{};
+  f32 opacity{};// logit opacity (sigmoid in shaders)
 };
 
-static_assert(sizeof(GaussianGeometry) == 11U * sizeof(f32));
+static_assert(sizeof(GaussianGeometry) == k_geometry_floats * sizeof(f32));
 static_assert(alignof(GaussianGeometry) == alignof(f32));
 static_assert(std::is_trivially_copyable_v<GaussianGeometry>);
 static_assert(std::is_standard_layout_v<GaussianGeometry>);
@@ -39,7 +47,7 @@ struct GaussianAppearance
   std::array<f32, k_sh_rest_coeffs> f_rest{};// f_rest_0 .. f_rest_44
 };
 
-static_assert(sizeof(GaussianAppearance) == k_sh_total_coeffs * sizeof(f32));
+static_assert(sizeof(GaussianAppearance) == k_appearance_floats * sizeof(f32));
 static_assert(alignof(GaussianAppearance) == alignof(f32));
 static_assert(std::is_trivially_copyable_v<GaussianAppearance>);
 static_assert(std::is_standard_layout_v<GaussianAppearance>);
@@ -54,5 +62,21 @@ struct GaussianSplat
 static_assert(sizeof(GaussianSplat) == sizeof(GaussianGeometry) + sizeof(GaussianAppearance));
 static_assert(std::is_trivially_copyable_v<GaussianSplat>);
 static_assert(std::is_standard_layout_v<GaussianSplat>);
+
+[[nodiscard]] inline auto sigmoid(f32 x) -> f32 { return 1.0F / (1.0F + std::exp(-x)); }
+
+[[nodiscard]] inline auto sh0_to_rgb(std::array<f32, 3> const &f_dc) -> std::array<f32, 3>
+{
+  return {
+    std::clamp(0.5F + (k_sh_c0 * f_dc[0]), 0.0F, 1.0F),
+    std::clamp(0.5F + (k_sh_c0 * f_dc[1]), 0.0F, 1.0F),
+    std::clamp(0.5F + (k_sh_c0 * f_dc[2]), 0.0F, 1.0F),
+  };
+}
+
+[[nodiscard]] inline auto scales_from_log(std::array<f32, 3> const &log_scale) -> std::array<f32, 3>
+{
+  return { std::exp(log_scale[0]), std::exp(log_scale[1]), std::exp(log_scale[2]) };
+}
 
 }// namespace vkgsplat

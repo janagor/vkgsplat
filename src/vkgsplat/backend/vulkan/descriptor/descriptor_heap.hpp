@@ -13,8 +13,8 @@ namespace vkgsplat {
 
 enum class HeapSlot : size_t
 {
-  Position = 0,
-  Color = 1,
+  Geometry = 0,
+  Appearance = 1,
   SortedIndices = 2,
   SortEntries = 3,
 };

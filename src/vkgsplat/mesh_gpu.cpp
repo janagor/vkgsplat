@@ -1,14 +1,14 @@
 #include "mesh_gpu.hpp"
 
-#include <array>
 #include <functional>
 #include <optional>
 #include <print>
 #include <span>
 #include <vector>
 
-#include "io/ply/load_splats.hpp"
 #include "app_state.hpp"
+#include "gaussian_splat.hpp"
+#include "io/ply/load_splats.hpp"
 #include "vulkan_context.hpp"
 #include <vkgsplat/types.hpp>
 
@@ -18,10 +18,10 @@ namespace vkgsplat {
 
 void destroy_sphere_buffers(Init &init, RenderData &data)
 {
-  init.gpu_allocator.destroy_buffer(data.position_buffer);
-  init.gpu_allocator.destroy_buffer(data.color_buffer);
-  data.position_buffer = {};
-  data.color_buffer = {};
+  init.gpu_allocator.destroy_buffer(data.geometry_buffer);
+  init.gpu_allocator.destroy_buffer(data.appearance_buffer);
+  data.geometry_buffer = {};
+  data.appearance_buffer = {};
 }
 
 auto create_sphere_buffers(Init &init,
@@ -33,11 +33,11 @@ auto create_sphere_buffers(Init &init,
 
   if (cpu_data) {
     auto const &splats = cpu_data->get();
-    if (splats.positions.size() != splats.colors.size() || splats.positions.empty()) {
+    if (splats.geometries.size() != splats.appearances.size() || splats.geometries.empty()) {
       std::println("Invalid splat CPU data!");
       return false;
     }
-    data.splat_count = static_cast<u32>(splats.positions.size());
+    data.splat_count = static_cast<u32>(splats.geometries.size());
   } else {
     if (splat_count == 0) {
       std::println("Splat count must be greater than zero!");
@@ -46,38 +46,43 @@ auto create_sphere_buffers(Init &init,
     data.splat_count = splat_count;
   }
 
-  auto const position_buffer_size =
-    static_cast<VkDeviceSize>(data.splat_count * sizeof(std::array<f32, 3>));
-  auto const color_buffer_size =
-    static_cast<VkDeviceSize>(data.splat_count * sizeof(std::array<f32, 3>));
+  auto const geometry_buffer_size =
+    static_cast<VkDeviceSize>(data.splat_count * sizeof(GaussianGeometry));
+  auto const appearance_buffer_size =
+    static_cast<VkDeviceSize>(data.splat_count * sizeof(GaussianAppearance));
 
-  auto position_buffer = init.gpu_allocator.create_storage_buffer(position_buffer_size);
-  auto color_buffer = init.gpu_allocator.create_storage_buffer(color_buffer_size);
-  if (!position_buffer || !color_buffer) {
-    std::println("Failed to create sphere buffers!");
+  auto geometry_buffer = init.gpu_allocator.create_storage_buffer(geometry_buffer_size);
+  auto appearance_buffer = init.gpu_allocator.create_storage_buffer(appearance_buffer_size);
+  if (!geometry_buffer || !appearance_buffer) {
+    std::println("Failed to create gaussian buffers!");
     return false;
   }
 
-  data.position_buffer = *position_buffer;
-  data.color_buffer = *color_buffer;
+  data.geometry_buffer = *geometry_buffer;
+  data.appearance_buffer = *appearance_buffer;
 
   if (cpu_data) {
     auto const &splats = cpu_data->get();
-    if (!init.gpu_allocator.write_buffer(*position_buffer, std::span{ splats.positions })) {
-      std::println("Failed to upload splat positions!");
+    if (!init.gpu_allocator.write_buffer(*geometry_buffer, std::span{ splats.geometries })) {
+      std::println("Failed to upload splat geometry!");
       return false;
     }
 
-    if (!init.gpu_allocator.write_buffer(*color_buffer, std::span{ splats.colors })) {
-      std::println("Failed to upload splat colors!");
+    if (!init.gpu_allocator.write_buffer(*appearance_buffer, std::span{ splats.appearances })) {
+      std::println("Failed to upload splat appearance!");
       return false;
     }
     return true;
   }
 
-  std::vector<std::array<f32, 3>> const zero_colors(data.splat_count, std::array<f32, 3>{ 0.0F, 0.0F, 0.0F });
-  if (!init.gpu_allocator.write_buffer(*color_buffer, std::span{ zero_colors })) {
-    std::println("Failed to zero-initialize color buffer!");
+  std::vector<GaussianGeometry> const zero_geometry(data.splat_count);
+  std::vector<GaussianAppearance> const zero_appearance(data.splat_count);
+  if (!init.gpu_allocator.write_buffer(*geometry_buffer, std::span{ zero_geometry })) {
+    std::println("Failed to zero-initialize geometry buffer!");
+    return false;
+  }
+  if (!init.gpu_allocator.write_buffer(*appearance_buffer, std::span{ zero_appearance })) {
+    std::println("Failed to zero-initialize appearance buffer!");
     return false;
   }
 

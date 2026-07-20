@@ -40,8 +40,8 @@ struct RenderData
 
   VkPipeline graphics_pipeline{};
 
-  vulkan::Buffer position_buffer{};
-  vulkan::Buffer color_buffer{};
+  vulkan::Buffer geometry_buffer{};
+  vulkan::Buffer appearance_buffer{};
   compute::Tensor<u32> sorted_indices{};
   compute::Tensor<compute::SortEntry> sort_entries{};
   vulkan::Buffer descriptor_heap_buffer{};
