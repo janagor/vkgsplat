@@ -28,6 +28,7 @@
 #include "mesh_gpu.hpp"
 #include "bin_gaussians.hpp"
 #include "project_gaussians.hpp"
+#include "rasterize_gaussians.hpp"
 #include "sort_gaussians.hpp"
 #include "sphere_setup.hpp"
 #include "vulkan_context.hpp"
@@ -119,6 +120,9 @@ auto Renderer::create(RendererConfig const &config) -> std::expected<Renderer, E
   }
   if (!init_sort_gaussians(impl->init, impl->render_data)) {
     return std::unexpected(make_error("Failed to initialize gaussian sorting"));
+  }
+  if (!init_rasterize_gaussians(impl->init, impl->render_data)) {
+    return std::unexpected(make_error("Failed to initialize gaussian rasterization"));
   }
   if (0 != create_graphics_pipeline(impl->init, impl->render_data)) {
     return std::unexpected(make_error("Failed to create graphics pipeline"));

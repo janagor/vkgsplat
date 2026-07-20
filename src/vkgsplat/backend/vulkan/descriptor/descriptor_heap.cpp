@@ -81,6 +81,7 @@ auto refresh_descriptor_heap(Init &init, RenderData &data) -> bool
       || data.sorted_keys_buffer.handle == VK_NULL_HANDLE
       || data.sorted_values_buffer.handle == VK_NULL_HANDLE
       || data.tile_ranges_buffer.handle == VK_NULL_HANDLE
+      || data.color_buffer.handle == VK_NULL_HANDLE
       || data.sorted_indices.buffer().handle == VK_NULL_HANDLE
       || data.sort_entries.buffer().handle == VK_NULL_HANDLE) {
     return true;
@@ -109,6 +110,8 @@ auto refresh_descriptor_heap(Init &init, RenderData &data) -> bool
     static_cast<VkDeviceSize>(data.gaussian_sort_size * sizeof(u32));
   auto const tile_ranges_buffer_size =
     static_cast<VkDeviceSize>(data.tile_count * sizeof(TileRange));
+  auto const color_buffer_size = static_cast<VkDeviceSize>(data.color_width)
+    * static_cast<VkDeviceSize>(data.color_height) * 4U * sizeof(f32);
   auto const sorted_indices_buffer_size = data.sorted_indices.byte_size();
   auto const sort_entries_buffer_size = data.sort_entries.byte_size();
 
@@ -153,6 +156,10 @@ auto refresh_descriptor_heap(Init &init, RenderData &data) -> bool
     VkDeviceAddressRangeEXT{
       .address = init.gpu_allocator.get_buffer_device_address(data.tile_ranges_buffer),
       .size = tile_ranges_buffer_size,
+    },
+    VkDeviceAddressRangeEXT{
+      .address = init.gpu_allocator.get_buffer_device_address(data.color_buffer),
+      .size = color_buffer_size,
     },
   };
 

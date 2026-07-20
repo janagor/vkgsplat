@@ -35,6 +35,8 @@ public:
     -> std::expected<GPUAllocator, void *>;
 
   auto create_storage_buffer(VkDeviceSize size) noexcept -> std::expected<Buffer, void *>;
+  // Device-local storage suitable for GPU write + transfer (e.g. color targets).
+  auto create_device_storage_buffer(VkDeviceSize size) noexcept -> std::expected<Buffer, void *>;
   auto create_heap_buffer(VkDeviceSize size) noexcept -> std::expected<Buffer, void *>;
   [[nodiscard]] auto vma_allocator() const noexcept -> VmaAllocator { return allocator_; }
   auto get_buffer_device_address(Buffer const &buffer) const noexcept -> VkDeviceAddress;

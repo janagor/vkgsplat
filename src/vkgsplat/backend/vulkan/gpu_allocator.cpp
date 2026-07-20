@@ -70,13 +70,34 @@ std::expected<Buffer, void *> GPUAllocator::create_storage_buffer(VkDeviceSize s
   // NOLINTBEGIN(hicpp-signed-bitwise)
   auto const buffer_info = initializers::BufferCreateInfo(size,
     VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
-      | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+      | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
   // NOLINTEND(hicpp-signed-bitwise)
 
   VmaAllocationCreateInfo alloc_info = {};
   alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
   alloc_info.flags =
     VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
+
+  Buffer buffer{ .size = size };
+  if (vmaCreateBuffer(allocator_, &buffer_info, &alloc_info, &buffer.handle, &buffer.allocation, nullptr)
+      != VK_SUCCESS) {
+    return std::unexpected(nullptr);
+  }
+
+  return buffer;
+}
+
+std::expected<Buffer, void *> GPUAllocator::create_device_storage_buffer(VkDeviceSize size) noexcept
+{
+  // NOLINTBEGIN(hicpp-signed-bitwise)
+  auto const buffer_info = initializers::BufferCreateInfo(size,
+    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+      | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+  // NOLINTEND(hicpp-signed-bitwise)
+
+  VmaAllocationCreateInfo alloc_info = {};
+  alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+  alloc_info.flags = 0;
 
   Buffer buffer{ .size = size };
   if (vmaCreateBuffer(allocator_, &buffer_info, &alloc_info, &buffer.handle, &buffer.allocation, nullptr)

@@ -29,6 +29,7 @@ auto build_swapchain(vkb::Device const &device, GLFWwindow *window, vkb::Swapcha
 
   vkb::SwapchainBuilder swapchain_builder{ device };
   return VKBResultToExpected(swapchain_builder.set_desired_extent(static_cast<u32>(width), static_cast<u32>(height))
+      .set_image_usage_flags(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT)
       .set_old_swapchain(old_swapchain)
       .build());
 }

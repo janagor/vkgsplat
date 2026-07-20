@@ -1,11 +1,13 @@
 #include "backend/vulkan/renderer.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
 #include <functional>
 #include <iostream>
+#include <print>
 #include <span>
 #include <utility>
 
@@ -19,11 +21,11 @@
 #include "backend/vulkan/command/command.hpp"
 #include "backend/vulkan/command/pool.hpp"
 #include "backend/vulkan/initializers.hpp"
-#include "backend/vulkan/rendering.hpp"
 #include "gaussian_splat.hpp"
 #include "mesh_gpu.hpp"
 #include "bin_gaussians.hpp"
 #include "project_gaussians.hpp"
+#include "rasterize_gaussians.hpp"
 #include "sort_gaussians.hpp"
 #include "sphere_setup.hpp"
 #include "sync_objects/fence.hpp"
@@ -31,6 +33,9 @@
 #include <vkgsplat/types.hpp>
 #include "backend/vulkan/vulkan_bootstrap.hpp"
 #include "window.hpp"
+
+#include <glm/ext/vector_float3.hpp>
+#include <glm/ext/vector_float4.hpp>
 
 #include <vulkan/vulkan_core.h>
 
@@ -76,141 +81,96 @@ void record_sphere_draw(Init &init,
   };
   dispatch_sort_gaussians(init, data, sort_push, command_buffer);
 
-  VkImageSubresourceRange const color_subresource_range = {
-    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-    .baseMipLevel = 0,
-    .levelCount = 1,
-    .baseArrayLayer = 0,
-    .layerCount = 1,
+  glm::vec3 const camera_pos{ camera.position() };
+  RasterPushConstants const raster_push{
+    .camera_position = glm::vec4{ camera_pos, 0.0F },
+    .viewport = { init.swapchain->extent().width, init.swapchain->extent().height },
+    .tile_size = k_tile_size,
+    .tiles_x = (init.swapchain->extent().width + k_tile_size - 1U) / k_tile_size,
+    .background = { 0.02F, 0.02F, 0.05F, 0.0F },
+    .sh_degree = data.procedural ? 0U : 3U,
+    .pad0 = 0U,
+    .pad1 = 0U,
+    .pad2 = 0U,
   };
+  dispatch_rasterize_gaussians(init, data, raster_push, command_buffer, image_index);
+}
 
-  VkImageSubresourceRange const depth_subresource_range = {
-    .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-    .baseMipLevel = 0,
-    .levelCount = 1,
-    .baseArrayLayer = 0,
-    .layerCount = 1,
-  };
+}// namespace
 
-  auto color_barrier = initializers::ImageMemoryBarrier(VK_IMAGE_LAYOUT_UNDEFINED,
-    VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-    init.swapchain->images().at(image_index),
-    color_subresource_range);
-  color_barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+namespace {
 
-  auto depth_barrier = initializers::ImageMemoryBarrier(VK_IMAGE_LAYOUT_UNDEFINED,
-    VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-    data.depth_image,
-    depth_subresource_range);
-  depth_barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+void debug_log_raster_state(Init &init, RenderData const &data)
+{
+  static int debug_frames = 0;
+  if (debug_frames >= 2) { return; }
 
-  std::array<VkImageMemoryBarrier, 2> barriers = { color_barrier, depth_barrier };
-  init.disp.cmdPipelineBarrier(command_buffer,
-    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-    0,
-    0,
-    nullptr,
-    0,
-    nullptr,
-    static_cast<uint32_t>(barriers.size()),
-    barriers.data());
+  init.disp.queueWaitIdle(data.graphics_queue);
+  auto instance_count = init.gpu_allocator.read_buffer<u32>(data.instance_count_buffer, 1);
+  auto projected = init.gpu_allocator.read_buffer<GaussianProjected>(data.projected_buffer, data.splat_count);
+  auto ranges = init.gpu_allocator.read_buffer<TileRange>(data.tile_ranges_buffer, data.tile_count);
+  if (!instance_count || !projected || !ranges) {
+    std::println(stderr, "[raster debug] failed to read back GPU buffers");
+    ++debug_frames;
+    return;
+  }
 
-  VkClearValue const clear_color{ { { 0.02F, 0.02F, 0.05F, 1.0F } } };
-  VkClearValue const clear_depth{ { { 1.0F, 0.0F } } };
+  u32 const live_radii = static_cast<u32>(std::count_if(projected->begin(), projected->end(), [](GaussianProjected const &projected_splat) {
+    return projected_splat.radius >= 1.0F;
+  }));
+  u32 const nonempty_tiles = static_cast<u32>(std::count_if(ranges->begin(), ranges->end(), [](TileRange const &tile_range) {
+    return tile_range.end > tile_range.start;
+  }));
 
-  VkRenderingAttachmentInfo const color_attachment = {
-    .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-    .pNext = nullptr,
-    .imageView = init.swapchain->image_views().at(image_index),
-    .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-    .resolveMode = VK_RESOLVE_MODE_NONE,
-    .resolveImageView = VK_NULL_HANDLE,
-    .resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-    .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-    .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-    .clearValue = clear_color,
-  };
+  std::println(stderr,
+    "[raster debug] instances={} live_radii={}/{} nonempty_tiles={} sort_size={} viewport={}x{}",
+    instance_count->at(0),
+    live_radii,
+    data.splat_count,
+    nonempty_tiles,
+    data.gaussian_sort_size,
+    data.color_width,
+    data.color_height);
 
-  VkRenderingAttachmentInfo const depth_attachment = {
-    .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-    .pNext = nullptr,
-    .imageView = data.depth_image_view,
-    .imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-    .resolveMode = VK_RESOLVE_MODE_NONE,
-    .resolveImageView = VK_NULL_HANDLE,
-    .resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-    .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-    .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-    .clearValue = clear_depth,
-  };
+  for (auto const &candidate : *projected) {
+    if (candidate.radius < 1.0F) { continue; }
+    std::println(stderr,
+      "[raster debug] sample mean=({:.1f},{:.1f}) depth={:.3f} radius={:.1f} conic=({:.4f},{:.4f},{:.4f})",
+      candidate.screen_position.at(0),
+      candidate.screen_position.at(1),
+      candidate.depth,
+      candidate.radius,
+      candidate.conic.at(0),
+      candidate.conic.at(1),
+      candidate.conic.at(2));
 
-  VkRect2D const render_area{ .offset = { .x = 0, .y = 0 }, .extent = init.swapchain->extent() };
-  VkRenderingInfo const rendering_info = {
-    .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
-    .pNext = nullptr,
-    .flags = 0,
-    .renderArea = render_area,
-    .layerCount = 1,
-    .viewMask = 0,
-    .colorAttachmentCount = 1,
-    .pColorAttachments = &color_attachment,
-    .pDepthAttachment = &depth_attachment,
-    .pStencilAttachment = nullptr,
-  };
+    u32 const tile_size = k_tile_size;
+    u32 const tiles_x = (data.color_width + tile_size - 1U) / tile_size;
+    auto const mean_x = static_cast<u32>(candidate.screen_position.at(0));
+    auto const mean_y = static_cast<u32>(candidate.screen_position.at(1));
+    u32 const tile_id = ((mean_y / tile_size) * tiles_x) + (mean_x / tile_size);
+    if (tile_id < ranges->size()) {
+      auto const &tile_range = ranges->at(tile_id);
+      std::println(stderr,
+        "[raster debug] tile_id={} range=[{}, {}) tiles_x={}",
+        tile_id,
+        tile_range.start,
+        tile_range.end,
+        tiles_x);
+    }
 
-  VkViewport viewport = {};
-  viewport.x = 0.0F;
-  viewport.y = 0.0F;
-  viewport.width = static_cast<float>(init.swapchain->extent().width);
-  viewport.height = static_cast<float>(init.swapchain->extent().height);
-  viewport.minDepth = 0.0F;
-  viewport.maxDepth = 1.0F;
-
-  VkRect2D scissor = {};
-  scissor.offset = { .x = 0, .y = 0 };
-  scissor.extent = init.swapchain->extent();
-
-  vulkan::with_rendering(std::ref(init.disp),
-    command_buffer,
-    rendering_info,
-    [&](vkb::DispatchTable &disp, VkCommandBuffer cmd) {
-      CameraPushConstants const push_constants{
-        .view = camera.view_matrix(),
-        .projection = camera.projection_matrix(aspect_ratio),
-      };
-
-      disp.cmdSetViewport(cmd, 0, 1, &viewport);
-      disp.cmdSetScissor(cmd, 0, 1, &scissor);
-      disp.cmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, data.graphics_pipeline);
-
-      VkPushDataInfoEXT const push_info = {
-        .sType = VK_STRUCTURE_TYPE_PUSH_DATA_INFO_EXT,
-        .pNext = nullptr,
-        .offset = 0,
-        .data = { .address = &push_constants, .size = sizeof(CameraPushConstants) },
-      };
-      init.cmd_push_data(cmd, &push_info);
-
-      disp.cmdDraw(cmd, k_verts_per_sphere, data.splat_count, 0, 0);
-    });
-
-  auto present_barrier = initializers::ImageMemoryBarrier(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-    VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-    init.swapchain->images().at(image_index),
-    color_subresource_range);
-  present_barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-
-  init.disp.cmdPipelineBarrier(command_buffer,
-    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-    VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-    0,
-    0,
-    nullptr,
-    0,
-    nullptr,
-    1,
-    &present_barrier);
+    auto sorted_values =
+      init.gpu_allocator.read_buffer<u32>(data.sorted_values_buffer, data.gaussian_sort_size);
+    if (sorted_values && tile_id < ranges->size()) {
+      auto const &tile_range = ranges->at(tile_id);
+      if (tile_range.end > tile_range.start && tile_range.start < sorted_values->size()) {
+        u32 const gaussian_id = sorted_values->at(tile_range.start);
+        std::println(stderr, "[raster debug] first gaussian in tile={}", gaussian_id);
+      }
+    }
+    break;
+  }
+  ++debug_frames;
 }
 
 }// namespace
@@ -301,6 +261,7 @@ auto recreate_swapchain(Init &init, RenderData &data) -> int
   if (!init.swapchain->recreate(init.device, init.window).has_value()) { return -1; }
   if (0 != create_graphics_pipeline(init, data)) { return -1; }
   if (!create_depth_buffer(init, data)) { return -1; }
+  if (!recreate_rasterize_color_target(init, data)) { return -1; }
   if (0 != create_command_resources(init, data)) { return -1; }
   return 0;
 }
@@ -341,7 +302,7 @@ auto draw_frame(Init &init, RenderData &data, Camera const &camera) -> int
   }
 
   std::array<VkSemaphore, 1> wait_semaphores = { available_semaphore };
-  std::array<VkPipelineStageFlags, 1> wait_stages = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+  std::array<VkPipelineStageFlags, 1> wait_stages = { VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT };
   auto *finished_semaphore = data.finished_semaphore.at(image_index).handle();
   std::array<VkSemaphore, 1> signal_semaphores = { finished_semaphore };
 
@@ -355,6 +316,8 @@ auto draw_frame(Init &init, RenderData &data, Camera const &camera) -> int
     std::cout << "failed to submit draw command buffer\n";
     return -1;
   }
+
+  debug_log_raster_state(init, data);
 
   std::array<VkSwapchainKHR, 1> const swap_chains = { init.swapchain->handle() };
   auto const present_info = initializers::PresentInfoKHR(signal_semaphores, swap_chains, std::span{ &image_index, 1 });
@@ -382,6 +345,7 @@ void cleanup(Init &init, RenderData &data)
 
   destroy_depth_buffer(init, data);
   destroy_sphere_buffers(init, data);
+  destroy_rasterize_gaussians(init, data);
   destroy_sort_gaussians(init, data);
   destroy_bin_gaussians(init, data);
   destroy_project_gaussians(init, data);

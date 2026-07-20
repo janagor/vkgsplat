@@ -10,6 +10,8 @@
 #include <glm/ext/quaternion_geometric.hpp>
 #include <glm/ext/quaternion_trigonometric.hpp>
 #include <glm/ext/vector_double3.hpp>
+#include <glm/ext/vector_float3.hpp>
+#include <glm/ext/vector_float4.hpp>
 #include <glm/ext/vector_uint2.hpp>
 #include <glm/fwd.hpp>
 #include <glm/geometric.hpp>
@@ -90,6 +92,23 @@ struct BitonicPushConstants
 };
 
 static_assert(sizeof(BitonicPushConstants) == 16);
+
+// Push data for Stage 4 per-tile front-to-back rasterization.
+// Layout matches GLSL std430 push_constant packing (vec3/vec4 alignment).
+struct RasterPushConstants
+{
+  glm::vec4 camera_position{};// xyz used
+  glm::uvec2 viewport{};// width, height in pixels
+  u32 tile_size{ 16 };
+  u32 tiles_x{};
+  glm::vec4 background{ 0.02F, 0.02F, 0.05F, 0.0F };// rgb used
+  u32 sh_degree{ 3 };// 0 = SH0 only; 3 = full degree-3
+  u32 pad0{};
+  u32 pad1{};
+  u32 pad2{};
+};
+
+static_assert(sizeof(RasterPushConstants) == 64);
 
 class Camera
 {

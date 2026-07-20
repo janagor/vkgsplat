@@ -89,19 +89,21 @@ void main()
 		geometry_buffers[HEAP_GEOMETRY].data[geom_base + GEOM_ROT + 2u],
 		geometry_buffers[HEAP_GEOMETRY].data[geom_base + GEOM_ROT + 3u]);
 
-	vec4 mean_view_h = camera.view * vec4(mean, 1.0);
-	vec3 mean_view = mean_view_h.xyz;
+	vec4 mean_world = vec4(mean, 1.0);
+	vec4 mean_view_gl = camera.view * mean_world;
+	// Camera / glm view is OpenGL-style (-Z forward). 3DGS EWA expects +Z depth.
+	vec3 mean_view = vec3(mean_view_gl.x, mean_view_gl.y, -mean_view_gl.z);
 	if (mean_view.z <= NEAR_PLANE) {
 		write_culled(proj_base);
 		return;
 	}
 
-	vec4 mean_clip = camera.proj * mean_view_h;
+	vec4 mean_clip = camera.proj * mean_view_gl;
 	float inv_w = 1.0 / (mean_clip.w + 1e-7);
 	vec3 mean_ndc = mean_clip.xyz * inv_w;
 
-	// Outside NDC frustum (with small margin for splat extent handled later via radius).
-	if (mean_ndc.z < 0.0 || mean_ndc.z > 1.0 || abs(mean_ndc.x) > 1.3 || abs(mean_ndc.y) > 1.3) {
+	// Projection only flips Y for Vulkan; NDC z stays OpenGL [-1, 1].
+	if (mean_ndc.z < -1.0 || mean_ndc.z > 1.0 || abs(mean_ndc.x) > 1.3 || abs(mean_ndc.y) > 1.3) {
 		write_culled(proj_base);
 		return;
 	}
@@ -134,9 +136,14 @@ void main()
 		0.0, focal_y / tz, -(focal_y * t.y) / tz2,
 		0.0, 0.0, 0.0);
 
+	// Match +Z view space used for t above.
 	mat3 W = mat3(camera.view);
-	mat3 T = J * W;
-	mat3 cov3 = T * Sigma * transpose(T);
+	W[0][2] = -W[0][2];
+	W[1][2] = -W[1][2];
+	W[2][2] = -W[2][2];
+	// 3DGS: T = W * J, cov2d = transpose(T) * Sigma * T
+	mat3 T = W * J;
+	mat3 cov3 = transpose(T) * Sigma * T;
 
 	float cov_xx = cov3[0][0] + COV_FILTER;
 	float cov_yy = cov3[1][1] + COV_FILTER;
