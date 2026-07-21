@@ -94,9 +94,7 @@ auto Renderer::create(RendererConfig const &config) -> std::expected<Renderer, E
   if (!swapchain) { return std::unexpected(make_error("Failed to create swapchain")); }
   impl->init.swapchain = std::make_unique<vulkan::Swapchain>(std::move(*swapchain));
 
-  if (auto queues = get_queues(impl->init, impl->render_data); !queues) {
-    return std::unexpected(queues.error());
-  }
+  if (auto queues = get_queues(impl->init, impl->render_data); !queues) { return std::unexpected(queues.error()); }
 
   if (impl->render_data.procedural) {
     if (!create_sphere_buffers(impl->init, impl->render_data, config.splat_count)) {

@@ -173,9 +173,7 @@ auto parse_app_config(std::span<char *const> args) -> std::expected<AppConfig, E
       return std::unexpected{ make_error(std::errc::invalid_argument, "unknown option: " + std::string{ arg }) };
     }
 
-    if (auto parsed = parse_shorthand_ply(args, index, config); !parsed) {
-      return std::unexpected{ parsed.error() };
-    }
+    if (auto parsed = parse_shorthand_ply(args, index, config); !parsed) { return std::unexpected{ parsed.error() }; }
     return config;
   }
 

@@ -199,9 +199,7 @@ auto create_command_resources(Init &init, RenderData &data) -> std::expected<voi
   auto pool = vulkan::CommandPool::create(std::ref(init.disp),
     static_cast<u32>(init.device.get_queue_index(vkb::QueueType::graphics).value()),
     VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
-  if (!pool) {
-    return std::unexpected{ pool.error() };
-  }
+  if (!pool) { return std::unexpected{ pool.error() }; }
   data.command_pool = std::move(*pool);
 
   auto buffers = data.command_pool->allocate_buffers(static_cast<u32>(init.swapchain->image_views().size()));
@@ -287,9 +285,8 @@ auto draw_frame(Init &init, RenderData &data, Camera const &camera) -> std::expe
   if (result == VK_ERROR_OUT_OF_DATE_KHR) {
     return recreate_swapchain(init, data);
   } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
-    return std::unexpected{
-      make_error(std::errc::io_error, "failed to acquire swapchain image. VkResult=" + std::to_string(result))
-    };
+    return std::unexpected{ make_error(
+      std::errc::io_error, "failed to acquire swapchain image. VkResult=" + std::to_string(result)) };
   }
 
   if (data.image_in_flight.at(image_index) != VK_NULL_HANDLE) {
@@ -301,9 +298,7 @@ auto draw_frame(Init &init, RenderData &data, Camera const &camera) -> std::expe
     std::ref(init.disp), data.command_buffers.at(image_index).handle(), [&](vkb::DispatchTable &, VkCommandBuffer cmd) {
       record_sphere_draw(init, data, camera, aspect_ratio, cmd, image_index);
     });
-  if (!recorded) {
-    return std::unexpected{ recorded.error() };
-  }
+  if (!recorded) { return std::unexpected{ recorded.error() }; }
 
   std::array<VkSemaphore, 1> wait_semaphores = { available_semaphore };
   std::array<VkPipelineStageFlags, 1> wait_stages = { VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT };

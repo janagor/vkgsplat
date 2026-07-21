@@ -43,7 +43,9 @@ private:
 }// namespace vkgsplat
 
 namespace std {
-template <> struct is_error_code_enum<vkgsplat::ErrorIO> : true_type {};
+template<> struct is_error_code_enum<vkgsplat::ErrorIO> : true_type
+{
+};
 }// namespace std
 
 #include <vkgsplat/error.ipp>

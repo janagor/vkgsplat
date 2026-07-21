@@ -16,7 +16,8 @@ auto run(std::span<char *const> args) noexcept -> int
   try {
     auto const config = parse_app_config(args);
     if (!config) {
-      std::println(stderr, "Failed to parse app config ({}): {}", config.error().code().value(), config.error().message());
+      std::println(
+        stderr, "Failed to parse app config ({}): {}", config.error().code().value(), config.error().message());
       return -1;
     }
 

@@ -96,8 +96,7 @@ namespace {
     return splat;
   }
 
-  [[nodiscard]] auto load_vertex_splats(miniply::PLYReader &reader, u32 count)
-    -> std::expected<SplatCpuData, Error>
+  [[nodiscard]] auto load_vertex_splats(miniply::PLYReader &reader, u32 count) -> std::expected<SplatCpuData, Error>
   {
     u32 const available = reader.num_rows();
     if (available == 0) {
@@ -192,9 +191,7 @@ auto load_splats_from_ply(std::string_view ply_path, u32 count) -> std::expected
   std::string const path{ ply_path };
   miniply::PLYReader reader(path.c_str());
   if (!reader.valid()) {
-    return std::unexpected{
-      make_error(ErrorIO::failed_open, "failed to open or parse PLY header: " + path)
-    };
+    return std::unexpected{ make_error(ErrorIO::failed_open, "failed to open or parse PLY header: " + path) };
   }
 
   while (reader.has_element()) {
