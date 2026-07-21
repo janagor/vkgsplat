@@ -15,6 +15,7 @@ add_library(
   backend/vulkan/swapchain.cpp
   backend/vulkan/command/pool.cpp
   backend/vulkan/renderer.cpp
+  backend/vulkan/sync_objects/barrier.cpp
   backend/vulkan/sync_objects/fence.cpp
   backend/vulkan/sync_objects/semaphore.cpp
   sphere_setup.cpp

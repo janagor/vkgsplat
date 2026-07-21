@@ -1,0 +1,30 @@
+#pragma once
+
+#include <VkBootstrapDispatch.h>
+#include <vulkan/vulkan_core.h>
+
+namespace vkgsplat {
+
+struct MemoryBarrierParams
+{
+  VkPipelineStageFlags src_stage{};
+  VkPipelineStageFlags dst_stage{};
+  VkAccessFlags src_access{};
+  VkAccessFlags dst_access{};
+};
+
+class Barrier
+{
+public:
+  Barrier() = delete;
+
+  static void memory(vkb::DispatchTable const &disp, VkCommandBuffer command_buffer, MemoryBarrierParams params);
+
+  static void transfer_to_compute(vkb::DispatchTable const &disp, VkCommandBuffer command_buffer);
+
+  static void compute_to_compute(vkb::DispatchTable const &disp, VkCommandBuffer command_buffer);
+
+  static void compute_read(vkb::DispatchTable const &disp, VkCommandBuffer command_buffer);
+};
+
+}// namespace vkgsplat

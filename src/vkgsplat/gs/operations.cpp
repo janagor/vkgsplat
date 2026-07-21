@@ -1,7 +1,7 @@
 #include "gs/operations.hpp"
 
 #include "app_state.hpp"
-#include "compute/vulkan_barrier.hpp"
+#include "backend/vulkan/sync_objects/barrier.hpp"
 #include "gs/push_constants.hpp"
 #include "gs/rasterization.hpp"
 #include "vulkan_context.hpp"
@@ -79,7 +79,7 @@ void OpProjection::record(Init const &init, RenderData const &data, VkCommandBuf
 
   u32 const workgroup_count = (data.splat_count + k_compute_local_size_x - 1U) / k_compute_local_size_x;
   dispatch_compute_1d(init, command_buffer, workgroup_count);
-  compute::compute_read_barrier(init, command_buffer);
+  Barrier::compute_read(init.disp, command_buffer);
 }
 
 void OpBinning::record(Init const &init, RenderData const &data, VkCommandBuffer command_buffer)
@@ -89,7 +89,7 @@ void OpBinning::record(Init const &init, RenderData const &data, VkCommandBuffer
 
   u32 const workgroup_count = (data.splat_count + k_compute_local_size_x - 1U) / k_compute_local_size_x;
   dispatch_compute_1d(init, command_buffer, workgroup_count);
-  compute::compute_read_barrier(init, command_buffer);
+  Barrier::compute_read(init.disp, command_buffer);
 }
 
 void OpPrepareSort::record(Init const &init, RenderData const &data, VkCommandBuffer command_buffer)
@@ -102,7 +102,7 @@ void OpPrepareSort::record(Init const &init, RenderData const &data, VkCommandBu
     &data.sort_push,
     sizeof(SortPushConstants),
     sort_grid);
-  compute::compute_to_compute_barrier(init, command_buffer);
+  Barrier::compute_to_compute(init.disp, command_buffer);
 }
 
 void OpBitonicSort::record(Init const &init, RenderData const &data, VkCommandBuffer command_buffer)
@@ -120,7 +120,7 @@ void OpBitonicSort::record(Init const &init, RenderData const &data, VkCommandBu
       };
       push_constants(init, &bitonic_push, sizeof(BitonicPushConstants), command_buffer);
       dispatch_compute_2d(init, command_buffer, sort_grid);
-      compute::compute_to_compute_barrier(init, command_buffer);
+      Barrier::compute_to_compute(init.disp, command_buffer);
     }
   }
 }
@@ -135,7 +135,7 @@ void OpIdentifyRanges::record(Init const &init, RenderData const &data, VkComman
     &data.sort_push,
     sizeof(SortPushConstants),
     sort_grid);
-  compute::compute_read_barrier(init, command_buffer);
+  Barrier::compute_read(init.disp, command_buffer);
 }
 
 void OpRasterization::record(Init const &init, RenderData const &data, VkCommandBuffer command_buffer)

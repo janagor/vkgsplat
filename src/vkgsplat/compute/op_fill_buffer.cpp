@@ -1,7 +1,7 @@
 #include "compute/op_fill_buffer.hpp"
 
 #include "app_state.hpp"
-#include "compute/vulkan_barrier.hpp"
+#include "backend/vulkan/sync_objects/barrier.hpp"
 #include "vulkan_context.hpp"
 
 #include <vulkan/vulkan_core.h>
@@ -15,7 +15,7 @@ void OpFillBuffer::record(Init const &init,
   VkCommandBuffer command_buffer)
 {
   init.disp.cmdFillBuffer(command_buffer, params_.buffer, params_.offset, params_.size, params_.value);
-  transfer_to_compute_barrier(init, command_buffer);
+  Barrier::transfer_to_compute(init.disp, command_buffer);
 }
 
 }// namespace vkgsplat::compute
