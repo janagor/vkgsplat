@@ -25,6 +25,7 @@
 #include "backend/vulkan/renderer.hpp"
 #include "backend/vulkan/swapchain.hpp"
 #include "gs/binning.hpp"
+#include "gs/pipeline.hpp"
 #include "gs/projection.hpp"
 #include "gs/rasterization.hpp"
 #include "gs/sorting.hpp"
@@ -122,6 +123,7 @@ auto Renderer::create(RendererConfig const &config) -> std::expected<Renderer, E
   if (!init_rasterization(impl->init, impl->render_data)) {
     return std::unexpected(make_error("Failed to initialize gaussian rasterization"));
   }
+  record_gs_pipeline(impl->render_data);
   if (0 != create_graphics_pipeline(impl->init, impl->render_data)) {
     return std::unexpected(make_error("Failed to create graphics pipeline"));
   }

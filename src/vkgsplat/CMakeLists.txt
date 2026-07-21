@@ -22,6 +22,7 @@ add_library(
   gs/binning.cpp
   gs/sorting.cpp
   gs/rasterization.cpp
+  gs/pipeline.cpp
   vma_usage.cpp
   backend/vulkan/gpu_allocator.cpp
   compute/algorithm.cpp

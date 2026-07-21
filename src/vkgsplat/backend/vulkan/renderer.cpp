@@ -22,8 +22,8 @@
 #include "backend/vulkan/vulkan_bootstrap.hpp"
 #include "gs/binning.hpp"
 #include "gs/gaussian_splat.hpp"
+#include "gs/pipeline.hpp"
 #include "gs/projection.hpp"
-#include "gs/push_constants.hpp"
 #include "gs/rasterization.hpp"
 #include "gs/sorting.hpp"
 #include "mesh_gpu.hpp"
@@ -36,9 +36,6 @@
 #include <vkgsplat/error.hpp>
 #include <vkgsplat/types.hpp>
 
-#include <glm/ext/vector_float3.hpp>
-#include <glm/ext/vector_float4.hpp>
-
 #include <vulkan/vulkan_core.h>
 
 #include <VkBootstrap.h>
@@ -50,52 +47,17 @@ using namespace gs;
 namespace {
 
   void record_sphere_draw(Init &init,
-    RenderData const &data,
+    RenderData &data,
     Camera const &camera,
     f64 aspect_ratio,
     VkCommandBuffer command_buffer,
     size_t image_index)
   {
     bind_descriptor_heap(init, data, command_buffer);
-    dispatch_sphere_setup(init, data, command_buffer);
+    data.compute_sequence.eval(init, data, command_buffer);
 
-    ProjectPushConstants const project_push{
-      .view = camera.view_matrix(),
-      .projection = camera.projection_matrix(aspect_ratio),
-      .viewport = { static_cast<float>(init.swapchain->extent().width),
-        static_cast<float>(init.swapchain->extent().height) },
-      .padding = {},
-    };
-    dispatch_projection(init, data, project_push, command_buffer);
-
-    BinPushConstants const bin_push{
-      .viewport = { init.swapchain->extent().width, init.swapchain->extent().height },
-      .max_instances = data.max_bin_instances,
-      .tile_size = k_tile_size,
-      .instance_count_address = init.gpu_allocator.get_buffer_device_address(data.instance_count_buffer),
-    };
-    dispatch_binning(init, data, bin_push, command_buffer);
-
-    SortPushConstants const sort_push{
-      .instance_count_address = init.gpu_allocator.get_buffer_device_address(data.instance_count_buffer),
-      .sort_size = data.gaussian_sort_size,
-      .tile_count = data.tile_count,
-    };
-    dispatch_sorting(init, data, sort_push, command_buffer);
-
-    glm::vec3 const camera_pos{ camera.position() };
-    RasterPushConstants const raster_push{
-      .camera_position = glm::vec4{ camera_pos, 0.0F },
-      .viewport = { init.swapchain->extent().width, init.swapchain->extent().height },
-      .tile_size = k_tile_size,
-      .tiles_x = (init.swapchain->extent().width + k_tile_size - 1U) / k_tile_size,
-      .background = { 0.02F, 0.02F, 0.05F, 0.0F },
-      .sh_degree = data.procedural ? 0U : 3U,
-      .pad0 = 0U,
-      .pad1 = 0U,
-      .pad2 = 0U,
-    };
-    dispatch_rasterization(init, data, raster_push, command_buffer, image_index);
+    update_gs_frame_state(init, data, { .camera = camera, .image_index = image_index, .aspect_ratio = aspect_ratio });
+    eval_gs_pipeline(init, data, command_buffer);
   }
 
 }// namespace
@@ -341,6 +303,7 @@ void cleanup(Init &init, RenderData &data)
   data.command_pool.reset();
 
   destroy_depth_buffer(init, data);
+  destroy_gs_pipeline(data);
   destroy_sphere_buffers(init, data);
   destroy_rasterization(init, data);
   destroy_sorting(init, data);

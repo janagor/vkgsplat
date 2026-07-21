@@ -14,6 +14,7 @@
 #include "compute/sequence.hpp"
 #include "compute/sort_entry.hpp"
 #include "compute/tensor.hpp"
+#include "gs/push_constants.hpp"
 #include <vkgsplat/types.hpp>
 
 #include <vk_mem_alloc.h>
@@ -74,6 +75,12 @@ struct RenderData
   compute::Algorithm identify_ranges_algorithm{};
   compute::Algorithm rasterize_algorithm{};
   compute::Sequence compute_sequence{};
+  compute::Sequence gs_sequence{};
+  gs::ProjectPushConstants project_push{};
+  gs::BinPushConstants bin_push{};
+  gs::SortPushConstants sort_push{};
+  gs::RasterPushConstants raster_push{};
+  size_t present_image_index{};
 
   VkImage depth_image{};
   VmaAllocation depth_allocation{};
