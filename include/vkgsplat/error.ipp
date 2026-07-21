@@ -2,6 +2,7 @@
 
 #include <vkgsplat/error.hpp>// NOLINT(misc-header-include-cycle)
 
+#include <magic_enum/magic_enum.hpp>
 #include <source_location>
 #include <string>
 #include <system_error>
@@ -35,16 +36,8 @@ inline auto make_error_code(ErrorIO err) -> std::error_code
 
 inline auto to_string(ErrorIO err) -> char const *
 {
-  switch (err) {
-  case ErrorIO::invalid_splat_count: return "invalid_splat_count";
-  case ErrorIO::failed_open: return "failed_open";
-  case ErrorIO::missing_vertex_element: return "missing_vertex_element";
-  case ErrorIO::empty_vertex_element: return "empty_vertex_element";
-  case ErrorIO::missing_property: return "missing_property";
-  case ErrorIO::extract_property_failed: return "extract_property_failed";
-  case ErrorIO::load_element_failed: return "load_element_failed";
-  default: return "";
-  }
+  if (auto const name = magic_enum::enum_name(err); !name.empty()) { return name.data(); }
+  return "";
 }
 
 inline auto make_error(ErrorIO code, std::string message, std::source_location source_location) -> Error

@@ -85,6 +85,18 @@ function(vkgsplat_setup_dependencies)
       YES)
   endif()
 
+  if(NOT TARGET magic_enum::magic_enum)
+    cpmaddpackage(
+      NAME
+      magic_enum
+      GITHUB_REPOSITORY
+      "Neargye/magic_enum"
+      GIT_TAG
+      "v0.9.8"
+      SYSTEM
+      YES)
+  endif()
+
   if(NOT TARGET fmtlib::fmtlib)
     cpmaddpackage(
       NAME

@@ -60,7 +60,7 @@ target_link_libraries(
           Vulkan::Vulkan
           vk-bootstrap::vk-bootstrap
           GPUOpen::VulkanMemoryAllocator
-  PUBLIC glm::glm)
+  PUBLIC glm::glm magic_enum::magic_enum)
 
 vkgsplat_configure_linker(vkgsplat)
 
