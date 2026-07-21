@@ -13,7 +13,11 @@ namespace compute {
   class Sequence
   {
   public:
-    void record(std::shared_ptr<Operation> op) { operations_.push_back(std::move(op)); }
+    auto record(std::shared_ptr<Operation> op) -> Sequence &
+    {
+      operations_.push_back(std::move(op));
+      return *this;
+    }
 
     void eval(Init &init, RenderData const &data, VkCommandBuffer cmd) const
     {

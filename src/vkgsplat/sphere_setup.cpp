@@ -55,12 +55,10 @@ auto init_sphere_setup(Init &init, RenderData &data) -> bool
   auto sync_device = std::make_shared<compute::OpTensorSyncDevice>();
   sync_device->add(data.sort_entries);
   sync_device->add(data.sorted_indices);
-  data.compute_sequence.record(sync_device);
-
   uint32_t const workgroup_count = (data.sort_size + 63U) / 64U;
   auto dispatch_op = std::make_shared<compute::OpAlgoDispatch>(
     data.sphere_setup_algorithm, std::array<uint32_t, 3>{ workgroup_count, 1U, 1U });
-  data.compute_sequence.record(dispatch_op);
+  data.compute_sequence.record(sync_device).record(dispatch_op);
 
   return true;
 }

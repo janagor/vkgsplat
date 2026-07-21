@@ -18,10 +18,10 @@ namespace vkgsplat::gs {
 
 void record_gs_pipeline(RenderData &data)
 {
-  data.gs_sequence.record(std::make_shared<OpProjection>());
-  data.gs_sequence.record(std::make_shared<OpBinning>());
-  data.gs_sequence.record(std::make_shared<OpSorting>());
-  data.gs_sequence.record(std::make_shared<OpRasterization>());
+  data.gs_sequence.record(std::make_shared<OpProjection>())
+    .record(std::make_shared<OpBinning>())
+    .record(std::make_shared<OpSorting>())
+    .record(std::make_shared<OpRasterization>());
 }
 
 void update_gs_frame_state(Init const &init, RenderData &data, GsFrameParams const &frame)
