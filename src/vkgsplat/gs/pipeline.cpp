@@ -1,11 +1,13 @@
 #include "gs/pipeline.hpp"
 
 #include "app_state.hpp"
+#include "compute/op_fill_buffer.hpp"
 #include "gs/gaussian_splat.hpp"
 #include "gs/operations.hpp"
 #include "vulkan_context.hpp"
 
 #include <vkgsplat/camera.hpp>
+#include <vkgsplat/types.hpp>
 
 #include <memory>
 
@@ -18,9 +20,25 @@ namespace vkgsplat::gs {
 
 void record_gs_pipeline(RenderData &data)
 {
+  auto const tile_ranges_size = static_cast<VkDeviceSize>(data.tile_count * sizeof(TileRange));
+
   data.gs_sequence.record(std::make_shared<OpProjection>())
+    .record(std::make_shared<compute::OpFillBuffer>(compute::FillBufferParams{
+      .buffer = data.instance_count_buffer.handle,
+      .offset = 0,
+      .size = sizeof(u32),
+      .value = 0U,
+    }))
     .record(std::make_shared<OpBinning>())
-    .record(std::make_shared<OpSorting>())
+    .record(std::make_shared<OpPrepareSort>())
+    .record(std::make_shared<OpBitonicSort>())
+    .record(std::make_shared<compute::OpFillBuffer>(compute::FillBufferParams{
+      .buffer = data.tile_ranges_buffer.handle,
+      .offset = 0,
+      .size = tile_ranges_size,
+      .value = 0U,
+    }))
+    .record(std::make_shared<OpIdentifyRanges>())
     .record(std::make_shared<OpRasterization>());
 }
 

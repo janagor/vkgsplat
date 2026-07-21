@@ -2,7 +2,6 @@
 
 #include "app_state.hpp"
 #include "gs/gaussian_splat.hpp"
-#include "gs/push_constants.hpp"
 #include "vulkan_context.hpp"
 
 #include <vkgsplat/types.hpp>
@@ -93,62 +92,6 @@ auto init_binning(Init &init, RenderData &data) -> bool
   }
 
   return true;
-}
-
-void dispatch_binning(Init const &init,
-  RenderData const &data,
-  BinPushConstants const &push_constants,
-  VkCommandBuffer command_buffer)
-{
-  // Reset instance counter for this frame.
-  init.disp.cmdFillBuffer(command_buffer, data.instance_count_buffer.handle, 0, sizeof(u32), 0);
-
-  VkMemoryBarrier const clear_barrier = {
-    .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
-    .pNext = nullptr,
-    .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
-    .dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
-  };
-  init.disp.cmdPipelineBarrier(command_buffer,
-    VK_PIPELINE_STAGE_TRANSFER_BIT,
-    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-    0,
-    1,
-    &clear_barrier,
-    0,
-    nullptr,
-    0,
-    nullptr);
-
-  init.disp.cmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, data.bin_algorithm.pipeline());
-
-  VkPushDataInfoEXT const push_info = {
-    .sType = VK_STRUCTURE_TYPE_PUSH_DATA_INFO_EXT,
-    .pNext = nullptr,
-    .offset = 0,
-    .data = { .address = &push_constants, .size = sizeof(BinPushConstants) },
-  };
-  init.cmd_push_data(command_buffer, &push_info);
-
-  uint32_t const workgroup_count = (data.splat_count + 63U) / 64U;
-  init.disp.cmdDispatch(command_buffer, workgroup_count, 1U, 1U);
-
-  VkMemoryBarrier const barrier = {
-    .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
-    .pNext = nullptr,
-    .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
-    .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-  };
-  init.disp.cmdPipelineBarrier(command_buffer,
-    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-    VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-    0,
-    1,
-    &barrier,
-    0,
-    nullptr,
-    0,
-    nullptr);
 }
 
 void destroy_binning(Init &init, RenderData &data)

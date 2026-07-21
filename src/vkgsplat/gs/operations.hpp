@@ -1,41 +1,43 @@
 #pragma once
 
 #include "compute/operation.hpp"
-#include "gs/binning.hpp"
-#include "gs/projection.hpp"
-#include "gs/rasterization.hpp"
-#include "gs/sorting.hpp"
 
 namespace vkgsplat::gs {
 
 class OpProjection : public compute::Operation
 {
 public:
-  void record(Init const &init, RenderData const &data, VkCommandBuffer cmd) override
-  { dispatch_projection(init, data, data.project_push, cmd); }
+  void record(Init const &init, RenderData const &data, VkCommandBuffer command_buffer) override;
 };
 
 class OpBinning : public compute::Operation
 {
 public:
-  void record(Init const &init, RenderData const &data, VkCommandBuffer cmd) override
-  { dispatch_binning(init, data, data.bin_push, cmd); }
+  void record(Init const &init, RenderData const &data, VkCommandBuffer command_buffer) override;
 };
 
-class OpSorting : public compute::Operation
+class OpPrepareSort : public compute::Operation
 {
 public:
-  void record(Init const &init, RenderData const &data, VkCommandBuffer cmd) override
-  { dispatch_sorting(init, data, data.sort_push, cmd); }
+  void record(Init const &init, RenderData const &data, VkCommandBuffer command_buffer) override;
+};
+
+class OpBitonicSort : public compute::Operation
+{
+public:
+  void record(Init const &init, RenderData const &data, VkCommandBuffer command_buffer) override;
+};
+
+class OpIdentifyRanges : public compute::Operation
+{
+public:
+  void record(Init const &init, RenderData const &data, VkCommandBuffer command_buffer) override;
 };
 
 class OpRasterization : public compute::Operation
 {
 public:
-  void record(Init const &init, RenderData const &data, VkCommandBuffer cmd) override
-  {
-    dispatch_rasterization(init, data, data.raster_push, cmd, data.present_image_index);
-  }
+  void record(Init const &init, RenderData const &data, VkCommandBuffer command_buffer) override;
 };
 
 }// namespace vkgsplat::gs

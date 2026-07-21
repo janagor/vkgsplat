@@ -23,10 +23,12 @@ add_library(
   gs/sorting.cpp
   gs/rasterization.cpp
   gs/pipeline.cpp
+  gs/operations.cpp
   vma_usage.cpp
   backend/vulkan/gpu_allocator.cpp
   compute/algorithm.cpp
   compute/op_algo_dispatch.cpp
+  compute/op_fill_buffer.cpp
   compute/op_tensor_sync_device.cpp
   compute/op_tensor_sync_local.cpp
   backend/vulkan/descriptor/descriptor_heap.cpp)
