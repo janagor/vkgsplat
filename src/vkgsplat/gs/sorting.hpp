@@ -8,13 +8,13 @@
 
 namespace vkgsplat::gs {
 
-[[nodiscard]] auto init_bin_gaussians(Init &init, RenderData &data) -> bool;
+[[nodiscard]] auto init_sorting(Init &init, RenderData &data) -> bool;
 
-void dispatch_bin_gaussians(Init const &init,
+void dispatch_sorting(Init const &init,
   RenderData const &data,
-  BinPushConstants const &push_constants,
+  SortPushConstants const &push_constants,
   VkCommandBuffer command_buffer);
 
-void destroy_bin_gaussians(Init &init, RenderData &data);
+void destroy_sorting(Init &init, RenderData &data);
 
 }// namespace vkgsplat::gs

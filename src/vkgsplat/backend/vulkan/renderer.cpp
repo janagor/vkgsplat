@@ -20,12 +20,12 @@
 #include "backend/vulkan/graphics_pipeline.hpp"
 #include "backend/vulkan/initializers.hpp"
 #include "backend/vulkan/vulkan_bootstrap.hpp"
-#include "gs/bin_gaussians.hpp"
+#include "gs/binning.hpp"
 #include "gs/gaussian_splat.hpp"
-#include "gs/project_gaussians.hpp"
+#include "gs/projection.hpp"
 #include "gs/push_constants.hpp"
-#include "gs/rasterize_gaussians.hpp"
-#include "gs/sort_gaussians.hpp"
+#include "gs/rasterization.hpp"
+#include "gs/sorting.hpp"
 #include "mesh_gpu.hpp"
 #include "sphere_setup.hpp"
 #include "sync_objects/fence.hpp"
@@ -66,7 +66,7 @@ namespace {
         static_cast<float>(init.swapchain->extent().height) },
       .padding = {},
     };
-    dispatch_project_gaussians(init, data, project_push, command_buffer);
+    dispatch_projection(init, data, project_push, command_buffer);
 
     BinPushConstants const bin_push{
       .viewport = { init.swapchain->extent().width, init.swapchain->extent().height },
@@ -74,14 +74,14 @@ namespace {
       .tile_size = k_tile_size,
       .instance_count_address = init.gpu_allocator.get_buffer_device_address(data.instance_count_buffer),
     };
-    dispatch_bin_gaussians(init, data, bin_push, command_buffer);
+    dispatch_binning(init, data, bin_push, command_buffer);
 
     SortPushConstants const sort_push{
       .instance_count_address = init.gpu_allocator.get_buffer_device_address(data.instance_count_buffer),
       .sort_size = data.gaussian_sort_size,
       .tile_count = data.tile_count,
     };
-    dispatch_sort_gaussians(init, data, sort_push, command_buffer);
+    dispatch_sorting(init, data, sort_push, command_buffer);
 
     glm::vec3 const camera_pos{ camera.position() };
     RasterPushConstants const raster_push{
@@ -95,7 +95,7 @@ namespace {
       .pad1 = 0U,
       .pad2 = 0U,
     };
-    dispatch_rasterize_gaussians(init, data, raster_push, command_buffer, image_index);
+    dispatch_rasterization(init, data, raster_push, command_buffer, image_index);
   }
 
 }// namespace
@@ -260,7 +260,7 @@ auto recreate_swapchain(Init &init, RenderData &data) -> std::expected<void, Err
   if (!create_depth_buffer(init, data)) {
     return std::unexpected{ make_error(std::errc::io_error, "failed to recreate depth buffer") };
   }
-  if (!recreate_rasterize_color_target(init, data)) {
+  if (!recreate_rasterization_color_target(init, data)) {
     return std::unexpected{ make_error(std::errc::io_error, "failed to recreate rasterize color target") };
   }
   if (auto command_resources = create_command_resources(init, data); !command_resources) {
@@ -342,10 +342,10 @@ void cleanup(Init &init, RenderData &data)
 
   destroy_depth_buffer(init, data);
   destroy_sphere_buffers(init, data);
-  destroy_rasterize_gaussians(init, data);
-  destroy_sort_gaussians(init, data);
-  destroy_bin_gaussians(init, data);
-  destroy_project_gaussians(init, data);
+  destroy_rasterization(init, data);
+  destroy_sorting(init, data);
+  destroy_binning(init, data);
+  destroy_projection(init, data);
   destroy_sphere_setup(init, data);
   destroy_descriptor_heap(init, data);
 

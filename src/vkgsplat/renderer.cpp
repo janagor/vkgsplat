@@ -24,10 +24,10 @@
 #include "backend/vulkan/graphics_pipeline.hpp"
 #include "backend/vulkan/renderer.hpp"
 #include "backend/vulkan/swapchain.hpp"
-#include "gs/bin_gaussians.hpp"
-#include "gs/project_gaussians.hpp"
-#include "gs/rasterize_gaussians.hpp"
-#include "gs/sort_gaussians.hpp"
+#include "gs/binning.hpp"
+#include "gs/projection.hpp"
+#include "gs/rasterization.hpp"
+#include "gs/sorting.hpp"
 #include "io/ply/load_splats.hpp"
 #include "mesh_gpu.hpp"
 #include "sphere_setup.hpp"
@@ -110,16 +110,16 @@ auto Renderer::create(RendererConfig const &config) -> std::expected<Renderer, E
   if (!init_sphere_setup(impl->init, impl->render_data)) {
     return std::unexpected(make_error("Failed to initialize sphere setup"));
   }
-  if (!init_bin_gaussians(impl->init, impl->render_data)) {
+  if (!init_binning(impl->init, impl->render_data)) {
     return std::unexpected(make_error("Failed to initialize gaussian binning"));
   }
-  if (!init_project_gaussians(impl->init, impl->render_data)) {
+  if (!init_projection(impl->init, impl->render_data)) {
     return std::unexpected(make_error("Failed to initialize gaussian projection"));
   }
-  if (!init_sort_gaussians(impl->init, impl->render_data)) {
+  if (!init_sorting(impl->init, impl->render_data)) {
     return std::unexpected(make_error("Failed to initialize gaussian sorting"));
   }
-  if (!init_rasterize_gaussians(impl->init, impl->render_data)) {
+  if (!init_rasterization(impl->init, impl->render_data)) {
     return std::unexpected(make_error("Failed to initialize gaussian rasterization"));
   }
   if (0 != create_graphics_pipeline(impl->init, impl->render_data)) {

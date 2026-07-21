@@ -1,4 +1,4 @@
-#include "gs/bin_gaussians.hpp"
+#include "gs/binning.hpp"
 
 #include "app_state.hpp"
 #include "gs/gaussian_splat.hpp"
@@ -76,7 +76,7 @@ namespace {
 
 }// namespace
 
-auto init_bin_gaussians(Init &init, RenderData &data) -> bool
+auto init_binning(Init &init, RenderData &data) -> bool
 {
   if (data.splat_count == 0) {
     std::println("Bin gaussians requires non-zero splat_count!");
@@ -86,7 +86,7 @@ auto init_bin_gaussians(Init &init, RenderData &data) -> bool
   if (!create_bin_buffers(init, data)) { return false; }
 
   std::array<uint32_t, 1> const specialization_constants{ data.splat_count };
-  std::string const shader_path = std::string(SHADER_DIRECTORY) + "/bin_gaussians.comp.spv";
+  std::string const shader_path = std::string(SHADER_DIRECTORY) + "/binning.comp.spv";
   if (!data.bin_algorithm.init(init, shader_path, std::span{ specialization_constants })) {
     destroy_bin_buffers(init, data);
     return false;
@@ -95,7 +95,7 @@ auto init_bin_gaussians(Init &init, RenderData &data) -> bool
   return true;
 }
 
-void dispatch_bin_gaussians(Init const &init,
+void dispatch_binning(Init const &init,
   RenderData const &data,
   BinPushConstants const &push_constants,
   VkCommandBuffer command_buffer)
@@ -151,7 +151,7 @@ void dispatch_bin_gaussians(Init const &init,
     nullptr);
 }
 
-void destroy_bin_gaussians(Init &init, RenderData &data)
+void destroy_binning(Init &init, RenderData &data)
 {
   data.bin_algorithm.destroy(init);
   destroy_bin_buffers(init, data);

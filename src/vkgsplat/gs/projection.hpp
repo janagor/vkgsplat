@@ -8,13 +8,13 @@
 
 namespace vkgsplat::gs {
 
-[[nodiscard]] auto init_project_gaussians(Init &init, RenderData &data) -> bool;
+[[nodiscard]] auto init_projection(Init &init, RenderData &data) -> bool;
 
-void dispatch_project_gaussians(Init const &init,
+void dispatch_projection(Init const &init,
   RenderData const &data,
   ProjectPushConstants const &push_constants,
   VkCommandBuffer command_buffer);
 
-void destroy_project_gaussians(Init &init, RenderData &data);
+void destroy_projection(Init &init, RenderData &data);
 
 }// namespace vkgsplat::gs

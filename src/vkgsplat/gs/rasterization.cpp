@@ -1,4 +1,4 @@
-#include "gs/rasterize_gaussians.hpp"
+#include "gs/rasterization.hpp"
 
 #include "app_state.hpp"
 #include "backend/vulkan/descriptor/descriptor_heap.hpp"
@@ -102,11 +102,11 @@ namespace {
 
 }// namespace
 
-auto init_rasterize_gaussians(Init &init, RenderData &data) -> bool
+auto init_rasterization(Init &init, RenderData &data) -> bool
 {
   if (!create_color_target(init, data)) { return false; }
 
-  std::string const shader_path = std::string(SHADER_DIRECTORY) + "/rasterize_gaussians.comp.spv";
+  std::string const shader_path = std::string(SHADER_DIRECTORY) + "/rasterization.comp.spv";
   if (!data.rasterize_algorithm.init(init, shader_path)) {
     destroy_color_target(init, data);
     return false;
@@ -115,13 +115,13 @@ auto init_rasterize_gaussians(Init &init, RenderData &data) -> bool
   return refresh_descriptor_heap(init, data);
 }
 
-auto recreate_rasterize_color_target(Init &init, RenderData &data) -> bool
+auto recreate_rasterization_color_target(Init &init, RenderData &data) -> bool
 {
   if (!create_color_target(init, data)) { return false; }
   return refresh_descriptor_heap(init, data);
 }
 
-void dispatch_rasterize_gaussians(Init const &init,
+void dispatch_rasterization(Init const &init,
   RenderData const &data,
   RasterPushConstants const &push_constants,
   VkCommandBuffer command_buffer,
@@ -280,7 +280,7 @@ void dispatch_rasterize_gaussians(Init const &init,
     &present_barrier);
 }
 
-void destroy_rasterize_gaussians(Init &init, RenderData &data)
+void destroy_rasterization(Init &init, RenderData &data)
 {
   data.rasterize_algorithm.destroy(init);
   destroy_color_target(init, data);

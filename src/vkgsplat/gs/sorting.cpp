@@ -1,4 +1,4 @@
-#include "gs/sort_gaussians.hpp"
+#include "gs/sorting.hpp"
 
 #include "app_state.hpp"
 #include "backend/vulkan/descriptor/descriptor_heap.hpp"
@@ -157,14 +157,14 @@ namespace {
 
 }// namespace
 
-auto init_sort_gaussians(Init &init, RenderData &data) -> bool
+auto init_sorting(Init &init, RenderData &data) -> bool
 {
   if (!create_sort_buffers(init, data)) { return false; }
 
   std::array<uint32_t, 1> const sort_size_spec{ data.gaussian_sort_size };
-  std::string const prepare_path = std::string(SHADER_DIRECTORY) + "/prepare_gaussian_sort.comp.spv";
-  std::string const sort_path = std::string(SHADER_DIRECTORY) + "/sort_gaussians.comp.spv";
-  std::string const identify_path = std::string(SHADER_DIRECTORY) + "/identify_tile_ranges.comp.spv";
+  std::string const prepare_path = std::string(SHADER_DIRECTORY) + "/prepare_sorting.comp.spv";
+  std::string const sort_path = std::string(SHADER_DIRECTORY) + "/sorting.comp.spv";
+  std::string const identify_path = std::string(SHADER_DIRECTORY) + "/identify_ranges.comp.spv";
 
   if (!data.prepare_sort_algorithm.init(init, prepare_path, std::span{ sort_size_spec })
       || !data.gaussian_sort_algorithm.init(init, sort_path, std::span{ sort_size_spec })
@@ -176,7 +176,7 @@ auto init_sort_gaussians(Init &init, RenderData &data) -> bool
   return refresh_descriptor_heap(init, data);
 }
 
-void dispatch_sort_gaussians(Init const &init,
+void dispatch_sorting(Init const &init,
   RenderData const &data,
   SortPushConstants const &push_constants,
   VkCommandBuffer command_buffer)
@@ -248,7 +248,7 @@ void dispatch_sort_gaussians(Init const &init,
     nullptr);
 }
 
-void destroy_sort_gaussians(Init &init, RenderData &data)
+void destroy_sorting(Init &init, RenderData &data)
 {
   data.prepare_sort_algorithm.destroy(init);
   data.gaussian_sort_algorithm.destroy(init);
