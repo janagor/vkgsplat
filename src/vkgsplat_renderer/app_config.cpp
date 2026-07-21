@@ -1,5 +1,6 @@
 #include "app_config.hpp"
 
+#include <vkgsplat/error.hpp>
 #include <vkgsplat/renderer.hpp>
 #include <vkgsplat/types.hpp>
 
@@ -7,11 +8,13 @@
 #include <cctype>
 #include <cstddef>
 #include <exception>
-#include <optional>
+#include <expected>
 #include <print>
 #include <span>
 #include <string>
 #include <string_view>
+#include <system_error>
+#include <utility>
 
 #ifndef VKGSPLAT_SOURCE_DIR
 #define VKGSPLAT_SOURCE_DIR "."
@@ -20,6 +23,9 @@
 namespace vkgsplat {
 
 namespace {
+
+  [[nodiscard]] auto make_error(std::errc errc_value, std::string message) -> Error
+  { return Error{ std::make_error_code(errc_value), std::move(message) }; }
 
   [[nodiscard]] auto default_ply_path() -> std::string
   { return std::string{ VKGSPLAT_SOURCE_DIR } + "/resources/scene.ply"; }
@@ -32,16 +38,20 @@ namespace {
       text, [](char const character) { return std::isdigit(static_cast<unsigned char>(character)) != 0; });
   }
 
-  [[nodiscard]] auto parse_count(std::string_view text) -> std::optional<u32>
+  [[nodiscard]] auto parse_count(std::string_view text) -> std::expected<u32, Error>
   {
-    if (!is_unsigned_integer(text)) { return std::nullopt; }
+    if (!is_unsigned_integer(text)) {
+      return std::unexpected{ make_error(std::errc::invalid_argument, "count must be a positive integer") };
+    }
 
     try {
       unsigned long const parsed = std::stoul(std::string{ text });
-      if (parsed == 0UL) { return std::nullopt; }
+      if (parsed == 0UL) {
+        return std::unexpected{ make_error(std::errc::invalid_argument, "count must be greater than zero") };
+      }
       return static_cast<u32>(parsed);
     } catch (std::exception const &) {
-      return std::nullopt;
+      return std::unexpected{ make_error(std::errc::result_out_of_range, "count is out of range for u32") };
     }
   }
 
@@ -60,42 +70,44 @@ namespace {
   [[nodiscard]] auto bounded_arg(std::span<char *const> args, size_t index) -> char *
   { return args.subspan(index, 1).front(); }
 
-  [[nodiscard]] auto require_count(std::span<char *const> args, size_t &index) -> std::optional<u32>
+  [[nodiscard]] auto require_count(std::span<char *const> args, size_t &index) -> std::expected<u32, Error>
   {
     if (index >= args.size()) {
       print_usage(args.front());
-      return std::nullopt;
+      return std::unexpected{ make_error(std::errc::invalid_argument, "missing <count> argument") };
     }
 
     auto const count = parse_count(bounded_arg(args, index));
     if (!count) {
       print_usage(args.front());
-      return std::nullopt;
+      return std::unexpected{ count.error() };
     }
 
     ++index;
     return count;
   }
 
-  [[nodiscard]] auto parse_procedural(std::span<char *const> args, size_t &index, AppConfig &config) -> bool
+  [[nodiscard]] auto parse_procedural(std::span<char *const> args, size_t &index, AppConfig &config)
+    -> std::expected<void, Error>
   {
     config.source = SplatSource::Procedural;
     ++index;
 
     auto const count = require_count(args, index);
-    if (!count) { return false; }
+    if (!count) { return std::unexpected{ count.error() }; }
 
     config.splat_count = *count;
-    return true;
+    return {};
   }
 
-  [[nodiscard]] auto parse_ply(std::span<char *const> args, size_t &index, AppConfig &config) -> bool
+  [[nodiscard]] auto parse_ply(std::span<char *const> args, size_t &index, AppConfig &config)
+    -> std::expected<void, Error>
   {
     config.source = SplatSource::Ply;
     ++index;
 
     auto const count = require_count(args, index);
-    if (!count) { return false; }
+    if (!count) { return std::unexpected{ count.error() }; }
 
     config.splat_count = *count;
 
@@ -104,15 +116,16 @@ namespace {
       ++index;
     }
 
-    return true;
+    return {};
   }
 
-  [[nodiscard]] auto parse_shorthand_ply(std::span<char *const> args, size_t &index, AppConfig &config) -> bool
+  [[nodiscard]] auto parse_shorthand_ply(std::span<char *const> args, size_t &index, AppConfig &config)
+    -> std::expected<void, Error>
   {
     auto const count = parse_count(bounded_arg(args, index));
     if (!count) {
       print_usage(args.front());
-      return false;
+      return std::unexpected{ count.error() };
     }
 
     config.source = SplatSource::Ply;
@@ -126,15 +139,15 @@ namespace {
 
     if (index < args.size()) {
       print_usage(args.front());
-      return false;
+      return std::unexpected{ make_error(std::errc::invalid_argument, "too many positional arguments") };
     }
 
-    return true;
+    return {};
   }
 
 }// namespace
 
-auto parse_app_config(std::span<char *const> args) -> std::optional<AppConfig>
+auto parse_app_config(std::span<char *const> args) -> std::expected<AppConfig, Error>
 {
   AppConfig config{};
   config.ply_path = default_ply_path();
@@ -146,21 +159,23 @@ auto parse_app_config(std::span<char *const> args) -> std::optional<AppConfig>
     std::string_view const arg{ bounded_arg(args, index) };
 
     if (arg == "--procedural" || arg == "--random") {
-      if (!parse_procedural(args, index, config)) { return std::nullopt; }
+      if (auto parsed = parse_procedural(args, index, config); !parsed) { return std::unexpected{ parsed.error() }; }
       continue;
     }
 
     if (arg == "--ply") {
-      if (!parse_ply(args, index, config)) { return std::nullopt; }
+      if (auto parsed = parse_ply(args, index, config); !parsed) { return std::unexpected{ parsed.error() }; }
       continue;
     }
 
     if (arg.starts_with("--")) {
       print_usage(args.front());
-      return std::nullopt;
+      return std::unexpected{ make_error(std::errc::invalid_argument, "unknown option: " + std::string{ arg }) };
     }
 
-    if (!parse_shorthand_ply(args, index, config)) { return std::nullopt; }
+    if (auto parsed = parse_shorthand_ply(args, index, config); !parsed) {
+      return std::unexpected{ parsed.error() };
+    }
     return config;
   }
 

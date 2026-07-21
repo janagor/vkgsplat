@@ -75,7 +75,7 @@ auto Renderer::create(RendererConfig const &config) -> std::expected<Renderer, E
   std::optional<SplatCpuData> splats{};
   if (!impl->render_data.procedural) {
     auto loaded = load_splats_from_ply(config.ply_path, config.splat_count);
-    if (!loaded) { return std::unexpected(make_error(std::move(loaded.error()))); }
+    if (!loaded) { return std::unexpected(loaded.error()); }
     splats = std::move(*loaded);
     std::println("Loaded {} splats from {}", splats->geometries.size(), config.ply_path);
   } else {
@@ -94,8 +94,8 @@ auto Renderer::create(RendererConfig const &config) -> std::expected<Renderer, E
   if (!swapchain) { return std::unexpected(make_error("Failed to create swapchain")); }
   impl->init.swapchain = std::make_unique<vulkan::Swapchain>(std::move(*swapchain));
 
-  if (!get_queues(impl->init, impl->render_data).has_value()) {
-    return std::unexpected(make_error("Failed to get device queues"));
+  if (auto queues = get_queues(impl->init, impl->render_data); !queues) {
+    return std::unexpected(queues.error());
   }
 
   if (impl->render_data.procedural) {
@@ -130,11 +130,11 @@ auto Renderer::create(RendererConfig const &config) -> std::expected<Renderer, E
   if (!create_depth_buffer(impl->init, impl->render_data)) {
     return std::unexpected(make_error("Failed to create depth buffer"));
   }
-  if (0 != create_command_resources(impl->init, impl->render_data)) {
-    return std::unexpected(make_error("Failed to create command resources"));
+  if (auto command_resources = create_command_resources(impl->init, impl->render_data); !command_resources) {
+    return std::unexpected(command_resources.error());
   }
-  if (0 != create_sync_objects(impl->init, impl->render_data)) {
-    return std::unexpected(make_error("Failed to create sync objects"));
+  if (auto sync_objects = create_sync_objects(impl->init, impl->render_data); !sync_objects) {
+    return std::unexpected(sync_objects.error());
   }
 
   return Renderer{ std::move(impl) };
@@ -150,8 +150,8 @@ auto Renderer::should_close() const -> bool { return glfwWindowShouldClose(impl_
 
 auto Renderer::draw(Camera const &camera) -> std::expected<void, Error>
 {
-  if (0 != draw_frame(impl_->init, impl_->render_data, camera)) {
-    return std::unexpected(make_error("Failed to draw frame"));
+  if (auto drawn = draw_frame(impl_->init, impl_->render_data, camera); !drawn) {
+    return std::unexpected(drawn.error());
   }
   return {};
 }

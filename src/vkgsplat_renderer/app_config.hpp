@@ -1,9 +1,10 @@
 #pragma once
 
-#include <optional>
+#include <expected>
 #include <span>
 #include <string>
 
+#include <vkgsplat/error.hpp>
 #include <vkgsplat/renderer.hpp>
 #include <vkgsplat/types.hpp>
 
@@ -16,6 +17,6 @@ struct AppConfig
   std::string ply_path;
 };
 
-[[nodiscard]] auto parse_app_config(std::span<char *const> args) -> std::optional<AppConfig>;
+[[nodiscard]] auto parse_app_config(std::span<char *const> args) -> std::expected<AppConfig, Error>;
 
 }// namespace vkgsplat

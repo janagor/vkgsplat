@@ -6,9 +6,10 @@
 #include <cstdint>
 #include <expected>
 #include <functional>
-#include <iostream>
 #include <print>
 #include <span>
+#include <string>
+#include <system_error>
 #include <utility>
 
 #include "app_state.hpp"
@@ -101,6 +102,9 @@ namespace {
 
 namespace {
 
+  [[nodiscard]] auto make_error(std::errc errc_value, std::string message) -> Error
+  { return Error{ std::make_error_code(errc_value), std::move(message) }; }
+
   void debug_log_raster_state(Init &init, RenderData const &data)
   {
     static int debug_frames = 0;
@@ -187,7 +191,7 @@ auto get_queues(Init &init, RenderData &data) -> std::expected<void, Error>
     });
 }
 
-auto create_command_resources(Init &init, RenderData &data) -> int
+auto create_command_resources(Init &init, RenderData &data) -> std::expected<void, Error>
 {
   data.command_buffers.clear();
   data.command_pool.reset();
@@ -196,18 +200,17 @@ auto create_command_resources(Init &init, RenderData &data) -> int
     static_cast<u32>(init.device.get_queue_index(vkb::QueueType::graphics).value()),
     VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
   if (!pool) {
-    std::cout << "failed to create command pool\n";
-    return -1;
+    return std::unexpected{ pool.error() };
   }
   data.command_pool = std::move(*pool);
 
   auto buffers = data.command_pool->allocate_buffers(static_cast<u32>(init.swapchain->image_views().size()));
-  if (!buffers) { return -1; }
+  if (!buffers) { return std::unexpected{ buffers.error() }; }
   data.command_buffers = std::move(*buffers);
-  return 0;
+  return {};
 }
 
-auto create_sync_objects(Init &init, RenderData &data) -> int
+auto create_sync_objects(Init &init, RenderData &data) -> std::expected<void, Error>
 {
   data.available_semaphores.clear();
   data.finished_semaphore.clear();
@@ -220,32 +223,23 @@ auto create_sync_objects(Init &init, RenderData &data) -> int
 
   for (size_t i = 0; i < init.swapchain->image_count(); i++) {
     auto semaphore = Semaphore::create(std::ref(init.disp));
-    if (!semaphore) {
-      std::cout << "failed to create sync objects\n";
-      return -1;
-    }
+    if (!semaphore) { return std::unexpected{ semaphore.error() }; }
     data.finished_semaphore.push_back(std::move(*semaphore));
   }
 
   for (size_t i = 0; i < k_max_frames_in_flight; i++) {
     auto available = Semaphore::create(std::ref(init.disp));
-    if (!available) {
-      std::cout << "failed to create sync objects\n";
-      return -1;
-    }
+    if (!available) { return std::unexpected{ available.error() }; }
     data.available_semaphores.push_back(std::move(*available));
 
     auto fence = Fence::create(std::ref(init.disp), VK_FENCE_CREATE_SIGNALED_BIT);
-    if (!fence) {
-      std::cout << "failed to create sync objects\n";
-      return -1;
-    }
+    if (!fence) { return std::unexpected{ fence.error() }; }
     data.in_flight_fences.push_back(std::move(*fence));
   }
-  return 0;
+  return {};
 }
 
-auto recreate_swapchain(Init &init, RenderData &data) -> int
+auto recreate_swapchain(Init &init, RenderData &data) -> std::expected<void, Error>
 {
   init.disp.deviceWaitIdle();
 
@@ -256,16 +250,28 @@ auto recreate_swapchain(Init &init, RenderData &data) -> int
 
   destroy_depth_buffer(init, data);
 
-  if (init.swapchain == nullptr) { return -1; }
-  if (!init.swapchain->recreate(init.device, init.window).has_value()) { return -1; }
-  if (0 != create_graphics_pipeline(init, data)) { return -1; }
-  if (!create_depth_buffer(init, data)) { return -1; }
-  if (!recreate_rasterize_color_target(init, data)) { return -1; }
-  if (0 != create_command_resources(init, data)) { return -1; }
-  return 0;
+  if (init.swapchain == nullptr) {
+    return std::unexpected{ make_error(std::errc::state_not_recoverable, "swapchain is not initialized") };
+  }
+  if (auto recreated = init.swapchain->recreate(init.device, init.window); !recreated) {
+    return std::unexpected{ recreated.error() };
+  }
+  if (0 != create_graphics_pipeline(init, data)) {
+    return std::unexpected{ make_error(std::errc::io_error, "failed to recreate graphics pipeline") };
+  }
+  if (!create_depth_buffer(init, data)) {
+    return std::unexpected{ make_error(std::errc::io_error, "failed to recreate depth buffer") };
+  }
+  if (!recreate_rasterize_color_target(init, data)) {
+    return std::unexpected{ make_error(std::errc::io_error, "failed to recreate rasterize color target") };
+  }
+  if (auto command_resources = create_command_resources(init, data); !command_resources) {
+    return std::unexpected{ command_resources.error() };
+  }
+  return {};
 }
 
-auto draw_frame(Init &init, RenderData &data, Camera const &camera) -> int
+auto draw_frame(Init &init, RenderData &data, Camera const &camera) -> std::expected<void, Error>
 {
   auto const aspect_ratio =
     static_cast<f64>(init.swapchain->extent().width) / static_cast<f64>(init.swapchain->extent().height);
@@ -281,8 +287,9 @@ auto draw_frame(Init &init, RenderData &data, Camera const &camera) -> int
   if (result == VK_ERROR_OUT_OF_DATE_KHR) {
     return recreate_swapchain(init, data);
   } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
-    std::cout << "failed to acquire swapchain image. Error " << result << "\n";
-    return -1;
+    return std::unexpected{
+      make_error(std::errc::io_error, "failed to acquire swapchain image. VkResult=" + std::to_string(result))
+    };
   }
 
   if (data.image_in_flight.at(image_index) != VK_NULL_HANDLE) {
@@ -295,8 +302,7 @@ auto draw_frame(Init &init, RenderData &data, Camera const &camera) -> int
       record_sphere_draw(init, data, camera, aspect_ratio, cmd, image_index);
     });
   if (!recorded) {
-    std::cout << "failed to record command buffer\n";
-    return -1;
+    return std::unexpected{ recorded.error() };
   }
 
   std::array<VkSemaphore, 1> wait_semaphores = { available_semaphore };
@@ -311,8 +317,7 @@ auto draw_frame(Init &init, RenderData &data, Camera const &camera) -> int
   init.disp.resetFences(1, &in_flight_fence);
 
   if (init.disp.queueSubmit(data.graphics_queue, 1, &submit_info, in_flight_fence) != VK_SUCCESS) {
-    std::cout << "failed to submit draw command buffer\n";
-    return -1;
+    return std::unexpected{ make_error(std::errc::io_error, "failed to submit draw command buffer") };
   }
 
   debug_log_raster_state(init, data);
@@ -324,12 +329,11 @@ auto draw_frame(Init &init, RenderData &data, Camera const &camera) -> int
   if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
     return recreate_swapchain(init, data);
   } else if (result != VK_SUCCESS) {
-    std::cout << "failed to present swapchain image\n";
-    return -1;
+    return std::unexpected{ make_error(std::errc::io_error, "failed to present swapchain image") };
   }
 
   data.current_frame = (data.current_frame + 1) % k_max_frames_in_flight;
-  return 0;
+  return {};
 }
 
 void cleanup(Init &init, RenderData &data)

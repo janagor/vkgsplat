@@ -2,6 +2,7 @@
 
 #include "gs/gaussian_splat.hpp"
 #include "io/ply/miniply.hpp"
+#include <vkgsplat/error.hpp>
 #include <vkgsplat/types.hpp>
 
 #include <algorithm>
@@ -11,6 +12,7 @@
 #include <expected>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -21,6 +23,9 @@ namespace {
   using gs::GaussianSplat;
   using gs::k_sh_dc_coeffs;
   using gs::k_sh_rest_coeffs;
+
+  [[nodiscard]] auto make_error(std::errc errc_value, std::string message) -> Error
+  { return Error{ std::make_error_code(errc_value), std::move(message) }; }
 
   struct ExtractedSplatAttributes
   {
@@ -51,9 +56,11 @@ namespace {
   [[nodiscard]] auto require_properties(miniply::PLYReader &reader,
     std::array<uint32_t, N> &indexes,
     std::array<char const *, N> const &names,
-    std::string_view missing_message) -> std::expected<void, std::string>
+    std::string_view missing_message) -> std::expected<void, Error>
   {
-    if (!reader.find_properties(indexes, names)) { return std::unexpected{ std::string{ missing_message } }; }
+    if (!reader.find_properties(indexes, names)) {
+      return std::unexpected{ make_error(std::errc::invalid_argument, std::string{ missing_message }) };
+    }
     return {};
   }
 
@@ -61,10 +68,10 @@ namespace {
   [[nodiscard]] auto extract_floats(miniply::PLYReader &reader,
     std::array<uint32_t, N> const &indexes,
     std::vector<f32> &destination,
-    std::string_view failure_message) -> std::expected<void, std::string>
+    std::string_view failure_message) -> std::expected<void, Error>
   {
     if (!reader.extract_properties(indexes, miniply::PLYPropertyType::Float, destination.data())) {
-      return std::unexpected{ std::string{ failure_message } };
+      return std::unexpected{ make_error(std::errc::io_error, std::string{ failure_message }) };
     }
     return {};
   }
@@ -94,10 +101,12 @@ namespace {
   }
 
   [[nodiscard]] auto load_vertex_splats(miniply::PLYReader &reader, u32 count)
-    -> std::expected<SplatCpuData, std::string>
+    -> std::expected<SplatCpuData, Error>
   {
     u32 const available = reader.num_rows();
-    if (available == 0) { return std::unexpected{ "PLY vertex element is empty" }; }
+    if (available == 0) {
+      return std::unexpected{ make_error(std::errc::invalid_argument, "PLY vertex element is empty") };
+    }
 
     u32 const splat_count = std::min(count, available);
 
@@ -178,13 +187,19 @@ namespace {
 
 }// namespace
 
-auto load_splats_from_ply(std::string_view ply_path, u32 count) -> std::expected<SplatCpuData, std::string>
+auto load_splats_from_ply(std::string_view ply_path, u32 count) -> std::expected<SplatCpuData, Error>
 {
-  if (count == 0) { return std::unexpected{ "splat count must be greater than zero" }; }
+  if (count == 0) {
+    return std::unexpected{ make_error(std::errc::invalid_argument, "splat count must be greater than zero") };
+  }
 
   std::string const path{ ply_path };
   miniply::PLYReader reader(path.c_str());
-  if (!reader.valid()) { return std::unexpected{ "failed to open or parse PLY header: " + path }; }
+  if (!reader.valid()) {
+    return std::unexpected{
+      make_error(std::errc::no_such_file_or_directory, "failed to open or parse PLY header: " + path)
+    };
+  }
 
   while (reader.has_element()) {
     if (reader.element()->name != miniply::kPLYVertexElement) {
@@ -192,11 +207,13 @@ auto load_splats_from_ply(std::string_view ply_path, u32 count) -> std::expected
       continue;
     }
 
-    if (!reader.load_element()) { return std::unexpected{ "failed to load vertex element from PLY" }; }
+    if (!reader.load_element()) {
+      return std::unexpected{ make_error(std::errc::io_error, "failed to load vertex element from PLY") };
+    }
     return load_vertex_splats(reader, count);
   }
 
-  return std::unexpected{ "PLY file does not contain a vertex element" };
+  return std::unexpected{ make_error(std::errc::invalid_argument, "PLY file does not contain a vertex element") };
 }
 
 }// namespace vkgsplat

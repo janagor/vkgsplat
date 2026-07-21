@@ -15,7 +15,10 @@ auto run(std::span<char *const> args) noexcept -> int
 {
   try {
     auto const config = parse_app_config(args);
-    if (!config) { return -1; }
+    if (!config) {
+      std::println(stderr, "Failed to parse app config ({}): {}", config.error().code().value(), config.error().message());
+      return -1;
+    }
 
     RendererConfig const renderer_config{
       .source = config->source,
