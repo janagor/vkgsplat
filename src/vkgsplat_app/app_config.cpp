@@ -20,12 +20,12 @@
 #define VKGSPLAT_SOURCE_DIR "."
 #endif
 
-namespace vkgsplat {
+namespace vkgsplat::app {
 
 namespace {
 
-  [[nodiscard]] auto make_error(std::errc errc_value, std::string message) -> Error
-  { return Error{ std::make_error_code(errc_value), std::move(message) }; }
+  [[nodiscard]] auto make_error(std::errc errc_value, std::string message) -> vkgsplat::Error
+  { return vkgsplat::Error{ std::make_error_code(errc_value), std::move(message) }; }
 
   [[nodiscard]] auto default_ply_path() -> std::string
   { return std::string{ VKGSPLAT_SOURCE_DIR } + "/resources/scene.ply"; }
@@ -38,7 +38,7 @@ namespace {
       text, [](char const character) { return std::isdigit(static_cast<unsigned char>(character)) != 0; });
   }
 
-  [[nodiscard]] auto parse_count(std::string_view text) -> std::expected<u32, Error>
+  [[nodiscard]] auto parse_count(std::string_view text) -> std::expected<vkgsplat::u32, vkgsplat::Error>
   {
     if (!is_unsigned_integer(text)) {
       return std::unexpected{ make_error(std::errc::invalid_argument, "count must be a positive integer") };
@@ -49,7 +49,7 @@ namespace {
       if (parsed == 0UL) {
         return std::unexpected{ make_error(std::errc::invalid_argument, "count must be greater than zero") };
       }
-      return static_cast<u32>(parsed);
+      return static_cast<vkgsplat::u32>(parsed);
     } catch (std::exception const &) {
       return std::unexpected{ make_error(std::errc::result_out_of_range, "count is out of range for u32") };
     }
@@ -70,7 +70,7 @@ namespace {
   [[nodiscard]] auto bounded_arg(std::span<char *const> args, size_t index) -> char *
   { return args.subspan(index, 1).front(); }
 
-  [[nodiscard]] auto require_count(std::span<char *const> args, size_t &index) -> std::expected<u32, Error>
+  [[nodiscard]] auto require_count(std::span<char *const> args, size_t &index) -> std::expected<vkgsplat::u32, vkgsplat::Error>
   {
     if (index >= args.size()) {
       print_usage(args.front());
@@ -88,9 +88,9 @@ namespace {
   }
 
   [[nodiscard]] auto parse_procedural(std::span<char *const> args, size_t &index, AppConfig &config)
-    -> std::expected<void, Error>
+    -> std::expected<void, vkgsplat::Error>
   {
-    config.source = SplatSource::Procedural;
+    config.source = vkgsplat::SplatSource::Procedural;
     ++index;
 
     auto const count = require_count(args, index);
@@ -101,9 +101,9 @@ namespace {
   }
 
   [[nodiscard]] auto parse_ply(std::span<char *const> args, size_t &index, AppConfig &config)
-    -> std::expected<void, Error>
+    -> std::expected<void, vkgsplat::Error>
   {
-    config.source = SplatSource::Ply;
+    config.source = vkgsplat::SplatSource::Ply;
     ++index;
 
     auto const count = require_count(args, index);
@@ -120,7 +120,7 @@ namespace {
   }
 
   [[nodiscard]] auto parse_shorthand_ply(std::span<char *const> args, size_t &index, AppConfig &config)
-    -> std::expected<void, Error>
+    -> std::expected<void, vkgsplat::Error>
   {
     auto const count = parse_count(bounded_arg(args, index));
     if (!count) {
@@ -128,7 +128,7 @@ namespace {
       return std::unexpected{ count.error() };
     }
 
-    config.source = SplatSource::Ply;
+    config.source = vkgsplat::SplatSource::Ply;
     config.splat_count = *count;
     ++index;
 
@@ -147,7 +147,7 @@ namespace {
 
 }// namespace
 
-auto parse_app_config(std::span<char *const> args) -> std::expected<AppConfig, Error>
+auto parse_app_config(std::span<char *const> args) -> std::expected<AppConfig, vkgsplat::Error>
 {
   AppConfig config{};
   config.ply_path = default_ply_path();
@@ -180,4 +180,4 @@ auto parse_app_config(std::span<char *const> args) -> std::expected<AppConfig, E
   return config;
 }
 
-}// namespace vkgsplat
+}// namespace vkgsplat::app

@@ -9,7 +9,7 @@
 
 #include "app_config.hpp"
 
-namespace vkgsplat {
+namespace vkgsplat::app {
 
 auto run(std::span<char *const> args) noexcept -> int
 {
@@ -21,20 +21,20 @@ auto run(std::span<char *const> args) noexcept -> int
       return -1;
     }
 
-    RendererConfig const renderer_config{
+    vkgsplat::RendererConfig const renderer_config{
       .source = config->source,
       .splat_count = config->splat_count,
       .ply_path = config->ply_path,
     };
 
-    auto renderer = Renderer::create(renderer_config);
+    auto renderer = vkgsplat::Renderer::create(renderer_config);
     if (!renderer) {
       std::println(stderr, "Failed to create renderer: {}", renderer.error().message());
       return -1;
     }
 
     // NOLINTNEXTLINE(misc-const-correctness) -- updated by input handlers once wired up
-    Camera camera{ k_default_camera_position };
+    vkgsplat::Camera camera{ vkgsplat::k_default_camera_position };
 
     while (!renderer->should_close()) {
       renderer->poll_events();
@@ -54,4 +54,4 @@ auto run(std::span<char *const> args) noexcept -> int
   return 0;
 }
 
-}// namespace vkgsplat
+}// namespace vkgsplat::app

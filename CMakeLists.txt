@@ -102,7 +102,7 @@ if(MSVC)
 endif()
 
 # set the startup project for the "play" button in MSVC
-set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT vkgsplat_renderer)
+set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT app)
 
 if(CMAKE_SKIP_INSTALL_RULES)
   return()
