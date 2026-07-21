@@ -25,81 +25,80 @@ namespace vkgsplat::gs {
 
 namespace {
 
-void destroy_color_target(Init &init, RenderData &data)
-{
-  if (data.color_image != VK_NULL_HANDLE || data.color_allocation != VK_NULL_HANDLE) {
-    vmaDestroyImage(init.gpu_allocator.vma_allocator(), data.color_image, data.color_allocation);
-    data.color_image = VK_NULL_HANDLE;
-    data.color_allocation = VK_NULL_HANDLE;
-  }
-  init.gpu_allocator.destroy_buffer(data.color_buffer);
-  data.color_buffer = {};
-  data.color_width = 0;
-  data.color_height = 0;
-}
-
-[[nodiscard]] auto create_color_target(Init &init, RenderData &data) -> bool
-{
-  destroy_color_target(init, data);
-
-  data.color_width = init.swapchain->extent().width;
-  data.color_height = init.swapchain->extent().height;
-  if (data.color_width == 0 || data.color_height == 0) {
-    std::println("Rasterize requires a non-zero swapchain extent!");
-    return false;
+  void destroy_color_target(Init &init, RenderData &data)
+  {
+    if (data.color_image != VK_NULL_HANDLE || data.color_allocation != VK_NULL_HANDLE) {
+      vmaDestroyImage(init.gpu_allocator.vma_allocator(), data.color_image, data.color_allocation);
+      data.color_image = VK_NULL_HANDLE;
+      data.color_allocation = VK_NULL_HANDLE;
+    }
+    init.gpu_allocator.destroy_buffer(data.color_buffer);
+    data.color_buffer = {};
+    data.color_width = 0;
+    data.color_height = 0;
   }
 
-  auto const pixel_count = static_cast<VkDeviceSize>(data.color_width) * data.color_height;
-  auto const buffer_size = pixel_count * 4U * sizeof(f32);
-  auto color_buffer = init.gpu_allocator.create_device_storage_buffer(buffer_size);
-  if (!color_buffer) {
-    std::println("Failed to create color storage buffer!");
+  [[nodiscard]] auto create_color_target(Init &init, RenderData &data) -> bool
+  {
     destroy_color_target(init, data);
-    return false;
+
+    data.color_width = init.swapchain->extent().width;
+    data.color_height = init.swapchain->extent().height;
+    if (data.color_width == 0 || data.color_height == 0) {
+      std::println("Rasterize requires a non-zero swapchain extent!");
+      return false;
+    }
+
+    auto const pixel_count = static_cast<VkDeviceSize>(data.color_width) * data.color_height;
+    auto const buffer_size = pixel_count * 4U * sizeof(f32);
+    auto color_buffer = init.gpu_allocator.create_device_storage_buffer(buffer_size);
+    if (!color_buffer) {
+      std::println("Failed to create color storage buffer!");
+      destroy_color_target(init, data);
+      return false;
+    }
+    data.color_buffer = *color_buffer;
+
+    auto image_info = initializers::ImageCreateInfo();
+    image_info.imageType = VK_IMAGE_TYPE_2D;
+    image_info.format = data.color_format;
+    image_info.extent = { .width = data.color_width, .height = data.color_height, .depth = 1 };
+    image_info.mipLevels = 1;
+    image_info.arrayLayers = 1;
+    image_info.samples = VK_SAMPLE_COUNT_1_BIT;
+    image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+    image_info.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    image_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    VmaAllocationCreateInfo alloc_info = {};
+    alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
+    if (vmaCreateImage(init.gpu_allocator.vma_allocator(),
+          &image_info,
+          &alloc_info,
+          &data.color_image,
+          &data.color_allocation,
+          nullptr)
+        != VK_SUCCESS) {
+      std::println("Failed to create color transfer image!");
+      destroy_color_target(init, data);
+      return false;
+    }
+
+    return true;
   }
-  data.color_buffer = *color_buffer;
 
-  auto image_info = initializers::ImageCreateInfo();
-  image_info.imageType = VK_IMAGE_TYPE_2D;
-  image_info.format = data.color_format;
-  image_info.extent = { .width = data.color_width, .height = data.color_height, .depth = 1 };
-  image_info.mipLevels = 1;
-  image_info.arrayLayers = 1;
-  image_info.samples = VK_SAMPLE_COUNT_1_BIT;
-  image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
-  image_info.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-  image_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-  image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-
-  VmaAllocationCreateInfo alloc_info = {};
-  alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
-  if (vmaCreateImage(init.gpu_allocator.vma_allocator(),
-        &image_info,
-        &alloc_info,
-        &data.color_image,
-        &data.color_allocation,
-        nullptr)
-      != VK_SUCCESS) {
-    std::println("Failed to create color transfer image!");
-    destroy_color_target(init, data);
-    return false;
+  void
+    push_raster_constants(Init const &init, RasterPushConstants const &push_constants, VkCommandBuffer command_buffer)
+  {
+    VkPushDataInfoEXT const push_info = {
+      .sType = VK_STRUCTURE_TYPE_PUSH_DATA_INFO_EXT,
+      .pNext = nullptr,
+      .offset = 0,
+      .data = { .address = &push_constants, .size = sizeof(RasterPushConstants) },
+    };
+    init.cmd_push_data(command_buffer, &push_info);
   }
-
-  return true;
-}
-
-void push_raster_constants(Init const &init,
-  RasterPushConstants const &push_constants,
-  VkCommandBuffer command_buffer)
-{
-  VkPushDataInfoEXT const push_info = {
-    .sType = VK_STRUCTURE_TYPE_PUSH_DATA_INFO_EXT,
-    .pNext = nullptr,
-    .offset = 0,
-    .data = { .address = &push_constants, .size = sizeof(RasterPushConstants) },
-  };
-  init.cmd_push_data(command_buffer, &push_info);
-}
 
 }// namespace
 
@@ -131,8 +130,7 @@ void dispatch_rasterize_gaussians(Init const &init,
   u32 const tiles_x = (data.color_width + k_tile_size - 1U) / k_tile_size;
   u32 const tiles_y = (data.color_height + k_tile_size - 1U) / k_tile_size;
 
-  init.disp.cmdBindPipeline(
-    command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, data.rasterize_algorithm.pipeline());
+  init.disp.cmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, data.rasterize_algorithm.pipeline());
   push_raster_constants(init, push_constants, command_buffer);
   init.disp.cmdDispatch(command_buffer, tiles_x, tiles_y, 1U);
 
@@ -208,17 +206,11 @@ void dispatch_rasterize_gaussians(Init const &init,
     .imageOffset = { .x = 0, .y = 0, .z = 0 },
     .imageExtent = { .width = data.color_width, .height = data.color_height, .depth = 1 },
   };
-  init.disp.cmdCopyBufferToImage(command_buffer,
-    data.color_buffer.handle,
-    data.color_image,
-    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-    1,
-    &copy_region);
+  init.disp.cmdCopyBufferToImage(
+    command_buffer, data.color_buffer.handle, data.color_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy_region);
 
-  auto color_to_src = initializers::ImageMemoryBarrier(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-    data.color_image,
-    color_range);
+  auto color_to_src = initializers::ImageMemoryBarrier(
+    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, data.color_image, color_range);
   color_to_src.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
   color_to_src.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
   init.disp.cmdPipelineBarrier(command_buffer,

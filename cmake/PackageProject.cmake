@@ -155,7 +155,7 @@ function(vkgsplat_package_project)
   unset(_PackageProject_TARGETS)
 
   # download ForwardArguments
-  FetchContent_Populate (
+  FetchContent_Populate(
     _fargs
     URL https://github.com/polysquare/cmake-forward-arguments/archive/8c50d1f956172edb34e95efa52a2d5cb1f686ed2.zip)
 

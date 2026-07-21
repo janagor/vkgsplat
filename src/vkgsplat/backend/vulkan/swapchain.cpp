@@ -8,9 +8,9 @@
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
+#include "backend/vulkan/vulkan_bootstrap.hpp"
 #include <vkgsplat/error.hpp>
 #include <vkgsplat/types.hpp>
-#include "backend/vulkan/vulkan_bootstrap.hpp"
 
 #include <VkBootstrap.h>
 #include <VkBootstrapDispatch.h>
@@ -20,19 +20,19 @@ namespace vkgsplat::vulkan {
 
 namespace {
 
-auto build_swapchain(vkb::Device const &device, GLFWwindow *window, vkb::Swapchain const &old_swapchain = {})
-  -> std::expected<vkb::Swapchain, Error>
-{
-  int width = 0;
-  int height = 0;
-  glfwGetFramebufferSize(window, &width, &height);
+  auto build_swapchain(vkb::Device const &device, GLFWwindow *window, vkb::Swapchain const &old_swapchain = {})
+    -> std::expected<vkb::Swapchain, Error>
+  {
+    int width = 0;
+    int height = 0;
+    glfwGetFramebufferSize(window, &width, &height);
 
-  vkb::SwapchainBuilder swapchain_builder{ device };
-  return VKBResultToExpected(swapchain_builder.set_desired_extent(static_cast<u32>(width), static_cast<u32>(height))
-      .set_image_usage_flags(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT)
-      .set_old_swapchain(old_swapchain)
-      .build());
-}
+    vkb::SwapchainBuilder swapchain_builder{ device };
+    return VKBResultToExpected(swapchain_builder.set_desired_extent(static_cast<u32>(width), static_cast<u32>(height))
+        .set_image_usage_flags(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT)
+        .set_old_swapchain(old_swapchain)
+        .build());
+  }
 
 }// namespace
 
@@ -43,9 +43,7 @@ Swapchain::Swapchain(vkb::Swapchain swapchain, std::reference_wrapper<vkb::Dispa
 Swapchain::Swapchain(Swapchain &&other) noexcept
   : swapchain_(other.swapchain_), images_(std::move(other.images_)), image_views_(std::move(other.image_views_)),
     disp_(other.disp_)
-{
-  other.swapchain_.swapchain = VK_NULL_HANDLE;
-}
+{ other.swapchain_.swapchain = VK_NULL_HANDLE; }
 
 auto Swapchain::operator=(Swapchain &&other) noexcept -> Swapchain &
 {

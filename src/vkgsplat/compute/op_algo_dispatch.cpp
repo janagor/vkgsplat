@@ -1,5 +1,5 @@
-#include "app_state.hpp"
 #include "compute/op_algo_dispatch.hpp"
+#include "app_state.hpp"
 #include "vulkan_context.hpp"
 #include <vulkan/vulkan_core.h>
 

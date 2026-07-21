@@ -25,7 +25,12 @@ function(vkgsplat_compile_shaders)
   set(options)
   set(one_value_args TARGET OUTPUT_DIR)
   set(multi_value_args SOURCES)
-  cmake_parse_arguments(VKGSPLAT "${options}" "${one_value_args}" "${multi_value_args}" ${ARGN})
+  cmake_parse_arguments(
+    VKGSPLAT
+    "${options}"
+    "${one_value_args}"
+    "${multi_value_args}"
+    ${ARGN})
 
   if(NOT VKGSPLAT_TARGET)
     message(FATAL_ERROR "vkgsplat_compile_shaders: TARGET is required")

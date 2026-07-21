@@ -11,8 +11,7 @@
 
 namespace vkgsplat {
 
-enum class SplatSource : u8
-{
+enum class SplatSource : u8 {
   Procedural,
   Ply,
 };

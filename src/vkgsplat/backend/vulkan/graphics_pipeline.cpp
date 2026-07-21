@@ -7,9 +7,9 @@
 #include <vector>
 
 #include "app_state.hpp"
-#include "vulkan_context.hpp"
 #include "backend/vulkan/initializers.hpp"
 #include "shader.hpp"
+#include "vulkan_context.hpp"
 
 #include <vulkan/vulkan_core.h>
 
@@ -73,8 +73,7 @@ auto create_graphics_pipeline(Init &init, RenderData &data) -> int
 
   auto const multisampling = initializers::PipelineMultisampleStateCreateInfo(VK_SAMPLE_COUNT_1_BIT);
 
-  auto const depth_stencil =
-    initializers::PipelineDepthStencilStateCreateInfo(VK_TRUE, VK_TRUE, VK_COMPARE_OP_LESS);
+  auto const depth_stencil = initializers::PipelineDepthStencilStateCreateInfo(VK_TRUE, VK_TRUE, VK_COMPARE_OP_LESS);
 
   VkPipelineColorBlendAttachmentState color_blend_attachment = {};
   // NOLINTBEGIN(hicpp-signed-bitwise)

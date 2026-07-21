@@ -10,11 +10,29 @@ set(vkgsplat_INDEX_TEMPLATE "${vkgsplat_WEB_DIR}/index_template.html.in")
 # Helper function to escape HTML special characters
 function(escape_html output_var input)
   set(result "${input}")
-  string(REPLACE "&" "&amp;" result "${result}")
-  string(REPLACE "<" "&lt;" result "${result}")
-  string(REPLACE ">" "&gt;" result "${result}")
-  string(REPLACE "\"" "&quot;" result "${result}")
-  set(${output_var} "${result}" PARENT_SCOPE)
+  string(
+    REPLACE "&"
+            "&amp;"
+            result
+            "${result}")
+  string(
+    REPLACE "<"
+            "&lt;"
+            result
+            "${result}")
+  string(
+    REPLACE ">"
+            "&gt;"
+            result
+            "${result}")
+  string(
+    REPLACE "\""
+            "&quot;"
+            result
+            "${result}")
+  set(${output_var}
+      "${result}"
+      PARENT_SCOPE)
 endfunction()
 
 # Detect if we're building with Emscripten
@@ -22,28 +40,45 @@ if(EMSCRIPTEN)
   message(STATUS "Emscripten build detected - configuring for WebAssembly")
 
   # Set WASM build flag
-  set(vkgsplat_WASM_BUILD ON CACHE BOOL "Building for WebAssembly" FORCE)
+  set(vkgsplat_WASM_BUILD
+      ON
+      CACHE BOOL "Building for WebAssembly" FORCE)
 
   # Sanitizers don't work with Emscripten
-  foreach(sanitizer ADDRESS LEAK UNDEFINED THREAD MEMORY)
-    set(vkgsplat_ENABLE_SANITIZER_${sanitizer} OFF CACHE BOOL "Not supported with Emscripten")
+  foreach(
+    sanitizer
+    ADDRESS
+    LEAK
+    UNDEFINED
+    THREAD
+    MEMORY)
+    set(vkgsplat_ENABLE_SANITIZER_${sanitizer}
+        OFF
+        CACHE BOOL "Not supported with Emscripten")
   endforeach()
 
   # Disable static analysis and strict warnings for Emscripten builds
   foreach(option CLANG_TIDY CPPCHECK WARNINGS_AS_ERRORS)
-    set(vkgsplat_ENABLE_${option} OFF CACHE BOOL "Disabled for Emscripten")
+    set(vkgsplat_ENABLE_${option}
+        OFF
+        CACHE BOOL "Disabled for Emscripten")
   endforeach()
 
   # Disable testing - no way to execute WASM test targets
-  set(BUILD_TESTING OFF CACHE BOOL "No test runner for WASM")
+  set(BUILD_TESTING
+      OFF
+      CACHE BOOL "No test runner for WASM")
 
   # WASM runtime configuration - tunable performance parameters
-  set(vkgsplat_WASM_INITIAL_MEMORY "33554432" CACHE STRING
-      "Initial WASM memory in bytes (default: 32MB)")
-  set(vkgsplat_WASM_PTHREAD_POOL_SIZE "4" CACHE STRING
-      "Pthread pool size for WASM builds (default: 4)")
-  set(vkgsplat_WASM_ASYNCIFY_STACK_SIZE "65536" CACHE STRING
-      "Asyncify stack size in bytes (default: 64KB)")
+  set(vkgsplat_WASM_INITIAL_MEMORY
+      "33554432"
+      CACHE STRING "Initial WASM memory in bytes (default: 32MB)")
+  set(vkgsplat_WASM_PTHREAD_POOL_SIZE
+      "4"
+      CACHE STRING "Pthread pool size for WASM builds (default: 4)")
+  set(vkgsplat_WASM_ASYNCIFY_STACK_SIZE
+      "65536"
+      CACHE STRING "Asyncify stack size in bytes (default: 64KB)")
 
   # For Emscripten WASM builds, FTXUI requires pthreads and native exception handling
   # Set these flags early so they propagate to all dependencies
@@ -58,7 +93,12 @@ function(vkgsplat_configure_wasm_target target)
     set(options "")
     set(oneValueArgs TITLE DESCRIPTION RESOURCES_DIR)
     set(multiValueArgs "")
-    cmake_parse_arguments(WASM "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+    cmake_parse_arguments(
+      WASM
+      "${options}"
+      "${oneValueArgs}"
+      "${multiValueArgs}"
+      ${ARGN})
 
     # Set defaults if not provided
     if(NOT WASM_TITLE)
@@ -84,7 +124,9 @@ function(vkgsplat_configure_wasm_target target)
     target_compile_definitions(${target} PRIVATE vkgsplat_WASM_BUILD=1)
 
     # Emscripten link flags
-    target_link_options(${target} PRIVATE
+    target_link_options(
+      ${target}
+      PRIVATE
       # Enable pthreads - REQUIRED by FTXUI's WASM implementation
       "-sUSE_PTHREADS=1"
       "-sPROXY_TO_PTHREAD=1"
@@ -102,17 +144,19 @@ function(vkgsplat_configure_wasm_target target)
       # Export malloc/free for MAIN_THREAD_EM_ASM usage
       "-sEXPORTED_FUNCTIONS=['_main','_malloc','_free']"
       # Debug: enable assertions for better error messages
-      "-sASSERTIONS=1"
-    )
+      "-sASSERTIONS=1")
 
     # Embed resources into WASM binary (optional, per-target)
     if(WASM_RESOURCES_DIR AND EXISTS "${WASM_RESOURCES_DIR}")
       # Convert to absolute path to avoid issues with Emscripten path resolution
-      get_filename_component(ABS_RESOURCES_DIR "${WASM_RESOURCES_DIR}" ABSOLUTE BASE_DIR "${CMAKE_SOURCE_DIR}")
+      get_filename_component(
+        ABS_RESOURCES_DIR
+        "${WASM_RESOURCES_DIR}"
+        ABSOLUTE
+        BASE_DIR
+        "${CMAKE_SOURCE_DIR}")
 
-      target_link_options(${target} PRIVATE
-        "--embed-file=${ABS_RESOURCES_DIR}@/resources"
-      )
+      target_link_options(${target} PRIVATE "--embed-file=${ABS_RESOURCES_DIR}@/resources")
       message(STATUS "Embedding resources for ${target} from ${ABS_RESOURCES_DIR}")
     endif()
 
@@ -120,27 +164,21 @@ function(vkgsplat_configure_wasm_target target)
     set(TARGET_NAME "${OUTPUT_NAME}")
     set(TARGET_TITLE "${WASM_TITLE}")
     set(TARGET_DESCRIPTION "${WASM_DESCRIPTION}")
-    set(AT "@")  # For escaping @ in npm package URLs
+    set(AT "@") # For escaping @ in npm package URLs
     set(CONFIGURED_SHELL "${CMAKE_BINARY_DIR}/web/${target}_shell.html")
 
     # Generate target-specific shell file (configure_file creates parent directories automatically)
     if(EXISTS "${vkgsplat_SHELL_TEMPLATE}")
-      configure_file(
-        "${vkgsplat_SHELL_TEMPLATE}"
-        "${CONFIGURED_SHELL}"
-        @ONLY
-      )
+      configure_file("${vkgsplat_SHELL_TEMPLATE}" "${CONFIGURED_SHELL}" @ONLY)
 
       # Use the generated shell file
-      target_link_options(${target} PRIVATE
-        "--shell-file=${CONFIGURED_SHELL}"
-      )
+      target_link_options(${target} PRIVATE "--shell-file=${CONFIGURED_SHELL}")
 
       # Add both template and configured file as link dependencies
-      set_property(TARGET ${target} APPEND PROPERTY LINK_DEPENDS
-        "${vkgsplat_SHELL_TEMPLATE}"
-        "${CONFIGURED_SHELL}"
-      )
+      set_property(
+        TARGET ${target}
+        APPEND
+        PROPERTY LINK_DEPENDS "${vkgsplat_SHELL_TEMPLATE}" "${CONFIGURED_SHELL}")
 
       message(STATUS "Configured WASM shell for ${target}: ${CONFIGURED_SHELL}")
     else()
@@ -149,12 +187,12 @@ function(vkgsplat_configure_wasm_target target)
 
     # Copy service worker to target build directory for standalone target builds
     if(EXISTS "${vkgsplat_COI_WORKER}")
-      add_custom_command(TARGET ${target} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-          "${vkgsplat_COI_WORKER}"
-          "$<TARGET_FILE_DIR:${target}>/coi-serviceworker.min.js"
-        COMMENT "Copying coi-serviceworker.min.js to ${target} build directory"
-      )
+      add_custom_command(
+        TARGET ${target}
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${vkgsplat_COI_WORKER}"
+                "$<TARGET_FILE_DIR:${target}>/coi-serviceworker.min.js"
+        COMMENT "Copying coi-serviceworker.min.js to ${target} build directory")
     endif()
 
     # Set output suffix to .html
@@ -191,8 +229,10 @@ function(vkgsplat_create_web_dist)
     escape_html(TITLE_ESCAPED "${TITLE}")
     escape_html(DESC_ESCAPED "${DESCRIPTION}")
 
-    string(APPEND WASM_APPS_HTML
-"            <a href=\"${target}/\" class=\"app-card\">
+    string(
+      APPEND
+      WASM_APPS_HTML
+      "            <a href=\"${target}/\" class=\"app-card\">
                 <h3>${TITLE_ESCAPED}</h3>
                 <p>${DESC_ESCAPED}</p>
             </a>
@@ -220,29 +260,45 @@ function(vkgsplat_create_web_dist)
 
     # Copy WASM artifacts: .html (as index.html), .js, .wasm, and service worker
     # Use OUTPUT_NAME instead of target name for file names
-    list(APPEND COPY_COMMANDS
-      COMMAND ${CMAKE_COMMAND} -E make_directory "${TARGET_DIST_DIR}"
-      COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${TARGET_BINARY_DIR}/${OUTPUT_NAME}.html"
-        "${TARGET_DIST_DIR}/index.html"
-      COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${TARGET_BINARY_DIR}/${OUTPUT_NAME}.js"
-        "${TARGET_DIST_DIR}/${OUTPUT_NAME}.js"
-      COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${TARGET_BINARY_DIR}/${OUTPUT_NAME}.wasm"
-        "${TARGET_DIST_DIR}/${OUTPUT_NAME}.wasm"
-      COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${vkgsplat_COI_WORKER}"
-        "${TARGET_DIST_DIR}/coi-serviceworker.min.js"
-    )
+    list(
+      APPEND
+      COPY_COMMANDS
+      COMMAND
+      ${CMAKE_COMMAND}
+      -E
+      make_directory
+      "${TARGET_DIST_DIR}"
+      COMMAND
+      ${CMAKE_COMMAND}
+      -E
+      copy_if_different
+      "${TARGET_BINARY_DIR}/${OUTPUT_NAME}.html"
+      "${TARGET_DIST_DIR}/index.html"
+      COMMAND
+      ${CMAKE_COMMAND}
+      -E
+      copy_if_different
+      "${TARGET_BINARY_DIR}/${OUTPUT_NAME}.js"
+      "${TARGET_DIST_DIR}/${OUTPUT_NAME}.js"
+      COMMAND
+      ${CMAKE_COMMAND}
+      -E
+      copy_if_different
+      "${TARGET_BINARY_DIR}/${OUTPUT_NAME}.wasm"
+      "${TARGET_DIST_DIR}/${OUTPUT_NAME}.wasm"
+      COMMAND
+      ${CMAKE_COMMAND}
+      -E
+      copy_if_different
+      "${vkgsplat_COI_WORKER}"
+      "${TARGET_DIST_DIR}/coi-serviceworker.min.js")
   endforeach()
 
   # Create custom target with all commands (part of ALL so it builds by default)
-  add_custom_target(web-dist ALL
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${WEB_DIST_DIR}"
-    ${COPY_COMMANDS}
-    COMMENT "Creating unified web deployment directory"
-  )
+  add_custom_target(
+    web-dist ALL
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${WEB_DIST_DIR}" ${COPY_COMMANDS}
+    COMMENT "Creating unified web deployment directory")
 
   # Ensure web-dist runs after all WASM targets are built
   add_dependencies(web-dist ${WASM_TARGETS})

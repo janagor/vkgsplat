@@ -3,10 +3,10 @@
 #include <expected>
 #include <system_error>
 
-#include <vkgsplat/error.hpp>
-#include "vulkan_context.hpp"
 #include "backend/vulkan/vulkan_bootstrap.hpp"
+#include "vulkan_context.hpp"
 #include "window.hpp"
+#include <vkgsplat/error.hpp>
 
 #include <vulkan/vulkan_core.h>
 
@@ -65,15 +65,13 @@ auto device_initialization(Init &init) -> std::expected<void, Error>
       init.device = device;
       init.disp = init.device.make_table();
 
-      // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+      // NOLINTBEGIN(cppcoreguidelines-pro-type-reinterpret-cast)
       init.write_resource_descriptors = reinterpret_cast<PFN_vkWriteResourceDescriptorsEXT>(
         vkGetDeviceProcAddr(init.device, "vkWriteResourceDescriptorsEXT"));
-      // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-      init.cmd_bind_resource_heap = reinterpret_cast<PFN_vkCmdBindResourceHeapEXT>(
-        vkGetDeviceProcAddr(init.device, "vkCmdBindResourceHeapEXT"));
-      // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-      init.cmd_push_data = reinterpret_cast<PFN_vkCmdPushDataEXT>(
-        vkGetDeviceProcAddr(init.device, "vkCmdPushDataEXT"));
+      init.cmd_bind_resource_heap =
+        reinterpret_cast<PFN_vkCmdBindResourceHeapEXT>(vkGetDeviceProcAddr(init.device, "vkCmdBindResourceHeapEXT"));
+      init.cmd_push_data = reinterpret_cast<PFN_vkCmdPushDataEXT>(vkGetDeviceProcAddr(init.device, "vkCmdPushDataEXT"));
+      // NOLINTEND(cppcoreguidelines-pro-type-reinterpret-cast)
 
       if (init.write_resource_descriptors == nullptr || init.cmd_bind_resource_heap == nullptr
           || init.cmd_push_data == nullptr) {

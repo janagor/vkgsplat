@@ -12,28 +12,28 @@
 #include <utility>
 
 #include "app_state.hpp"
-#include <vkgsplat/camera.hpp>
-#include "vulkan_context.hpp"
-#include "backend/vulkan/depth_buffer.hpp"
-#include "backend/vulkan/descriptor/descriptor_heap.hpp"
-#include <vkgsplat/error.hpp>
-#include "backend/vulkan/graphics_pipeline.hpp"
 #include "backend/vulkan/command/command.hpp"
 #include "backend/vulkan/command/pool.hpp"
+#include "backend/vulkan/depth_buffer.hpp"
+#include "backend/vulkan/descriptor/descriptor_heap.hpp"
+#include "backend/vulkan/graphics_pipeline.hpp"
 #include "backend/vulkan/initializers.hpp"
-#include "gs/gaussian_splat.hpp"
-#include "gs/push_constants.hpp"
-#include "mesh_gpu.hpp"
+#include "backend/vulkan/vulkan_bootstrap.hpp"
 #include "gs/bin_gaussians.hpp"
+#include "gs/gaussian_splat.hpp"
 #include "gs/project_gaussians.hpp"
+#include "gs/push_constants.hpp"
 #include "gs/rasterize_gaussians.hpp"
 #include "gs/sort_gaussians.hpp"
+#include "mesh_gpu.hpp"
 #include "sphere_setup.hpp"
 #include "sync_objects/fence.hpp"
 #include "sync_objects/semaphore.hpp"
-#include <vkgsplat/types.hpp>
-#include "backend/vulkan/vulkan_bootstrap.hpp"
+#include "vulkan_context.hpp"
 #include "window.hpp"
+#include <vkgsplat/camera.hpp>
+#include <vkgsplat/error.hpp>
+#include <vkgsplat/types.hpp>
 
 #include <glm/ext/vector_float3.hpp>
 #include <glm/ext/vector_float4.hpp>
@@ -48,133 +48,129 @@ using namespace gs;
 
 namespace {
 
-void record_sphere_draw(Init &init,
-  RenderData const &data,
-  Camera const &camera,
-  f64 aspect_ratio,
-  VkCommandBuffer command_buffer,
-  size_t image_index)
-{
-  bind_descriptor_heap(init, data, command_buffer);
-  dispatch_sphere_setup(init, data, command_buffer);
+  void record_sphere_draw(Init &init,
+    RenderData const &data,
+    Camera const &camera,
+    f64 aspect_ratio,
+    VkCommandBuffer command_buffer,
+    size_t image_index)
+  {
+    bind_descriptor_heap(init, data, command_buffer);
+    dispatch_sphere_setup(init, data, command_buffer);
 
-  ProjectPushConstants const project_push{
-    .view = camera.view_matrix(),
-    .projection = camera.projection_matrix(aspect_ratio),
-    .viewport = { static_cast<float>(init.swapchain->extent().width),
-      static_cast<float>(init.swapchain->extent().height) },
-    .padding = {},
-  };
-  dispatch_project_gaussians(init, data, project_push, command_buffer);
+    ProjectPushConstants const project_push{
+      .view = camera.view_matrix(),
+      .projection = camera.projection_matrix(aspect_ratio),
+      .viewport = { static_cast<float>(init.swapchain->extent().width),
+        static_cast<float>(init.swapchain->extent().height) },
+      .padding = {},
+    };
+    dispatch_project_gaussians(init, data, project_push, command_buffer);
 
-  BinPushConstants const bin_push{
-    .viewport = { init.swapchain->extent().width, init.swapchain->extent().height },
-    .max_instances = data.max_bin_instances,
-    .tile_size = k_tile_size,
-    .instance_count_address =
-      init.gpu_allocator.get_buffer_device_address(data.instance_count_buffer),
-  };
-  dispatch_bin_gaussians(init, data, bin_push, command_buffer);
+    BinPushConstants const bin_push{
+      .viewport = { init.swapchain->extent().width, init.swapchain->extent().height },
+      .max_instances = data.max_bin_instances,
+      .tile_size = k_tile_size,
+      .instance_count_address = init.gpu_allocator.get_buffer_device_address(data.instance_count_buffer),
+    };
+    dispatch_bin_gaussians(init, data, bin_push, command_buffer);
 
-  SortPushConstants const sort_push{
-    .instance_count_address =
-      init.gpu_allocator.get_buffer_device_address(data.instance_count_buffer),
-    .sort_size = data.gaussian_sort_size,
-    .tile_count = data.tile_count,
-  };
-  dispatch_sort_gaussians(init, data, sort_push, command_buffer);
+    SortPushConstants const sort_push{
+      .instance_count_address = init.gpu_allocator.get_buffer_device_address(data.instance_count_buffer),
+      .sort_size = data.gaussian_sort_size,
+      .tile_count = data.tile_count,
+    };
+    dispatch_sort_gaussians(init, data, sort_push, command_buffer);
 
-  glm::vec3 const camera_pos{ camera.position() };
-  RasterPushConstants const raster_push{
-    .camera_position = glm::vec4{ camera_pos, 0.0F },
-    .viewport = { init.swapchain->extent().width, init.swapchain->extent().height },
-    .tile_size = k_tile_size,
-    .tiles_x = (init.swapchain->extent().width + k_tile_size - 1U) / k_tile_size,
-    .background = { 0.02F, 0.02F, 0.05F, 0.0F },
-    .sh_degree = data.procedural ? 0U : 3U,
-    .pad0 = 0U,
-    .pad1 = 0U,
-    .pad2 = 0U,
-  };
-  dispatch_rasterize_gaussians(init, data, raster_push, command_buffer, image_index);
-}
+    glm::vec3 const camera_pos{ camera.position() };
+    RasterPushConstants const raster_push{
+      .camera_position = glm::vec4{ camera_pos, 0.0F },
+      .viewport = { init.swapchain->extent().width, init.swapchain->extent().height },
+      .tile_size = k_tile_size,
+      .tiles_x = (init.swapchain->extent().width + k_tile_size - 1U) / k_tile_size,
+      .background = { 0.02F, 0.02F, 0.05F, 0.0F },
+      .sh_degree = data.procedural ? 0U : 3U,
+      .pad0 = 0U,
+      .pad1 = 0U,
+      .pad2 = 0U,
+    };
+    dispatch_rasterize_gaussians(init, data, raster_push, command_buffer, image_index);
+  }
 
 }// namespace
 
 namespace {
 
-void debug_log_raster_state(Init &init, RenderData const &data)
-{
-  static int debug_frames = 0;
-  if (debug_frames >= 2) { return; }
+  void debug_log_raster_state(Init &init, RenderData const &data)
+  {
+    static int debug_frames = 0;
+    if (debug_frames >= 2) { return; }
 
-  init.disp.queueWaitIdle(data.graphics_queue);
-  auto instance_count = init.gpu_allocator.read_buffer<u32>(data.instance_count_buffer, 1);
-  auto projected = init.gpu_allocator.read_buffer<GaussianProjected>(data.projected_buffer, data.splat_count);
-  auto ranges = init.gpu_allocator.read_buffer<TileRange>(data.tile_ranges_buffer, data.tile_count);
-  if (!instance_count || !projected || !ranges) {
-    std::println(stderr, "[raster debug] failed to read back GPU buffers");
-    ++debug_frames;
-    return;
-  }
+    init.disp.queueWaitIdle(data.graphics_queue);
+    auto instance_count = init.gpu_allocator.read_buffer<u32>(data.instance_count_buffer, 1);
+    auto projected = init.gpu_allocator.read_buffer<GaussianProjected>(data.projected_buffer, data.splat_count);
+    auto ranges = init.gpu_allocator.read_buffer<TileRange>(data.tile_ranges_buffer, data.tile_count);
+    if (!instance_count || !projected || !ranges) {
+      std::println(stderr, "[raster debug] failed to read back GPU buffers");
+      ++debug_frames;
+      return;
+    }
 
-  u32 const live_radii = static_cast<u32>(std::count_if(projected->begin(), projected->end(), [](GaussianProjected const &projected_splat) {
-    return projected_splat.radius >= 1.0F;
-  }));
-  u32 const nonempty_tiles = static_cast<u32>(std::count_if(ranges->begin(), ranges->end(), [](TileRange const &tile_range) {
-    return tile_range.end > tile_range.start;
-  }));
+    u32 const live_radii = static_cast<u32>(std::count_if(projected->begin(),
+      projected->end(),
+      [](GaussianProjected const &projected_splat) { return projected_splat.radius >= 1.0F; }));
+    u32 const nonempty_tiles = static_cast<u32>(std::count_if(
+      ranges->begin(), ranges->end(), [](TileRange const &tile_range) { return tile_range.end > tile_range.start; }));
 
-  std::println(stderr,
-    "[raster debug] instances={} live_radii={}/{} nonempty_tiles={} sort_size={} viewport={}x{}",
-    instance_count->at(0),
-    live_radii,
-    data.splat_count,
-    nonempty_tiles,
-    data.gaussian_sort_size,
-    data.color_width,
-    data.color_height);
-
-  for (auto const &candidate : *projected) {
-    if (candidate.radius < 1.0F) { continue; }
     std::println(stderr,
-      "[raster debug] sample mean=({:.1f},{:.1f}) depth={:.3f} radius={:.1f} conic=({:.4f},{:.4f},{:.4f})",
-      candidate.screen_position.at(0),
-      candidate.screen_position.at(1),
-      candidate.depth,
-      candidate.radius,
-      candidate.conic.at(0),
-      candidate.conic.at(1),
-      candidate.conic.at(2));
+      "[raster debug] instances={} live_radii={}/{} nonempty_tiles={} sort_size={} viewport={}x{}",
+      instance_count->at(0),
+      live_radii,
+      data.splat_count,
+      nonempty_tiles,
+      data.gaussian_sort_size,
+      data.color_width,
+      data.color_height);
 
-    u32 const tile_size = k_tile_size;
-    u32 const tiles_x = (data.color_width + tile_size - 1U) / tile_size;
-    auto const mean_x = static_cast<u32>(candidate.screen_position.at(0));
-    auto const mean_y = static_cast<u32>(candidate.screen_position.at(1));
-    u32 const tile_id = ((mean_y / tile_size) * tiles_x) + (mean_x / tile_size);
-    if (tile_id < ranges->size()) {
-      auto const &tile_range = ranges->at(tile_id);
+    for (auto const &candidate : *projected) {
+      if (candidate.radius < 1.0F) { continue; }
       std::println(stderr,
-        "[raster debug] tile_id={} range=[{}, {}) tiles_x={}",
-        tile_id,
-        tile_range.start,
-        tile_range.end,
-        tiles_x);
-    }
+        "[raster debug] sample mean=({:.1f},{:.1f}) depth={:.3f} radius={:.1f} conic=({:.4f},{:.4f},{:.4f})",
+        candidate.screen_position.at(0),
+        candidate.screen_position.at(1),
+        candidate.depth,
+        candidate.radius,
+        candidate.conic.at(0),
+        candidate.conic.at(1),
+        candidate.conic.at(2));
 
-    auto sorted_values =
-      init.gpu_allocator.read_buffer<u32>(data.sorted_values_buffer, data.gaussian_sort_size);
-    if (sorted_values && tile_id < ranges->size()) {
-      auto const &tile_range = ranges->at(tile_id);
-      if (tile_range.end > tile_range.start && tile_range.start < sorted_values->size()) {
-        u32 const gaussian_id = sorted_values->at(tile_range.start);
-        std::println(stderr, "[raster debug] first gaussian in tile={}", gaussian_id);
+      u32 const tile_size = k_tile_size;
+      u32 const tiles_x = (data.color_width + tile_size - 1U) / tile_size;
+      auto const mean_x = static_cast<u32>(candidate.screen_position.at(0));
+      auto const mean_y = static_cast<u32>(candidate.screen_position.at(1));
+      u32 const tile_id = ((mean_y / tile_size) * tiles_x) + (mean_x / tile_size);
+      if (tile_id < ranges->size()) {
+        auto const &tile_range = ranges->at(tile_id);
+        std::println(stderr,
+          "[raster debug] tile_id={} range=[{}, {}) tiles_x={}",
+          tile_id,
+          tile_range.start,
+          tile_range.end,
+          tiles_x);
       }
+
+      auto sorted_values = init.gpu_allocator.read_buffer<u32>(data.sorted_values_buffer, data.gaussian_sort_size);
+      if (sorted_values && tile_id < ranges->size()) {
+        auto const &tile_range = ranges->at(tile_id);
+        if (tile_range.end > tile_range.start && tile_range.start < sorted_values->size()) {
+          u32 const gaussian_id = sorted_values->at(tile_range.start);
+          std::println(stderr, "[raster debug] first gaussian in tile={}", gaussian_id);
+        }
+      }
+      break;
     }
-    break;
+    ++debug_frames;
   }
-  ++debug_frames;
-}
 
 }// namespace
 
@@ -271,8 +267,8 @@ auto recreate_swapchain(Init &init, RenderData &data) -> int
 
 auto draw_frame(Init &init, RenderData &data, Camera const &camera) -> int
 {
-  auto const aspect_ratio = static_cast<f64>(init.swapchain->extent().width)
-    / static_cast<f64>(init.swapchain->extent().height);
+  auto const aspect_ratio =
+    static_cast<f64>(init.swapchain->extent().width) / static_cast<f64>(init.swapchain->extent().height);
 
   auto *in_flight_fence = data.in_flight_fences.at(data.current_frame).handle();
   init.disp.waitForFences(1, &in_flight_fence, VK_TRUE, UINT64_MAX);
@@ -294,9 +290,8 @@ auto draw_frame(Init &init, RenderData &data, Camera const &camera) -> int
   }
   data.image_in_flight.at(image_index) = in_flight_fence;
 
-  auto recorded = vulkan::with_command(std::ref(init.disp),
-    data.command_buffers.at(image_index).handle(),
-    [&](vkb::DispatchTable &, VkCommandBuffer cmd) {
+  auto recorded = vulkan::with_command(
+    std::ref(init.disp), data.command_buffers.at(image_index).handle(), [&](vkb::DispatchTable &, VkCommandBuffer cmd) {
       record_sphere_draw(init, data, camera, aspect_ratio, cmd, image_index);
     });
   if (!recorded) {
@@ -310,8 +305,8 @@ auto draw_frame(Init &init, RenderData &data, Camera const &camera) -> int
   std::array<VkSemaphore, 1> signal_semaphores = { finished_semaphore };
 
   auto *command_buffer = data.command_buffers.at(image_index).handle();
-  auto const submit_info = initializers::SubmitInfo(
-    wait_semaphores, wait_stages, std::span{ &command_buffer, 1 }, signal_semaphores);
+  auto const submit_info =
+    initializers::SubmitInfo(wait_semaphores, wait_stages, std::span{ &command_buffer, 1 }, signal_semaphores);
 
   init.disp.resetFences(1, &in_flight_fence);
 

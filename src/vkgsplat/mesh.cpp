@@ -11,14 +11,14 @@ namespace vkgsplat {
 
 namespace {
 
-inline constexpr f32 k_min_color_component = 0.05F;
-inline constexpr f32 k_max_color_component = 1.0F;
+  inline constexpr f32 k_min_color_component = 0.05F;
+  inline constexpr f32 k_max_color_component = 1.0F;
 
-[[nodiscard]] auto random_color(std::mt19937 &rng) -> std::array<f32, 3>
-{
-  std::uniform_real_distribution<f32> dist(k_min_color_component, k_max_color_component);
-  return { dist(rng), dist(rng), dist(rng) };
-}
+  [[nodiscard]] auto random_color(std::mt19937 &rng) -> std::array<f32, 3>
+  {
+    std::uniform_real_distribution<f32> dist(k_min_color_component, k_max_color_component);
+    return { dist(rng), dist(rng), dist(rng) };
+  }
 
 }// namespace
 

@@ -12,7 +12,11 @@ function(vkgsplat_setup_dependencies)
     find_package(Vulkan QUIET)
     if(NOT Vulkan_FOUND)
       find_package(PkgConfig REQUIRED)
-      pkg_check_modules(Vulkan REQUIRED IMPORTED_TARGET vulkan)
+      pkg_check_modules(
+        Vulkan
+        REQUIRED
+        IMPORTED_TARGET
+        vulkan)
       add_library(Vulkan::Vulkan ALIAS PkgConfig::Vulkan)
     endif()
   endif()

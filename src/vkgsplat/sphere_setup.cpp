@@ -1,14 +1,14 @@
 #include "sphere_setup.hpp"
 
 #include "app_state.hpp"
+#include "backend/vulkan/descriptor/descriptor_heap.hpp"
 #include "compute/algorithm.hpp"
 #include "compute/op_algo_dispatch.hpp"
 #include "compute/op_tensor_sync_device.hpp"
 #include "compute/sort_entry.hpp"
 #include "compute/tensor.hpp"
-#include "backend/vulkan/descriptor/descriptor_heap.hpp"
-#include <vkgsplat/types.hpp>
 #include "vulkan_context.hpp"
+#include <vkgsplat/types.hpp>
 
 #include <array>
 #include <cstdint>
@@ -50,9 +50,7 @@ auto init_sphere_setup(Init &init, RenderData &data) -> bool
   };
 
   std::string const shader_path = std::string(SHADER_DIRECTORY) + "/init_spheres.comp.spv";
-  if (!data.sphere_setup_algorithm.init(init, shader_path, std::span{ specialization_constants })) {
-    return false;
-  }
+  if (!data.sphere_setup_algorithm.init(init, shader_path, std::span{ specialization_constants })) { return false; }
 
   auto sync_device = std::make_shared<compute::OpTensorSyncDevice>();
   sync_device->add(data.sort_entries);

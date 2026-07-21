@@ -8,8 +8,8 @@
 #include <vector>
 
 #include "backend/vulkan/initializers.hpp"
-#include <vkgsplat/types.hpp>
 #include "vulkan_context.hpp"
+#include <vkgsplat/types.hpp>
 
 #include <vulkan/vulkan_core.h>
 

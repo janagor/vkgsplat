@@ -122,8 +122,6 @@ inline constexpr u32 k_max_tiles = k_max_tile_grid_dim * k_max_tile_grid_dim;
 }
 
 [[nodiscard]] inline auto scales_from_log(std::array<f32, 3> const &log_scale) -> std::array<f32, 3>
-{
-  return { std::exp(log_scale[0]), std::exp(log_scale[1]), std::exp(log_scale[2]) };
-}
+{ return { std::exp(log_scale[0]), std::exp(log_scale[1]), std::exp(log_scale[2]) }; }
 
 }// namespace vkgsplat::gs

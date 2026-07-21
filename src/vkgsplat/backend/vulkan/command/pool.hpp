@@ -25,11 +25,12 @@ public:
   CommandPool(CommandPool &&other) noexcept;
   auto operator=(CommandPool &&other) noexcept -> CommandPool &;
 
-  [[nodiscard]] static auto create(std::reference_wrapper<vkb::DispatchTable> disp, u32 queue_family_index,
+  [[nodiscard]] static auto create(std::reference_wrapper<vkb::DispatchTable> disp,
+    u32 queue_family_index,
     VkCommandPoolCreateFlags flags = 0) -> std::expected<CommandPool, Error>;
 
-  [[nodiscard]] auto allocate_buffers(u32 count,
-    VkCommandBufferLevel level = VK_COMMAND_BUFFER_LEVEL_PRIMARY) const -> std::expected<std::vector<CommandBuffer>, Error>;
+  [[nodiscard]] auto allocate_buffers(u32 count, VkCommandBufferLevel level = VK_COMMAND_BUFFER_LEVEL_PRIMARY) const
+    -> std::expected<std::vector<CommandBuffer>, Error>;
 
   [[nodiscard]] auto handle() const noexcept -> VkCommandPool { return pool_; }
   [[nodiscard]] explicit operator bool() const noexcept { return pool_ != VK_NULL_HANDLE; }

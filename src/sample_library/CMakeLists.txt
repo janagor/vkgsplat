@@ -1,9 +1,6 @@
 include(GenerateExportHeader)
 
-
 add_library(sample_library sample_library.cpp)
-
-
 
 add_library(vkgsplat::sample_library ALIAS sample_library)
 
@@ -12,7 +9,7 @@ target_link_libraries(sample_library PRIVATE vkgsplat_options vkgsplat_warnings)
 target_include_directories(sample_library ${WARNING_GUARD} PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
                                                                   $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>)
 
-if (vkgsplat_BUILD_FUZZ_TESTS)
+if(vkgsplat_BUILD_FUZZ_TESTS)
   target_link_libraries(sample_library PRIVATE -fsanitize=fuzzer-no-link)
   target_compile_options(sample_library PRIVATE -fsanitize=fuzzer-no-link)
 endif()

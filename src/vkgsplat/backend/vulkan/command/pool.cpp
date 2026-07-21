@@ -43,7 +43,8 @@ void CommandPool::cleanup() noexcept
   pool_ = VK_NULL_HANDLE;
 }
 
-auto CommandPool::create(std::reference_wrapper<vkb::DispatchTable> disp, u32 queue_family_index,
+auto CommandPool::create(std::reference_wrapper<vkb::DispatchTable> disp,
+  u32 queue_family_index,
   VkCommandPoolCreateFlags flags) -> std::expected<CommandPool, Error>
 {
   auto const pool_info = initializers::CommandPoolCreateInfo(queue_family_index, flags);

@@ -24,12 +24,12 @@
 #include "backend/vulkan/graphics_pipeline.hpp"
 #include "backend/vulkan/renderer.hpp"
 #include "backend/vulkan/swapchain.hpp"
-#include "io/ply/load_splats.hpp"
-#include "mesh_gpu.hpp"
 #include "gs/bin_gaussians.hpp"
 #include "gs/project_gaussians.hpp"
 #include "gs/rasterize_gaussians.hpp"
 #include "gs/sort_gaussians.hpp"
+#include "io/ply/load_splats.hpp"
+#include "mesh_gpu.hpp"
 #include "sphere_setup.hpp"
 #include "vulkan_context.hpp"
 
@@ -39,16 +39,14 @@ using namespace gs;
 
 namespace {
 
-[[nodiscard]] auto next_power_of_2(u32 value) -> u32
-{
-  if (value <= 1U) { return 1U; }
-  return 1U << static_cast<unsigned>(std::bit_width(static_cast<unsigned>(value - 1U)));
-}
+  [[nodiscard]] auto next_power_of_2(u32 value) -> u32
+  {
+    if (value <= 1U) { return 1U; }
+    return 1U << static_cast<unsigned>(std::bit_width(static_cast<unsigned>(value - 1U)));
+  }
 
-[[nodiscard]] auto make_error(std::string message) -> Error
-{
-  return Error{ std::make_error_code(std::errc::invalid_argument), std::move(message) };
-}
+  [[nodiscard]] auto make_error(std::string message) -> Error
+  { return Error{ std::make_error_code(std::errc::invalid_argument), std::move(message) }; }
 
 }// namespace
 

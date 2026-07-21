@@ -1,6 +1,6 @@
 #include <vkgsplat/sample_library.hpp>
 
-int factorial(int input) noexcept //NOLINT
+int factorial(int input) noexcept// NOLINT
 {
   int result = 1;
 

@@ -32,9 +32,9 @@ auto create_depth_buffer(Init &init, RenderData &data) -> bool
   auto image_info = initializers::ImageCreateInfo();
   image_info.imageType = VK_IMAGE_TYPE_2D;
   image_info.format = data.depth_format;
-  image_info.extent = { .width = init.swapchain->extent().width,
-    .height = init.swapchain->extent().height,
-    .depth = 1 };
+  image_info.extent = {
+    .width = init.swapchain->extent().width, .height = init.swapchain->extent().height, .depth = 1
+  };
   image_info.mipLevels = 1;
   image_info.arrayLayers = 1;
   image_info.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -46,7 +46,12 @@ auto create_depth_buffer(Init &init, RenderData &data) -> bool
   VmaAllocationCreateInfo alloc_info = {};
   alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
 
-  if (vmaCreateImage(init.gpu_allocator.vma_allocator(), &image_info, &alloc_info, &data.depth_image, &data.depth_allocation, nullptr)
+  if (vmaCreateImage(init.gpu_allocator.vma_allocator(),
+        &image_info,
+        &alloc_info,
+        &data.depth_image,
+        &data.depth_allocation,
+        nullptr)
       != VK_SUCCESS) {
     std::println("Failed to create depth image!");
     return false;

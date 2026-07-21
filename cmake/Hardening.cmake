@@ -9,16 +9,32 @@ macro(
   message(STATUS "** Enabling Hardening (Target ${target}) **")
 
   if(MSVC)
-    list(APPEND NEW_COMPILE_OPTIONS /sdl /DYNAMICBASE /guard:cf)
+    list(
+      APPEND
+      NEW_COMPILE_OPTIONS
+      /sdl
+      /DYNAMICBASE
+      /guard:cf)
     message(STATUS "*** MSVC flags: /sdl /DYNAMICBASE /guard:cf /NXCOMPAT /CETCOMPAT")
-    list(APPEND NEW_LINK_OPTIONS /NXCOMPAT /CETCOMPAT)
+    list(
+      APPEND
+      NEW_LINK_OPTIONS
+      /NXCOMPAT
+      /CETCOMPAT)
 
   elseif(CMAKE_CXX_COMPILER_ID MATCHES ".*Clang|GNU")
     list(APPEND NEW_CXX_DEFINITIONS -D_GLIBCXX_ASSERTIONS)
     message(STATUS "*** GLIBC++ Assertions (vector[], string[], ...) enabled")
 
-    if(NOT CMAKE_BUILD_TYPE MATCHES "Debug")
-      list(APPEND NEW_COMPILE_OPTIONS -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3)
+    if(NOT
+       CMAKE_BUILD_TYPE
+       MATCHES
+       "Debug")
+      list(
+        APPEND
+        NEW_COMPILE_OPTIONS
+        -U_FORTIFY_SOURCE
+        -D_FORTIFY_SOURCE=3)
       message(STATUS "*** g++/clang _FORTIFY_SOURCE=3 enabled")
     endif()
 
@@ -65,8 +81,16 @@ macro(
     check_cxx_compiler_flag("-fsanitize=undefined -fno-sanitize-recover=undefined -fsanitize-minimal-runtime"
                             MINIMAL_RUNTIME)
     if(MINIMAL_RUNTIME)
-      list(APPEND NEW_COMPILE_OPTIONS -fsanitize=undefined -fsanitize-minimal-runtime)
-      list(APPEND NEW_LINK_OPTIONS -fsanitize=undefined -fsanitize-minimal-runtime)
+      list(
+        APPEND
+        NEW_COMPILE_OPTIONS
+        -fsanitize=undefined
+        -fsanitize-minimal-runtime)
+      list(
+        APPEND
+        NEW_LINK_OPTIONS
+        -fsanitize=undefined
+        -fsanitize-minimal-runtime)
 
       if(NOT ${global})
         list(APPEND NEW_COMPILE_OPTIONS -fno-sanitize-recover=undefined)

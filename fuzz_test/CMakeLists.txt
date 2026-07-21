@@ -13,7 +13,6 @@ target_link_libraries(
           -fsanitize=fuzzer)
 target_compile_options(fuzz_tester PRIVATE -fsanitize=fuzzer)
 
-
 vkgsplat_configure_linker(fuzz_tester)
 
 # Allow short runs during automated testing to see if something new breaks

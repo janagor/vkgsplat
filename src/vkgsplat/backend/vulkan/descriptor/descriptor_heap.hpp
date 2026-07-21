@@ -11,8 +11,7 @@
 
 namespace vkgsplat {
 
-enum class HeapSlot : size_t
-{
+enum class HeapSlot : size_t {
   Geometry = 0,
   Appearance = 1,
   SortedIndices = 2,

@@ -50,12 +50,9 @@ auto create_sphere_buffers(Init &init,
     data.splat_count = splat_count;
   }
 
-  auto const geometry_buffer_size =
-    static_cast<VkDeviceSize>(data.splat_count * sizeof(GaussianGeometry));
-  auto const appearance_buffer_size =
-    static_cast<VkDeviceSize>(data.splat_count * sizeof(GaussianAppearance));
-  auto const projected_buffer_size =
-    static_cast<VkDeviceSize>(data.splat_count * sizeof(GaussianProjected));
+  auto const geometry_buffer_size = static_cast<VkDeviceSize>(data.splat_count * sizeof(GaussianGeometry));
+  auto const appearance_buffer_size = static_cast<VkDeviceSize>(data.splat_count * sizeof(GaussianAppearance));
+  auto const projected_buffer_size = static_cast<VkDeviceSize>(data.splat_count * sizeof(GaussianProjected));
 
   auto geometry_buffer = init.gpu_allocator.create_storage_buffer(geometry_buffer_size);
   auto appearance_buffer = init.gpu_allocator.create_storage_buffer(appearance_buffer_size);

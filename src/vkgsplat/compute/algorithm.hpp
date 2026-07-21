@@ -22,9 +22,8 @@ namespace compute {
     Algorithm(Algorithm &&other) noexcept;
     Algorithm &operator=(Algorithm &&other) noexcept;
 
-    [[nodiscard]] auto init(Init &init,
-      std::string const &shader_path,
-      std::span<const uint32_t> specialization_constants = {}) -> bool;
+    [[nodiscard]] auto
+      init(Init &init, std::string const &shader_path, std::span<const uint32_t> specialization_constants = {}) -> bool;
 
     void destroy(Init &init);
 

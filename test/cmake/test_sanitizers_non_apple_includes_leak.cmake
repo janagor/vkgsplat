@@ -25,7 +25,7 @@ include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/Sanitizers.cmake")
 vkgsplat_enable_sanitizers(
   test_target
   OFF # ENABLE_SANITIZER_ADDRESS
-  ON  # ENABLE_SANITIZER_LEAK
+  ON # ENABLE_SANITIZER_LEAK
   OFF # ENABLE_SANITIZER_UNDEFINED_BEHAVIOR
   OFF # ENABLE_SANITIZER_THREAD
   OFF # ENABLE_SANITIZER_MEMORY
@@ -37,16 +37,18 @@ get_property(link_options GLOBAL PROPERTY captured_link_options)
 message(STATUS "Captured compile options: ${compile_options}")
 message(STATUS "Captured link options:    ${link_options}")
 
-if(NOT compile_options MATCHES "leak")
-  message(
-    FATAL_ERROR
-    "Leak sanitizer must still be enabled on non-Apple platforms, "
-    "but compile options were: ${compile_options}")
+if(NOT
+   compile_options
+   MATCHES
+   "leak")
+  message(FATAL_ERROR "Leak sanitizer must still be enabled on non-Apple platforms, "
+                      "but compile options were: ${compile_options}")
 endif()
 
-if(NOT link_options MATCHES "leak")
-  message(
-    FATAL_ERROR
-    "Leak sanitizer must still be enabled on non-Apple platforms, "
-    "but link options were: ${link_options}")
+if(NOT
+   link_options
+   MATCHES
+   "leak")
+  message(FATAL_ERROR "Leak sanitizer must still be enabled on non-Apple platforms, "
+                      "but link options were: ${link_options}")
 endif()

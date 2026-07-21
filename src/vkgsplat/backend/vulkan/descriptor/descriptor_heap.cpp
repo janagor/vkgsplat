@@ -9,8 +9,8 @@
 
 #include "app_state.hpp"
 #include "gs/gaussian_splat.hpp"
-#include <vkgsplat/types.hpp>
 #include "vulkan_context.hpp"
+#include <vkgsplat/types.hpp>
 
 #include <vulkan/vulkan_core.h>
 
@@ -77,14 +77,10 @@ auto refresh_descriptor_heap(Init &init, RenderData &data) -> bool
   destroy_descriptor_heap(init, data);
 
   if (data.geometry_buffer.handle == VK_NULL_HANDLE || data.appearance_buffer.handle == VK_NULL_HANDLE
-      || data.projected_buffer.handle == VK_NULL_HANDLE
-      || data.unsorted_keys_buffer.handle == VK_NULL_HANDLE
-      || data.unsorted_values_buffer.handle == VK_NULL_HANDLE
-      || data.sorted_keys_buffer.handle == VK_NULL_HANDLE
-      || data.sorted_values_buffer.handle == VK_NULL_HANDLE
-      || data.tile_ranges_buffer.handle == VK_NULL_HANDLE
-      || data.color_buffer.handle == VK_NULL_HANDLE
-      || data.sorted_indices.buffer().handle == VK_NULL_HANDLE
+      || data.projected_buffer.handle == VK_NULL_HANDLE || data.unsorted_keys_buffer.handle == VK_NULL_HANDLE
+      || data.unsorted_values_buffer.handle == VK_NULL_HANDLE || data.sorted_keys_buffer.handle == VK_NULL_HANDLE
+      || data.sorted_values_buffer.handle == VK_NULL_HANDLE || data.tile_ranges_buffer.handle == VK_NULL_HANDLE
+      || data.color_buffer.handle == VK_NULL_HANDLE || data.sorted_indices.buffer().handle == VK_NULL_HANDLE
       || data.sort_entries.buffer().handle == VK_NULL_HANDLE) {
     return true;
   }
@@ -96,24 +92,16 @@ auto refresh_descriptor_heap(Init &init, RenderData &data) -> bool
   }
 
   auto const descriptor_size = data.descriptor_stride;
-  auto const geometry_buffer_size =
-    static_cast<VkDeviceSize>(data.splat_count * sizeof(GaussianGeometry));
-  auto const appearance_buffer_size =
-    static_cast<VkDeviceSize>(data.splat_count * sizeof(GaussianAppearance));
-  auto const projected_buffer_size =
-    static_cast<VkDeviceSize>(data.splat_count * sizeof(GaussianProjected));
-  auto const unsorted_keys_buffer_size =
-    static_cast<VkDeviceSize>(data.max_bin_instances * sizeof(BinningKey));
-  auto const unsorted_values_buffer_size =
-    static_cast<VkDeviceSize>(data.max_bin_instances * sizeof(u32));
-  auto const sorted_keys_buffer_size =
-    static_cast<VkDeviceSize>(data.gaussian_sort_size * sizeof(BinningKey));
-  auto const sorted_values_buffer_size =
-    static_cast<VkDeviceSize>(data.gaussian_sort_size * sizeof(u32));
-  auto const tile_ranges_buffer_size =
-    static_cast<VkDeviceSize>(data.tile_count * sizeof(TileRange));
-  auto const color_buffer_size = static_cast<VkDeviceSize>(data.color_width)
-    * static_cast<VkDeviceSize>(data.color_height) * 4U * sizeof(f32);
+  auto const geometry_buffer_size = static_cast<VkDeviceSize>(data.splat_count * sizeof(GaussianGeometry));
+  auto const appearance_buffer_size = static_cast<VkDeviceSize>(data.splat_count * sizeof(GaussianAppearance));
+  auto const projected_buffer_size = static_cast<VkDeviceSize>(data.splat_count * sizeof(GaussianProjected));
+  auto const unsorted_keys_buffer_size = static_cast<VkDeviceSize>(data.max_bin_instances * sizeof(BinningKey));
+  auto const unsorted_values_buffer_size = static_cast<VkDeviceSize>(data.max_bin_instances * sizeof(u32));
+  auto const sorted_keys_buffer_size = static_cast<VkDeviceSize>(data.gaussian_sort_size * sizeof(BinningKey));
+  auto const sorted_values_buffer_size = static_cast<VkDeviceSize>(data.gaussian_sort_size * sizeof(u32));
+  auto const tile_ranges_buffer_size = static_cast<VkDeviceSize>(data.tile_count * sizeof(TileRange));
+  auto const color_buffer_size =
+    static_cast<VkDeviceSize>(data.color_width) * static_cast<VkDeviceSize>(data.color_height) * 4U * sizeof(f32);
   auto const sorted_indices_buffer_size = data.sorted_indices.byte_size();
   auto const sort_entries_buffer_size = data.sort_entries.byte_size();
 
@@ -198,8 +186,6 @@ void bind_descriptor_heap(Init const &init, RenderData const &data, VkCommandBuf
 }
 
 auto heap_slot_byte_offset(RenderData const &data, HeapSlot slot) -> uint32_t
-{
-  return static_cast<uint32_t>(static_cast<size_t>(slot) * data.descriptor_stride);
-}
+{ return static_cast<uint32_t>(static_cast<size_t>(slot) * data.descriptor_stride); }
 
 }// namespace vkgsplat

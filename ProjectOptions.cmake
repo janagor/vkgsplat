@@ -2,9 +2,7 @@ include(cmake/LibFuzzer.cmake)
 include(CMakeDependentOption)
 include(CheckCXXCompilerFlag)
 
-
 include(CheckCXXSourceCompiles)
-
 
 macro(vkgsplat_supports_sanitizers)
   # Emscripten doesn't support sanitizers
@@ -35,7 +33,7 @@ macro(vkgsplat_supports_sanitizers)
   if((CMAKE_CXX_COMPILER_ID MATCHES ".*Clang.*" OR CMAKE_CXX_COMPILER_ID MATCHES ".*GNU.*") AND WIN32)
     set(SUPPORTS_ASAN OFF)
   else()
-    if (NOT WIN32)
+    if(NOT WIN32)
       message(STATUS "Sanity checking AddressSanitizer, it should be supported on this platform")
       set(TEST_PROGRAM "int main() { return 0; }")
 
@@ -115,7 +113,10 @@ macro(vkgsplat_setup_options)
   endif()
 
   vkgsplat_check_libfuzzer_support(LIBFUZZER_SUPPORTED)
-  if(LIBFUZZER_SUPPORTED AND (vkgsplat_ENABLE_SANITIZER_ADDRESS OR vkgsplat_ENABLE_SANITIZER_THREAD OR vkgsplat_ENABLE_SANITIZER_UNDEFINED))
+  if(LIBFUZZER_SUPPORTED
+     AND (vkgsplat_ENABLE_SANITIZER_ADDRESS
+          OR vkgsplat_ENABLE_SANITIZER_THREAD
+          OR vkgsplat_ENABLE_SANITIZER_UNDEFINED))
     set(DEFAULT_FUZZER ON)
   else()
     set(DEFAULT_FUZZER OFF)
@@ -135,7 +136,7 @@ macro(vkgsplat_global_options)
 
   if(vkgsplat_ENABLE_HARDENING AND vkgsplat_ENABLE_GLOBAL_HARDENING)
     include(cmake/Hardening.cmake)
-    if(NOT SUPPORTS_UBSAN 
+    if(NOT SUPPORTS_UBSAN
        OR vkgsplat_ENABLE_SANITIZER_UNDEFINED
        OR vkgsplat_ENABLE_SANITIZER_ADDRESS
        OR vkgsplat_ENABLE_SANITIZER_THREAD
@@ -221,7 +222,7 @@ macro(vkgsplat_local_options)
 
   if(vkgsplat_ENABLE_HARDENING AND NOT vkgsplat_ENABLE_GLOBAL_HARDENING)
     include(cmake/Hardening.cmake)
-    if(NOT SUPPORTS_UBSAN 
+    if(NOT SUPPORTS_UBSAN
        OR vkgsplat_ENABLE_SANITIZER_UNDEFINED
        OR vkgsplat_ENABLE_SANITIZER_ADDRESS
        OR vkgsplat_ENABLE_SANITIZER_THREAD

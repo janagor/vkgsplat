@@ -1,7 +1,7 @@
 #include "gs/project_gaussians.hpp"
 
-#include "gs/push_constants.hpp"
 #include "app_state.hpp"
+#include "gs/push_constants.hpp"
 #include "vulkan_context.hpp"
 
 #include <array>

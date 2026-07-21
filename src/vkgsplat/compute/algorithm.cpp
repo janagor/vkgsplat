@@ -21,9 +21,8 @@ Algorithm &Algorithm::operator=(Algorithm &&other) noexcept
   return *this;
 }
 
-auto Algorithm::init(Init &init,
-  std::string const &shader_path,
-  std::span<const uint32_t> specialization_constants) -> bool
+auto Algorithm::init(Init &init, std::string const &shader_path, std::span<const uint32_t> specialization_constants)
+  -> bool
 {
   auto const comp_code = read_file(shader_path);
   VkShaderModule comp_module = create_shader_module(init, comp_code);
