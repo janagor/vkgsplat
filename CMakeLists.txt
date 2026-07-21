@@ -1,14 +1,14 @@
 cmake_minimum_required(VERSION 3.29)
 
 # Disable modules support, this is broken with clang-tidy at the moment
-cmake_policy(SET CMP0155 OLD) 
+cmake_policy(SET CMP0155 OLD)
 
 # This template attempts to be "fetch_content"-able
 # so that it works well with tools like CPM or other
 # manual dependency management
 
 # Only set the cxx_standard if it is not set by someone else
-if (NOT DEFINED CMAKE_CXX_STANDARD)
+if(NOT DEFINED CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 23)
 endif()
 
@@ -28,7 +28,6 @@ project(
 include(cmake/PreventInSourceBuilds.cmake)
 include(cmake/Emscripten.cmake)
 include(ProjectOptions.cmake)
-
 
 vkgsplat_setup_options()
 
@@ -74,6 +73,9 @@ if(NOT PROJECT_IS_TOP_LEVEL)
   return()
 endif()
 
+include(cmake/Format.cmake)
+vkgsplat_enable_formatting()
+
 # Adding the tests:
 include(CTest)
 
@@ -82,10 +84,9 @@ if(BUILD_TESTING)
   add_subdirectory(test)
 endif()
 
-
 if(vkgsplat_BUILD_FUZZ_TESTS)
   message(AUTHOR_WARNING "Building Fuzz Tests, using fuzzing sanitizer https://www.llvm.org/docs/LibFuzzer.html")
-  if (NOT vkgsplat_ENABLE_SANITIZER_ADDRESS AND NOT vkgsplat_ENABLE_SANITIZER_THREAD)
+  if(NOT vkgsplat_ENABLE_SANITIZER_ADDRESS AND NOT vkgsplat_ENABLE_SANITIZER_THREAD)
     message(WARNING "You need asan or tsan enabled for meaningful fuzz testing")
   endif()
   add_subdirectory(fuzz_test)
