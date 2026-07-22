@@ -4,7 +4,6 @@
 #include <string>
 #include <system_error>
 #include <type_traits>
-#include <utility>
 
 namespace vkgsplat {
 
@@ -25,21 +24,20 @@ private:
   std::source_location source_location_;
 };
 
-[[nodiscard]] inline auto make_error(std::error_code code,
+[[nodiscard]] auto make_error(std::error_code code,
   std::string message = "",
-  std::source_location source_location = std::source_location::current()) -> Error
-{ return Error{ code, std::move(message), source_location }; }
+  std::source_location source_location = std::source_location::current()) -> Error;
 
-[[nodiscard]] inline auto make_error(std::errc code,
+[[nodiscard]] auto make_error(std::errc code,
   std::string message = "",
-  std::source_location source_location = std::source_location::current()) -> Error
-{ return make_error(std::make_error_code(code), std::move(message), source_location); }
+  std::source_location source_location = std::source_location::current()) -> Error;
 
 template<class ErrorCodeEnum>
   requires std::is_error_code_enum_v<ErrorCodeEnum>
 [[nodiscard]] auto make_error(ErrorCodeEnum code,
   std::string message = "",
-  std::source_location source_location = std::source_location::current()) -> Error
-{ return make_error(make_error_code(code), std::move(message), source_location); }
+  std::source_location source_location = std::source_location::current()) -> Error;
 
 }// namespace vkgsplat
+
+#include <vkgsplat_utility/error.ipp>// IWYU pragma: export
