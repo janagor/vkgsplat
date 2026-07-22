@@ -157,4 +157,42 @@ function(vkgsplat_setup_dependencies)
       "main")
   endif()
 
+  # Dear ImGui from achaulk/imgui@desc_heap (Vulkan descriptor-heap backend).
+  # Upstream ImGui has no CMakeLists.txt, so fetch sources and build a target.
+  if(NOT TARGET imgui::imgui)
+    cpmaddpackage(
+      NAME
+      imgui
+      GITHUB_REPOSITORY
+      "achaulk/imgui"
+      GIT_TAG
+      "689e4dc5d5ea6238034836015ff33a0d3ac8bcdf"
+      DOWNLOAD_ONLY
+      YES
+      SYSTEM
+      YES)
+
+    add_library(
+      imgui
+      STATIC
+      ${imgui_SOURCE_DIR}/imgui.cpp
+      ${imgui_SOURCE_DIR}/imgui_demo.cpp
+      ${imgui_SOURCE_DIR}/imgui_draw.cpp
+      ${imgui_SOURCE_DIR}/imgui_tables.cpp
+      ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+      ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
+      ${imgui_SOURCE_DIR}/backends/imgui_impl_vulkan.cpp)
+
+    target_include_directories(
+      imgui
+      SYSTEM
+      PUBLIC
+      ${imgui_SOURCE_DIR}
+      ${imgui_SOURCE_DIR}/backends)
+
+    target_link_libraries(imgui PUBLIC glfw::glfw Vulkan::Headers)
+
+    add_library(imgui::imgui ALIAS imgui)
+  endif()
+
 endfunction()
