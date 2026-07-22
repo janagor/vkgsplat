@@ -263,21 +263,8 @@ void dispatch_rasterization(Init const &init,
     &blit,
     VK_FILTER_NEAREST);
 
-  auto present_barrier = initializers::ImageMemoryBarrier(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-    VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-    init.swapchain->images().at(image_index),
-    color_range);
-  present_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-  init.disp.cmdPipelineBarrier(command_buffer,
-    VK_PIPELINE_STAGE_TRANSFER_BIT,
-    VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-    0,
-    0,
-    nullptr,
-    0,
-    nullptr,
-    1,
-    &present_barrier);
+  // Leave the swapchain image in TRANSFER_DST_OPTIMAL so the UI overlay can
+  // transition into a dynamic-rendering color attachment and present afterward.
 }
 
 void destroy_rasterization(Init &init, RenderData &data)

@@ -2,6 +2,7 @@
 
 #include <expected>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <vector>
 
@@ -30,6 +31,8 @@ constexpr int k_max_frames_in_flight = 2;
 
 constexpr u32 k_verts_per_sphere = 6;
 constexpr size_t k_sort_entry_size = sizeof(f32) + sizeof(u32);
+
+struct ImGuiOverlayState;
 
 struct RenderData
 {
@@ -94,6 +97,14 @@ struct RenderData
   std::vector<Fence> in_flight_fences;
   std::vector<VkFence> image_in_flight;
   size_t current_frame = {};
+  std::unique_ptr<ImGuiOverlayState> imgui;
+
+  RenderData();
+  ~RenderData();
+  RenderData(RenderData &&) noexcept;
+  auto operator=(RenderData &&) noexcept -> RenderData &;
+  RenderData(RenderData const &) = delete;
+  auto operator=(RenderData const &) -> RenderData & = delete;
 };
 
 }// namespace vkgsplat

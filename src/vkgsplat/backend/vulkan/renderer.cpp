@@ -18,6 +18,7 @@
 #include "backend/vulkan/depth_buffer.hpp"
 #include "backend/vulkan/descriptor/descriptor_heap.hpp"
 #include "backend/vulkan/graphics_pipeline.hpp"
+#include "backend/vulkan/imgui_overlay.hpp"
 #include "backend/vulkan/initializers.hpp"
 #include "backend/vulkan/vulkan_bootstrap.hpp"
 #include "gs/binning.hpp"
@@ -58,6 +59,7 @@ namespace {
 
     update_gs_frame_state(init, data, { .camera = camera, .image_index = image_index, .aspect_ratio = aspect_ratio });
     eval_gs_pipeline(init, data, command_buffer);
+    record_imgui_overlay(init, data, command_buffer, image_index);
   }
 
 }// namespace
@@ -225,6 +227,7 @@ auto recreate_swapchain(Init &init, RenderData &data) -> std::expected<void, Err
   if (auto command_resources = create_command_resources(init, data); !command_resources) {
     return std::unexpected{ command_resources.error() };
   }
+  recreate_imgui_overlay_pipeline(init, data);
   return {};
 }
 
@@ -298,6 +301,8 @@ void cleanup(Init &init, RenderData &data)
 
   data.command_buffers.clear();
   data.command_pool.reset();
+
+  shutdown_imgui_overlay(init, data);
 
   destroy_depth_buffer(init, data);
   destroy_gs_pipeline(data);

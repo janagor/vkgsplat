@@ -31,7 +31,8 @@ add_library(
   compute/op_fill_buffer.cpp
   compute/op_tensor_sync_device.cpp
   compute/op_tensor_sync_local.cpp
-  backend/vulkan/descriptor/descriptor_heap.cpp)
+  backend/vulkan/descriptor/descriptor_heap.cpp
+  backend/vulkan/imgui_overlay.cpp)
 
 add_library(vkgsplat::vkgsplat ALIAS vkgsplat)
 
@@ -64,6 +65,7 @@ target_link_libraries(
           vk-bootstrap::vk-bootstrap
           GPUOpen::VulkanMemoryAllocator
           magic_enum::magic_enum
+          imgui::imgui
   PUBLIC vkgsplat::vkgsplat_utility vkgsplat::vkgsplat_window glm::glm)
 
 vkgsplat_configure_linker(vkgsplat)

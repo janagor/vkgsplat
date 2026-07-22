@@ -30,6 +30,7 @@
 #include "mesh_gpu.hpp"
 #include "sphere_setup.hpp"
 #include "vulkan_context.hpp"
+#include "backend/vulkan/imgui_overlay.hpp"
 
 namespace vkgsplat {
 
@@ -120,6 +121,9 @@ auto Renderer::create(RendererConfig const &config, Window &window) -> std::expe
   }
   if (auto sync_objects = create_sync_objects(impl->init, impl->render_data); !sync_objects) {
     return std::unexpected(sync_objects.error());
+  }
+  if (auto imgui = init_imgui_overlay(impl->init, impl->render_data); !imgui) {
+    return std::unexpected(imgui.error());
   }
 
   return Renderer{ std::move(impl) };

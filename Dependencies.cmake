@@ -170,7 +170,9 @@ function(vkgsplat_setup_dependencies)
       DOWNLOAD_ONLY
       YES
       SYSTEM
-      YES)
+      YES
+      PATCHES
+      "${CMAKE_SOURCE_DIR}/cmake/patches/imgui-desc-heap-dynamic-rendering.patch")
 
     add_library(
       imgui
@@ -190,7 +192,9 @@ function(vkgsplat_setup_dependencies)
       ${imgui_SOURCE_DIR}
       ${imgui_SOURCE_DIR}/backends)
 
-    target_link_libraries(imgui PUBLIC glfw::glfw Vulkan::Headers)
+    target_compile_definitions(imgui PUBLIC IMGUI_IMPL_VULKAN_NO_PROTOTYPES)
+
+    target_link_libraries(imgui PUBLIC glfw::glfw Vulkan::Headers Vulkan::Vulkan)
 
     add_library(imgui::imgui ALIAS imgui)
   endif()

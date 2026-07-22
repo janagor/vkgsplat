@@ -72,12 +72,17 @@ auto device_initialization(Init &init) -> std::expected<void, Error>
       // NOLINTBEGIN(cppcoreguidelines-pro-type-reinterpret-cast)
       init.write_resource_descriptors = reinterpret_cast<PFN_vkWriteResourceDescriptorsEXT>(
         vkGetDeviceProcAddr(init.device, "vkWriteResourceDescriptorsEXT"));
+      init.write_sampler_descriptors = reinterpret_cast<PFN_vkWriteSamplerDescriptorsEXT>(
+        vkGetDeviceProcAddr(init.device, "vkWriteSamplerDescriptorsEXT"));
       init.cmd_bind_resource_heap =
         reinterpret_cast<PFN_vkCmdBindResourceHeapEXT>(vkGetDeviceProcAddr(init.device, "vkCmdBindResourceHeapEXT"));
+      init.cmd_bind_sampler_heap =
+        reinterpret_cast<PFN_vkCmdBindSamplerHeapEXT>(vkGetDeviceProcAddr(init.device, "vkCmdBindSamplerHeapEXT"));
       init.cmd_push_data = reinterpret_cast<PFN_vkCmdPushDataEXT>(vkGetDeviceProcAddr(init.device, "vkCmdPushDataEXT"));
       // NOLINTEND(cppcoreguidelines-pro-type-reinterpret-cast)
 
-      if (init.write_resource_descriptors == nullptr || init.cmd_bind_resource_heap == nullptr
+      if (init.write_resource_descriptors == nullptr || init.write_sampler_descriptors == nullptr
+          || init.cmd_bind_resource_heap == nullptr || init.cmd_bind_sampler_heap == nullptr
           || init.cmd_push_data == nullptr) {
         return std::unexpected{ Error{ std::make_error_code(std::errc::function_not_supported),
           "VK_EXT_descriptor_heap entry points are unavailable" } };
