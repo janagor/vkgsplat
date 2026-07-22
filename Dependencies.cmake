@@ -147,18 +147,6 @@ function(vkgsplat_setup_dependencies)
       YES)
   endif()
 
-  if(NOT TARGET ftxui::screen)
-    cpmaddpackage(
-      NAME
-      FTXUI
-      VERSION
-      6.1.9
-      GITHUB_REPOSITORY
-      "ArthurSonzogni/FTXUI"
-      SYSTEM
-      YES)
-  endif()
-
   if(NOT TARGET tools::tools)
     cpmaddpackage(
       NAME

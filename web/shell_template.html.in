@@ -86,10 +86,10 @@
 
             <strong>Examples:</strong>
             <ul>
-                <li><code>intro.html?version</code></li>
-                <li><code>intro.html?h</code></li>
-                <li><code>intro.html?file=data.txt</code></li>
-                <li><code>intro.html?verbose&config=settings.json</code></li>
+                <li><code>@TARGET_NAME@.html?version</code></li>
+                <li><code>@TARGET_NAME@.html?h</code></li>
+                <li><code>@TARGET_NAME@.html?file=data.txt</code></li>
+                <li><code>@TARGET_NAME@.html?verbose&config=settings.json</code></li>
             </ul>
         </section>
     </main>
@@ -255,14 +255,11 @@
         Module.postRun.push(function() {
             document.getElementById('loading').classList.add('hidden');
 
-            // Set up resize observer for FTXUI's resize callback
-            if (Module._ftxui_on_resize) {
-                var resizeObserver = new ResizeObserver(function() {
-                    fitAddon.fit();
-                    Module._ftxui_on_resize(term.cols, term.rows);
-                });
-                resizeObserver.observe(document.getElementById('terminal'));
-            }
+            // Fit terminal on resize
+            var resizeObserver = new ResizeObserver(function() {
+                fitAddon.fit();
+            });
+            resizeObserver.observe(document.getElementById('terminal'));
         });
 
         // Consolidated error display helper

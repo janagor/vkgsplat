@@ -80,7 +80,6 @@ vkgsplat_enable_formatting()
 include(CTest)
 
 if(BUILD_TESTING)
-  message(AUTHOR_WARNING "Building Tests. Be sure to check out test/constexpr_tests.cpp for constexpr testing")
   add_subdirectory(test)
 endif()
 
@@ -102,7 +101,7 @@ if(MSVC)
 endif()
 
 # set the startup project for the "play" button in MSVC
-set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT app)
+set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT vkgsplat_app)
 
 if(CMAKE_SKIP_INSTALL_RULES)
   return()
@@ -114,7 +113,7 @@ include(cmake/PackageProject.cmake)
 # we know we want to ship
 vkgsplat_package_project(
   TARGETS
-  intro
+  vkgsplat_app
   vkgsplat_options
   vkgsplat_warnings
   # FIXME: this does not work! CK

@@ -80,7 +80,7 @@ if(EMSCRIPTEN)
       "65536"
       CACHE STRING "Asyncify stack size in bytes (default: 64KB)")
 
-  # For Emscripten WASM builds, FTXUI requires pthreads and native exception handling
+  # For Emscripten WASM builds, enable pthreads and native exception handling
   # Set these flags early so they propagate to all dependencies
   add_compile_options(-pthread -fwasm-exceptions)
   add_link_options(-pthread -fwasm-exceptions)
@@ -127,7 +127,7 @@ function(vkgsplat_configure_wasm_target target)
     target_link_options(
       ${target}
       PRIVATE
-      # Enable pthreads - REQUIRED by FTXUI's WASM implementation
+      # Enable pthreads
       "-sUSE_PTHREADS=1"
       "-sPROXY_TO_PTHREAD=1"
       "-sPTHREAD_POOL_SIZE=${vkgsplat_WASM_PTHREAD_POOL_SIZE}"
