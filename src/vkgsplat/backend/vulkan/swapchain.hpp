@@ -11,8 +11,6 @@
 #include <VkBootstrapDispatch.h>
 #include <vulkan/vulkan_core.h>
 
-struct GLFWwindow;
-
 namespace vkgsplat::vulkan {
 
 class Swapchain
@@ -28,10 +26,10 @@ public:
   auto operator=(Swapchain &&other) noexcept -> Swapchain &;
 
   [[nodiscard]] static auto create(vkb::Device const &device,
-    GLFWwindow *window,
+    Extent2D extent,
     std::reference_wrapper<vkb::DispatchTable> disp) -> std::expected<Swapchain, Error>;
 
-  [[nodiscard]] auto recreate(vkb::Device const &device, GLFWwindow *window) -> std::expected<void, Error>;
+  [[nodiscard]] auto recreate(vkb::Device const &device, Extent2D extent) -> std::expected<void, Error>;
 
   [[nodiscard]] auto handle() const noexcept -> VkSwapchainKHR { return swapchain_.swapchain; }
   [[nodiscard]] auto format() const noexcept -> VkFormat { return swapchain_.image_format; }

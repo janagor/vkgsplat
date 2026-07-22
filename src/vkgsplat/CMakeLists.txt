@@ -5,7 +5,6 @@ add_library(
   error.cpp
   renderer.cpp
   mesh_gpu.cpp
-  window.cpp
   backend/vulkan/device.cpp
   shader.cpp
   io/ply/miniply.cpp
@@ -60,13 +59,12 @@ target_link_libraries(
   vkgsplat
   PRIVATE vkgsplat::vkgsplat_options
           vkgsplat::vkgsplat_warnings
-          glfw::glfw
           Vulkan::Headers
           Vulkan::Vulkan
           vk-bootstrap::vk-bootstrap
           GPUOpen::VulkanMemoryAllocator
           magic_enum::magic_enum
-  PUBLIC vkgsplat::vkgsplat_utility glm::glm)
+  PUBLIC vkgsplat::vkgsplat_utility vkgsplat::vkgsplat_window glm::glm)
 
 vkgsplat_configure_linker(vkgsplat)
 

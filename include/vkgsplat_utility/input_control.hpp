@@ -18,14 +18,12 @@ enum class ViewMovement : u8 {
 };
 
 template<class T>
-concept KeyboardControllable = requires(T &target, ViewMovement direction, f64 delta_time) {
-  target.process_keyboard(direction, delta_time);
-};
+concept KeyboardControllable =
+  requires(T &target, ViewMovement direction, f64 delta_time) { target.process_keyboard(direction, delta_time); };
 
 template<class T>
-concept MouseLookControllable = requires(T &target, f64 x_offset, f64 y_offset) {
-  target.process_mouse_movement(x_offset, y_offset);
-};
+concept MouseLookControllable =
+  requires(T &target, f64 x_offset, f64 y_offset) { target.process_mouse_movement(x_offset, y_offset); };
 
 template<class T>
 concept ScrollZoomable = requires(T &target, f64 y_offset) { target.process_mouse_scroll(y_offset); };

@@ -5,8 +5,8 @@
 
 #include "backend/vulkan/vulkan_bootstrap.hpp"
 #include "vulkan_context.hpp"
-#include "window.hpp"
 #include <vkgsplat_utility/error.hpp>
+#include <vkgsplat_window/window.hpp>
 
 #include <vulkan/vulkan_core.h>
 
@@ -16,7 +16,9 @@ namespace vkgsplat {
 
 auto device_initialization(Init &init) -> std::expected<void, Error>
 {
-  init.window = create_window_glfw("Vulkan Triangle", true);
+  if (init.window == nullptr) {
+    return std::unexpected{ Error{ std::make_error_code(std::errc::invalid_argument), "Window is required" } };
+  }
 
   VkPhysicalDeviceDescriptorHeapFeaturesEXT descriptor_heap_features{};
   descriptor_heap_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_FEATURES_EXT;
@@ -38,11 +40,13 @@ auto device_initialization(Init &init) -> std::expected<void, Error>
   vkb::InstanceBuilder instance_builder;
   return VKBResultToExpected(
     instance_builder.use_default_debug_messenger().request_validation_layers().require_api_version(1, 4, 0).build())
-    .and_then([&](vkb::Instance const &instance) {
+    .and_then([&](vkb::Instance const &instance) -> std::expected<vkb::PhysicalDevice, Error> {
       init.instance = instance;
       init.inst_disp = init.instance.make_table();
 
-      init.surface = create_surface_glfw(init.instance, init.window);
+      auto surface = init.window->create_surface(init.instance);
+      if (!surface) { return std::unexpected{ surface.error() }; }
+      init.surface = *surface;
 
       vkb::PhysicalDeviceSelector phys_device_selector(init.instance);
 

@@ -1,5 +1,6 @@
 #include <vkgsplat_input_handler/input_handler.hpp>
 #include <vkgsplat_utility/types.hpp>
+#include <vkgsplat_window/window.hpp>
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -15,7 +16,7 @@ void InputHandler::scroll_callback(GLFWwindow *window, f64 /*x_offset*/, f64 y_o
   handler->scroll_y_ += y_offset;
 }
 
-InputHandler::InputHandler(GLFWwindow *window) : window_(window)
+InputHandler::InputHandler(Window &window) : window_(static_cast<GLFWwindow *>(window.native_handle()))
 {
   if (window_ == nullptr) { return; }
 

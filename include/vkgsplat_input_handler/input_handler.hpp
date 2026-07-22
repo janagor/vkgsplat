@@ -2,6 +2,7 @@
 
 #include <vkgsplat_utility/input_control.hpp>
 #include <vkgsplat_utility/types.hpp>
+#include <vkgsplat_window/window.hpp>
 
 struct GLFWwindow;
 
@@ -10,7 +11,7 @@ namespace vkgsplat {
 class InputHandler
 {
 public:
-  explicit InputHandler(GLFWwindow *window);
+  explicit InputHandler(Window &window);
   ~InputHandler();
 
   InputHandler(InputHandler const &) = delete;

@@ -57,4 +57,10 @@ static constexpr IntType kI64Max = INT64_MAX;
 
 template<class IntType> static constexpr IntType kZero = 0;
 
+struct Extent2D
+{
+  u32 width = 0;
+  u32 height = 0;
+};
+
 }// namespace vkgsplat

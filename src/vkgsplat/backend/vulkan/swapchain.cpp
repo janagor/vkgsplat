@@ -5,9 +5,6 @@
 #include <utility>
 #include <vector>
 
-#define GLFW_INCLUDE_NONE
-#include <GLFW/glfw3.h>
-
 #include "backend/vulkan/vulkan_bootstrap.hpp"
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
@@ -20,15 +17,11 @@ namespace vkgsplat::vulkan {
 
 namespace {
 
-  auto build_swapchain(vkb::Device const &device, GLFWwindow *window, vkb::Swapchain const &old_swapchain = {})
+  auto build_swapchain(vkb::Device const &device, Extent2D extent, vkb::Swapchain const &old_swapchain = {})
     -> std::expected<vkb::Swapchain, Error>
   {
-    int width = 0;
-    int height = 0;
-    glfwGetFramebufferSize(window, &width, &height);
-
     vkb::SwapchainBuilder swapchain_builder{ device };
-    return VKBResultToExpected(swapchain_builder.set_desired_extent(static_cast<u32>(width), static_cast<u32>(height))
+    return VKBResultToExpected(swapchain_builder.set_desired_extent(extent.width, extent.height)
         .set_image_usage_flags(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT)
         .set_old_swapchain(old_swapchain)
         .build());
@@ -84,10 +77,10 @@ auto Swapchain::init_images_and_views() -> std::expected<void, Error>
   return {};
 }
 
-auto Swapchain::create(vkb::Device const &device, GLFWwindow *window, std::reference_wrapper<vkb::DispatchTable> disp)
+auto Swapchain::create(vkb::Device const &device, Extent2D extent, std::reference_wrapper<vkb::DispatchTable> disp)
   -> std::expected<Swapchain, Error>
 {
-  auto vkb_swapchain = build_swapchain(device, window);
+  auto vkb_swapchain = build_swapchain(device, extent);
   if (!vkb_swapchain) { return std::unexpected(vkb_swapchain.error()); }
 
   Swapchain swapchain(*vkb_swapchain, disp);
@@ -97,10 +90,10 @@ auto Swapchain::create(vkb::Device const &device, GLFWwindow *window, std::refer
   return swapchain;
 }
 
-auto Swapchain::recreate(vkb::Device const &device, GLFWwindow *window) -> std::expected<void, Error>
+auto Swapchain::recreate(vkb::Device const &device, Extent2D extent) -> std::expected<void, Error>
 {
   vkb::Swapchain const old_swapchain = swapchain_;
-  auto vkb_swapchain = build_swapchain(device, window, old_swapchain);
+  auto vkb_swapchain = build_swapchain(device, extent, old_swapchain);
   if (!vkb_swapchain) { return std::unexpected(vkb_swapchain.error()); }
 
   cleanup();

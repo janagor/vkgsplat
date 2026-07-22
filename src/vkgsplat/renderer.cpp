@@ -10,12 +10,10 @@
 #include <system_error>
 #include <utility>
 
-#define GLFW_INCLUDE_NONE
-#include <GLFW/glfw3.h>
-
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
+#include <vkgsplat_window/window.hpp>
 
 #include "app_state.hpp"
 #include "backend/vulkan/depth_buffer.hpp"
@@ -65,9 +63,10 @@ Renderer::~Renderer()
   cleanup(impl_->init, impl_->render_data);
 }
 
-auto Renderer::create(RendererConfig const &config) -> std::expected<Renderer, Error>
+auto Renderer::create(RendererConfig const &config, Window &window) -> std::expected<Renderer, Error>
 {
   auto impl = std::make_unique<Impl>();
+  impl->init.window = &window;
   impl->render_data.procedural = config.source == SplatSource::Procedural;
 
   std::optional<SplatCpuData> splats{};
@@ -90,7 +89,7 @@ auto Renderer::create(RendererConfig const &config) -> std::expected<Renderer, E
   }
   impl->init.gpu_allocator = std::move(*gpu_allocator);
 
-  auto swapchain = vulkan::Swapchain::create(impl->init.device, impl->init.window, std::ref(impl->init.disp));
+  auto swapchain = vulkan::Swapchain::create(impl->init.device, window.framebuffer_extent(), std::ref(impl->init.disp));
   if (!swapchain) { return std::unexpected(make_error(std::errc::invalid_argument, "Failed to create swapchain")); }
   impl->init.swapchain = std::make_unique<vulkan::Swapchain>(std::move(*swapchain));
 
@@ -138,16 +137,6 @@ auto Renderer::create(RendererConfig const &config) -> std::expected<Renderer, E
 
   return Renderer{ std::move(impl) };
 }
-
-void Renderer::poll_events() const
-{
-  (void)impl_;
-  glfwPollEvents();
-}
-
-auto Renderer::should_close() const -> bool { return glfwWindowShouldClose(impl_->init.window) != 0; }
-
-auto Renderer::native_window() const -> GLFWwindow * { return impl_->init.window; }
 
 auto Renderer::draw(Camera const &camera) -> std::expected<void, Error>
 {

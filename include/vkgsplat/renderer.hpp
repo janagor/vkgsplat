@@ -9,9 +9,9 @@
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
 
-struct GLFWwindow;
-
 namespace vkgsplat {
+
+class Window;
 
 enum class SplatSource : u8 {
   Procedural,
@@ -28,7 +28,7 @@ struct RendererConfig
 class VKGSPLAT_EXPORT Renderer
 {
 public:
-  [[nodiscard]] static auto create(RendererConfig const &config) -> std::expected<Renderer, Error>;
+  [[nodiscard]] static auto create(RendererConfig const &config, Window &window) -> std::expected<Renderer, Error>;
 
   Renderer(Renderer &&) noexcept;
   auto operator=(Renderer &&) noexcept -> Renderer &;
@@ -37,9 +37,6 @@ public:
   Renderer(Renderer const &) = delete;
   auto operator=(Renderer const &) -> Renderer & = delete;
 
-  void poll_events() const;
-  [[nodiscard]] auto should_close() const -> bool;
-  [[nodiscard]] auto native_window() const -> GLFWwindow *;
   [[nodiscard]] auto draw(Camera const &camera) -> std::expected<void, Error>;
   void wait_idle() const;
 

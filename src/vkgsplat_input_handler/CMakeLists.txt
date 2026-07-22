@@ -7,7 +7,7 @@ add_library(vkgsplat::vkgsplat_input_handler ALIAS vkgsplat_input_handler)
 target_link_libraries(
   vkgsplat_input_handler
   PRIVATE vkgsplat::vkgsplat_options vkgsplat::vkgsplat_warnings
-  PUBLIC vkgsplat::vkgsplat_utility glfw::glfw)
+  PUBLIC vkgsplat::vkgsplat_utility vkgsplat::vkgsplat_window glfw::glfw)
 
 target_compile_features(vkgsplat_input_handler PUBLIC cxx_std_${CMAKE_CXX_STANDARD})
 

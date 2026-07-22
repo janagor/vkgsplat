@@ -1,11 +1,7 @@
 #pragma once
 
-
 #include <memory>
 #include <vulkan/vulkan_core.h>
-
-#define GLFW_INCLUDE_NONE
-#include <GLFW/glfw3.h>
 
 #include <VkBootstrap.h>
 #include <VkBootstrapDispatch.h>
@@ -15,9 +11,11 @@
 
 namespace vkgsplat {
 
+class Window;
+
 struct Init
 {
-  GLFWwindow *window{};
+  Window *window{};
   vkb::Instance instance{};
   vkb::InstanceDispatchTable inst_disp;
   VkSurfaceKHR surface{};
@@ -29,6 +27,5 @@ struct Init
   PFN_vkCmdBindResourceHeapEXT cmd_bind_resource_heap{};
   PFN_vkCmdPushDataEXT cmd_push_data{};
 };
-
 
 }// namespace vkgsplat
