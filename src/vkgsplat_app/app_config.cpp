@@ -1,6 +1,5 @@
 #include "app_config.hpp"
 
-#include <vkgsplat/renderer.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
 
@@ -56,13 +55,11 @@ namespace {
   void print_usage(std::string_view program_name)
   {
     std::println(stderr, "Usage:");
-    std::println(stderr, "  {} [--procedural <count>]", program_name);
-    std::println(stderr, "  {} --ply <count> [ply_path]", program_name);
-    std::println(stderr, "  {} <count> [ply_path]", program_name);
+    std::println(stderr, "  {} [--ply] <count> [ply_path]", program_name);
     std::println(stderr, "");
-    std::println(stderr, "  --procedural  generate random spheres (default: 64)");
-    std::println(stderr, "  --ply         load first N splats from a PLY file");
-    std::println(stderr, "  <count>       shorthand for --ply <count>");
+    std::println(stderr, "  --ply         load first N splats from a PLY file (default)");
+    std::println(stderr, "  <count>       number of splats to load (default: 64)");
+    std::println(stderr, "  [ply_path]    path to PLY file (default: resources/scene.ply)");
   }
 
   [[nodiscard]] auto bounded_arg(std::span<char *const> args, size_t index) -> char *
@@ -86,23 +83,9 @@ namespace {
     return count;
   }
 
-  [[nodiscard]] auto parse_procedural(std::span<char *const> args, size_t &index, AppConfig &config)
-    -> std::expected<void, vkgsplat::Error>
-  {
-    config.source = vkgsplat::SplatSource::Procedural;
-    ++index;
-
-    auto const count = require_count(args, index);
-    if (!count) { return std::unexpected{ count.error() }; }
-
-    config.splat_count = *count;
-    return {};
-  }
-
   [[nodiscard]] auto parse_ply(std::span<char *const> args, size_t &index, AppConfig &config)
     -> std::expected<void, vkgsplat::Error>
   {
-    config.source = vkgsplat::SplatSource::Ply;
     ++index;
 
     auto const count = require_count(args, index);
@@ -127,7 +110,6 @@ namespace {
       return std::unexpected{ count.error() };
     }
 
-    config.source = vkgsplat::SplatSource::Ply;
     config.splat_count = *count;
     ++index;
 
@@ -156,11 +138,6 @@ auto parse_app_config(std::span<char *const> args) -> std::expected<AppConfig, v
   size_t index = 1;
   while (index < args.size()) {
     std::string_view const arg{ bounded_arg(args, index) };
-
-    if (arg == "--procedural" || arg == "--random") {
-      if (auto parsed = parse_procedural(args, index, config); !parsed) { return std::unexpected{ parsed.error() }; }
-      continue;
-    }
 
     if (arg == "--ply") {
       if (auto parsed = parse_ply(args, index, config); !parsed) { return std::unexpected{ parsed.error() }; }

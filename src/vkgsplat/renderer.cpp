@@ -4,7 +4,6 @@
 #include <expected>
 #include <functional>
 #include <memory>
-#include <optional>
 #include <print>
 #include <string>
 #include <system_error>
@@ -67,17 +66,11 @@ auto Renderer::create(RendererConfig const &config, Window &window) -> std::expe
 {
   auto impl = std::make_unique<Impl>();
   impl->init.window = &window;
-  impl->render_data.procedural = config.source == SplatSource::Procedural;
 
-  std::optional<SplatCpuData> splats{};
-  if (!impl->render_data.procedural) {
-    auto loaded = load_splats_from_ply(config.ply_path, config.splat_count);
-    if (!loaded) { return std::unexpected(loaded.error()); }
-    splats = std::move(*loaded);
-    std::println("Loaded {} splats from {}", splats->geometries.size(), config.ply_path);
-  } else {
-    std::println("Using procedural mode with {} spheres", config.splat_count);
-  }
+  auto loaded = load_splats_from_ply(config.ply_path, config.splat_count);
+  if (!loaded) { return std::unexpected(loaded.error()); }
+  SplatCpuData const splats = std::move(*loaded);
+  std::println("Loaded {} splats from {}", splats.geometries.size(), config.ply_path);
 
   auto const init_result = device_initialization(impl->init);
   if (!init_result.has_value()) { return std::unexpected(init_result.error()); }
@@ -95,14 +88,8 @@ auto Renderer::create(RendererConfig const &config, Window &window) -> std::expe
 
   if (auto queues = get_queues(impl->init, impl->render_data); !queues) { return std::unexpected(queues.error()); }
 
-  if (impl->render_data.procedural) {
-    if (!create_sphere_buffers(impl->init, impl->render_data, config.splat_count)) {
-      return std::unexpected(make_error(std::errc::invalid_argument, "Failed to create procedural sphere buffers"));
-    }
-  } else {
-    if (!create_sphere_buffers(impl->init, impl->render_data, config.splat_count, std::cref(*splats))) {
-      return std::unexpected(make_error(std::errc::invalid_argument, "Failed to create PLY sphere buffers"));
-    }
+  if (!create_sphere_buffers(impl->init, impl->render_data, splats)) {
+    return std::unexpected(make_error(std::errc::invalid_argument, "Failed to create PLY sphere buffers"));
   }
 
   impl->render_data.sort_size = next_power_of_2(impl->render_data.splat_count);

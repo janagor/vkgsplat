@@ -13,14 +13,8 @@ namespace vkgsplat {
 
 class Window;
 
-enum class SplatSource : u8 {
-  Procedural,
-  Ply,
-};
-
 struct RendererConfig
 {
-  SplatSource source = SplatSource::Procedural;
   u32 splat_count = 64;
   std::string ply_path;
 };

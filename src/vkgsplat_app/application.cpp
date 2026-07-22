@@ -31,7 +31,6 @@ auto run(std::span<char *const> args) noexcept -> int
     }
 
     vkgsplat::RendererConfig const renderer_config{
-      .source = config->source,
       .splat_count = config->splat_count,
       .ply_path = config->ply_path,
     };

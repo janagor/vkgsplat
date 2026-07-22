@@ -43,10 +43,9 @@ auto init_sphere_setup(Init &init, RenderData &data) -> bool
 
   if (!query_descriptor_heap_layout(init, data)) { return false; }
 
-  std::array<uint32_t, 3> const specialization_constants{
+  std::array<uint32_t, 2> const specialization_constants{
     data.splat_count,
     data.sort_size,
-    data.procedural ? 1U : 0U,
   };
 
   std::string const shader_path = std::string(SHADER_DIRECTORY) + "/init_spheres.comp.spv";

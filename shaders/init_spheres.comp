@@ -45,21 +45,8 @@ layout(descriptor_heap, std430) buffer SortBuffer {
 
 layout(constant_id = 0) const uint SPHERE_COUNT = 1u;
 layout(constant_id = 1) const uint SORT_SIZE = 1u;
-layout(constant_id = 2) const uint PROCEDURAL = 0u;
 
 const float SH_C0 = 0.28209479177387814;
-
-uint hash_u32(uint x)
-{
-	x ^= x >> 16u;
-	x *= 0x7feb352du;
-	x ^= x >> 15u;
-	x *= 0x846ca68bu;
-	x ^= x >> 16u;
-	return x;
-}
-
-float hash_f01(uint x) { return float(hash_u32(x)) / 4294967295.0; }
 
 float sigmoid(float x)
 {
@@ -83,34 +70,6 @@ void main()
 	if (id < SPHERE_COUNT) {
 		uint geom_base = id * GEOMETRY_STRIDE;
 		uint app_base = id * APPEARANCE_STRIDE;
-
-		if (PROCEDURAL != 0u) {
-			geometry_buffers[HEAP_GEOMETRY].data[geom_base + GEOM_POS] =
-				mix(-4.0, 4.0, float(id) / float(max(SPHERE_COUNT, 2u) - 1u));
-			geometry_buffers[HEAP_GEOMETRY].data[geom_base + GEOM_POS + 1u] =
-				mix(-1.5, 1.5, hash_f01(id * 48271u + 3u));
-			geometry_buffers[HEAP_GEOMETRY].data[geom_base + GEOM_POS + 2u] =
-				mix(-2.0, 2.0, hash_f01(id * 69621u + 11u));
-			geometry_buffers[HEAP_GEOMETRY].data[geom_base + GEOM_SCALE] = log(0.22);
-			geometry_buffers[HEAP_GEOMETRY].data[geom_base + GEOM_SCALE + 1u] = log(0.22);
-			geometry_buffers[HEAP_GEOMETRY].data[geom_base + GEOM_SCALE + 2u] = log(0.22);
-			geometry_buffers[HEAP_GEOMETRY].data[geom_base + GEOM_ROT] = 1.0;
-			geometry_buffers[HEAP_GEOMETRY].data[geom_base + GEOM_ROT + 1u] = 0.0;
-			geometry_buffers[HEAP_GEOMETRY].data[geom_base + GEOM_ROT + 2u] = 0.0;
-			geometry_buffers[HEAP_GEOMETRY].data[geom_base + GEOM_ROT + 3u] = 0.0;
-			geometry_buffers[HEAP_GEOMETRY].data[geom_base + GEOM_OPACITY] = 10.0;
-
-			vec3 rgb = vec3(
-				mix(0.05, 1.0, hash_f01(id * 1664525u + 1013904223u)),
-				mix(0.05, 1.0, hash_f01(id * 22695477u + 1u)),
-				mix(0.05, 1.0, hash_f01(id * 1103515245u + 12345u)));
-			appearance_buffers[HEAP_APPEARANCE].data[app_base + APP_F_DC] = (rgb.r - 0.5) / SH_C0;
-			appearance_buffers[HEAP_APPEARANCE].data[app_base + APP_F_DC + 1u] = (rgb.g - 0.5) / SH_C0;
-			appearance_buffers[HEAP_APPEARANCE].data[app_base + APP_F_DC + 2u] = (rgb.b - 0.5) / SH_C0;
-			for (uint i = 0u; i < APP_F_REST_COUNT; ++i) {
-				appearance_buffers[HEAP_APPEARANCE].data[app_base + APP_F_REST + i] = 0.0;
-			}
-		}
 
 		vec3 f_dc = vec3(
 			appearance_buffers[HEAP_APPEARANCE].data[app_base + APP_F_DC],

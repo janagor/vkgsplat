@@ -1,7 +1,5 @@
 #include "mesh_gpu.hpp"
 
-#include <functional>
-#include <optional>
 #include <print>
 #include <span>
 #include <vector>
@@ -28,27 +26,15 @@ void destroy_sphere_buffers(Init &init, RenderData &data)
   data.projected_buffer = {};
 }
 
-auto create_sphere_buffers(Init &init,
-  RenderData &data,
-  u32 splat_count,
-  std::optional<std::reference_wrapper<SplatCpuData const>> cpu_data) -> bool
+auto create_sphere_buffers(Init &init, RenderData &data, SplatCpuData const &cpu_data) -> bool
 {
   destroy_sphere_buffers(init, data);
 
-  if (cpu_data) {
-    auto const &splats = cpu_data->get();
-    if (splats.geometries.size() != splats.appearances.size() || splats.geometries.empty()) {
-      std::println("Invalid splat CPU data!");
-      return false;
-    }
-    data.splat_count = static_cast<u32>(splats.geometries.size());
-  } else {
-    if (splat_count == 0) {
-      std::println("Splat count must be greater than zero!");
-      return false;
-    }
-    data.splat_count = splat_count;
+  if (cpu_data.geometries.size() != cpu_data.appearances.size() || cpu_data.geometries.empty()) {
+    std::println("Invalid splat CPU data!");
+    return false;
   }
+  data.splat_count = static_cast<u32>(cpu_data.geometries.size());
 
   auto const geometry_buffer_size = static_cast<VkDeviceSize>(data.splat_count * sizeof(GaussianGeometry));
   auto const appearance_buffer_size = static_cast<VkDeviceSize>(data.splat_count * sizeof(GaussianAppearance));
@@ -72,28 +58,13 @@ auto create_sphere_buffers(Init &init,
     return false;
   }
 
-  if (cpu_data) {
-    auto const &splats = cpu_data->get();
-    if (!init.gpu_allocator.write_buffer(*geometry_buffer, std::span{ splats.geometries })) {
-      std::println("Failed to upload splat geometry!");
-      return false;
-    }
-
-    if (!init.gpu_allocator.write_buffer(*appearance_buffer, std::span{ splats.appearances })) {
-      std::println("Failed to upload splat appearance!");
-      return false;
-    }
-    return true;
-  }
-
-  std::vector<GaussianGeometry> const zero_geometry(data.splat_count);
-  std::vector<GaussianAppearance> const zero_appearance(data.splat_count);
-  if (!init.gpu_allocator.write_buffer(*geometry_buffer, std::span{ zero_geometry })) {
-    std::println("Failed to zero-initialize geometry buffer!");
+  if (!init.gpu_allocator.write_buffer(*geometry_buffer, std::span{ cpu_data.geometries })) {
+    std::println("Failed to upload splat geometry!");
     return false;
   }
-  if (!init.gpu_allocator.write_buffer(*appearance_buffer, std::span{ zero_appearance })) {
-    std::println("Failed to zero-initialize appearance buffer!");
+
+  if (!init.gpu_allocator.write_buffer(*appearance_buffer, std::span{ cpu_data.appearances })) {
+    std::println("Failed to upload splat appearance!");
     return false;
   }
 

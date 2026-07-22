@@ -35,7 +35,6 @@ struct RenderData
 {
   u32 splat_count = 0;
   u32 sort_size = 0;
-  bool procedural = true;
   VkQueue graphics_queue{};
   VkQueue present_queue{};
 

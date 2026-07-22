@@ -4,7 +4,6 @@
 #include <span>
 #include <string>
 
-#include <vkgsplat/renderer.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
 
@@ -12,7 +11,6 @@ namespace vkgsplat::app {
 
 struct AppConfig
 {
-  vkgsplat::SplatSource source = vkgsplat::SplatSource::Procedural;
   vkgsplat::u32 splat_count = 64;
   std::string ply_path;
 };

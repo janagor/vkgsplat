@@ -73,7 +73,7 @@ void update_gs_frame_state(Init const &init, RenderData &data, GsFrameParams con
     .viewport = { init.swapchain->extent().width, init.swapchain->extent().height },
     .tile_size = k_tile_size,
     .tiles_x = (init.swapchain->extent().width + k_tile_size - 1U) / k_tile_size,
-    .sh_degree = data.procedural ? 0U : 3U,
+    .sh_degree = 3U,
     .pad0 = 0U,
     .pad1 = 0U,
     .pad2 = 0U,
