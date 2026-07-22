@@ -6,7 +6,7 @@
 #include "gs/rasterization.hpp"
 #include "vulkan_context.hpp"
 
-#include <vkgsplat/types.hpp>
+#include <vkgsplat_utility/types.hpp>
 
 #include <cstddef>
 #include <print>
@@ -139,8 +139,6 @@ void OpIdentifyRanges::record(Init const &init, RenderData const &data, VkComman
 }
 
 void OpRasterization::record(Init const &init, RenderData const &data, VkCommandBuffer command_buffer)
-{
-  dispatch_rasterization(init, data, data.raster_push, command_buffer, data.present_image_index);
-}
+{ dispatch_rasterization(init, data, data.raster_push, command_buffer, data.present_image_index); }
 
 }// namespace vkgsplat::gs

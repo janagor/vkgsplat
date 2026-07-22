@@ -6,7 +6,7 @@
 #include <cstddef>
 #include <type_traits>
 
-#include <vkgsplat/types.hpp>
+#include <vkgsplat_utility/types.hpp>
 
 namespace vkgsplat::gs {
 

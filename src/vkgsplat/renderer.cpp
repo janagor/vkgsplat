@@ -14,8 +14,8 @@
 #include <GLFW/glfw3.h>
 
 #include <vkgsplat/camera.hpp>
-#include <vkgsplat/error.hpp>
-#include <vkgsplat/types.hpp>
+#include <vkgsplat_utility/error.hpp>
+#include <vkgsplat_utility/types.hpp>
 
 #include "app_state.hpp"
 #include "backend/vulkan/depth_buffer.hpp"

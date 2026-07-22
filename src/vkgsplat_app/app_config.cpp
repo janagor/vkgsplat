@@ -1,8 +1,8 @@
 #include "app_config.hpp"
 
-#include <vkgsplat/error.hpp>
 #include <vkgsplat/renderer.hpp>
-#include <vkgsplat/types.hpp>
+#include <vkgsplat_utility/error.hpp>
+#include <vkgsplat_utility/types.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -70,7 +70,8 @@ namespace {
   [[nodiscard]] auto bounded_arg(std::span<char *const> args, size_t index) -> char *
   { return args.subspan(index, 1).front(); }
 
-  [[nodiscard]] auto require_count(std::span<char *const> args, size_t &index) -> std::expected<vkgsplat::u32, vkgsplat::Error>
+  [[nodiscard]] auto require_count(std::span<char *const> args, size_t &index)
+    -> std::expected<vkgsplat::u32, vkgsplat::Error>
   {
     if (index >= args.size()) {
       print_usage(args.front());

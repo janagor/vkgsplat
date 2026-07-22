@@ -10,7 +10,7 @@
 #include "gs/gaussian_splat.hpp"
 #include "io/ply/load_splats.hpp"
 #include "vulkan_context.hpp"
-#include <vkgsplat/types.hpp>
+#include <vkgsplat_utility/types.hpp>
 
 #include <vulkan/vulkan_core.h>
 

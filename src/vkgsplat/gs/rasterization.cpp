@@ -7,7 +7,7 @@
 #include "gs/push_constants.hpp"
 #include "vulkan_context.hpp"
 
-#include <vkgsplat/types.hpp>
+#include <vkgsplat_utility/types.hpp>
 
 #include <array>
 #include <cstddef>

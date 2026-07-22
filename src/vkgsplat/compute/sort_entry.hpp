@@ -1,6 +1,6 @@
 #pragma once
 
-#include <vkgsplat/types.hpp>
+#include <vkgsplat_utility/types.hpp>
 
 namespace vkgsplat::compute {
 

@@ -4,8 +4,8 @@
 #include <functional>
 #include <vector>
 
-#include <vkgsplat/error.hpp>
-#include <vkgsplat/types.hpp>
+#include <vkgsplat_utility/error.hpp>
+#include <vkgsplat_utility/types.hpp>
 
 #include <VkBootstrap.h>
 #include <VkBootstrapDispatch.h>

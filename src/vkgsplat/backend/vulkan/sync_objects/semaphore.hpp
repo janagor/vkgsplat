@@ -3,7 +3,7 @@
 #include <expected>
 #include <functional>
 
-#include <vkgsplat/error.hpp>
+#include <vkgsplat_utility/error.hpp>
 
 #include <VkBootstrapDispatch.h>
 #include <vulkan/vulkan_core.h>

@@ -13,8 +13,7 @@ void Barrier::memory(vkb::DispatchTable const &disp, VkCommandBuffer command_buf
     .srcAccessMask = params.src_access,
     .dstAccessMask = params.dst_access,
   };
-  disp.cmdPipelineBarrier(
-    command_buffer, params.src_stage, params.dst_stage, 0, 1, &barrier, 0, nullptr, 0, nullptr);
+  disp.cmdPipelineBarrier(command_buffer, params.src_stage, params.dst_stage, 0, 1, &barrier, 0, nullptr, 0, nullptr);
 }
 
 void Barrier::transfer_to_compute(vkb::DispatchTable const &disp, VkCommandBuffer command_buffer)

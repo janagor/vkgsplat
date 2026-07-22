@@ -4,7 +4,7 @@
 #include <cstddef>
 #include <vector>
 
-#include <vkgsplat/types.hpp>
+#include <vkgsplat_utility/types.hpp>
 
 namespace vkgsplat {
 

@@ -6,7 +6,7 @@
 #include "backend/vulkan/vulkan_bootstrap.hpp"
 #include "vulkan_context.hpp"
 #include "window.hpp"
-#include <vkgsplat/error.hpp>
+#include <vkgsplat_utility/error.hpp>
 
 #include <vulkan/vulkan_core.h>
 

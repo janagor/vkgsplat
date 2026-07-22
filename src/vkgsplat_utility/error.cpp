@@ -1,4 +1,4 @@
-#include <vkgsplat/error.hpp>
+#include <vkgsplat_utility/error.hpp>
 
 #include <magic_enum/magic_enum.hpp>
 #include <source_location>

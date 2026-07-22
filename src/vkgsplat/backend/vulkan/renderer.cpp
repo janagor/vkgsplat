@@ -33,8 +33,8 @@
 #include "vulkan_context.hpp"
 #include "window.hpp"
 #include <vkgsplat/camera.hpp>
-#include <vkgsplat/error.hpp>
-#include <vkgsplat/types.hpp>
+#include <vkgsplat_utility/error.hpp>
+#include <vkgsplat_utility/types.hpp>
 
 #include <vulkan/vulkan_core.h>
 

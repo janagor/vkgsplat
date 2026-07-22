@@ -4,7 +4,7 @@
 #include <ranges>
 #include <string>
 
-#include <vkgsplat/error.hpp>
+#include <vkgsplat_utility/error.hpp>
 
 #include <VkBootstrap.h>
 

@@ -15,7 +15,7 @@
 #include "compute/sort_entry.hpp"
 #include "compute/tensor.hpp"
 #include "gs/push_constants.hpp"
-#include <vkgsplat/types.hpp>
+#include <vkgsplat_utility/types.hpp>
 
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan_core.h>

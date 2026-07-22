@@ -7,7 +7,7 @@
 #include "vulkan_context.hpp"
 
 #include <vkgsplat/camera.hpp>
-#include <vkgsplat/types.hpp>
+#include <vkgsplat_utility/types.hpp>
 
 #include <memory>
 

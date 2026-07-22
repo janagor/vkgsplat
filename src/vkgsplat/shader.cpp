@@ -9,7 +9,7 @@
 
 #include "backend/vulkan/initializers.hpp"
 #include "vulkan_context.hpp"
-#include <vkgsplat/types.hpp>
+#include <vkgsplat_utility/types.hpp>
 
 #include <vulkan/vulkan_core.h>
 

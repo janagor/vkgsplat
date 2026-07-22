@@ -5,7 +5,7 @@
 
 #include <vulkan/vulkan_core.h>
 
-#include <vkgsplat/types.hpp>
+#include <vkgsplat_utility/types.hpp>
 
 namespace vkgsplat::initializers {
 

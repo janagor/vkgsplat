@@ -8,7 +8,7 @@
 #include "compute/sort_entry.hpp"
 #include "compute/tensor.hpp"
 #include "vulkan_context.hpp"
-#include <vkgsplat/types.hpp>
+#include <vkgsplat_utility/types.hpp>
 
 #include <array>
 #include <cstdint>
