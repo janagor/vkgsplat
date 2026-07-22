@@ -46,9 +46,6 @@ namespace {
     return 1U << static_cast<unsigned>(std::bit_width(static_cast<unsigned>(value - 1U)));
   }
 
-  [[nodiscard]] auto make_error(std::string message) -> Error
-  { return Error{ std::make_error_code(std::errc::invalid_argument), std::move(message) }; }
-
 }// namespace
 
 struct Renderer::Impl
@@ -88,47 +85,49 @@ auto Renderer::create(RendererConfig const &config) -> std::expected<Renderer, E
 
   auto gpu_allocator =
     vulkan::GPUAllocator::create(impl->init.instance, impl->init.device, impl->init.device.physical_device);
-  if (!gpu_allocator) { return std::unexpected(make_error("Failed to create GPU allocator")); }
+  if (!gpu_allocator) {
+    return std::unexpected(make_error(std::errc::invalid_argument, "Failed to create GPU allocator"));
+  }
   impl->init.gpu_allocator = std::move(*gpu_allocator);
 
   auto swapchain = vulkan::Swapchain::create(impl->init.device, impl->init.window, std::ref(impl->init.disp));
-  if (!swapchain) { return std::unexpected(make_error("Failed to create swapchain")); }
+  if (!swapchain) { return std::unexpected(make_error(std::errc::invalid_argument, "Failed to create swapchain")); }
   impl->init.swapchain = std::make_unique<vulkan::Swapchain>(std::move(*swapchain));
 
   if (auto queues = get_queues(impl->init, impl->render_data); !queues) { return std::unexpected(queues.error()); }
 
   if (impl->render_data.procedural) {
     if (!create_sphere_buffers(impl->init, impl->render_data, config.splat_count)) {
-      return std::unexpected(make_error("Failed to create procedural sphere buffers"));
+      return std::unexpected(make_error(std::errc::invalid_argument, "Failed to create procedural sphere buffers"));
     }
   } else {
     if (!create_sphere_buffers(impl->init, impl->render_data, config.splat_count, std::cref(*splats))) {
-      return std::unexpected(make_error("Failed to create PLY sphere buffers"));
+      return std::unexpected(make_error(std::errc::invalid_argument, "Failed to create PLY sphere buffers"));
     }
   }
 
   impl->render_data.sort_size = next_power_of_2(impl->render_data.splat_count);
   if (!init_sphere_setup(impl->init, impl->render_data)) {
-    return std::unexpected(make_error("Failed to initialize sphere setup"));
+    return std::unexpected(make_error(std::errc::invalid_argument, "Failed to initialize sphere setup"));
   }
   if (!init_binning(impl->init, impl->render_data)) {
-    return std::unexpected(make_error("Failed to initialize gaussian binning"));
+    return std::unexpected(make_error(std::errc::invalid_argument, "Failed to initialize gaussian binning"));
   }
   if (!init_projection(impl->init, impl->render_data)) {
-    return std::unexpected(make_error("Failed to initialize gaussian projection"));
+    return std::unexpected(make_error(std::errc::invalid_argument, "Failed to initialize gaussian projection"));
   }
   if (!init_sorting(impl->init, impl->render_data)) {
-    return std::unexpected(make_error("Failed to initialize gaussian sorting"));
+    return std::unexpected(make_error(std::errc::invalid_argument, "Failed to initialize gaussian sorting"));
   }
   if (!init_rasterization(impl->init, impl->render_data)) {
-    return std::unexpected(make_error("Failed to initialize gaussian rasterization"));
+    return std::unexpected(make_error(std::errc::invalid_argument, "Failed to initialize gaussian rasterization"));
   }
   record_gs_pipeline(impl->render_data);
   if (0 != create_graphics_pipeline(impl->init, impl->render_data)) {
-    return std::unexpected(make_error("Failed to create graphics pipeline"));
+    return std::unexpected(make_error(std::errc::invalid_argument, "Failed to create graphics pipeline"));
   }
   if (!create_depth_buffer(impl->init, impl->render_data)) {
-    return std::unexpected(make_error("Failed to create depth buffer"));
+    return std::unexpected(make_error(std::errc::invalid_argument, "Failed to create depth buffer"));
   }
   if (auto command_resources = create_command_resources(impl->init, impl->render_data); !command_resources) {
     return std::unexpected(command_resources.error());

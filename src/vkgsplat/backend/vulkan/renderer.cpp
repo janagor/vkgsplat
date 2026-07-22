@@ -64,9 +64,6 @@ namespace {
 
 namespace {
 
-  [[nodiscard]] auto make_error(std::errc errc_value, std::string message) -> Error
-  { return Error{ std::make_error_code(errc_value), std::move(message) }; }
-
   void debug_log_raster_state(Init &init, RenderData const &data)
   {
     static int debug_frames = 0;

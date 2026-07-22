@@ -4,8 +4,7 @@ add_library(vkgsplat_utility error.cpp)
 
 add_library(vkgsplat::vkgsplat_utility ALIAS vkgsplat_utility)
 
-target_link_libraries(vkgsplat_utility PRIVATE vkgsplat::vkgsplat_options vkgsplat::vkgsplat_warnings
-                                               magic_enum::magic_enum)
+target_link_libraries(vkgsplat_utility PRIVATE vkgsplat::vkgsplat_options vkgsplat::vkgsplat_warnings)
 
 target_compile_features(vkgsplat_utility PUBLIC cxx_std_${CMAKE_CXX_STANDARD})
 

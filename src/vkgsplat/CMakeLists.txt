@@ -2,6 +2,7 @@ include(GenerateExportHeader)
 
 add_library(
   vkgsplat
+  error.cpp
   renderer.cpp
   mesh_gpu.cpp
   window.cpp
@@ -64,6 +65,7 @@ target_link_libraries(
           Vulkan::Vulkan
           vk-bootstrap::vk-bootstrap
           GPUOpen::VulkanMemoryAllocator
+          magic_enum::magic_enum
   PUBLIC vkgsplat::vkgsplat_utility glm::glm)
 
 vkgsplat_configure_linker(vkgsplat)

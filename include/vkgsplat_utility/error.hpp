@@ -3,21 +3,10 @@
 #include <source_location>
 #include <string>
 #include <system_error>
+#include <type_traits>
+#include <utility>
 
 namespace vkgsplat {
-
-enum class ErrorIO {
-  invalid_splat_count,
-  failed_open,
-  missing_vertex_element,
-  empty_vertex_element,
-  missing_property,
-  extract_property_failed,
-  load_element_failed,
-};
-
-[[nodiscard]] auto make_error_code(ErrorIO err) -> std::error_code;
-[[nodiscard]] auto to_string(ErrorIO err) -> char const *;
 
 class Error
 {
@@ -36,14 +25,21 @@ private:
   std::source_location source_location_;
 };
 
-[[nodiscard]] auto make_error(ErrorIO code,
+[[nodiscard]] inline auto make_error(std::error_code code,
   std::string message = "",
-  std::source_location source_location = std::source_location::current()) -> Error;
+  std::source_location source_location = std::source_location::current()) -> Error
+{ return Error{ code, std::move(message), source_location }; }
+
+[[nodiscard]] inline auto make_error(std::errc code,
+  std::string message = "",
+  std::source_location source_location = std::source_location::current()) -> Error
+{ return make_error(std::make_error_code(code), std::move(message), source_location); }
+
+template<class ErrorCodeEnum>
+  requires std::is_error_code_enum_v<ErrorCodeEnum>
+[[nodiscard]] auto make_error(ErrorCodeEnum code,
+  std::string message = "",
+  std::source_location source_location = std::source_location::current()) -> Error
+{ return make_error(make_error_code(code), std::move(message), source_location); }
 
 }// namespace vkgsplat
-
-namespace std {
-template<> struct is_error_code_enum<vkgsplat::ErrorIO> : true_type
-{
-};
-}// namespace std

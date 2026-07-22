@@ -2,6 +2,7 @@
 
 #include "gs/gaussian_splat.hpp"
 #include "io/ply/miniply.hpp"
+#include <vkgsplat/error.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
 

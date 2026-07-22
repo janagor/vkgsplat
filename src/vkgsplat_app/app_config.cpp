@@ -14,7 +14,6 @@
 #include <string>
 #include <string_view>
 #include <system_error>
-#include <utility>
 
 #ifndef VKGSPLAT_SOURCE_DIR
 #define VKGSPLAT_SOURCE_DIR "."
@@ -24,8 +23,7 @@ namespace vkgsplat::app {
 
 namespace {
 
-  [[nodiscard]] auto make_error(std::errc errc_value, std::string message) -> vkgsplat::Error
-  { return vkgsplat::Error{ std::make_error_code(errc_value), std::move(message) }; }
+  using vkgsplat::make_error;
 
   [[nodiscard]] auto default_ply_path() -> std::string
   { return std::string{ VKGSPLAT_SOURCE_DIR } + "/resources/scene.ply"; }
