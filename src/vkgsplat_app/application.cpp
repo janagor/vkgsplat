@@ -6,6 +6,8 @@
 
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat/renderer.hpp>
+#include <vkgsplat_input_handler/input_handler.hpp>
+#include <vkgsplat_utility/input_control.hpp>
 
 #include "app_config.hpp"
 
@@ -33,11 +35,13 @@ auto run(std::span<char *const> args) noexcept -> int
       return -1;
     }
 
-    // NOLINTNEXTLINE(misc-const-correctness) -- updated by input handlers once wired up
     vkgsplat::Camera camera{ vkgsplat::k_default_camera_position };
+    vkgsplat::CloseState close{};
+    vkgsplat::InputHandler input{ renderer->native_window() };
 
-    while (!renderer->should_close()) {
+    while (!renderer->should_close() && !close.close_requested()) {
       renderer->poll_events();
+      input.update(camera, close);
       auto const draw_result = renderer->draw(camera);
       if (!draw_result) {
         std::println(stderr, "failed to draw frame: {}", draw_result.error().message());

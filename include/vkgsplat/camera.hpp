@@ -16,20 +16,12 @@
 #include <glm/gtc/quaternion.hpp>
 #include <glm/trigonometric.hpp>
 
+#include <vkgsplat_utility/input_control.hpp>
 #include <vkgsplat_utility/types.hpp>
 
 namespace vkgsplat {
 
-enum class CameraMovement : u8 {
-  Forward,
-  Backward,
-  Left,
-  Right,
-  Up,
-  Down,
-  RollLeft,
-  RollRight,
-};
+using CameraMovement = ViewMovement;
 
 constexpr f64 k_camera_speed = 2.5;
 constexpr f64 k_camera_sensitivity = 0.1;
@@ -82,24 +74,24 @@ public:
     return proj;
   }
 
-  void process_keyboard(CameraMovement direction, f64 delta_time)
+  void process_keyboard(ViewMovement direction, f64 delta_time)
   {
     auto const velocity = movement_speed_ * delta_time;
 
-    if (direction == CameraMovement::Forward) { position_ += front_ * velocity; }
-    if (direction == CameraMovement::Backward) { position_ -= front_ * velocity; }
-    if (direction == CameraMovement::Left) { position_ -= right_ * velocity; }
-    if (direction == CameraMovement::Right) { position_ += right_ * velocity; }
-    if (direction == CameraMovement::Up) { position_ += up_ * velocity; }
-    if (direction == CameraMovement::Down) { position_ -= up_ * velocity; }
+    if (direction == ViewMovement::Forward) { position_ += front_ * velocity; }
+    if (direction == ViewMovement::Backward) { position_ -= front_ * velocity; }
+    if (direction == ViewMovement::Left) { position_ -= right_ * velocity; }
+    if (direction == ViewMovement::Right) { position_ += right_ * velocity; }
+    if (direction == ViewMovement::Up) { position_ += up_ * velocity; }
+    if (direction == ViewMovement::Down) { position_ -= up_ * velocity; }
 
-    if (direction == CameraMovement::RollLeft) {
+    if (direction == ViewMovement::RollLeft) {
       auto const q_roll = glm::angleAxis(glm::radians(-50.0 * delta_time), front_);
       orientation_ = q_roll * orientation_;
       orientation_ = glm::normalize(orientation_);
       update_camera_vectors();
     }
-    if (direction == CameraMovement::RollRight) {
+    if (direction == ViewMovement::RollRight) {
       auto const q_roll = glm::angleAxis(glm::radians(50.0 * delta_time), front_);
       orientation_ = q_roll * orientation_;
       orientation_ = glm::normalize(orientation_);
@@ -146,5 +138,9 @@ private:
   f64 mouse_sensitivity_{ k_camera_sensitivity };
   f64 zoom_{ k_camera_default_zoom };
 };
+
+static_assert(KeyboardControllable<Camera>);
+static_assert(MouseLookControllable<Camera>);
+static_assert(ScrollZoomable<Camera>);
 
 }// namespace vkgsplat

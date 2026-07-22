@@ -9,6 +9,8 @@
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
 
+struct GLFWwindow;
+
 namespace vkgsplat {
 
 enum class SplatSource : u8 {
@@ -37,6 +39,7 @@ public:
 
   void poll_events() const;
   [[nodiscard]] auto should_close() const -> bool;
+  [[nodiscard]] auto native_window() const -> GLFWwindow *;
   [[nodiscard]] auto draw(Camera const &camera) -> std::expected<void, Error>;
   void wait_idle() const;
 

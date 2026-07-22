@@ -147,6 +147,8 @@ void Renderer::poll_events() const
 
 auto Renderer::should_close() const -> bool { return glfwWindowShouldClose(impl_->init.window) != 0; }
 
+auto Renderer::native_window() const -> GLFWwindow * { return impl_->init.window; }
+
 auto Renderer::draw(Camera const &camera) -> std::expected<void, Error>
 {
   if (auto drawn = draw_frame(impl_->init, impl_->render_data, camera); !drawn) {
