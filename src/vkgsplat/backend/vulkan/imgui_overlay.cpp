@@ -142,11 +142,14 @@ namespace {
       VK_API_VERSION_1_4,
       [](char const *function_name, void *user_data) -> PFN_vkVoidFunction {
         auto *ctx = static_cast<Init *>(user_data);
-        if (PFN_vkVoidFunction const device_fn = vkGetDeviceProcAddr(ctx->device, function_name);
-            device_fn != nullptr) {
-          return device_fn;
+        // Prefer instance lookup first: ImGui's table includes instance-level
+        // entry points, and querying those via vkGetDeviceProcAddr triggers
+        // WARNING-vkGetDeviceProcAddr-device.
+        if (PFN_vkVoidFunction const instance_fn = vkGetInstanceProcAddr(ctx->instance, function_name);
+            instance_fn != nullptr) {
+          return instance_fn;
         }
-        return vkGetInstanceProcAddr(ctx->instance, function_name);
+        return vkGetDeviceProcAddr(ctx->device, function_name);
       },
       &init);
   }

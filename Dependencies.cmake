@@ -164,15 +164,13 @@ function(vkgsplat_setup_dependencies)
       NAME
       imgui
       GITHUB_REPOSITORY
-      "achaulk/imgui"
+      "janagor/imgui"
       GIT_TAG
-      "689e4dc5d5ea6238034836015ff33a0d3ac8bcdf"
+      "9c073b5ff7150d6ed8b2ed5ea8f435fafe6c3893"
       DOWNLOAD_ONLY
       YES
       SYSTEM
-      YES
-      PATCHES
-      "${CMAKE_SOURCE_DIR}/cmake/patches/imgui-desc-heap-dynamic-rendering.patch")
+      YES)
 
     add_library(
       imgui
