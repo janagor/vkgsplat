@@ -295,6 +295,8 @@ auto draw_frame(Init &init, RenderData &data, Camera const &camera) -> std::expe
 
 void cleanup(Init &init, RenderData &data)
 {
+  init.disp.deviceWaitIdle();
+
   data.available_semaphores.clear();
   data.finished_semaphore.clear();
   data.in_flight_fences.clear();
@@ -317,6 +319,9 @@ void cleanup(Init &init, RenderData &data)
   destroy_graphics_pipeline(init, data);
 
   init.swapchain.reset();
+
+  // VMA keeps VkDeviceMemory blocks until the allocator is destroyed.
+  init.gpu_allocator = vulkan::GPUAllocator{};
 
   vkb::destroy_device(init.device);
   vkb::destroy_surface(init.instance, init.surface);
