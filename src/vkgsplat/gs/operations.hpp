@@ -22,7 +22,7 @@ public:
   void record(Init const &init, RenderData const &data, VkCommandBuffer command_buffer) override;
 };
 
-class OpBitonicSort : public compute::Operation
+class OpRadixSort : public compute::Operation
 {
 public:
   void record(Init const &init, RenderData const &data, VkCommandBuffer command_buffer) override;

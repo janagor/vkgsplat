@@ -41,16 +41,20 @@ struct SortPushConstants
 
 static_assert(sizeof(SortPushConstants) == 16);
 
-// One bitonic compare-exchange stage (host loops over all (k, j) phases).
-struct BitonicPushConstants
+// Multi-pass radix sort (VkRadixSort / Embree). Host loops 8× for 64-bit keys.
+struct RadixPushConstants
 {
-  u32 sort_size{};
-  u32 k{};
-  u32 j{};
-  u32 pad{};
+  u32 num_elements{};
+  u32 shift{};
+  u32 num_workgroups{};
+  u32 num_blocks_per_workgroup{};
+  u32 ping{};// 0: sorted→unsorted, 1: unsorted→sorted
+  u32 pad0{};
+  u32 pad1{};
+  u32 pad2{};
 };
 
-static_assert(sizeof(BitonicPushConstants) == 16);
+static_assert(sizeof(RadixPushConstants) == 32);
 
 // Stage 4 per-tile front-to-back rasterization.
 // Layout matches GLSL std430 push_constant packing (vec3/vec4 alignment).

@@ -23,9 +23,10 @@ enum class HeapSlot : size_t {
   SortedValues = 8,
   TileRanges = 9,
   ColorTarget = 10,
+  SortHistogram = 11,
 };
 
-inline constexpr size_t k_heap_descriptor_count = 11;
+inline constexpr size_t k_heap_descriptor_count = 12;
 
 [[nodiscard]] auto align_up(VkDeviceSize value, VkDeviceSize alignment) -> VkDeviceSize;
 

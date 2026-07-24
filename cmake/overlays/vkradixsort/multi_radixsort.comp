@@ -1,0 +1,160 @@
+/**
+ * VkRadixSort multi-workgroup scatter pass (Mirco Werner), adapted for vkgsplat:
+ * - VK_EXT_descriptor_heap instead of descriptor sets
+ * - 64-bit keys as [tile_id, depth_bits] with associated uint values
+ * - Fixed local size (no LocalSizeId / maintenance4 requirement)
+ *
+ * Upstream: https://github.com/MircoWerner/VkRadixSort
+ * Based on Embree GPU sort.
+ */
+#version 460
+#extension GL_EXT_descriptor_heap : require
+#extension GL_EXT_nonuniform_qualifier : enable
+#extension GL_KHR_shader_subgroup_basic : enable
+#extension GL_KHR_shader_subgroup_arithmetic : enable
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+const uint WORKGROUP_SIZE = 256u;
+const uint RADIX_SORT_BINS = 256u;
+
+const uint HEAP_UNSORTED_KEYS = 5u;
+const uint HEAP_UNSORTED_VALUES = 6u;
+const uint HEAP_SORTED_KEYS = 7u;
+const uint HEAP_SORTED_VALUES = 8u;
+const uint HEAP_SORT_HISTOGRAM = 11u;
+const uint KEY_STRIDE = 2u;
+const uint KEY_TILE = 0u;
+const uint KEY_DEPTH = 1u;
+
+layout(push_constant, std430) uniform PushConstants {
+	uint g_num_elements;
+	uint g_shift;
+	uint g_num_workgroups;
+	uint g_num_blocks_per_workgroup;
+	uint g_ping;// 0: sorted→unsorted, 1: unsorted→sorted
+	uint _pad0;
+	uint _pad1;
+	uint _pad2;
+};
+
+layout(descriptor_heap, std430) buffer KeysBuffer {
+	uint data[];
+} keys_buffers[];
+
+layout(descriptor_heap, std430) buffer ValuesBuffer {
+	uint data[];
+} values_buffers[];
+
+layout(descriptor_heap, std430) readonly buffer HistogramsBuffer {
+	uint data[];
+} histograms_buffers[];
+
+shared uint sums[32];// sized for min subgroup size 8 → 256/8 subgroups
+shared uint global_offsets[RADIX_SORT_BINS];
+
+struct BinFlags {
+	uint flags[WORKGROUP_SIZE / 32u];
+};
+shared BinFlags bin_flags[RADIX_SORT_BINS];
+
+uint key_bin_from_words(uint tile, uint depth)
+{
+	uint word = g_shift < 32u ? depth : tile;
+	return (word >> (g_shift & 31u)) & (RADIX_SORT_BINS - 1u);
+}
+
+void main()
+{
+	uint local_histogram = 0;
+	uint histogram_count = 0;
+	if (gl_LocalInvocationID.x < RADIX_SORT_BINS) {
+		for (uint j = 0; j < g_num_workgroups; j++) {
+			const uint t =
+				histograms_buffers[HEAP_SORT_HISTOGRAM].data[RADIX_SORT_BINS * j + gl_LocalInvocationID.x];
+			local_histogram = (j == gl_WorkGroupID.x) ? histogram_count : local_histogram;
+			histogram_count += t;
+		}
+	}
+
+	// Must use runtime gl_SubgroupSize — a hardcoded 32 breaks Intel (and others).
+	const uint sum = subgroupAdd(histogram_count);
+	const uint prefix_sum = subgroupExclusiveAdd(histogram_count);
+	if (subgroupElect()) {
+		sums[gl_SubgroupID] = sum;
+	}
+	barrier();
+
+	if (gl_LocalInvocationID.x < RADIX_SORT_BINS) {
+		uint sums_prefix_sum = 0;
+		for (uint i = 0; i < gl_SubgroupID; i++) {
+			sums_prefix_sum += sums[i];
+		}
+		global_offsets[gl_LocalInvocationID.x] = sums_prefix_sum + prefix_sum + local_histogram;
+	}
+
+	const uint flags_bin = gl_LocalInvocationID.x / 32u;
+	const uint flags_bit = 1u << (gl_LocalInvocationID.x % 32u);
+
+	for (uint index = 0; index < g_num_blocks_per_workgroup; index++) {
+		uint elementId = gl_WorkGroupID.x * g_num_blocks_per_workgroup * WORKGROUP_SIZE
+			+ index * WORKGROUP_SIZE + gl_LocalInvocationID.x;
+
+		if (gl_LocalInvocationID.x < RADIX_SORT_BINS) {
+			for (uint i = 0; i < WORKGROUP_SIZE / 32u; i++) {
+				bin_flags[gl_LocalInvocationID.x].flags[i] = 0U;
+			}
+		}
+		barrier();
+
+		uint tile = 0;
+		uint depth = 0;
+		uint value = 0;
+		uint binID = 0;
+		uint binOffset = 0;
+		if (elementId < g_num_elements) {
+			uint key_base = elementId * KEY_STRIDE;
+			if (g_ping == 0u) {
+				tile = keys_buffers[HEAP_SORTED_KEYS].data[key_base + KEY_TILE];
+				depth = keys_buffers[HEAP_SORTED_KEYS].data[key_base + KEY_DEPTH];
+				value = values_buffers[HEAP_SORTED_VALUES].data[elementId];
+			} else {
+				tile = keys_buffers[HEAP_UNSORTED_KEYS].data[key_base + KEY_TILE];
+				depth = keys_buffers[HEAP_UNSORTED_KEYS].data[key_base + KEY_DEPTH];
+				value = values_buffers[HEAP_UNSORTED_VALUES].data[elementId];
+			}
+			binID = key_bin_from_words(tile, depth);
+			binOffset = global_offsets[binID];
+			atomicAdd(bin_flags[binID].flags[flags_bin], flags_bit);
+		}
+		barrier();
+
+		if (elementId < g_num_elements) {
+			uint prefix = 0;
+			uint count = 0;
+			for (uint i = 0; i < WORKGROUP_SIZE / 32u; i++) {
+				const uint bits = bin_flags[binID].flags[i];
+				const uint full_count = bitCount(bits);
+				const uint partial_count = bitCount(bits & (flags_bit - 1u));
+				prefix += (i < flags_bin) ? full_count : 0U;
+				prefix += (i == flags_bin) ? partial_count : 0U;
+				count += full_count;
+			}
+			uint out_id = binOffset + prefix;
+			uint out_base = out_id * KEY_STRIDE;
+			if (g_ping == 0u) {
+				keys_buffers[HEAP_UNSORTED_KEYS].data[out_base + KEY_TILE] = tile;
+				keys_buffers[HEAP_UNSORTED_KEYS].data[out_base + KEY_DEPTH] = depth;
+				values_buffers[HEAP_UNSORTED_VALUES].data[out_id] = value;
+			} else {
+				keys_buffers[HEAP_SORTED_KEYS].data[out_base + KEY_TILE] = tile;
+				keys_buffers[HEAP_SORTED_KEYS].data[out_base + KEY_DEPTH] = depth;
+				values_buffers[HEAP_SORTED_VALUES].data[out_id] = value;
+			}
+			if (prefix == count - 1) {
+				atomicAdd(global_offsets[binID], count);
+			}
+		}
+		barrier();
+	}
+}

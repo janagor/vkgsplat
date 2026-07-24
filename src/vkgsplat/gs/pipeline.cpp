@@ -31,7 +31,7 @@ void record_gs_pipeline(RenderData &data)
     }))
     .record(std::make_shared<OpBinning>())
     .record(std::make_shared<OpPrepareSort>())
-    .record(std::make_shared<OpBitonicSort>())
+    .record(std::make_shared<OpRadixSort>())
     .record(std::make_shared<compute::OpFillBuffer>(compute::FillBufferParams{
       .buffer = data.tile_ranges_buffer.handle,
       .offset = 0,

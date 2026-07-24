@@ -52,7 +52,8 @@ vkgsplat_compile_shaders(
   shaders/gs/projection.comp
   shaders/gs/binning.comp
   shaders/gs/prepare_sorting.comp
-  shaders/gs/sorting.comp
+  "${VKGSPLAT_VKRADIXSORT_SHADERS_DIR}/multi_radixsort_histograms.comp"
+  "${VKGSPLAT_VKRADIXSORT_SHADERS_DIR}/multi_radixsort.comp"
   shaders/gs/identify_ranges.comp
   shaders/gs/rasterization.comp)
 

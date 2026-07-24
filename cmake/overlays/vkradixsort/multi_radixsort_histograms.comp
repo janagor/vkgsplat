@@ -1,0 +1,83 @@
+/**
+ * VkRadixSort multi-workgroup histogram pass (Mirco Werner), adapted for vkgsplat:
+ * - VK_EXT_descriptor_heap instead of descriptor sets
+ * - 64-bit keys as [tile_id, depth_bits] + ping-pong via g_ping
+ * - Fixed local size (no LocalSizeId / maintenance4 requirement)
+ *
+ * Upstream: https://github.com/MircoWerner/VkRadixSort
+ * Based on Embree GPU sort.
+ */
+#version 460
+#extension GL_EXT_descriptor_heap : require
+#extension GL_EXT_nonuniform_qualifier : enable
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+const uint WORKGROUP_SIZE = 256u;
+const uint RADIX_SORT_BINS = 256u;
+
+const uint HEAP_UNSORTED_KEYS = 5u;
+const uint HEAP_SORTED_KEYS = 7u;
+const uint HEAP_SORT_HISTOGRAM = 11u;
+const uint KEY_STRIDE = 2u;
+const uint KEY_TILE = 0u;
+const uint KEY_DEPTH = 1u;
+
+layout(push_constant, std430) uniform PushConstants {
+	uint g_num_elements;
+	uint g_shift;
+	uint g_num_workgroups;
+	uint g_num_blocks_per_workgroup;
+	uint g_ping;// 0: sorted→unsorted, 1: unsorted→sorted
+	uint _pad0;
+	uint _pad1;
+	uint _pad2;
+};
+
+layout(descriptor_heap, std430) readonly buffer KeysBuffer {
+	uint data[];
+} keys_buffers[];
+
+layout(descriptor_heap, std430) writeonly buffer HistogramsBuffer {
+	uint data[];
+} histograms_buffers[];
+
+shared uint histogram[RADIX_SORT_BINS];
+
+uint key_bin(uint element_id)
+{
+	uint key_base = element_id * KEY_STRIDE;
+	uint tile;
+	uint depth;
+	if (g_ping == 0u) {
+		tile = keys_buffers[HEAP_SORTED_KEYS].data[key_base + KEY_TILE];
+		depth = keys_buffers[HEAP_SORTED_KEYS].data[key_base + KEY_DEPTH];
+	} else {
+		tile = keys_buffers[HEAP_UNSORTED_KEYS].data[key_base + KEY_TILE];
+		depth = keys_buffers[HEAP_UNSORTED_KEYS].data[key_base + KEY_DEPTH];
+	}
+	uint word = g_shift < 32u ? depth : tile;
+	return (word >> (g_shift & 31u)) & (RADIX_SORT_BINS - 1u);
+}
+
+void main()
+{
+	if (gl_LocalInvocationID.x < RADIX_SORT_BINS) {
+		histogram[gl_LocalInvocationID.x] = 0U;
+	}
+	barrier();
+
+	for (uint index = 0; index < g_num_blocks_per_workgroup; index++) {
+		uint elementId = gl_WorkGroupID.x * g_num_blocks_per_workgroup * WORKGROUP_SIZE
+			+ index * WORKGROUP_SIZE + gl_LocalInvocationID.x;
+		if (elementId < g_num_elements) {
+			atomicAdd(histogram[key_bin(elementId)], 1U);
+		}
+	}
+	barrier();
+
+	if (gl_LocalInvocationID.x < RADIX_SORT_BINS) {
+		histograms_buffers[HEAP_SORT_HISTOGRAM].data[RADIX_SORT_BINS * gl_WorkGroupID.x + gl_LocalInvocationID.x] =
+			histogram[gl_LocalInvocationID.x];
+	}
+}

@@ -79,9 +79,9 @@ auto refresh_descriptor_heap(Init &init, RenderData &data) -> bool
   if (data.geometry_buffer.handle == VK_NULL_HANDLE || data.appearance_buffer.handle == VK_NULL_HANDLE
       || data.projected_buffer.handle == VK_NULL_HANDLE || data.unsorted_keys_buffer.handle == VK_NULL_HANDLE
       || data.unsorted_values_buffer.handle == VK_NULL_HANDLE || data.sorted_keys_buffer.handle == VK_NULL_HANDLE
-      || data.sorted_values_buffer.handle == VK_NULL_HANDLE || data.tile_ranges_buffer.handle == VK_NULL_HANDLE
-      || data.color_buffer.handle == VK_NULL_HANDLE || data.sorted_indices.buffer().handle == VK_NULL_HANDLE
-      || data.sort_entries.buffer().handle == VK_NULL_HANDLE) {
+      || data.sorted_values_buffer.handle == VK_NULL_HANDLE || data.sort_histogram_buffer.handle == VK_NULL_HANDLE
+      || data.tile_ranges_buffer.handle == VK_NULL_HANDLE || data.color_buffer.handle == VK_NULL_HANDLE
+      || data.sorted_indices.buffer().handle == VK_NULL_HANDLE || data.sort_entries.buffer().handle == VK_NULL_HANDLE) {
     return true;
   }
 
@@ -99,6 +99,8 @@ auto refresh_descriptor_heap(Init &init, RenderData &data) -> bool
   auto const unsorted_values_buffer_size = static_cast<VkDeviceSize>(data.max_bin_instances * sizeof(u32));
   auto const sorted_keys_buffer_size = static_cast<VkDeviceSize>(data.gaussian_sort_size * sizeof(BinningKey));
   auto const sorted_values_buffer_size = static_cast<VkDeviceSize>(data.gaussian_sort_size * sizeof(u32));
+  auto const sort_histogram_buffer_size = static_cast<VkDeviceSize>(
+    static_cast<size_t>(data.radix_num_workgroups) * 256U * sizeof(u32));
   auto const tile_ranges_buffer_size = static_cast<VkDeviceSize>(data.tile_count * sizeof(TileRange));
   auto const color_buffer_size =
     static_cast<VkDeviceSize>(data.color_width) * static_cast<VkDeviceSize>(data.color_height) * 4U * sizeof(f32);
@@ -150,6 +152,10 @@ auto refresh_descriptor_heap(Init &init, RenderData &data) -> bool
     VkDeviceAddressRangeEXT{
       .address = init.gpu_allocator.get_buffer_device_address(data.color_buffer),
       .size = color_buffer_size,
+    },
+    VkDeviceAddressRangeEXT{
+      .address = init.gpu_allocator.get_buffer_device_address(data.sort_histogram_buffer),
+      .size = sort_histogram_buffer_size,
     },
   };
 

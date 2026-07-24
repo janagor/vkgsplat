@@ -51,6 +51,7 @@ struct RenderData
   vulkan::Buffer instance_count_buffer{};
   vulkan::Buffer sorted_keys_buffer{};
   vulkan::Buffer sorted_values_buffer{};
+  vulkan::Buffer sort_histogram_buffer{};
   vulkan::Buffer tile_ranges_buffer{};
   vulkan::Buffer color_buffer{};
   VkImage color_image{};
@@ -58,6 +59,8 @@ struct RenderData
   VkFormat color_format{ VK_FORMAT_R32G32B32A32_SFLOAT };
   u32 max_bin_instances = 0;
   u32 gaussian_sort_size = 0;
+  u32 radix_num_workgroups = 0;
+  u32 radix_blocks_per_workgroup = 32;
   u32 tile_count = 0;
   u32 color_width = 0;
   u32 color_height = 0;
@@ -73,7 +76,8 @@ struct RenderData
   compute::Algorithm project_algorithm{};
   compute::Algorithm bin_algorithm{};
   compute::Algorithm prepare_sort_algorithm{};
-  compute::Algorithm gaussian_sort_algorithm{};
+  compute::Algorithm radix_histogram_algorithm{};
+  compute::Algorithm radix_scatter_algorithm{};
   compute::Algorithm identify_ranges_algorithm{};
   compute::Algorithm rasterize_algorithm{};
   compute::Sequence compute_sequence{};

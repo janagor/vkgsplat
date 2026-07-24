@@ -105,23 +105,33 @@ void OpPrepareSort::record(Init const &init, RenderData const &data, VkCommandBu
   Barrier::compute_to_compute(init.disp, command_buffer);
 }
 
-void OpBitonicSort::record(Init const &init, RenderData const &data, VkCommandBuffer command_buffer)
+void OpRadixSort::record(Init const &init, RenderData const &data, VkCommandBuffer command_buffer)
 {
-  Dispatch2D const sort_grid = dispatch_2d_for_threads(init, data.gaussian_sort_size, k_compute_local_size_x);
+  constexpr u32 k_radix_passes = 8U;// 64-bit key, 8 bits per pass
 
-  init.disp.cmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, data.gaussian_sort_algorithm.pipeline());
-  for (u32 k = 2U; k <= data.gaussian_sort_size; k <<= 1U) {
-    for (u32 j = k >> 1U; j > 0U; j >>= 1U) {
-      BitonicPushConstants const bitonic_push{
-        .sort_size = data.gaussian_sort_size,
-        .k = k,
-        .j = j,
-        .pad = 0U,
-      };
-      push_constants(init, &bitonic_push, sizeof(BitonicPushConstants), command_buffer);
-      dispatch_compute_2d(init, command_buffer, sort_grid);
-      Barrier::compute_to_compute(init.disp, command_buffer);
-    }
+  for (u32 pass = 0U; pass < k_radix_passes; ++pass) {
+    RadixPushConstants const radix_push{
+      .num_elements = data.gaussian_sort_size,
+      .shift = pass * 8U,
+      .num_workgroups = data.radix_num_workgroups,
+      .num_blocks_per_workgroup = data.radix_blocks_per_workgroup,
+      .ping = pass & 1U,
+      .pad0 = 0U,
+      .pad1 = 0U,
+      .pad2 = 0U,
+    };
+
+    init.disp.cmdBindPipeline(
+      command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, data.radix_histogram_algorithm.pipeline());
+    push_constants(init, &radix_push, sizeof(RadixPushConstants), command_buffer);
+    dispatch_compute_1d(init, command_buffer, data.radix_num_workgroups);
+    Barrier::compute_to_compute(init.disp, command_buffer);
+
+    init.disp.cmdBindPipeline(
+      command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, data.radix_scatter_algorithm.pipeline());
+    push_constants(init, &radix_push, sizeof(RadixPushConstants), command_buffer);
+    dispatch_compute_1d(init, command_buffer, data.radix_num_workgroups);
+    Barrier::compute_to_compute(init.disp, command_buffer);
   }
 }
 

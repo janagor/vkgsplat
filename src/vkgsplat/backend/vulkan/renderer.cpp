@@ -11,6 +11,7 @@
 #include <string>
 #include <system_error>
 #include <utility>
+#include <vector>
 
 #include "app_state.hpp"
 #include "backend/vulkan/command/command.hpp"
@@ -66,6 +67,26 @@ namespace {
 
 namespace {
 
+  constexpr u32 k_binning_sentinel = 0xFFFFFFFFU;
+
+  [[nodiscard]] auto count_sort_inversions(std::vector<BinningKey> const &keys, u32 live) -> std::pair<u32, u32>
+  {
+    u32 inversions = 0;
+    u32 sentinel_in_prefix = 0;
+    if (live <= 1U || keys.empty()) { return { inversions, sentinel_in_prefix }; }
+
+    u32 const check_n = std::min(live, static_cast<u32>(keys.size()));
+    for (u32 i = 1U; i < check_n; ++i) {
+      auto const &prev = keys.at(i - 1U);
+      auto const &cur = keys.at(i);
+      if (prev.tile_id == k_binning_sentinel || cur.tile_id == k_binning_sentinel) { ++sentinel_in_prefix; }
+      bool const out_of_order =
+        prev.tile_id > cur.tile_id || (prev.tile_id == cur.tile_id && prev.depth_bits > cur.depth_bits);
+      if (out_of_order) { ++inversions; }
+    }
+    return { inversions, sentinel_in_prefix };
+  }
+
   void debug_log_raster_state(Init &init, RenderData const &data)
   {
     static int debug_frames = 0;
@@ -87,13 +108,20 @@ namespace {
     u32 const nonempty_tiles = static_cast<u32>(std::count_if(
       ranges->begin(), ranges->end(), [](TileRange const &tile_range) { return tile_range.end > tile_range.start; }));
 
+    u32 const live = instance_count->at(0);
+    auto sorted_keys = init.gpu_allocator.read_buffer<BinningKey>(data.sorted_keys_buffer, data.gaussian_sort_size);
+    auto const [sort_inversions, sentinel_in_prefix] =
+      sorted_keys ? count_sort_inversions(*sorted_keys, live) : std::pair{ 0U, 0U };
+
     std::println(stderr,
-      "[raster debug] instances={} live_radii={}/{} nonempty_tiles={} sort_size={} viewport={}x{}",
-      instance_count->at(0),
+      "[raster debug] instances={} live_radii={}/{} nonempty_tiles={} sort_size={} inversions={} sentinel_in_live={} viewport={}x{}",
+      live,
       live_radii,
       data.splat_count,
       nonempty_tiles,
       data.gaussian_sort_size,
+      sort_inversions,
+      sentinel_in_prefix,
       data.color_width,
       data.color_height);
 

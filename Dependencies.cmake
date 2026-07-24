@@ -233,4 +233,32 @@ function(vkgsplat_setup_dependencies)
     add_library(imgui::imgui ALIAS imgui)
   endif()
 
+  # Reference shaders from MircoWerner/VkRadixSort. Not a linkable library — example +
+  # engine code — so we DOWNLOAD_ONLY for the upstream pin and compile our heap/KV
+  # overlays (same algorithm, adapted bindings).
+  cpmaddpackage(
+    NAME
+    VkRadixSort
+    GITHUB_REPOSITORY
+    MircoWerner/VkRadixSort
+    GIT_TAG
+    "029c351d24d9a6c6d680de272cd24d4448a34373"
+    DOWNLOAD_ONLY
+    YES)
+
+  set(_vkradixsort_overlay "${PROJECT_SOURCE_DIR}/cmake/overlays/vkradixsort")
+  foreach(_shader multi_radixsort_histograms.comp multi_radixsort.comp)
+    if(NOT EXISTS "${_vkradixsort_overlay}/${_shader}")
+      message(FATAL_ERROR "Missing VkRadixSort overlay: ${_vkradixsort_overlay}/${_shader}")
+    endif()
+  endforeach()
+
+  set(VKGSPLAT_VKRADIXSORT_SHADERS_DIR
+      "${_vkradixsort_overlay}"
+      CACHE PATH
+            "VkRadixSort multi-radix overlay shader directory"
+            FORCE)
+  message(STATUS "VkRadixSort shaders (overlay): ${VKGSPLAT_VKRADIXSORT_SHADERS_DIR}")
+  message(STATUS "VkRadixSort upstream source: ${VkRadixSort_SOURCE_DIR}")
+
 endfunction()

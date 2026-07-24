@@ -1,6 +1,7 @@
 #include "device.hpp"
 
 #include <expected>
+#include <print>
 #include <system_error>
 
 #include "backend/vulkan/vulkan_bootstrap.hpp"
@@ -36,6 +37,7 @@ auto device_initialization(Init &init) -> std::expected<void, Error>
   features_13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
   features_13.dynamicRendering = VK_TRUE;
   features_13.shaderDemoteToHelperInvocation = VK_TRUE;
+  features_13.maintenance4 = VK_TRUE;
 
   vkb::InstanceBuilder instance_builder;
   return VKBResultToExpected(
@@ -68,6 +70,18 @@ auto device_initialization(Init &init) -> std::expected<void, Error>
     .and_then([&](vkb::Device const &device) -> std::expected<void, Error> {
       init.device = device;
       init.disp = init.device.make_table();
+
+      VkPhysicalDeviceSubgroupProperties subgroup_props{};
+      subgroup_props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES;
+      VkPhysicalDeviceProperties2 props2 = {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+        .pNext = &subgroup_props,
+        .properties = {},
+      };
+      init.inst_disp.getPhysicalDeviceProperties2(init.device.physical_device, &props2);
+      std::println("Subgroup size={} operations={:#x} (radix sort needs arithmetic)",
+        subgroup_props.subgroupSize,
+        static_cast<unsigned>(subgroup_props.supportedOperations));
 
       // NOLINTBEGIN(cppcoreguidelines-pro-type-reinterpret-cast)
       init.write_resource_descriptors = reinterpret_cast<PFN_vkWriteResourceDescriptorsEXT>(
