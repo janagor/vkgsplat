@@ -1,0 +1,10 @@
+--- a/backends/imgui_impl_vulkan.cpp
++++ b/backends/imgui_impl_vulkan.cpp
+@@ -1266,6 +1266,7 @@
+         create_info.pNext = &pipeline_rendering_create_info;
+         create_info.renderPass = VK_NULL_HANDLE; // Just make sure it's actually nullptr.
+     }
++    else
+ #endif
+ #ifdef IMGUI_IMPL_VULKAN_HAS_DESCRIPTOR_HEAP
+     if (bd->VulkanInitInfo.DescriptorHeapInfo)

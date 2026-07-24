@@ -115,11 +115,27 @@ std::expected<Buffer, void *> GPUAllocator::create_heap_buffer(VkDeviceSize size
 
   VmaAllocationCreateInfo alloc_info = {};
   alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
-  alloc_info.flags =
-    VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
+  // NOLINTBEGIN(hicpp-signed-bitwise)
+  alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
+                     | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT
+                     // ANV (Gfx < 12.5) bindless heap addressing assumes a 4 KiB-aligned
+                     // device address; VMA suballocs of tiny heaps often are not.
+                     | VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+  // NOLINTEND(hicpp-signed-bitwise)
+  alloc_info.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+  alloc_info.preferredFlags = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+  // Match ANV's BindlessSurfaceStateBaseAddress 4 KiB granularity.
+  constexpr VkDeviceSize k_heap_device_address_alignment = 4096;
 
   Buffer buffer{ .size = size };
-  if (vmaCreateBuffer(allocator_, &buffer_info, &alloc_info, &buffer.handle, &buffer.allocation, nullptr)
+  if (vmaCreateBufferWithAlignment(allocator_,
+        &buffer_info,
+        &alloc_info,
+        k_heap_device_address_alignment,
+        &buffer.handle,
+        &buffer.allocation,
+        nullptr)
       != VK_SUCCESS) {
     return std::unexpected(nullptr);
   }

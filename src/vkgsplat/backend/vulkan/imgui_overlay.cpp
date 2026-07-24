@@ -9,8 +9,11 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
+#include <cstring>
 #include <expected>
 #include <memory>
+#include <print>
 #include <span>
 #include <system_error>
 #include <utility>
@@ -46,6 +49,7 @@ struct ImGuiOverlayState
   uint64_t resource_freelist{};
   uint64_t sampler_freelist{};
   VkDevice device{};
+  vulkan::GPUAllocator *gpu_allocator{};
   PFN_vkWriteResourceDescriptorsEXT write_resource_descriptors{};
   PFN_vkWriteSamplerDescriptorsEXT write_sampler_descriptors{};
   ImGui_ImplVulkan_DescriptorHeapInfo heap_info{};
@@ -107,7 +111,10 @@ namespace {
       .address = host_descriptor_address(overlay->resource_mapped, overlay->resource_stride, index),
       .size = overlay->resource_stride,
     };
-    overlay->write_resource_descriptors(overlay->device, 1, &resource_info, &host_range);
+    if (overlay->write_resource_descriptors(overlay->device, 1, &resource_info, &host_range) != VK_SUCCESS) {
+      std::println(stderr, "[imgui] vkWriteResourceDescriptorsEXT failed for image slot {}", index);
+    }
+    if (overlay->gpu_allocator != nullptr) { overlay->gpu_allocator->flush_buffer(overlay->resource_heap); }
     return index;
   }
 
@@ -126,7 +133,10 @@ namespace {
       .address = host_descriptor_address(overlay->sampler_mapped, overlay->sampler_stride, index),
       .size = overlay->sampler_stride,
     };
-    overlay->write_sampler_descriptors(overlay->device, 1, create_info, &host_range);
+    if (overlay->write_sampler_descriptors(overlay->device, 1, create_info, &host_range) != VK_SUCCESS) {
+      std::println(stderr, "[imgui] vkWriteSamplerDescriptorsEXT failed for sampler slot {}", index);
+    }
+    if (overlay->gpu_allocator != nullptr) { overlay->gpu_allocator->flush_buffer(overlay->sampler_heap); }
     return index;
   }
 
@@ -136,22 +146,39 @@ namespace {
     free_slot(overlay->sampler_freelist, index);
   }
 
+  [[nodiscard]] auto is_instance_proc_name(char const *function_name) -> bool
+  {
+    // Avoid WARNING-vkGetDeviceProcAddr-device for instance-level entry points
+    // while still resolving device extensions (e.g. vkCmdPushDataEXT) via the device.
+    return std::strstr(function_name, "PhysicalDevice") != nullptr || std::strstr(function_name, "Surface") != nullptr
+           || std::strcmp(function_name, "vkCreateInstance") == 0 || std::strcmp(function_name, "vkDestroyInstance") == 0
+           || std::strcmp(function_name, "vkEnumerateInstanceExtensionProperties") == 0
+           || std::strcmp(function_name, "vkEnumerateInstanceLayerProperties") == 0
+           || std::strcmp(function_name, "vkEnumerateInstanceVersion") == 0
+           || std::strcmp(function_name, "vkGetInstanceProcAddr") == 0
+           || std::strstr(function_name, "DebugReport") != nullptr || std::strstr(function_name, "DebugUtils") != nullptr;
+  }
+
   [[nodiscard]] auto load_imgui_vulkan_functions(Init &init) -> bool
   {
     return ImGui_ImplVulkan_LoadFunctions(
       VK_API_VERSION_1_4,
       [](char const *function_name, void *user_data) -> PFN_vkVoidFunction {
         auto *ctx = static_cast<Init *>(user_data);
-        // Prefer instance lookup first: ImGui's table includes instance-level
-        // entry points, and querying those via vkGetDeviceProcAddr triggers
-        // WARNING-vkGetDeviceProcAddr-device.
-        if (PFN_vkVoidFunction const instance_fn = vkGetInstanceProcAddr(ctx->instance, function_name);
-            instance_fn != nullptr) {
-          return instance_fn;
+        if (is_instance_proc_name(function_name)) { return vkGetInstanceProcAddr(ctx->instance, function_name); }
+        if (PFN_vkVoidFunction const device_fn = vkGetDeviceProcAddr(ctx->device, function_name);
+            device_fn != nullptr) {
+          return device_fn;
         }
-        return vkGetDeviceProcAddr(ctx->device, function_name);
+        return vkGetInstanceProcAddr(ctx->instance, function_name);
       },
       &init);
+  }
+
+  void check_imgui_vk_result(VkResult result)
+  {
+    if (result == VK_SUCCESS) { return; }
+    std::println(stderr, "[imgui] Vulkan error: VkResult={}", static_cast<int>(result));
   }
 
   void fill_pipeline_rendering_info(Init const &init, ImGuiOverlayState &overlay)
@@ -217,6 +244,10 @@ auto init_imgui_overlay(Init &init, RenderData &data) -> std::expected<void, Err
   }
 
   auto overlay = std::make_unique<ImGuiOverlayState>();
+  overlay->device = init.device;
+  overlay->gpu_allocator = &init.gpu_allocator;
+  overlay->write_resource_descriptors = init.write_resource_descriptors;
+  overlay->write_sampler_descriptors = init.write_sampler_descriptors;
 
   VkPhysicalDeviceDescriptorHeapPropertiesEXT heap_props{};
   heap_props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_PROPERTIES_EXT;
@@ -264,17 +295,14 @@ auto init_imgui_overlay(Init &init, RenderData &data) -> std::expected<void, Err
   overlay->sampler_mapped = sampler_mapped->data();
   overlay->resource_stride = heap_props.imageDescriptorSize;
   overlay->sampler_stride = heap_props.samplerDescriptorSize;
-  overlay->resource_heap_size = resource_size;
-  overlay->sampler_heap_size = sampler_size;
+  overlay->resource_heap_size = resource_descriptors_size + heap_props.minResourceHeapReservedRange;
+  overlay->sampler_heap_size = sampler_descriptors_size + heap_props.minSamplerHeapReservedRange;
   overlay->resource_reserved_offset = resource_descriptors_size;
   overlay->resource_reserved_size = heap_props.minResourceHeapReservedRange;
   overlay->sampler_reserved_offset = sampler_descriptors_size;
   overlay->sampler_reserved_size = heap_props.minSamplerHeapReservedRange;
   overlay->resource_freelist = (uint64_t{ 1 } << k_imgui_image_slots) - uint64_t{ 1 };
   overlay->sampler_freelist = (uint64_t{ 1 } << k_imgui_sampler_slots) - uint64_t{ 1 };
-  overlay->device = init.device;
-  overlay->write_resource_descriptors = init.write_resource_descriptors;
-  overlay->write_sampler_descriptors = init.write_sampler_descriptors;
   overlay->heap_info = {
     .RegisterSampler = register_sampler,
     .UnRegisterSampler = unregister_sampler,
@@ -308,6 +336,7 @@ auto init_imgui_overlay(Init &init, RenderData &data) -> std::expected<void, Err
   vulkan_init.UseDynamicRendering = true;
   vulkan_init.PipelineInfoMain.PipelineRenderingCreateInfo = overlay->pipeline_rendering;
   vulkan_init.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+  vulkan_init.CheckVkResultFn = check_imgui_vk_result;
   vulkan_init.DescriptorHeapInfo = &overlay->heap_info;
 
   if (!ImGui_ImplVulkan_Init(&vulkan_init)) {
