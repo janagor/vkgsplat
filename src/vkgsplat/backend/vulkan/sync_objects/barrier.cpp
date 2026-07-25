@@ -38,8 +38,7 @@ void Barrier::compute_to_compute(vkb::DispatchTable const &disp, VkCommandBuffer
       // DRAW_INDIRECT covers vkCmdDispatchIndirect reads of GPU-written args.
       .dst_stage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
       .src_access = VK_ACCESS_SHADER_WRITE_BIT,
-      .dst_access =
-        VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT,
+      .dst_access = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT,
     });
   // NOLINTEND(hicpp-signed-bitwise)
 }

@@ -19,6 +19,7 @@
 #include "backend/vulkan/device.hpp"
 #include "backend/vulkan/gpu_allocator.hpp"
 #include "backend/vulkan/graphics_pipeline.hpp"
+#include "backend/vulkan/imgui_overlay.hpp"
 #include "backend/vulkan/renderer.hpp"
 #include "backend/vulkan/swapchain.hpp"
 #include "gs/binning.hpp"
@@ -30,7 +31,6 @@
 #include "mesh_gpu.hpp"
 #include "sphere_setup.hpp"
 #include "vulkan_context.hpp"
-#include "backend/vulkan/imgui_overlay.hpp"
 
 namespace vkgsplat {
 

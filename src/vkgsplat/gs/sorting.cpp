@@ -68,8 +68,7 @@ namespace {
 
     auto const keys_size = static_cast<VkDeviceSize>(data.gaussian_sort_size * sizeof(BinningKey));
     auto const values_size = static_cast<VkDeviceSize>(data.gaussian_sort_size * sizeof(u32));
-    auto const histogram_entries =
-      static_cast<size_t>(data.radix_num_workgroups) * static_cast<size_t>(k_radix_bins);
+    auto const histogram_entries = static_cast<size_t>(data.radix_num_workgroups) * static_cast<size_t>(k_radix_bins);
     auto const histogram_size = static_cast<VkDeviceSize>(histogram_entries * sizeof(u32));
     auto const ranges_size = static_cast<VkDeviceSize>(data.tile_count * sizeof(TileRange));
     auto const dispatch_size = static_cast<VkDeviceSize>(sizeof(VkDispatchIndirectCommand));
@@ -108,8 +107,7 @@ auto init_sorting(Init &init, RenderData &data) -> bool
   std::string const identify_path = std::string(SHADER_DIRECTORY) + "/identify_ranges.comp.spv";
 
   if (!data.prepare_sort_algorithm.init(init, prepare_path, std::span{ sort_size_spec })
-      || !data.radix_histogram_algorithm.init(init, hist_path)
-      || !data.radix_scatter_algorithm.init(init, scatter_path)
+      || !data.radix_histogram_algorithm.init(init, hist_path) || !data.radix_scatter_algorithm.init(init, scatter_path)
       || !data.identify_ranges_algorithm.init(init, identify_path)) {
     destroy_sort_buffers(init, data);
     return false;

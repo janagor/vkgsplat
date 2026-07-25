@@ -170,12 +170,14 @@ namespace {
     // Avoid WARNING-vkGetDeviceProcAddr-device for instance-level entry points
     // while still resolving device extensions (e.g. vkCmdPushDataEXT) via the device.
     return std::strstr(function_name, "PhysicalDevice") != nullptr || std::strstr(function_name, "Surface") != nullptr
-           || std::strcmp(function_name, "vkCreateInstance") == 0 || std::strcmp(function_name, "vkDestroyInstance") == 0
+           || std::strcmp(function_name, "vkCreateInstance") == 0
+           || std::strcmp(function_name, "vkDestroyInstance") == 0
            || std::strcmp(function_name, "vkEnumerateInstanceExtensionProperties") == 0
            || std::strcmp(function_name, "vkEnumerateInstanceLayerProperties") == 0
            || std::strcmp(function_name, "vkEnumerateInstanceVersion") == 0
            || std::strcmp(function_name, "vkGetInstanceProcAddr") == 0
-           || std::strstr(function_name, "DebugReport") != nullptr || std::strstr(function_name, "DebugUtils") != nullptr;
+           || std::strstr(function_name, "DebugReport") != nullptr
+           || std::strstr(function_name, "DebugUtils") != nullptr;
   }
 
   [[nodiscard]] auto load_imgui_vulkan_functions(Init &init) -> bool
@@ -186,7 +188,7 @@ namespace {
         auto *ctx = static_cast<Init *>(user_data);
         if (is_instance_proc_name(function_name)) { return vkGetInstanceProcAddr(ctx->instance, function_name); }
         if (PFN_vkVoidFunction const device_fn = vkGetDeviceProcAddr(ctx->device, function_name);
-            device_fn != nullptr) {
+          device_fn != nullptr) {
           return device_fn;
         }
         return vkGetInstanceProcAddr(ctx->instance, function_name);
@@ -217,9 +219,8 @@ namespace {
   void draw_fps_window(char const *fps_label)
   {
     ImGuiIO const &imgui_io = ImGui::GetIO();
-    ImGui::SetNextWindowPos(ImVec2(k_fps_window_margin, imgui_io.DisplaySize.y - k_fps_window_margin),
-      ImGuiCond_Always,
-      ImVec2(0.0F, 1.0F));
+    ImGui::SetNextWindowPos(
+      ImVec2(k_fps_window_margin, imgui_io.DisplaySize.y - k_fps_window_margin), ImGuiCond_Always, ImVec2(0.0F, 1.0F));
     ImGui::SetNextWindowBgAlpha(k_fps_window_alpha);
     // NOLINTBEGIN(hicpp-signed-bitwise)
     ImGuiWindowFlags const flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize
@@ -270,11 +271,8 @@ namespace {
       float const fps = overlay.fps_ema > 0.0F ? overlay.fps_ema : 0.0F;
       double const frame_ms = fps > 0.0F ? k_ms_per_second / static_cast<double>(fps) : 0.0;
       // NOLINTNEXTLINE(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
-      (void)std::snprintf(overlay.fps_label.data(),
-        overlay.fps_label.size(),
-        "FPS: %.1f (%.2f ms)",
-        static_cast<double>(fps),
-        frame_ms);
+      (void)std::snprintf(
+        overlay.fps_label.data(), overlay.fps_label.size(), "FPS: %.1f (%.2f ms)", static_cast<double>(fps), frame_ms);
       invalidate_overlay_secondaries(overlay);
     }
   }

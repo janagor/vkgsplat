@@ -126,8 +126,8 @@ void dispatch_rasterization(Init const &init,
     .layerCount = 1,
   };
 
-  auto color_to_general = initializers::ImageMemoryBarrier(
-    VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, data.color_image, color_range);
+  auto color_to_general =
+    initializers::ImageMemoryBarrier(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, data.color_image, color_range);
   color_to_general.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
 
   auto swap_to_dst = initializers::ImageMemoryBarrier(VK_IMAGE_LAYOUT_UNDEFINED,

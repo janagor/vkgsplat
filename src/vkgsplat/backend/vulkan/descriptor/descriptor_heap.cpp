@@ -72,10 +72,9 @@ auto query_descriptor_heap_layout(Init const &init, RenderData &data) -> bool
   init.inst_disp.getPhysicalDeviceProperties2(init.device.physical_device, &props2);
 
   // Mix storage buffers and a storage image in one heap; stride must fit both.
-  auto const descriptor_size = static_cast<size_t>(
-    std::max(heap_props.bufferDescriptorSize, heap_props.imageDescriptorSize));
-  auto const descriptor_alignment =
-    std::max(heap_props.bufferDescriptorAlignment, heap_props.imageDescriptorAlignment);
+  auto const descriptor_size =
+    static_cast<size_t>(std::max(heap_props.bufferDescriptorSize, heap_props.imageDescriptorSize));
+  auto const descriptor_alignment = std::max(heap_props.bufferDescriptorAlignment, heap_props.imageDescriptorAlignment);
   if (descriptor_size == 0 || (descriptor_alignment != 0 && descriptor_size % descriptor_alignment != 0)) {
     return false;
   }
@@ -125,8 +124,8 @@ auto refresh_descriptor_heap(Init &init, RenderData &data) -> bool
   auto const unsorted_values_buffer_size = static_cast<VkDeviceSize>(data.max_bin_instances * sizeof(u32));
   auto const sorted_keys_buffer_size = static_cast<VkDeviceSize>(data.gaussian_sort_size * sizeof(BinningKey));
   auto const sorted_values_buffer_size = static_cast<VkDeviceSize>(data.gaussian_sort_size * sizeof(u32));
-  auto const sort_histogram_buffer_size = static_cast<VkDeviceSize>(
-    static_cast<size_t>(data.radix_num_workgroups) * 256U * sizeof(u32));
+  auto const sort_histogram_buffer_size =
+    static_cast<VkDeviceSize>(static_cast<size_t>(data.radix_num_workgroups) * 256U * sizeof(u32));
   auto const tile_ranges_buffer_size = static_cast<VkDeviceSize>(data.tile_count * sizeof(TileRange));
   auto const sorted_indices_buffer_size = data.sorted_indices.byte_size();
   auto const sort_entries_buffer_size = data.sort_entries.byte_size();
@@ -192,10 +191,8 @@ auto refresh_descriptor_heap(Init &init, RenderData &data) -> bool
       };
       auto const view_info = initializers::ImageViewCreateInfo(
         data.color_image, VK_IMAGE_VIEW_TYPE_2D, data.color_format, subresource_range);
-      if (!write_storage_image_descriptor(init,
-            view_info,
-            VK_IMAGE_LAYOUT_GENERAL,
-            destination.first(data.image_descriptor_size))) {
+      if (!write_storage_image_descriptor(
+            init, view_info, VK_IMAGE_LAYOUT_GENERAL, destination.first(data.image_descriptor_size))) {
         std::println("Failed to write color storage image descriptor!");
         return false;
       }
