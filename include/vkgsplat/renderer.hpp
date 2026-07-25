@@ -1,9 +1,9 @@
 #pragma once
 
 #include <expected>
-#include <memory>
 #include <string>
 
+#include <beman/indirect/indirect.hpp>
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat/vkgsplat_export.hpp>
 #include <vkgsplat_utility/error.hpp>
@@ -38,9 +38,9 @@ public:
 
 private:
   struct Impl;
-  explicit Renderer(std::unique_ptr<Impl> impl);
+  explicit Renderer(beman::indirect::indirect<Impl> impl);
 
-  std::unique_ptr<Impl> impl_;
+  beman::indirect::indirect<Impl> impl_;
 };
 
 }// namespace vkgsplat

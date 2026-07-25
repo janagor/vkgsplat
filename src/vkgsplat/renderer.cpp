@@ -9,6 +9,8 @@
 #include <system_error>
 #include <utility>
 
+#include <beman/indirect/indirect.hpp>
+
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
@@ -52,20 +54,20 @@ struct Renderer::Impl
   RenderData render_data{};
 };
 
-Renderer::Renderer(std::unique_ptr<Impl> impl) : impl_(std::move(impl)) {}
+Renderer::Renderer(beman::indirect::indirect<Impl> impl) : impl_(std::move(impl)) {}
 
 Renderer::Renderer(Renderer &&) noexcept = default;
 auto Renderer::operator=(Renderer &&) noexcept -> Renderer & = default;
 
 Renderer::~Renderer()
 {
-  if (impl_ == nullptr) { return; }
+  if (impl_.valueless_after_move()) { return; }
   cleanup(impl_->init, impl_->render_data);
 }
 
 auto Renderer::create(RendererConfig const &config, Window &window) -> std::expected<Renderer, Error>
 {
-  auto impl = std::make_unique<Impl>();
+  beman::indirect::indirect<Impl> impl;
   impl->init.window = &window;
 
   auto loaded = load_splats_from_ply(config.ply_path, config.splat_count);

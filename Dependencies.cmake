@@ -97,6 +97,18 @@ function(vkgsplat_setup_dependencies)
       YES)
   endif()
 
+  if(NOT TARGET beman::indirect)
+    cpmaddpackage(
+      NAME
+      indirect
+      GITHUB_REPOSITORY
+      "bemanproject/indirect"
+      GIT_TAG
+      "v0.1.0"
+      SYSTEM
+      YES)
+  endif()
+
   if(NOT TARGET fmtlib::fmtlib)
     cpmaddpackage(
       NAME

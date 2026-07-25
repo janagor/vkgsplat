@@ -4,10 +4,11 @@
 #include <vkgsplat_utility/types.hpp>
 
 #include <expected>
-#include <memory>
 #include <string>
 #include <system_error>
 #include <utility>
+
+#include <beman/indirect/indirect.hpp>
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -36,14 +37,14 @@ namespace {
 
 }// namespace
 
-Window::Window(std::unique_ptr<Impl> impl) : impl_(std::move(impl)) {}
+Window::Window(beman::indirect::indirect<Impl> impl) : impl_(std::move(impl)) {}
 
 Window::Window(Window &&) noexcept = default;
 auto Window::operator=(Window &&) noexcept -> Window & = default;
 
 Window::~Window()
 {
-  if (impl_ == nullptr || impl_->handle == nullptr) { return; }
+  if (impl_.valueless_after_move() || impl_->handle == nullptr) { return; }
   glfwDestroyWindow(impl_->handle);
   impl_->handle = nullptr;
   glfwTerminate();
@@ -63,7 +64,7 @@ auto Window::create(WindowConfig const &config) -> std::expected<Window, Error>
     return std::unexpected{ make_error_from_glfw("Failed to create GLFW window") };
   }
 
-  auto impl = std::make_unique<Impl>();
+  beman::indirect::indirect<Impl> impl;
   impl->handle = handle;
   return Window{ std::move(impl) };
 }

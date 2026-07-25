@@ -67,7 +67,7 @@ target_link_libraries(
           GPUOpen::VulkanMemoryAllocator
           magic_enum::magic_enum
           imgui::imgui
-  PUBLIC vkgsplat::vkgsplat_utility vkgsplat::vkgsplat_window glm::glm)
+  PUBLIC vkgsplat::vkgsplat_utility vkgsplat::vkgsplat_window glm::glm beman::indirect)
 
 vkgsplat_configure_linker(vkgsplat)
 

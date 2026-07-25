@@ -1,9 +1,9 @@
 #pragma once
 
 #include <expected>
-#include <memory>
 #include <string>
 
+#include <beman/indirect/indirect.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
 
@@ -39,9 +39,9 @@ public:
 
 private:
   struct Impl;
-  explicit Window(std::unique_ptr<Impl> impl);
+  explicit Window(beman::indirect::indirect<Impl> impl);
 
-  std::unique_ptr<Impl> impl_;
+  beman::indirect::indirect<Impl> impl_;
 };
 
 }// namespace vkgsplat
