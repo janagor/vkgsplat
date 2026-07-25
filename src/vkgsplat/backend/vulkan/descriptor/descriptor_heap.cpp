@@ -105,8 +105,8 @@ auto refresh_descriptor_heap(Init &init, RenderData &data) -> bool
       || data.projected_buffer.handle == VK_NULL_HANDLE || data.unsorted_keys_buffer.handle == VK_NULL_HANDLE
       || data.unsorted_values_buffer.handle == VK_NULL_HANDLE || data.sorted_keys_buffer.handle == VK_NULL_HANDLE
       || data.sorted_values_buffer.handle == VK_NULL_HANDLE || data.sort_histogram_buffer.handle == VK_NULL_HANDLE
-      || data.tile_ranges_buffer.handle == VK_NULL_HANDLE || data.color_image == VK_NULL_HANDLE
-      || data.sorted_indices.buffer().handle == VK_NULL_HANDLE || data.sort_entries.buffer().handle == VK_NULL_HANDLE) {
+      || data.tile_ranges_buffer.handle == VK_NULL_HANDLE || data.sorted_indices.buffer().handle == VK_NULL_HANDLE
+      || data.sort_entries.buffer().handle == VK_NULL_HANDLE) {
     return true;
   }
 
@@ -182,6 +182,10 @@ auto refresh_descriptor_heap(Init &init, RenderData &data) -> bool
     auto destination = std::span{ descriptor_data }.subspan(i * data.descriptor_stride, descriptor_size);
 
     if (slot == HeapSlot::ColorTarget) {
+      if (data.color_image == VK_NULL_HANDLE) {
+        // HW quad path has no compute color target; leave slot unused.
+        continue;
+      }
       VkImageSubresourceRange const subresource_range = {
         .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
         .baseMipLevel = 0,

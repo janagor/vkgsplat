@@ -38,13 +38,14 @@ struct SortPushConstants
 {
   u64 instance_count_address{};
   u64 radix_dispatch_address{};// VkDispatchIndirectCommand {x,y,z}
+  u64 draw_indirect_address{};// VkDrawIndirectCommand
   u32 sort_size{};// capacity
   u32 tile_count{};
   u32 blocks_per_workgroup{ 32 };
   u32 pad{};
 };
 
-static_assert(sizeof(SortPushConstants) == 32);
+static_assert(sizeof(SortPushConstants) == 40);
 
 // Multi-pass radix sort. Keys are packed uint32 (tile<<16)|(depth>>16); 4× 8-bit passes.
 struct RadixPushConstants

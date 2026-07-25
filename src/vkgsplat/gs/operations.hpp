@@ -28,12 +28,6 @@ public:
   void record(Init const &init, RenderData const &data, VkCommandBuffer command_buffer) override;
 };
 
-class OpIdentifyRanges : public compute::Operation
-{
-public:
-  void record(Init const &init, RenderData const &data, VkCommandBuffer command_buffer) override;
-};
-
 class OpRasterization : public compute::Operation
 {
 public:

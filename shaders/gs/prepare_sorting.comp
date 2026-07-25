@@ -42,9 +42,17 @@ layout(buffer_reference, std430, buffer_reference_align = 4) buffer DispatchRef 
 	uint z;
 };
 
+layout(buffer_reference, std430, buffer_reference_align = 4) buffer DrawIndirectRef {
+	uint vertexCount;
+	uint instanceCount;
+	uint firstVertex;
+	uint firstInstance;
+};
+
 layout(push_constant) uniform SortPush {
 	uvec2 instance_count_addr;
 	uvec2 radix_dispatch_addr;
+	uvec2 draw_indirect_addr;
 	uint sort_size;
 	uint tile_count;
 	uint blocks_per_workgroup;
@@ -65,7 +73,6 @@ void main()
 	InstanceCountRef instance_count = InstanceCountRef(push.instance_count_addr);
 	uint live_count = min(instance_count.count, push.sort_size);
 
-	// Thread 0 publishes radix dispatch size for the live instance count only.
 	if (id == 0u) {
 		uint blocks = max(push.blocks_per_workgroup, 1u);
 		uint threads = (live_count + blocks - 1u) / blocks;
@@ -77,6 +84,12 @@ void main()
 		dispatch.x = wgs;
 		dispatch.y = 1u;
 		dispatch.z = 1u;
+
+		DrawIndirectRef draw = DrawIndirectRef(push.draw_indirect_addr);
+		draw.vertexCount = 6u;
+		draw.instanceCount = live_count;
+		draw.firstVertex = 0u;
+		draw.firstInstance = 0u;
 	}
 
 	if (id >= SORT_SIZE || id >= live_count) {

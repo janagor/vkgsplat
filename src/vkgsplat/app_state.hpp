@@ -54,6 +54,7 @@ struct RenderData
   vulkan::Buffer sorted_values_buffer{};
   vulkan::Buffer sort_histogram_buffer{};
   vulkan::Buffer radix_dispatch_buffer{};
+  vulkan::Buffer draw_indirect_buffer{};
   vulkan::Buffer tile_ranges_buffer{};
   VkImage color_image{};
   VmaAllocation color_allocation{};

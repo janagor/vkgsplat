@@ -32,8 +32,6 @@ auto gpu_pass_name(GpuPass pass) -> char const *
     return "prep";
   case GpuPass::RadixSort:
     return "radix";
-  case GpuPass::IdentifyRanges:
-    return "ranges";
   case GpuPass::Rasterize:
     return "raster";
   case GpuPass::Count:

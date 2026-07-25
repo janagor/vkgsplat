@@ -24,6 +24,9 @@ public:
 
   static void compute_to_compute(vkb::DispatchTable const &disp, VkCommandBuffer command_buffer);
 
+  // After compute writes buffers consumed by DrawIndirect + vertex/fragment shaders.
+  static void compute_to_graphics(vkb::DispatchTable const &disp, VkCommandBuffer command_buffer);
+
   static void compute_read(vkb::DispatchTable const &disp, VkCommandBuffer command_buffer);
 };
 

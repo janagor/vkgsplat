@@ -176,13 +176,12 @@ auto draw_frame(Init &init, RenderData &data, Camera const &camera) -> std::expe
         last_print = now;
         auto const &pass_ms = data.gpu_pass_timer.last_ms();
         std::println(
-          "GPU: {:.2f} ms (proj {:.2f} bin {:.2f} prep {:.2f} radix {:.2f} ranges {:.2f} raster {:.2f})",
+          "GPU: {:.2f} ms (proj {:.2f} bin {:.2f} prep {:.2f} radix {:.2f} raster {:.2f})",
           data.gpu_pass_timer.total_ms(),
           pass_ms.at(static_cast<size_t>(GpuPass::Projection)),
           pass_ms.at(static_cast<size_t>(GpuPass::Binning)),
           pass_ms.at(static_cast<size_t>(GpuPass::PrepareSort)),
           pass_ms.at(static_cast<size_t>(GpuPass::RadixSort)),
-          pass_ms.at(static_cast<size_t>(GpuPass::IdentifyRanges)),
           pass_ms.at(static_cast<size_t>(GpuPass::Rasterize)));
       }
     }
@@ -212,7 +211,7 @@ auto draw_frame(Init &init, RenderData &data, Camera const &camera) -> std::expe
   if (!recorded) { return std::unexpected{ recorded.error() }; }
 
   std::array<VkSemaphore, 1> wait_semaphores = { available_semaphore };
-  std::array<VkPipelineStageFlags, 1> wait_stages = { VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT };
+  std::array<VkPipelineStageFlags, 1> wait_stages = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
   auto *finished_semaphore = data.finished_semaphore.at(image_index).handle();
   std::array<VkSemaphore, 1> signal_semaphores = { finished_semaphore };
 

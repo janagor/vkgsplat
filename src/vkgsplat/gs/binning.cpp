@@ -35,7 +35,7 @@ namespace {
   {
     destroy_bin_buffers(init, data);
 
-    data.max_bin_instances = data.splat_count * k_max_tiles_per_splat;
+    data.max_bin_instances = data.splat_count;
     if (data.max_bin_instances == 0) {
       std::println("Bin gaussians requires non-zero instance capacity!");
       return false;

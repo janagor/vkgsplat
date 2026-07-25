@@ -40,11 +40,13 @@ namespace {
     init.gpu_allocator.destroy_buffer(data.sorted_values_buffer);
     init.gpu_allocator.destroy_buffer(data.sort_histogram_buffer);
     init.gpu_allocator.destroy_buffer(data.radix_dispatch_buffer);
+    init.gpu_allocator.destroy_buffer(data.draw_indirect_buffer);
     init.gpu_allocator.destroy_buffer(data.tile_ranges_buffer);
     data.sorted_keys_buffer = {};
     data.sorted_values_buffer = {};
     data.sort_histogram_buffer = {};
     data.radix_dispatch_buffer = {};
+    data.draw_indirect_buffer = {};
     data.tile_ranges_buffer = {};
     data.gaussian_sort_size = 0;
     data.radix_num_workgroups = 0;
@@ -72,13 +74,15 @@ namespace {
     auto const histogram_size = static_cast<VkDeviceSize>(histogram_entries * sizeof(u32));
     auto const ranges_size = static_cast<VkDeviceSize>(data.tile_count * sizeof(TileRange));
     auto const dispatch_size = static_cast<VkDeviceSize>(sizeof(VkDispatchIndirectCommand));
+    auto const draw_indirect_size = static_cast<VkDeviceSize>(sizeof(VkDrawIndirectCommand));
 
     auto keys = init.gpu_allocator.create_device_storage_buffer(keys_size);
     auto values = init.gpu_allocator.create_device_storage_buffer(values_size);
     auto histogram = init.gpu_allocator.create_device_storage_buffer(histogram_size);
     auto dispatch = init.gpu_allocator.create_device_storage_buffer(dispatch_size);
+    auto draw_indirect = init.gpu_allocator.create_device_storage_buffer(draw_indirect_size);
     auto ranges = init.gpu_allocator.create_device_storage_buffer(ranges_size);
-    if (!keys || !values || !histogram || !dispatch || !ranges) {
+    if (!keys || !values || !histogram || !dispatch || !draw_indirect || !ranges) {
       std::println("Failed to create sort buffers!");
       destroy_sort_buffers(init, data);
       return false;
@@ -88,6 +92,7 @@ namespace {
     data.sorted_values_buffer = *values;
     data.sort_histogram_buffer = *histogram;
     data.radix_dispatch_buffer = *dispatch;
+    data.draw_indirect_buffer = *draw_indirect;
     data.tile_ranges_buffer = *ranges;
 
     // GPU-only working set: shaders / cmdFillBuffer overwrite these each frame.
@@ -104,11 +109,9 @@ auto init_sorting(Init &init, RenderData &data) -> bool
   std::string const prepare_path = std::string(SHADER_DIRECTORY) + "/prepare_sorting.comp.spv";
   std::string const hist_path = std::string(SHADER_DIRECTORY) + "/multi_radixsort_histograms.comp.spv";
   std::string const scatter_path = std::string(SHADER_DIRECTORY) + "/multi_radixsort.comp.spv";
-  std::string const identify_path = std::string(SHADER_DIRECTORY) + "/identify_ranges.comp.spv";
 
   if (!data.prepare_sort_algorithm.init(init, prepare_path, std::span{ sort_size_spec })
-      || !data.radix_histogram_algorithm.init(init, hist_path) || !data.radix_scatter_algorithm.init(init, scatter_path)
-      || !data.identify_ranges_algorithm.init(init, identify_path)) {
+      || !data.radix_histogram_algorithm.init(init, hist_path) || !data.radix_scatter_algorithm.init(init, scatter_path)) {
     destroy_sort_buffers(init, data);
     return false;
   }
@@ -121,7 +124,6 @@ void destroy_sorting(Init &init, RenderData &data)
   data.prepare_sort_algorithm.destroy(init);
   data.radix_histogram_algorithm.destroy(init);
   data.radix_scatter_algorithm.destroy(init);
-  data.identify_ranges_algorithm.destroy(init);
   destroy_sort_buffers(init, data);
 }
 

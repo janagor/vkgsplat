@@ -2,91 +2,87 @@
 #extension GL_EXT_descriptor_heap : require
 #extension GL_EXT_nonuniform_qualifier : enable
 
+// Instanced screen-space Gaussian quads (PlayCanvas-style HW raster path).
 layout(location = 0) out vec3 fragColor;
-layout(location = 1) out vec2 fragLocal;
-layout(location = 2) out float fragOpacity;
+layout(location = 1) out vec3 fragConic;
+layout(location = 2) out vec2 fragOffset;
+layout(location = 3) out float fragOpacity;
 
-layout(push_constant) uniform CameraMatrices {
-	mat4 view;
-	mat4 proj;
-} camera;
+layout(push_constant) uniform RasterPush {
+	vec4 camera_position;
+	uvec2 viewport;
+	uint tile_size;
+	uint tiles_x;
+	vec4 background;
+	uint sh_degree;
+	uint _pad0;
+	uint _pad1;
+	uint _pad2;
+} push;
 
-// Heap slot indices must match HeapSlot in descriptor_heap.hpp.
-const uint HEAP_GEOMETRY = 0u;
-const uint HEAP_APPEARANCE = 1u;
-const uint HEAP_SORTED_INDICES = 2u;
+const uint HEAP_PROJECTED = 4u;
+const uint HEAP_SORTED_VALUES = 8u;
 
-// Flat packing must match GaussianGeometry / GaussianAppearance in gaussian_splat.hpp.
-// Descriptor-heap struct member access hits Mesa/glslang Offset bugs; use scalar arrays.
-const uint GEOMETRY_STRIDE = 11u;
-const uint GEOM_POS = 0u;
-const uint GEOM_SCALE = 3u;
-const uint GEOM_OPACITY = 10u;
+const uint PROJECTED_STRIDE = 11u;
+const uint PROJ_MEAN = 0u;
+const uint PROJ_CONIC = 2u;
+const uint PROJ_RADIUS = 6u;
+const uint PROJ_COLOR = 7u;
+const uint PROJ_OPACITY = 10u;
 
-const uint APPEARANCE_STRIDE = 48u;
-const uint APP_F_DC = 0u;
-
-layout(descriptor_heap, std430) readonly buffer GeometryBuffer {
+layout(descriptor_heap, std430) readonly buffer ProjectedBuffer {
 	float data[];
-} geometry_buffers[];
+} projected_buffers[];
 
-layout(descriptor_heap, std430) readonly buffer AppearanceBuffer {
-	float data[];
-} appearance_buffers[];
+layout(descriptor_heap, std430) readonly buffer SortedValuesBuffer {
+	uint data[];
+} sorted_values_buffers[];
 
-layout(descriptor_heap, std430) readonly buffer SortedIndices {
-	uint sorted_indices[];
-} sorted_index_buffers[];
-
-const float SH_C0 = 0.28209479177387814;
 const vec2 QUAD_VERTS[6] = vec2[](
 	vec2(-1.0, -1.0), vec2(1.0, -1.0), vec2(-1.0, 1.0),
 	vec2(-1.0, 1.0), vec2(1.0, -1.0), vec2(1.0, 1.0)
 );
 
-float sigmoid(float x)
-{
-	return 1.0 / (1.0 + exp(-x));
-}
-
-vec3 sh0_to_rgb(vec3 f_dc)
-{
-	return clamp(vec3(0.5) + SH_C0 * f_dc, 0.0, 1.0);
-}
-
-vec3 scales_from_log(vec3 log_scale)
-{
-	return exp(log_scale);
-}
-
 void main()
 {
-	uint display_slot = gl_InstanceIndex;
-	uint src_sphere = sorted_index_buffers[HEAP_SORTED_INDICES].sorted_indices[display_slot];
+	uint gaussian_id = sorted_values_buffers[HEAP_SORTED_VALUES].data[gl_InstanceIndex];
+	uint proj_base = gaussian_id * PROJECTED_STRIDE;
 
-	uint geom_base = src_sphere * GEOMETRY_STRIDE;
-	uint app_base = src_sphere * APPEARANCE_STRIDE;
+	vec2 mean = vec2(
+		projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_MEAN],
+		projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_MEAN + 1u]);
+	vec3 conic = vec3(
+		projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_CONIC],
+		projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_CONIC + 1u],
+		projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_CONIC + 2u]);
+	float radius = projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_RADIUS];
+	vec3 color = vec3(
+		projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_COLOR],
+		projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_COLOR + 1u],
+		projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_COLOR + 2u]);
+	float opacity = projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_OPACITY];
 
-	vec3 center = vec3(
-		geometry_buffers[HEAP_GEOMETRY].data[geom_base + GEOM_POS],
-		geometry_buffers[HEAP_GEOMETRY].data[geom_base + GEOM_POS + 1u],
-		geometry_buffers[HEAP_GEOMETRY].data[geom_base + GEOM_POS + 2u]);
-	vec3 scale = scales_from_log(vec3(
-		geometry_buffers[HEAP_GEOMETRY].data[geom_base + GEOM_SCALE],
-		geometry_buffers[HEAP_GEOMETRY].data[geom_base + GEOM_SCALE + 1u],
-		geometry_buffers[HEAP_GEOMETRY].data[geom_base + GEOM_SCALE + 2u]));
-	float radius = max(max(scale.x, scale.y), scale.z);
-	float opacity = sigmoid(geometry_buffers[HEAP_GEOMETRY].data[geom_base + GEOM_OPACITY]);
+	// Degenerate / culled splats collapse to a point (fragment will discard).
+	if (radius < 1.0) {
+		gl_Position = vec4(2.0, 2.0, 0.0, 1.0);
+		fragColor = vec3(0.0);
+		fragConic = vec3(0.0);
+		fragOffset = vec2(0.0);
+		fragOpacity = 0.0;
+		return;
+	}
 
-	vec2 local = QUAD_VERTS[gl_VertexIndex] * radius;
-	vec3 world_pos = center + vec3(local, 0.0);
-	gl_Position = camera.proj * camera.view * vec4(world_pos, 1.0);
+	vec2 local = QUAD_VERTS[gl_VertexIndex];
+	vec2 offset = local * radius;
+	vec2 pixel = mean + offset;
 
-	vec3 f_dc = vec3(
-		appearance_buffers[HEAP_APPEARANCE].data[app_base + APP_F_DC],
-		appearance_buffers[HEAP_APPEARANCE].data[app_base + APP_F_DC + 1u],
-		appearance_buffers[HEAP_APPEARANCE].data[app_base + APP_F_DC + 2u]);
-	fragColor = sh0_to_rgb(f_dc);
+	float width = max(float(push.viewport.x), 1.0);
+	float height = max(float(push.viewport.y), 1.0);
+	vec2 ndc = vec2(pixel.x / width, pixel.y / height) * 2.0 - 1.0;
+	gl_Position = vec4(ndc, 0.0, 1.0);
+
+	fragColor = color;
+	fragConic = conic;
+	fragOffset = offset;
 	fragOpacity = opacity;
-	fragLocal = QUAD_VERTS[gl_VertexIndex];
 }

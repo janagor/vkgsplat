@@ -170,21 +170,6 @@ void OpRadixSort::record(Init const &init, RenderData const &data, VkCommandBuff
   }
 }
 
-void OpIdentifyRanges::record(Init const &init, RenderData const &data, VkCommandBuffer command_buffer)
-{
-  ScopedGpuPass const timer{ init, data, command_buffer, GpuPass::IdentifyRanges };
-
-  Dispatch2D const sort_grid = dispatch_2d_for_threads(init, data.gaussian_sort_size, k_compute_local_size_x);
-
-  dispatch_compute_pass(init,
-    command_buffer,
-    data.identify_ranges_algorithm.pipeline(),
-    &data.sort_push,
-    sizeof(SortPushConstants),
-    sort_grid);
-  Barrier::compute_read(init.disp, command_buffer);
-}
-
 void OpRasterization::record(Init const &init, RenderData const &data, VkCommandBuffer command_buffer)
 {
   ScopedGpuPass const timer{ init, data, command_buffer, GpuPass::Rasterize };

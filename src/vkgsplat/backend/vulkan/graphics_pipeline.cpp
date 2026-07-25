@@ -73,14 +73,20 @@ auto create_graphics_pipeline(Init &init, RenderData &data) -> int
 
   auto const multisampling = initializers::PipelineMultisampleStateCreateInfo(VK_SAMPLE_COUNT_1_BIT);
 
-  auto const depth_stencil = initializers::PipelineDepthStencilStateCreateInfo(VK_TRUE, VK_TRUE, VK_COMPARE_OP_LESS);
+  auto const depth_stencil = initializers::PipelineDepthStencilStateCreateInfo(VK_FALSE, VK_FALSE, VK_COMPARE_OP_ALWAYS);
 
   VkPipelineColorBlendAttachmentState color_blend_attachment = {};
   // NOLINTBEGIN(hicpp-signed-bitwise)
   color_blend_attachment.colorWriteMask =
     VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
   // NOLINTEND(hicpp-signed-bitwise)
-  color_blend_attachment.blendEnable = VK_FALSE;
+  color_blend_attachment.blendEnable = VK_TRUE;
+  color_blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+  color_blend_attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+  color_blend_attachment.colorBlendOp = VK_BLEND_OP_ADD;
+  color_blend_attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+  color_blend_attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+  color_blend_attachment.alphaBlendOp = VK_BLEND_OP_ADD;
 
   std::array<VkPipelineColorBlendAttachmentState, 1> color_blend_attachments = { color_blend_attachment };
   auto const color_blending =
@@ -97,7 +103,7 @@ auto create_graphics_pipeline(Init &init, RenderData &data) -> int
     .viewMask = 0,
     .colorAttachmentCount = 1,
     .pColorAttachmentFormats = &swapchain_format,
-    .depthAttachmentFormat = data.depth_format,
+    .depthAttachmentFormat = VK_FORMAT_UNDEFINED,
     .stencilAttachmentFormat = VK_FORMAT_UNDEFINED,
   };
 

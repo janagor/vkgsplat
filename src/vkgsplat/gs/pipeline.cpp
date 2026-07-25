@@ -21,8 +21,6 @@ namespace vkgsplat::gs {
 
 void record_gs_pipeline(RenderData &data)
 {
-  auto const tile_ranges_size = static_cast<VkDeviceSize>(data.tile_count * sizeof(TileRange));
-
   data.gs_sequence.record(std::make_shared<OpProjection>())
     .record(std::make_shared<compute::OpFillBuffer>(compute::FillBufferParams{
       .buffer = data.instance_count_buffer.handle,
@@ -33,13 +31,6 @@ void record_gs_pipeline(RenderData &data)
     .record(std::make_shared<OpBinning>())
     .record(std::make_shared<OpPrepareSort>())
     .record(std::make_shared<OpRadixSort>())
-    .record(std::make_shared<compute::OpFillBuffer>(compute::FillBufferParams{
-      .buffer = data.tile_ranges_buffer.handle,
-      .offset = 0,
-      .size = tile_ranges_size,
-      .value = 0U,
-    }))
-    .record(std::make_shared<OpIdentifyRanges>())
     .record(std::make_shared<OpRasterization>());
 }
 
@@ -68,6 +59,7 @@ void update_gs_frame_state(Init const &init, RenderData &data, GsFrameParams con
   data.sort_push = {
     .instance_count_address = init.gpu_allocator.get_buffer_device_address(data.instance_count_buffer),
     .radix_dispatch_address = init.gpu_allocator.get_buffer_device_address(data.radix_dispatch_buffer),
+    .draw_indirect_address = init.gpu_allocator.get_buffer_device_address(data.draw_indirect_buffer),
     .sort_size = data.gaussian_sort_size,
     .tile_count = data.tile_count,
     .blocks_per_workgroup = data.radix_blocks_per_workgroup,

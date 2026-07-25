@@ -16,7 +16,6 @@ enum class GpuPass : u32 {
   Binning,
   PrepareSort,
   RadixSort,
-  IdentifyRanges,
   Rasterize,
   Count,
 };
