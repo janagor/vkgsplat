@@ -1,17 +1,14 @@
 #include "backend/vulkan/renderer.hpp"
 
-#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
 #include <functional>
-#include <print>
 #include <span>
 #include <string>
 #include <system_error>
 #include <utility>
-#include <vector>
 
 #include "app_state.hpp"
 #include "backend/vulkan/command/command.hpp"
@@ -23,7 +20,6 @@
 #include "backend/vulkan/initializers.hpp"
 #include "backend/vulkan/vulkan_bootstrap.hpp"
 #include "gs/binning.hpp"
-#include "gs/gaussian_splat.hpp"
 #include "gs/pipeline.hpp"
 #include "gs/projection.hpp"
 #include "gs/rasterization.hpp"
@@ -62,106 +58,6 @@ namespace {
     update_gs_frame_state(init, data, { .camera = camera, .image_index = image_index, .aspect_ratio = aspect_ratio });
     eval_gs_pipeline(init, data, command_buffer);
     record_imgui_overlay(init, data, command_buffer, image_index);
-  }
-
-}// namespace
-
-namespace {
-
-  constexpr u32 k_binning_sentinel = 0xFFFFFFFFU;
-
-  [[nodiscard]] auto count_sort_inversions(std::vector<BinningKey> const &keys, u32 live) -> std::pair<u32, u32>
-  {
-    u32 inversions = 0;
-    u32 sentinel_in_prefix = 0;
-    if (live <= 1U || keys.empty()) { return { inversions, sentinel_in_prefix }; }
-
-    u32 const check_n = std::min(live, static_cast<u32>(keys.size()));
-    for (u32 i = 1U; i < check_n; ++i) {
-      u32 const prev = keys.at(i - 1U).packed;
-      u32 const cur = keys.at(i).packed;
-      if (prev == k_binning_sentinel || cur == k_binning_sentinel) { ++sentinel_in_prefix; }
-      if (prev > cur) { ++inversions; }
-    }
-    return { inversions, sentinel_in_prefix };
-  }
-
-  void debug_log_raster_state(Init &init, RenderData const &data)
-  {
-    static int debug_frames = 0;
-    if (debug_frames >= 2) { return; }
-
-    init.disp.queueWaitIdle(data.graphics_queue);
-    auto instance_count = init.gpu_allocator.read_buffer<u32>(data.instance_count_buffer, 1);
-    auto projected = init.gpu_allocator.read_buffer<GaussianProjected>(data.projected_buffer, data.splat_count);
-    auto ranges = init.gpu_allocator.read_buffer<TileRange>(data.tile_ranges_buffer, data.tile_count);
-    if (!instance_count || !projected || !ranges) {
-      std::println(stderr, "[raster debug] failed to read back GPU buffers");
-      ++debug_frames;
-      return;
-    }
-
-    u32 const live_radii = static_cast<u32>(std::count_if(projected->begin(),
-      projected->end(),
-      [](GaussianProjected const &projected_splat) { return projected_splat.radius >= 1.0F; }));
-    u32 const nonempty_tiles = static_cast<u32>(std::count_if(
-      ranges->begin(), ranges->end(), [](TileRange const &tile_range) { return tile_range.end > tile_range.start; }));
-
-    u32 const live = instance_count->at(0);
-    auto sorted_keys = init.gpu_allocator.read_buffer<BinningKey>(data.sorted_keys_buffer, data.gaussian_sort_size);
-    auto const [sort_inversions, sentinel_in_prefix] =
-      sorted_keys ? count_sort_inversions(*sorted_keys, live) : std::pair{ 0U, 0U };
-
-    std::println(stderr,
-      "[raster debug] instances={} live_radii={}/{} nonempty_tiles={} sort_size={} inversions={} sentinel_in_live={} viewport={}x{}",
-      live,
-      live_radii,
-      data.splat_count,
-      nonempty_tiles,
-      data.gaussian_sort_size,
-      sort_inversions,
-      sentinel_in_prefix,
-      data.color_width,
-      data.color_height);
-
-    for (auto const &candidate : *projected) {
-      if (candidate.radius < 1.0F) { continue; }
-      std::println(stderr,
-        "[raster debug] sample mean=({:.1f},{:.1f}) depth={:.3f} radius={:.1f} conic=({:.4f},{:.4f},{:.4f})",
-        candidate.screen_position.at(0),
-        candidate.screen_position.at(1),
-        candidate.depth,
-        candidate.radius,
-        candidate.conic.at(0),
-        candidate.conic.at(1),
-        candidate.conic.at(2));
-
-      u32 const tile_size = k_tile_size;
-      u32 const tiles_x = (data.color_width + tile_size - 1U) / tile_size;
-      auto const mean_x = static_cast<u32>(candidate.screen_position.at(0));
-      auto const mean_y = static_cast<u32>(candidate.screen_position.at(1));
-      u32 const tile_id = ((mean_y / tile_size) * tiles_x) + (mean_x / tile_size);
-      if (tile_id < ranges->size()) {
-        auto const &tile_range = ranges->at(tile_id);
-        std::println(stderr,
-          "[raster debug] tile_id={} range=[{}, {}) tiles_x={}",
-          tile_id,
-          tile_range.start,
-          tile_range.end,
-          tiles_x);
-      }
-
-      auto sorted_values = init.gpu_allocator.read_buffer<u32>(data.sorted_values_buffer, data.gaussian_sort_size);
-      if (sorted_values && tile_id < ranges->size()) {
-        auto const &tile_range = ranges->at(tile_id);
-        if (tile_range.end > tile_range.start && tile_range.start < sorted_values->size()) {
-          u32 const gaussian_id = sorted_values->at(tile_range.start);
-          std::println(stderr, "[raster debug] first gaussian in tile={}", gaussian_id);
-        }
-      }
-      break;
-    }
-    ++debug_frames;
   }
 
 }// namespace
@@ -303,8 +199,6 @@ auto draw_frame(Init &init, RenderData &data, Camera const &camera) -> std::expe
   if (init.disp.queueSubmit(data.graphics_queue, 1, &submit_info, in_flight_fence) != VK_SUCCESS) {
     return std::unexpected{ make_error(std::errc::io_error, "failed to submit draw command buffer") };
   }
-
-  debug_log_raster_state(init, data);
 
   std::array<VkSwapchainKHR, 1> const swap_chains = { init.swapchain->handle() };
   auto const present_info = initializers::PresentInfoKHR(signal_semaphores, swap_chains, std::span{ &image_index, 1 });

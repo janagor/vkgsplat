@@ -2,7 +2,6 @@
 
 #include <print>
 #include <span>
-#include <vector>
 
 #include "app_state.hpp"
 #include "gs/gaussian_splat.hpp"
@@ -42,7 +41,7 @@ auto create_sphere_buffers(Init &init, RenderData &data, SplatCpuData const &cpu
 
   auto geometry_buffer = init.gpu_allocator.create_storage_buffer(geometry_buffer_size);
   auto appearance_buffer = init.gpu_allocator.create_storage_buffer(appearance_buffer_size);
-  auto projected_buffer = init.gpu_allocator.create_storage_buffer(projected_buffer_size);
+  auto projected_buffer = init.gpu_allocator.create_device_storage_buffer(projected_buffer_size);
   if (!geometry_buffer || !appearance_buffer || !projected_buffer) {
     std::println("Failed to create gaussian buffers!");
     return false;
@@ -51,12 +50,6 @@ auto create_sphere_buffers(Init &init, RenderData &data, SplatCpuData const &cpu
   data.geometry_buffer = *geometry_buffer;
   data.appearance_buffer = *appearance_buffer;
   data.projected_buffer = *projected_buffer;
-
-  std::vector<GaussianProjected> const zero_projected(data.splat_count);
-  if (!init.gpu_allocator.write_buffer(*projected_buffer, std::span{ zero_projected })) {
-    std::println("Failed to zero-initialize projected buffer!");
-    return false;
-  }
 
   if (!init.gpu_allocator.write_buffer(*geometry_buffer, std::span{ cpu_data.geometries })) {
     std::println("Failed to upload splat geometry!");

@@ -11,7 +11,6 @@
 #include <print>
 #include <span>
 #include <string>
-#include <vector>
 
 #include <vulkan/vulkan_core.h>
 
@@ -46,9 +45,9 @@ namespace {
     auto const values_size = static_cast<VkDeviceSize>(data.max_bin_instances * sizeof(u32));
     auto const count_size = static_cast<VkDeviceSize>(sizeof(u32));
 
-    auto keys = init.gpu_allocator.create_storage_buffer(keys_size);
-    auto values = init.gpu_allocator.create_storage_buffer(values_size);
-    auto count = init.gpu_allocator.create_storage_buffer(count_size);
+    auto keys = init.gpu_allocator.create_device_storage_buffer(keys_size);
+    auto values = init.gpu_allocator.create_device_storage_buffer(values_size);
+    auto count = init.gpu_allocator.create_device_storage_buffer(count_size);
     if (!keys || !values || !count) {
       std::println("Failed to create binning buffers!");
       destroy_bin_buffers(init, data);
@@ -59,17 +58,7 @@ namespace {
     data.unsorted_values_buffer = *values;
     data.instance_count_buffer = *count;
 
-    std::vector<BinningKey> const zero_keys(data.max_bin_instances);
-    std::vector<u32> const zero_values(data.max_bin_instances, 0U);
-    std::vector<u32> const zero_count(1U, 0U);
-    if (!init.gpu_allocator.write_buffer(*keys, std::span{ zero_keys })
-        || !init.gpu_allocator.write_buffer(*values, std::span{ zero_values })
-        || !init.gpu_allocator.write_buffer(*count, std::span{ zero_count })) {
-      std::println("Failed to zero-initialize binning buffers!");
-      destroy_bin_buffers(init, data);
-      return false;
-    }
-
+    // GPU-only: instance count is cmdFillBuffer'd and keys/values rewritten each frame.
     return true;
   }
 

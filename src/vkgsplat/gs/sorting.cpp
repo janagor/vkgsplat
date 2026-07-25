@@ -13,7 +13,6 @@
 #include <print>
 #include <span>
 #include <string>
-#include <vector>
 
 #include <vulkan/vulkan_core.h>
 
@@ -75,11 +74,11 @@ namespace {
     auto const ranges_size = static_cast<VkDeviceSize>(data.tile_count * sizeof(TileRange));
     auto const dispatch_size = static_cast<VkDeviceSize>(sizeof(VkDispatchIndirectCommand));
 
-    auto keys = init.gpu_allocator.create_storage_buffer(keys_size);
-    auto values = init.gpu_allocator.create_storage_buffer(values_size);
-    auto histogram = init.gpu_allocator.create_storage_buffer(histogram_size);
-    auto dispatch = init.gpu_allocator.create_storage_buffer(dispatch_size);
-    auto ranges = init.gpu_allocator.create_storage_buffer(ranges_size);
+    auto keys = init.gpu_allocator.create_device_storage_buffer(keys_size);
+    auto values = init.gpu_allocator.create_device_storage_buffer(values_size);
+    auto histogram = init.gpu_allocator.create_device_storage_buffer(histogram_size);
+    auto dispatch = init.gpu_allocator.create_device_storage_buffer(dispatch_size);
+    auto ranges = init.gpu_allocator.create_device_storage_buffer(ranges_size);
     if (!keys || !values || !histogram || !dispatch || !ranges) {
       std::println("Failed to create sort buffers!");
       destroy_sort_buffers(init, data);
@@ -92,21 +91,7 @@ namespace {
     data.radix_dispatch_buffer = *dispatch;
     data.tile_ranges_buffer = *ranges;
 
-    std::vector<BinningKey> const zero_keys(data.gaussian_sort_size);
-    std::vector<u32> const zero_values(data.gaussian_sort_size, 0U);
-    std::vector<u32> const zero_histogram(histogram_entries, 0U);
-    std::vector<TileRange> const zero_ranges(data.tile_count);
-    VkDispatchIndirectCommand const zero_dispatch{ .x = 1U, .y = 1U, .z = 1U };
-    if (!init.gpu_allocator.write_buffer(*keys, std::span{ zero_keys })
-        || !init.gpu_allocator.write_buffer(*values, std::span{ zero_values })
-        || !init.gpu_allocator.write_buffer(*histogram, std::span{ zero_histogram })
-        || !init.gpu_allocator.write_buffer(*dispatch, std::span{ &zero_dispatch, 1 })
-        || !init.gpu_allocator.write_buffer(*ranges, std::span{ zero_ranges })) {
-      std::println("Failed to zero-initialize sort buffers!");
-      destroy_sort_buffers(init, data);
-      return false;
-    }
-
+    // GPU-only working set: shaders / cmdFillBuffer overwrite these each frame.
     return true;
   }
 
