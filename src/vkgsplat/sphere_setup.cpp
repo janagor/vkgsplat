@@ -4,7 +4,6 @@
 #include "backend/vulkan/descriptor/descriptor_heap.hpp"
 #include "compute/algorithm.hpp"
 #include "compute/op_algo_dispatch.hpp"
-#include "compute/op_tensor_sync_device.hpp"
 #include "compute/sort_entry.hpp"
 #include "compute/tensor.hpp"
 #include "vulkan_context.hpp"
@@ -51,13 +50,11 @@ auto init_sphere_setup(Init &init, RenderData &data) -> bool
   std::string const shader_path = std::string(SHADER_DIRECTORY) + "/init_spheres.comp.spv";
   if (!data.sphere_setup_algorithm.init(init, shader_path, std::span{ specialization_constants })) { return false; }
 
-  auto sync_device = std::make_shared<compute::OpTensorSyncDevice>();
-  sync_device->add(data.sort_entries);
-  sync_device->add(data.sorted_indices);
+  // Host mirrors are uploaded once in Tensor::create; do not re-sync every dispatch.
   uint32_t const workgroup_count = (data.sort_size + 63U) / 64U;
   auto dispatch_op = std::make_shared<compute::OpAlgoDispatch>(
     data.sphere_setup_algorithm, std::array<uint32_t, 3>{ workgroup_count, 1U, 1U });
-  data.compute_sequence.record(sync_device).record(dispatch_op);
+  data.compute_sequence.record(dispatch_op);
 
   return true;
 }

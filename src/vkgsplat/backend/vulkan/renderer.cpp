@@ -56,7 +56,8 @@ namespace {
     size_t image_index)
   {
     bind_descriptor_heap(init, data, command_buffer);
-    data.compute_sequence.eval(init, data, command_buffer);
+    // Sphere luminance bitonic setup is only needed for the unused graphics draw path;
+    // re-uploading those tensors every frame was a multi-MB memcpy in pre_eval.
 
     update_gs_frame_state(init, data, { .camera = camera, .image_index = image_index, .aspect_ratio = aspect_ratio });
     eval_gs_pipeline(init, data, command_buffer);
