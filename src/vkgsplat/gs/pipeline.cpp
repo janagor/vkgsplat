@@ -44,7 +44,7 @@ void update_gs_frame_state(Init const &init, RenderData &data, GsFrameParams con
     .projection = frame.camera.projection_matrix(frame.aspect_ratio),
     .viewport = { static_cast<float>(init.swapchain->extent().width),
       static_cast<float>(init.swapchain->extent().height) },
-    .sh_degree = 3U,
+    .sh_degree = k_viewer_sh_degree,
     .pad0 = 0U,
     .camera_position = glm::vec4{ camera_pos, 0.0F },
   };
@@ -71,7 +71,7 @@ void update_gs_frame_state(Init const &init, RenderData &data, GsFrameParams con
     .viewport = { init.swapchain->extent().width, init.swapchain->extent().height },
     .tile_size = k_tile_size,
     .tiles_x = (init.swapchain->extent().width + k_tile_size - 1U) / k_tile_size,
-    .sh_degree = 3U,
+    .sh_degree = k_viewer_sh_degree,
     .pad0 = 0U,
     .pad1 = 0U,
     .pad2 = 0U,

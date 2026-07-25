@@ -15,7 +15,7 @@ struct ProjectPushConstants
   glm::mat4 view{};
   glm::mat4 projection{};
   glm::vec2 viewport{};// width, height
-  u32 sh_degree{ 3 };
+  u32 sh_degree{ 0 };// 0 = SH0 only (fast viewer); 3 = full view-dependent SH
   u32 pad0{};
   glm::vec4 camera_position{};// xyz used for SH view direction
 };
@@ -70,7 +70,7 @@ struct RasterPushConstants
   u32 tile_size{ 16 };
   u32 tiles_x{};
   glm::vec4 background{ 0.02F, 0.02F, 0.05F, 0.0F };// rgb used
-  u32 sh_degree{ 3 };// 0 = SH0 only; 3 = full degree-3
+  u32 sh_degree{ 0 };// 0 = SH0 only; 3 = full degree-3
   u32 pad0{};
   u32 pad1{};
   u32 pad2{};
