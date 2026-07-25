@@ -5,8 +5,11 @@
 #include "backend/vulkan/initializers.hpp"
 #include "vulkan_context.hpp"
 #include <vkgsplat_utility/error.hpp>
+#include <vkgsplat_utility/types.hpp>
 #include <vkgsplat_window/window.hpp>
 
+#include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -30,6 +33,10 @@
 #include <VkBootstrap.h>
 
 namespace vkgsplat {
+
+namespace {
+  constexpr size_t k_fps_label_capacity = 64;
+}// namespace
 
 struct ImGuiOverlayState
 {
@@ -55,6 +62,16 @@ struct ImGuiOverlayState
   ImGui_ImplVulkan_DescriptorHeapInfo heap_info{};
   VkPipelineRenderingCreateInfo pipeline_rendering{};
   VkFormat color_format{ VK_FORMAT_UNDEFINED };
+
+  // Rebuild ImGui draw data infrequently; reuse per-frame secondary CBs between updates.
+  std::array<VkCommandBuffer, k_max_frames_in_flight> overlay_secondaries{};
+  std::array<uint64_t, k_max_frames_in_flight> secondary_generation{};
+  uint64_t ui_generation = 1;
+  std::array<char, k_fps_label_capacity> fps_label{ "FPS: --" };
+  std::chrono::steady_clock::time_point last_fps_update;
+  std::chrono::steady_clock::time_point last_frame_time;
+  float fps_ema = 0.0F;
+  VkExtent2D last_extent{};
 };
 
 namespace {
@@ -65,6 +82,8 @@ namespace {
   constexpr float k_fps_window_margin = 12.0F;
   constexpr float k_fps_window_alpha = 0.45F;
   constexpr double k_ms_per_second = 1000.0;
+  constexpr auto k_fps_update_interval = std::chrono::milliseconds{ 100 };
+  constexpr float k_fps_ema_alpha = 0.1F;
 
   [[nodiscard]] auto align_buffer_size(VkDeviceSize size, VkDeviceSize alignment) -> VkDeviceSize
   {
@@ -195,7 +214,7 @@ namespace {
     };
   }
 
-  void draw_fps_window()
+  void draw_fps_window(char const *fps_label)
   {
     ImGuiIO const &imgui_io = ImGui::GetIO();
     ImGui::SetNextWindowPos(ImVec2(k_fps_window_margin, imgui_io.DisplaySize.y - k_fps_window_margin),
@@ -207,13 +226,129 @@ namespace {
                                    | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing
                                    | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoMove;
     // NOLINTEND(hicpp-signed-bitwise)
-    if (ImGui::Begin("FPS", nullptr, flags)) {
-      // NOLINTNEXTLINE(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
-      ImGui::Text("FPS: %.1f (%.2f ms)",
-        static_cast<double>(imgui_io.Framerate),
-        k_ms_per_second / static_cast<double>(imgui_io.Framerate));
-    }
+    if (ImGui::Begin("FPS", nullptr, flags)) { ImGui::TextUnformatted(fps_label); }
     ImGui::End();
+  }
+
+  void invalidate_overlay_secondaries(ImGuiOverlayState &overlay)
+  {
+    ++overlay.ui_generation;
+    overlay.secondary_generation.fill(0);
+  }
+
+  [[nodiscard]] auto allocate_overlay_secondaries(RenderData &data) -> bool
+  {
+    if (data.imgui == nullptr || !data.command_pool) { return false; }
+
+    auto buffers =
+      data.command_pool->allocate_buffers(static_cast<u32>(k_max_frames_in_flight), VK_COMMAND_BUFFER_LEVEL_SECONDARY);
+    if (!buffers) { return false; }
+
+    for (size_t i = 0; i < k_max_frames_in_flight; ++i) {
+      data.imgui->overlay_secondaries.at(i) = buffers->at(i).handle();
+      data.imgui->secondary_generation.at(i) = 0;
+    }
+    return true;
+  }
+
+  void sample_frame_time(ImGuiOverlayState &overlay)
+  {
+    auto const now = std::chrono::steady_clock::now();
+    if (overlay.last_frame_time.time_since_epoch().count() != 0) {
+      float const frame_delta = std::chrono::duration<float>(now - overlay.last_frame_time).count();
+      if (frame_delta > 0.0F) {
+        float const fps = 1.0F / frame_delta;
+        overlay.fps_ema =
+          overlay.fps_ema > 0.0F ? ((1.0F - k_fps_ema_alpha) * overlay.fps_ema) + (k_fps_ema_alpha * fps) : fps;
+      }
+    }
+    overlay.last_frame_time = now;
+
+    bool const first_sample = overlay.last_fps_update.time_since_epoch().count() == 0;
+    if (first_sample || now - overlay.last_fps_update >= k_fps_update_interval) {
+      overlay.last_fps_update = now;
+      float const fps = overlay.fps_ema > 0.0F ? overlay.fps_ema : 0.0F;
+      double const frame_ms = fps > 0.0F ? k_ms_per_second / static_cast<double>(fps) : 0.0;
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
+      (void)std::snprintf(overlay.fps_label.data(),
+        overlay.fps_label.size(),
+        "FPS: %.1f (%.2f ms)",
+        static_cast<double>(fps),
+        frame_ms);
+      invalidate_overlay_secondaries(overlay);
+    }
+  }
+
+  void record_overlay_secondary(Init &init, RenderData const &data, size_t frame_slot)
+  {
+    auto &overlay = *data.imgui;
+    VkCommandBuffer secondary = overlay.overlay_secondaries.at(frame_slot);
+
+    VkCommandBufferInheritanceRenderingInfo inheritance_rendering{
+      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_RENDERING_INFO,
+      .pNext = nullptr,
+      .flags = 0,
+      .viewMask = 0,
+      .colorAttachmentCount = 1,
+      .pColorAttachmentFormats = &overlay.color_format,
+      .depthAttachmentFormat = VK_FORMAT_UNDEFINED,
+      .stencilAttachmentFormat = VK_FORMAT_UNDEFINED,
+      .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+    };
+    VkCommandBufferInheritanceInfo const inheritance{
+      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
+      .pNext = &inheritance_rendering,
+      .renderPass = VK_NULL_HANDLE,
+      .subpass = 0,
+      .framebuffer = VK_NULL_HANDLE,
+      .occlusionQueryEnable = VK_FALSE,
+      .queryFlags = 0,
+      .pipelineStatistics = 0,
+    };
+    VkCommandBufferBeginInfo const begin_info{
+      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+      .pNext = nullptr,
+      .flags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT,
+      .pInheritanceInfo = &inheritance,
+    };
+
+    init.disp.resetCommandBuffer(secondary, 0);
+    init.disp.beginCommandBuffer(secondary, &begin_info);
+
+    VkBindHeapInfoEXT const resource_bind = {
+      .sType = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
+      .pNext = nullptr,
+      .heapRange =
+        {
+          .address = init.gpu_allocator.get_buffer_device_address(overlay.resource_heap),
+          .size = overlay.resource_heap_size,
+        },
+      .reservedRangeOffset = overlay.resource_reserved_offset,
+      .reservedRangeSize = overlay.resource_reserved_size,
+    };
+    VkBindHeapInfoEXT const sampler_bind = {
+      .sType = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
+      .pNext = nullptr,
+      .heapRange =
+        {
+          .address = init.gpu_allocator.get_buffer_device_address(overlay.sampler_heap),
+          .size = overlay.sampler_heap_size,
+        },
+      .reservedRangeOffset = overlay.sampler_reserved_offset,
+      .reservedRangeSize = overlay.sampler_reserved_size,
+    };
+    init.cmd_bind_resource_heap(secondary, &resource_bind);
+    init.cmd_bind_sampler_heap(secondary, &sampler_bind);
+
+    ImGui_ImplVulkan_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+    draw_fps_window(overlay.fps_label.data());
+    ImGui::Render();
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), secondary);
+
+    init.disp.endCommandBuffer(secondary);
+    overlay.secondary_generation.at(frame_slot) = overlay.ui_generation;
   }
 
   void destroy_imgui_heaps(Init &init, ImGuiOverlayState &overlay)
@@ -348,6 +483,12 @@ auto init_imgui_overlay(Init &init, RenderData &data) -> std::expected<void, Err
 
   overlay->initialized = true;
   data.imgui = std::move(overlay);
+
+  if (!allocate_overlay_secondaries(data)) {
+    shutdown_imgui_overlay(init, data);
+    return std::unexpected{ make_error(std::errc::io_error, "failed to allocate ImGui overlay command buffers") };
+  }
+
   return {};
 }
 
@@ -377,21 +518,37 @@ void recreate_imgui_overlay_pipeline(Init &init, RenderData &data)
   pipeline_info.PipelineRenderingCreateInfo = data.imgui->pipeline_rendering;
   pipeline_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
   ImGui_ImplVulkan_CreateMainPipeline(&pipeline_info);
+
+  // Command pool was recreated with the swapchain; reclaim secondary CBs.
+  if (!allocate_overlay_secondaries(data)) {
+    std::println(stderr, "[imgui] failed to reallocate overlay command buffers after swapchain recreate");
+  }
+  invalidate_overlay_secondaries(*data.imgui);
+  data.imgui->last_extent = {};
 }
 
 void record_imgui_overlay(Init &init, RenderData const &data, VkCommandBuffer command_buffer, size_t image_index)
 {
   if (data.imgui == nullptr || !data.imgui->initialized) { return; }
 
-  ImGui_ImplVulkan_NewFrame();
-  ImGui_ImplGlfw_NewFrame();
-  ImGui::NewFrame();
-  draw_fps_window();
-  ImGui::Render();
+  auto &overlay = *data.imgui;
+  sample_frame_time(overlay);
+
+  VkExtent2D const extent = init.swapchain->extent();
+  if (extent.width != overlay.last_extent.width || extent.height != overlay.last_extent.height) {
+    overlay.last_extent = extent;
+    invalidate_overlay_secondaries(overlay);
+  }
+
+  size_t const frame_slot = data.current_frame;
+  if (overlay.overlay_secondaries.at(frame_slot) == VK_NULL_HANDLE) { return; }
+
+  if (overlay.secondary_generation.at(frame_slot) != overlay.ui_generation) {
+    record_overlay_secondary(init, data, frame_slot);
+  }
 
   VkImage swapchain_image = init.swapchain->images().at(image_index);
   VkImageView swapchain_view = init.swapchain->image_views().at(image_index);
-  VkExtent2D const extent = init.swapchain->extent();
 
   VkImageSubresourceRange const color_range = {
     .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -432,7 +589,7 @@ void record_imgui_overlay(Init &init, RenderData const &data, VkCommandBuffer co
   VkRenderingInfo const rendering_info = {
     .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
     .pNext = nullptr,
-    .flags = 0,
+    .flags = VK_RENDERING_CONTENTS_SECONDARY_COMMAND_BUFFERS_BIT,
     .renderArea = { .offset = { .x = 0, .y = 0 }, .extent = extent },
     .layerCount = 1,
     .viewMask = 0,
@@ -443,33 +600,7 @@ void record_imgui_overlay(Init &init, RenderData const &data, VkCommandBuffer co
   };
 
   init.disp.cmdBeginRendering(command_buffer, &rendering_info);
-
-  VkBindHeapInfoEXT const resource_bind = {
-    .sType = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
-    .pNext = nullptr,
-    .heapRange =
-      {
-        .address = init.gpu_allocator.get_buffer_device_address(data.imgui->resource_heap),
-        .size = data.imgui->resource_heap_size,
-      },
-    .reservedRangeOffset = data.imgui->resource_reserved_offset,
-    .reservedRangeSize = data.imgui->resource_reserved_size,
-  };
-  VkBindHeapInfoEXT const sampler_bind = {
-    .sType = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
-    .pNext = nullptr,
-    .heapRange =
-      {
-        .address = init.gpu_allocator.get_buffer_device_address(data.imgui->sampler_heap),
-        .size = data.imgui->sampler_heap_size,
-      },
-    .reservedRangeOffset = data.imgui->sampler_reserved_offset,
-    .reservedRangeSize = data.imgui->sampler_reserved_size,
-  };
-  init.cmd_bind_resource_heap(command_buffer, &resource_bind);
-  init.cmd_bind_sampler_heap(command_buffer, &sampler_bind);
-
-  ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), command_buffer);
+  init.disp.cmdExecuteCommands(command_buffer, 1, &overlay.overlay_secondaries.at(frame_slot));
   init.disp.cmdEndRendering(command_buffer);
 
   auto to_present = initializers::ImageMemoryBarrier(
