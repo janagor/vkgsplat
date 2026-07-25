@@ -6,23 +6,35 @@ layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 
 // Heap slot indices must match HeapSlot in descriptor_heap.hpp.
 const uint HEAP_GEOMETRY = 0u;
+const uint HEAP_APPEARANCE = 1u;
 const uint HEAP_PROJECTED = 4u;
 
-// Flat packing must match GaussianGeometry / GaussianProjected in gaussian_splat.hpp.
+// Flat packing must match GaussianGeometry / GaussianProjected / Appearance in gaussian_splat.hpp.
 const uint GEOMETRY_STRIDE = 11u;
 const uint GEOM_POS = 0u;
 const uint GEOM_SCALE = 3u;
 const uint GEOM_ROT = 6u;
+const uint GEOM_OPACITY = 10u;
 
-const uint PROJECTED_STRIDE = 7u;
+const uint APPEARANCE_STRIDE = 48u;
+const uint APP_F_DC = 0u;
+const uint APP_F_REST = 3u;
+
+const uint PROJECTED_STRIDE = 11u;
 const uint PROJ_MEAN = 0u;
 const uint PROJ_CONIC = 2u;
 const uint PROJ_DEPTH = 5u;
 const uint PROJ_RADIUS = 6u;
+const uint PROJ_COLOR = 7u;
+const uint PROJ_OPACITY = 10u;
 
 layout(descriptor_heap, std430) readonly buffer GeometryBuffer {
 	float data[];
 } geometry_buffers[];
+
+layout(descriptor_heap, std430) readonly buffer AppearanceBuffer {
+	float data[];
+} appearance_buffers[];
 
 layout(descriptor_heap, std430) writeonly buffer ProjectedBuffer {
 	float data[];
@@ -32,7 +44,9 @@ layout(push_constant) uniform ProjectCamera {
 	mat4 view;
 	mat4 proj;
 	vec2 viewport;
-	vec2 _pad;
+	uint sh_degree;
+	uint _pad0;
+	vec4 camera_position;
 } camera;
 
 layout(constant_id = 0) const uint SPLAT_COUNT = 1u;
@@ -40,6 +54,26 @@ layout(constant_id = 0) const uint SPLAT_COUNT = 1u;
 const float NEAR_PLANE = 0.2;
 const float COV_FILTER = 0.3;
 const float RADIUS_SCALE = 3.0;
+
+const float SH_C0 = 0.28209479177387814;
+const float SH_C1 = 0.4886025119029199;
+const float SH_C2_0 = 1.0925484305920792;
+const float SH_C2_1 = -1.0925484305920792;
+const float SH_C2_2 = 0.31539156525252005;
+const float SH_C2_3 = -1.0925484305920792;
+const float SH_C2_4 = 0.5462742152960396;
+const float SH_C3_0 = -0.5900435899266435;
+const float SH_C3_1 = 2.890611442640554;
+const float SH_C3_2 = -0.4570457994644658;
+const float SH_C3_3 = 0.3731763325901154;
+const float SH_C3_4 = -0.4570457994644658;
+const float SH_C3_5 = 1.445305721320277;
+const float SH_C3_6 = -0.5900435899266435;
+
+float sigmoid(float x)
+{
+	return 1.0 / (1.0 + exp(-x));
+}
 
 mat3 quat_to_rotmat(vec4 q)
 {
@@ -54,6 +88,65 @@ mat3 quat_to_rotmat(vec4 q)
 		2.0 * (x * z + w * y), 2.0 * (y * z - w * x), 1.0 - 2.0 * (x * x + y * y));
 }
 
+// PLY f_rest is channel-major: 15 R, 15 G, 15 B for degrees 1..3.
+vec3 sh_coeff(uint app_base, uint coeff_index)
+{
+	if (coeff_index == 0u) {
+		return vec3(
+			appearance_buffers[HEAP_APPEARANCE].data[app_base + APP_F_DC],
+			appearance_buffers[HEAP_APPEARANCE].data[app_base + APP_F_DC + 1u],
+			appearance_buffers[HEAP_APPEARANCE].data[app_base + APP_F_DC + 2u]);
+	}
+	uint rest = coeff_index - 1u;
+	uint r_i = app_base + APP_F_REST + rest;
+	uint g_i = app_base + APP_F_REST + 15u + rest;
+	uint b_i = app_base + APP_F_REST + 30u + rest;
+	return vec3(
+		appearance_buffers[HEAP_APPEARANCE].data[r_i],
+		appearance_buffers[HEAP_APPEARANCE].data[g_i],
+		appearance_buffers[HEAP_APPEARANCE].data[b_i]);
+}
+
+vec3 eval_sh(uint gaussian_id, vec3 view_dir)
+{
+	uint app_base = gaussian_id * APPEARANCE_STRIDE;
+	vec3 result = SH_C0 * sh_coeff(app_base, 0u);
+
+	if (camera.sh_degree > 0u) {
+		float x = view_dir.x;
+		float y = view_dir.y;
+		float z = view_dir.z;
+		result = result - SH_C1 * y * sh_coeff(app_base, 1u) + SH_C1 * z * sh_coeff(app_base, 2u)
+			- SH_C1 * x * sh_coeff(app_base, 3u);
+
+		if (camera.sh_degree > 1u) {
+			float xx = x * x;
+			float yy = y * y;
+			float zz = z * z;
+			float xy = x * y;
+			float yz = y * z;
+			float xz = x * z;
+			result = result + SH_C2_0 * xy * sh_coeff(app_base, 4u)
+				+ SH_C2_1 * yz * sh_coeff(app_base, 5u)
+				+ SH_C2_2 * (2.0 * zz - xx - yy) * sh_coeff(app_base, 6u)
+				+ SH_C2_3 * xz * sh_coeff(app_base, 7u)
+				+ SH_C2_4 * (xx - yy) * sh_coeff(app_base, 8u);
+
+			if (camera.sh_degree > 2u) {
+				result = result + SH_C3_0 * y * (3.0 * xx - yy) * sh_coeff(app_base, 9u)
+					+ SH_C3_1 * xy * z * sh_coeff(app_base, 10u)
+					+ SH_C3_2 * y * (4.0 * zz - xx - yy) * sh_coeff(app_base, 11u)
+					+ SH_C3_3 * z * (2.0 * zz - 3.0 * xx - 3.0 * yy) * sh_coeff(app_base, 12u)
+					+ SH_C3_4 * x * (4.0 * zz - xx - yy) * sh_coeff(app_base, 13u)
+					+ SH_C3_5 * z * (xx - yy) * sh_coeff(app_base, 14u)
+					+ SH_C3_6 * x * (xx - 3.0 * yy) * sh_coeff(app_base, 15u);
+			}
+		}
+	}
+
+	return clamp(result + 0.5, 0.0, 1.0);
+}
+
 void write_culled(uint base)
 {
 	projected_buffers[HEAP_PROJECTED].data[base + PROJ_MEAN] = 0.0;
@@ -63,6 +156,10 @@ void write_culled(uint base)
 	projected_buffers[HEAP_PROJECTED].data[base + PROJ_CONIC + 2u] = 0.0;
 	projected_buffers[HEAP_PROJECTED].data[base + PROJ_DEPTH] = 0.0;
 	projected_buffers[HEAP_PROJECTED].data[base + PROJ_RADIUS] = 0.0;
+	projected_buffers[HEAP_PROJECTED].data[base + PROJ_COLOR] = 0.0;
+	projected_buffers[HEAP_PROJECTED].data[base + PROJ_COLOR + 1u] = 0.0;
+	projected_buffers[HEAP_PROJECTED].data[base + PROJ_COLOR + 2u] = 0.0;
+	projected_buffers[HEAP_PROJECTED].data[base + PROJ_OPACITY] = 0.0;
 }
 
 void main()
@@ -174,6 +271,10 @@ void main()
 		(mean_ndc.x * 0.5 + 0.5) * width,
 		(mean_ndc.y * 0.5 + 0.5) * height);
 
+	float opacity = sigmoid(geometry_buffers[HEAP_GEOMETRY].data[geom_base + GEOM_OPACITY]);
+	vec3 view_dir = normalize(mean - camera.camera_position.xyz);
+	vec3 color = eval_sh(id, view_dir);
+
 	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_MEAN] = screen.x;
 	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_MEAN + 1u] = screen.y;
 	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_CONIC] = conic_xx;
@@ -181,4 +282,8 @@ void main()
 	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_CONIC + 2u] = conic_xy;
 	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_DEPTH] = mean_view.z;
 	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_RADIUS] = radius;
+	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_COLOR] = color.r;
+	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_COLOR + 1u] = color.g;
+	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_COLOR + 2u] = color.b;
+	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_OPACITY] = opacity;
 }

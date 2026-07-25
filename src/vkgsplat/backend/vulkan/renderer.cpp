@@ -77,12 +77,10 @@ namespace {
 
     u32 const check_n = std::min(live, static_cast<u32>(keys.size()));
     for (u32 i = 1U; i < check_n; ++i) {
-      auto const &prev = keys.at(i - 1U);
-      auto const &cur = keys.at(i);
-      if (prev.tile_id == k_binning_sentinel || cur.tile_id == k_binning_sentinel) { ++sentinel_in_prefix; }
-      bool const out_of_order =
-        prev.tile_id > cur.tile_id || (prev.tile_id == cur.tile_id && prev.depth_bits > cur.depth_bits);
-      if (out_of_order) { ++inversions; }
+      u32 const prev = keys.at(i - 1U).packed;
+      u32 const cur = keys.at(i).packed;
+      if (prev == k_binning_sentinel || cur == k_binning_sentinel) { ++sentinel_in_prefix; }
+      if (prev > cur) { ++inversions; }
     }
     return { inversions, sentinel_in_prefix };
   }

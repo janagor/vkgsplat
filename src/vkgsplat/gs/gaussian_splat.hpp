@@ -64,7 +64,8 @@ static_assert(std::is_trivially_copyable_v<GaussianSplat>);
 static_assert(std::is_standard_layout_v<GaussianSplat>);
 
 // Stage 1 projection output (AoS). radius == 0 marks a culled splat.
-inline constexpr u32 k_projected_floats = 7;
+// Layout: mean(2) + conic(3) + depth(1) + radius(1) + rgb(3) + opacity(1).
+inline constexpr u32 k_projected_floats = 11;
 
 struct GaussianProjected
 {
@@ -72,6 +73,8 @@ struct GaussianProjected
   std::array<f32, 3> conic{};// Σ₂D⁻¹ as (xx, yy, xy)
   f32 depth{};// view-space z
   f32 radius{};// screen-space extent in pixels
+  std::array<f32, 3> color{};// view-dependent SH RGB (precomputed once per frame)
+  f32 opacity{};// sigmoid(logit) opacity
 };
 
 static_assert(sizeof(GaussianProjected) == k_projected_floats * sizeof(f32));
@@ -84,11 +87,12 @@ inline constexpr u32 k_tile_size = 16;
 // Conservative upper bound on tiles touched per splat (16x16 tile grid).
 inline constexpr u32 k_max_tiles_per_splat = 64;
 
-// 64-bit sort key: high = tile_id, low = depth bit pattern (front-to-back within tile).
+// 32-bit sort key packed as (tile_id << 16) | (depth_bits >> 16).
+// Fits tile grids up to 65536 and keeps coarse depth order within a tile.
 struct BinningKey
 {
-  u32 tile_id{};
-  u32 depth_bits{};
+  u32 packed{};
+  u32 _pad{};// keeps 8-byte stride used by existing KEY_STRIDE=2 shaders
 };
 
 static_assert(sizeof(BinningKey) == 8U);

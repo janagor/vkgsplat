@@ -107,30 +107,31 @@ void OpPrepareSort::record(Init const &init, RenderData const &data, VkCommandBu
 
 void OpRadixSort::record(Init const &init, RenderData const &data, VkCommandBuffer command_buffer)
 {
-  constexpr u32 k_radix_passes = 8U;// 64-bit key, 8 bits per pass
+  constexpr u32 k_radix_passes = 4U;// packed uint32 key, 8 bits per pass
+  u64 const instance_count_address =
+    init.gpu_allocator.get_buffer_device_address(data.instance_count_buffer);
 
   for (u32 pass = 0U; pass < k_radix_passes; ++pass) {
     RadixPushConstants const radix_push{
-      .num_elements = data.gaussian_sort_size,
+      .instance_count_address = instance_count_address,
+      .capacity = data.gaussian_sort_size,
       .shift = pass * 8U,
-      .num_workgroups = data.radix_num_workgroups,
       .num_blocks_per_workgroup = data.radix_blocks_per_workgroup,
       .ping = pass & 1U,
       .pad0 = 0U,
       .pad1 = 0U,
-      .pad2 = 0U,
     };
 
     init.disp.cmdBindPipeline(
       command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, data.radix_histogram_algorithm.pipeline());
     push_constants(init, &radix_push, sizeof(RadixPushConstants), command_buffer);
-    dispatch_compute_1d(init, command_buffer, data.radix_num_workgroups);
+    init.disp.cmdDispatchIndirect(command_buffer, data.radix_dispatch_buffer.handle, 0);
     Barrier::compute_to_compute(init.disp, command_buffer);
 
     init.disp.cmdBindPipeline(
       command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, data.radix_scatter_algorithm.pipeline());
     push_constants(init, &radix_push, sizeof(RadixPushConstants), command_buffer);
-    dispatch_compute_1d(init, command_buffer, data.radix_num_workgroups);
+    init.disp.cmdDispatchIndirect(command_buffer, data.radix_dispatch_buffer.handle, 0);
     Barrier::compute_to_compute(init.disp, command_buffer);
   }
 }

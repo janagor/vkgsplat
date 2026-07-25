@@ -14,7 +14,7 @@ const uint HEAP_SORTED_VALUES = 8u;
 const uint KEY_STRIDE = 2u;
 const uint KEY_TILE = 0u;
 const uint KEY_DEPTH = 1u;
-const uint SENTINEL = 0xFFFFFFFFu;
+const uint WORKGROUP_SIZE_RADIX = 256u;
 
 layout(descriptor_heap, std430) readonly buffer UnsortedKeysBuffer {
 	uint data[];
@@ -36,10 +36,19 @@ layout(buffer_reference, std430, buffer_reference_align = 4) buffer InstanceCoun
 	uint count;
 };
 
+layout(buffer_reference, std430, buffer_reference_align = 4) buffer DispatchRef {
+	uint x;
+	uint y;
+	uint z;
+};
+
 layout(push_constant) uniform SortPush {
 	uvec2 instance_count_addr;
+	uvec2 radix_dispatch_addr;
 	uint sort_size;
 	uint tile_count;
+	uint blocks_per_workgroup;
+	uint _pad;
 } push;
 
 layout(constant_id = 0) const uint SORT_SIZE = 1u;
@@ -53,24 +62,32 @@ uint flat_invocation_id()
 void main()
 {
 	uint id = flat_invocation_id();
-	if (id >= SORT_SIZE) {
+	InstanceCountRef instance_count = InstanceCountRef(push.instance_count_addr);
+	uint live_count = min(instance_count.count, push.sort_size);
+
+	// Thread 0 publishes radix dispatch size for the live instance count only.
+	if (id == 0u) {
+		uint blocks = max(push.blocks_per_workgroup, 1u);
+		uint threads = (live_count + blocks - 1u) / blocks;
+		uint wgs = (threads + WORKGROUP_SIZE_RADIX - 1u) / WORKGROUP_SIZE_RADIX;
+		if (wgs == 0u) {
+			wgs = 1u;
+		}
+		DispatchRef dispatch = DispatchRef(push.radix_dispatch_addr);
+		dispatch.x = wgs;
+		dispatch.y = 1u;
+		dispatch.z = 1u;
+	}
+
+	if (id >= SORT_SIZE || id >= live_count) {
 		return;
 	}
 
-	InstanceCountRef instance_count = InstanceCountRef(push.instance_count_addr);
-	uint live_count = min(instance_count.count, push.sort_size);
 	uint key_base = id * KEY_STRIDE;
-
-	if (id < live_count) {
-		sorted_keys_buffers[HEAP_SORTED_KEYS].data[key_base + KEY_TILE] =
-			unsorted_keys_buffers[HEAP_UNSORTED_KEYS].data[key_base + KEY_TILE];
-		sorted_keys_buffers[HEAP_SORTED_KEYS].data[key_base + KEY_DEPTH] =
-			unsorted_keys_buffers[HEAP_UNSORTED_KEYS].data[key_base + KEY_DEPTH];
-		sorted_values_buffers[HEAP_SORTED_VALUES].data[id] =
-			unsorted_values_buffers[HEAP_UNSORTED_VALUES].data[id];
-	} else {
-		sorted_keys_buffers[HEAP_SORTED_KEYS].data[key_base + KEY_TILE] = SENTINEL;
-		sorted_keys_buffers[HEAP_SORTED_KEYS].data[key_base + KEY_DEPTH] = SENTINEL;
-		sorted_values_buffers[HEAP_SORTED_VALUES].data[id] = 0u;
-	}
+	sorted_keys_buffers[HEAP_SORTED_KEYS].data[key_base + KEY_TILE] =
+		unsorted_keys_buffers[HEAP_UNSORTED_KEYS].data[key_base + KEY_TILE];
+	sorted_keys_buffers[HEAP_SORTED_KEYS].data[key_base + KEY_DEPTH] =
+		unsorted_keys_buffers[HEAP_UNSORTED_KEYS].data[key_base + KEY_DEPTH];
+	sorted_values_buffers[HEAP_SORTED_VALUES].data[id] =
+		unsorted_values_buffers[HEAP_UNSORTED_VALUES].data[id];
 }

@@ -15,10 +15,12 @@ struct ProjectPushConstants
   glm::mat4 view{};
   glm::mat4 projection{};
   glm::vec2 viewport{};// width, height
-  glm::vec2 padding{};
+  u32 sh_degree{ 3 };
+  u32 pad0{};
+  glm::vec4 camera_position{};// xyz used for SH view direction
 };
 
-static_assert(sizeof(ProjectPushConstants) == 144);
+static_assert(sizeof(ProjectPushConstants) == 160);
 
 // Stage 2 tile binning.
 struct BinPushConstants
@@ -35,23 +37,25 @@ static_assert(sizeof(BinPushConstants) == 24);
 struct SortPushConstants
 {
   u64 instance_count_address{};
-  u32 sort_size{};
+  u64 radix_dispatch_address{};// VkDispatchIndirectCommand {x,y,z}
+  u32 sort_size{};// capacity
   u32 tile_count{};
+  u32 blocks_per_workgroup{ 32 };
+  u32 pad{};
 };
 
-static_assert(sizeof(SortPushConstants) == 16);
+static_assert(sizeof(SortPushConstants) == 32);
 
-// Multi-pass radix sort (VkRadixSort / Embree). Host loops 8× for 64-bit keys.
+// Multi-pass radix sort. Keys are packed uint32 (tile<<16)|(depth>>16); 4× 8-bit passes.
 struct RadixPushConstants
 {
-  u32 num_elements{};
+  u64 instance_count_address{};
+  u32 capacity{};
   u32 shift{};
-  u32 num_workgroups{};
   u32 num_blocks_per_workgroup{};
   u32 ping{};// 0: sorted→unsorted, 1: unsorted→sorted
   u32 pad0{};
   u32 pad1{};
-  u32 pad2{};
 };
 
 static_assert(sizeof(RadixPushConstants) == 32);

@@ -12,7 +12,7 @@ const uint HEAP_UNSORTED_KEYS = 5u;
 const uint HEAP_UNSORTED_VALUES = 6u;
 
 // Flat packing must match GaussianProjected / BinningKey in gaussian_splat.hpp.
-const uint PROJECTED_STRIDE = 7u;
+const uint PROJECTED_STRIDE = 11u;
 const uint PROJ_MEAN = 0u;
 const uint PROJ_DEPTH = 5u;
 const uint PROJ_RADIUS = 6u;
@@ -95,9 +95,11 @@ void main()
 			}
 
 			uint tile_id = tile_y * tiles_x + tile_x;
+			// Pack (tile << 16) | (depth_hi) so radix needs only 4 passes.
+			uint packed = (tile_id << 16) | (depth_bits >> 16);
 			uint key_base = slot * KEY_STRIDE;
-			unsorted_keys_buffers[HEAP_UNSORTED_KEYS].data[key_base + KEY_TILE] = tile_id;
-			unsorted_keys_buffers[HEAP_UNSORTED_KEYS].data[key_base + KEY_DEPTH] = depth_bits;
+			unsorted_keys_buffers[HEAP_UNSORTED_KEYS].data[key_base + KEY_TILE] = packed;
+			unsorted_keys_buffers[HEAP_UNSORTED_KEYS].data[key_base + KEY_DEPTH] = 0u;
 			unsorted_values_buffers[HEAP_UNSORTED_VALUES].data[slot] = id;
 		}
 	}

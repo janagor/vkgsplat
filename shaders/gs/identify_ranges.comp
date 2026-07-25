@@ -30,8 +30,11 @@ layout(buffer_reference, std430, buffer_reference_align = 4) buffer InstanceCoun
 
 layout(push_constant) uniform SortPush {
 	uvec2 instance_count_addr;
+	uvec2 radix_dispatch_addr;
 	uint sort_size;
 	uint tile_count;
+	uint blocks_per_workgroup;
+	uint _pad;
 } push;
 
 uint flat_invocation_id()
@@ -51,14 +54,16 @@ void main()
 	}
 
 	uint key_base = id * KEY_STRIDE;
-	uint tile_id = sorted_keys_buffers[HEAP_SORTED_KEYS].data[key_base + KEY_TILE];
-	if (tile_id == SENTINEL || tile_id >= push.tile_count) {
+	uint packed = sorted_keys_buffers[HEAP_SORTED_KEYS].data[key_base + KEY_TILE];
+	uint tile_id = packed >> 16;
+	if (tile_id >= push.tile_count) {
 		return;
 	}
 
 	uint prev_tile = SENTINEL;
 	if (id > 0u) {
-		prev_tile = sorted_keys_buffers[HEAP_SORTED_KEYS].data[(id - 1u) * KEY_STRIDE + KEY_TILE];
+		uint prev_packed = sorted_keys_buffers[HEAP_SORTED_KEYS].data[(id - 1u) * KEY_STRIDE + KEY_TILE];
+		prev_tile = prev_packed >> 16;
 	}
 
 	if (tile_id != prev_tile) {

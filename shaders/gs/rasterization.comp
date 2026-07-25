@@ -3,60 +3,31 @@
 #extension GL_EXT_nonuniform_qualifier : enable
 
 // One workgroup per 16×16 tile; each thread evaluates one pixel front-to-back.
+// Splats are collaboratively loaded into shared memory in batches of 256.
 
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
-const uint HEAP_GEOMETRY = 0u;
-const uint HEAP_APPEARANCE = 1u;
 const uint HEAP_PROJECTED = 4u;
 const uint HEAP_SORTED_VALUES = 8u;
 const uint HEAP_TILE_RANGES = 9u;
 const uint HEAP_COLOR = 10u;
 
-const uint GEOMETRY_STRIDE = 11u;
-const uint GEOM_POS = 0u;
-const uint GEOM_OPACITY = 10u;
-
-const uint APPEARANCE_STRIDE = 48u;
-const uint APP_F_DC = 0u;
-const uint APP_F_REST = 3u;
-
-const uint PROJECTED_STRIDE = 7u;
+const uint PROJECTED_STRIDE = 11u;
 const uint PROJ_MEAN = 0u;
 const uint PROJ_CONIC = 2u;
 const uint PROJ_RADIUS = 6u;
+const uint PROJ_COLOR = 7u;
+const uint PROJ_OPACITY = 10u;
 
 const uint RANGE_STRIDE = 2u;
 const uint RANGE_START = 0u;
 const uint RANGE_END = 1u;
 
 const uint COLOR_STRIDE = 4u;
-
-const float SH_C0 = 0.28209479177387814;
-const float SH_C1 = 0.4886025119029199;
-const float SH_C2_0 = 1.0925484305920792;
-const float SH_C2_1 = -1.0925484305920792;
-const float SH_C2_2 = 0.31539156525252005;
-const float SH_C2_3 = -1.0925484305920792;
-const float SH_C2_4 = 0.5462742152960396;
-const float SH_C3_0 = -0.5900435899266435;
-const float SH_C3_1 = 2.890611442640554;
-const float SH_C3_2 = -0.4570457994644658;
-const float SH_C3_3 = 0.3731763325901154;
-const float SH_C3_4 = -0.4570457994644658;
-const float SH_C3_5 = 1.445305721320277;
-const float SH_C3_6 = -0.5900435899266435;
+const uint BATCH_SIZE = 256u;
 
 const float T_EPS = 1e-4;
 const float ALPHA_MIN = 1.0 / 255.0;
-
-layout(descriptor_heap, std430) readonly buffer GeometryBuffer {
-	float data[];
-} geometry_buffers[];
-
-layout(descriptor_heap, std430) readonly buffer AppearanceBuffer {
-	float data[];
-} appearance_buffers[];
 
 layout(descriptor_heap, std430) readonly buffer ProjectedBuffer {
 	float data[];
@@ -86,77 +57,17 @@ layout(push_constant) uniform RasterPush {
 	uint _pad2;
 } push;
 
-float sigmoid(float x)
-{
-	return 1.0 / (1.0 + exp(-x));
-}
-
-// PLY f_rest is channel-major: 15 R, 15 G, 15 B for degrees 1..3.
-vec3 sh_coeff(uint app_base, uint coeff_index)
-{
-	if (coeff_index == 0u) {
-		return vec3(
-			appearance_buffers[HEAP_APPEARANCE].data[app_base + APP_F_DC],
-			appearance_buffers[HEAP_APPEARANCE].data[app_base + APP_F_DC + 1u],
-			appearance_buffers[HEAP_APPEARANCE].data[app_base + APP_F_DC + 2u]);
-	}
-	uint rest = coeff_index - 1u;
-	uint r_i = app_base + APP_F_REST + rest;
-	uint g_i = app_base + APP_F_REST + 15u + rest;
-	uint b_i = app_base + APP_F_REST + 30u + rest;
-	return vec3(
-		appearance_buffers[HEAP_APPEARANCE].data[r_i],
-		appearance_buffers[HEAP_APPEARANCE].data[g_i],
-		appearance_buffers[HEAP_APPEARANCE].data[b_i]);
-}
-
-vec3 eval_sh(uint gaussian_id, vec3 view_dir)
-{
-	uint app_base = gaussian_id * APPEARANCE_STRIDE;
-	vec3 result = SH_C0 * sh_coeff(app_base, 0u);
-
-	if (push.sh_degree > 0u) {
-		float x = view_dir.x;
-		float y = view_dir.y;
-		float z = view_dir.z;
-		result = result - SH_C1 * y * sh_coeff(app_base, 1u) + SH_C1 * z * sh_coeff(app_base, 2u)
-			- SH_C1 * x * sh_coeff(app_base, 3u);
-
-		if (push.sh_degree > 1u) {
-			float xx = x * x;
-			float yy = y * y;
-			float zz = z * z;
-			float xy = x * y;
-			float yz = y * z;
-			float xz = x * z;
-			result = result + SH_C2_0 * xy * sh_coeff(app_base, 4u)
-				+ SH_C2_1 * yz * sh_coeff(app_base, 5u)
-				+ SH_C2_2 * (2.0 * zz - xx - yy) * sh_coeff(app_base, 6u)
-				+ SH_C2_3 * xz * sh_coeff(app_base, 7u)
-				+ SH_C2_4 * (xx - yy) * sh_coeff(app_base, 8u);
-
-			if (push.sh_degree > 2u) {
-				result = result + SH_C3_0 * y * (3.0 * xx - yy) * sh_coeff(app_base, 9u)
-					+ SH_C3_1 * xy * z * sh_coeff(app_base, 10u)
-					+ SH_C3_2 * y * (4.0 * zz - xx - yy) * sh_coeff(app_base, 11u)
-					+ SH_C3_3 * z * (2.0 * zz - 3.0 * xx - 3.0 * yy) * sh_coeff(app_base, 12u)
-					+ SH_C3_4 * x * (4.0 * zz - xx - yy) * sh_coeff(app_base, 13u)
-					+ SH_C3_5 * z * (xx - yy) * sh_coeff(app_base, 14u)
-					+ SH_C3_6 * x * (xx - 3.0 * yy) * sh_coeff(app_base, 15u);
-			}
-		}
-	}
-
-	return clamp(result + 0.5, 0.0, 1.0);
-}
+// Collaborative tile cache: one slot per workgroup thread.
+shared vec3 s_mean_radius[BATCH_SIZE];// xy = mean, z = radius
+shared vec3 s_conic[BATCH_SIZE];
+shared vec4 s_color_opacity[BATCH_SIZE];// rgb + opacity
 
 void main()
 {
 	uint pixel_x = gl_GlobalInvocationID.x;
 	uint pixel_y = gl_GlobalInvocationID.y;
-	if (pixel_x >= push.viewport.x || pixel_y >= push.viewport.y) {
-		return;
-	}
+	// Out-of-viewport threads must still participate in shared loads + barriers.
+	bool write_pixel = pixel_x < push.viewport.x && pixel_y < push.viewport.y;
 
 	uint tile_x = gl_WorkGroupID.x;
 	uint tile_y = gl_WorkGroupID.y;
@@ -170,57 +81,79 @@ void main()
 	float T = 1.0;
 	vec2 pixel = vec2(float(pixel_x) + 0.5, float(pixel_y) + 0.5);
 
-	for (uint i = range_start; i < range_end; ++i) {
-		uint gaussian_id = sorted_values_buffers[HEAP_SORTED_VALUES].data[i];
-		uint proj_base = gaussian_id * PROJECTED_STRIDE;
+	uint num_splats = range_end > range_start ? (range_end - range_start) : 0u;
+	uint batches = (num_splats + BATCH_SIZE - 1u) / BATCH_SIZE;
 
-		float radius = projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_RADIUS];
-		if (radius <= 0.0) {
-			continue;
+	for (uint b = 0u; b < batches; ++b) {
+		uint batch_base = range_start + b * BATCH_SIZE;
+		uint load_idx = batch_base + gl_LocalInvocationIndex;
+
+		if (load_idx < range_end) {
+			uint gaussian_id = sorted_values_buffers[HEAP_SORTED_VALUES].data[load_idx];
+			uint proj_base = gaussian_id * PROJECTED_STRIDE;
+			s_mean_radius[gl_LocalInvocationIndex] = vec3(
+				projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_MEAN],
+				projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_MEAN + 1u],
+				projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_RADIUS]);
+			s_conic[gl_LocalInvocationIndex] = vec3(
+				projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_CONIC],
+				projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_CONIC + 1u],
+				projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_CONIC + 2u]);
+			s_color_opacity[gl_LocalInvocationIndex] = vec4(
+				projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_COLOR],
+				projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_COLOR + 1u],
+				projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_COLOR + 2u],
+				projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_OPACITY]);
+		} else {
+			s_mean_radius[gl_LocalInvocationIndex] = vec3(0.0);
+			s_conic[gl_LocalInvocationIndex] = vec3(0.0);
+			s_color_opacity[gl_LocalInvocationIndex] = vec4(0.0);
 		}
+		barrier();
 
-		vec2 mean = vec2(
-			projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_MEAN],
-			projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_MEAN + 1u]);
-		vec2 delta = pixel - mean;
-		if (dot(delta, delta) > radius * radius) {
-			continue;
+		uint splats_in_batch = min(BATCH_SIZE, range_end - batch_base);
+		if (write_pixel && T >= T_EPS) {
+			for (uint j = 0u; j < splats_in_batch; ++j) {
+				vec3 mean_radius = s_mean_radius[j];
+				float radius = mean_radius.z;
+				if (radius <= 0.0) {
+					continue;
+				}
+
+				vec2 mean = mean_radius.xy;
+				vec2 delta = pixel - mean;
+				if (dot(delta, delta) > radius * radius) {
+					continue;
+				}
+
+				vec3 conic = s_conic[j];
+				float power = -0.5 * (conic.x * delta.x * delta.x + conic.y * delta.y * delta.y)
+					- conic.z * delta.x * delta.y;
+				if (power > 0.0) {
+					continue;
+				}
+
+				vec4 color_opacity = s_color_opacity[j];
+				float alpha = min(0.99, color_opacity.a * exp(power));
+				if (alpha < ALPHA_MIN) {
+					continue;
+				}
+
+				color += (alpha * T) * color_opacity.rgb;
+				T *= (1.0 - alpha);
+				if (T < T_EPS) {
+					break;
+				}
+			}
 		}
-
-		float conic_xx = projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_CONIC];
-		float conic_yy = projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_CONIC + 1u];
-		float conic_xy = projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_CONIC + 2u];
-		float power = -0.5 * (conic_xx * delta.x * delta.x + conic_yy * delta.y * delta.y)
-			- conic_xy * delta.x * delta.y;
-		if (power > 0.0) {
-			continue;
-		}
-
-		uint geom_base = gaussian_id * GEOMETRY_STRIDE;
-		float opacity = sigmoid(geometry_buffers[HEAP_GEOMETRY].data[geom_base + GEOM_OPACITY]);
-		float alpha = min(0.99, opacity * exp(power));
-		if (alpha < ALPHA_MIN) {
-			continue;
-		}
-
-		vec3 mean3 = vec3(
-			geometry_buffers[HEAP_GEOMETRY].data[geom_base + GEOM_POS],
-			geometry_buffers[HEAP_GEOMETRY].data[geom_base + GEOM_POS + 1u],
-			geometry_buffers[HEAP_GEOMETRY].data[geom_base + GEOM_POS + 2u]);
-		vec3 view_dir = normalize(mean3 - push.camera_position.xyz);
-		vec3 sh_color = eval_sh(gaussian_id, view_dir);
-
-		float weight = alpha * T;
-		color += weight * sh_color;
-		T *= (1.0 - alpha);
-		if (T < T_EPS) {
-			break;
-		}
+		barrier();
 	}
 
-	uint color_base = (pixel_y * push.viewport.x + pixel_x) * COLOR_STRIDE;
-	color_buffers[HEAP_COLOR].data[color_base] = color.r;
-	color_buffers[HEAP_COLOR].data[color_base + 1u] = color.g;
-	color_buffers[HEAP_COLOR].data[color_base + 2u] = color.b;
-	color_buffers[HEAP_COLOR].data[color_base + 3u] = 1.0 - T;
+	if (write_pixel) {
+		uint color_base = (pixel_y * push.viewport.x + pixel_x) * COLOR_STRIDE;
+		color_buffers[HEAP_COLOR].data[color_base] = color.r;
+		color_buffers[HEAP_COLOR].data[color_base + 1u] = color.g;
+		color_buffers[HEAP_COLOR].data[color_base + 2u] = color.b;
+		color_buffers[HEAP_COLOR].data[color_base + 3u] = 1.0 - T;
+	}
 }

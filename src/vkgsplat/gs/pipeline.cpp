@@ -46,12 +46,15 @@ void update_gs_frame_state(Init const &init, RenderData &data, GsFrameParams con
 {
   data.present_image_index = frame.image_index;
 
+  glm::vec3 const camera_pos{ frame.camera.position() };
   data.project_push = {
     .view = frame.camera.view_matrix(),
     .projection = frame.camera.projection_matrix(frame.aspect_ratio),
     .viewport = { static_cast<float>(init.swapchain->extent().width),
       static_cast<float>(init.swapchain->extent().height) },
-    .padding = {},
+    .sh_degree = 3U,
+    .pad0 = 0U,
+    .camera_position = glm::vec4{ camera_pos, 0.0F },
   };
 
   data.bin_push = {
@@ -63,11 +66,13 @@ void update_gs_frame_state(Init const &init, RenderData &data, GsFrameParams con
 
   data.sort_push = {
     .instance_count_address = init.gpu_allocator.get_buffer_device_address(data.instance_count_buffer),
+    .radix_dispatch_address = init.gpu_allocator.get_buffer_device_address(data.radix_dispatch_buffer),
     .sort_size = data.gaussian_sort_size,
     .tile_count = data.tile_count,
+    .blocks_per_workgroup = data.radix_blocks_per_workgroup,
+    .pad = 0U,
   };
 
-  glm::vec3 const camera_pos{ frame.camera.position() };
   data.raster_push = {
     .camera_position = glm::vec4{ camera_pos, 0.0F },
     .viewport = { init.swapchain->extent().width, init.swapchain->extent().height },

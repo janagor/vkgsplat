@@ -40,8 +40,9 @@ auto device_initialization(Init &init) -> std::expected<void, Error>
   features_13.maintenance4 = VK_TRUE;
 
   vkb::InstanceBuilder instance_builder;
-  return VKBResultToExpected(
-    instance_builder.use_default_debug_messenger().request_validation_layers().require_api_version(1, 4, 0).build())
+  // Validation layers crush large GS compute workloads; keep off for interactive runs.
+  std::println("Vulkan validation layers disabled");
+  return VKBResultToExpected(instance_builder.require_api_version(1, 4, 0).build())
     .and_then([&](vkb::Instance const &instance) -> std::expected<vkb::PhysicalDevice, Error> {
       init.instance = instance;
       init.inst_disp = init.instance.make_table();
