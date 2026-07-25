@@ -15,7 +15,7 @@
 
 namespace vkgsplat {
 
-auto device_initialization(Init &init) -> std::expected<void, Error>
+auto device_initialization(Init &init, bool enable_validation) -> std::expected<void, Error>
 {
   if (init.window == nullptr) {
     return std::unexpected{ Error{ std::make_error_code(std::errc::invalid_argument), "Window is required" } };
@@ -40,9 +40,14 @@ auto device_initialization(Init &init) -> std::expected<void, Error>
   features_13.maintenance4 = VK_TRUE;
 
   vkb::InstanceBuilder instance_builder;
-  // Validation layers crush large GS compute workloads; keep off for interactive runs.
-  std::println("Vulkan validation layers disabled");
-  return VKBResultToExpected(instance_builder.require_api_version(1, 4, 0).build())
+  instance_builder.require_api_version(1, 4, 0);
+  if (enable_validation) {
+    std::println("Vulkan validation layers enabled");
+    instance_builder.enable_validation_layers().use_default_debug_messenger();
+  } else {
+    std::println("Vulkan validation layers disabled");
+  }
+  return VKBResultToExpected(instance_builder.build())
     .and_then([&](vkb::Instance const &instance) -> std::expected<vkb::PhysicalDevice, Error> {
       init.instance = instance;
       init.inst_disp = init.instance.make_table();

@@ -73,7 +73,7 @@ auto Renderer::create(RendererConfig const &config, Window &window) -> std::expe
   SplatCpuData const splats = std::move(*loaded);
   std::println("Loaded {} splats from {}", splats.geometries.size(), config.ply_path);
 
-  auto const init_result = device_initialization(impl->init);
+  auto const init_result = device_initialization(impl->init, config.enable_validation);
   if (!init_result.has_value()) { return std::unexpected(init_result.error()); }
 
   auto gpu_allocator =

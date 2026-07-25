@@ -55,8 +55,9 @@ namespace {
   void print_usage(std::string_view program_name)
   {
     std::println(stderr, "Usage:");
-    std::println(stderr, "  {} [--ply] <count> [ply_path]", program_name);
+    std::println(stderr, "  {} [--validation] [--ply] <count> [ply_path]", program_name);
     std::println(stderr, "");
+    std::println(stderr, "  --validation  enable Vulkan validation layers (off by default)");
     std::println(stderr, "  --ply         load first N splats from a PLY file (default)");
     std::println(stderr, "  <count>       number of splats to load (default: 64)");
     std::println(stderr, "  [ply_path]    path to PLY file (default: resources/scene.ply)");
@@ -113,14 +114,9 @@ namespace {
     config.splat_count = *count;
     ++index;
 
-    if (index < args.size()) {
+    if (index < args.size() && !std::string_view{ bounded_arg(args, index) }.starts_with("--")) {
       config.ply_path = bounded_arg(args, index);
       ++index;
-    }
-
-    if (index < args.size()) {
-      print_usage(args.front());
-      return std::unexpected{ make_error(std::errc::invalid_argument, "too many positional arguments") };
     }
 
     return {};
@@ -139,6 +135,12 @@ auto parse_app_config(std::span<char *const> args) -> std::expected<AppConfig, v
   while (index < args.size()) {
     std::string_view const arg{ bounded_arg(args, index) };
 
+    if (arg == "--validation") {
+      config.enable_validation = true;
+      ++index;
+      continue;
+    }
+
     if (arg == "--ply") {
       if (auto parsed = parse_ply(args, index, config); !parsed) { return std::unexpected{ parsed.error() }; }
       continue;
@@ -150,7 +152,6 @@ auto parse_app_config(std::span<char *const> args) -> std::expected<AppConfig, v
     }
 
     if (auto parsed = parse_shorthand_ply(args, index, config); !parsed) { return std::unexpected{ parsed.error() }; }
-    return config;
   }
 
   return config;

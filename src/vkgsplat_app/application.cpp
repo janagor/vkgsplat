@@ -33,6 +33,7 @@ auto run(std::span<char *const> args) noexcept -> int
     vkgsplat::RendererConfig const renderer_config{
       .splat_count = config->splat_count,
       .ply_path = config->ply_path,
+      .enable_validation = config->enable_validation,
     };
 
     auto renderer = vkgsplat::Renderer::create(renderer_config, *window);
