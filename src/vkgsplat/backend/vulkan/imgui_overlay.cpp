@@ -529,7 +529,32 @@ void recreate_imgui_overlay_pipeline(Init &init, RenderData &data)
 
 void record_imgui_overlay(Init &init, RenderData const &data, VkCommandBuffer command_buffer, size_t image_index)
 {
-  if (data.imgui == nullptr || !data.imgui->initialized) { return; }
+  VkImage swapchain_image = init.swapchain->images().at(image_index);
+  VkImageSubresourceRange const color_range = {
+    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+    .baseMipLevel = 0,
+    .levelCount = 1,
+    .baseArrayLayer = 0,
+    .layerCount = 1,
+  };
+
+  // Raster leaves the swapchain in TRANSFER_DST; always finish with PRESENT.
+  if (data.imgui == nullptr || !data.imgui->initialized) {
+    auto to_present = initializers::ImageMemoryBarrier(
+      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, swapchain_image, color_range);
+    to_present.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    init.disp.cmdPipelineBarrier(command_buffer,
+      VK_PIPELINE_STAGE_TRANSFER_BIT,
+      VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+      0,
+      0,
+      nullptr,
+      0,
+      nullptr,
+      1,
+      &to_present);
+    return;
+  }
 
   auto &overlay = *data.imgui;
   sample_frame_time(overlay);
@@ -541,22 +566,28 @@ void record_imgui_overlay(Init &init, RenderData const &data, VkCommandBuffer co
   }
 
   size_t const frame_slot = data.current_frame;
-  if (overlay.overlay_secondaries.at(frame_slot) == VK_NULL_HANDLE) { return; }
+  if (overlay.overlay_secondaries.at(frame_slot) == VK_NULL_HANDLE) {
+    auto to_present = initializers::ImageMemoryBarrier(
+      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, swapchain_image, color_range);
+    to_present.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    init.disp.cmdPipelineBarrier(command_buffer,
+      VK_PIPELINE_STAGE_TRANSFER_BIT,
+      VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+      0,
+      0,
+      nullptr,
+      0,
+      nullptr,
+      1,
+      &to_present);
+    return;
+  }
 
   if (overlay.secondary_generation.at(frame_slot) != overlay.ui_generation) {
     record_overlay_secondary(init, data, frame_slot);
   }
 
-  VkImage swapchain_image = init.swapchain->images().at(image_index);
   VkImageView swapchain_view = init.swapchain->image_views().at(image_index);
-
-  VkImageSubresourceRange const color_range = {
-    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-    .baseMipLevel = 0,
-    .levelCount = 1,
-    .baseArrayLayer = 0,
-    .layerCount = 1,
-  };
 
   auto to_color_attachment = initializers::ImageMemoryBarrier(
     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, swapchain_image, color_range);

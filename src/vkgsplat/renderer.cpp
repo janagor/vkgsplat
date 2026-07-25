@@ -122,8 +122,10 @@ auto Renderer::create(RendererConfig const &config, Window &window) -> std::expe
   if (auto sync_objects = create_sync_objects(impl->init, impl->render_data); !sync_objects) {
     return std::unexpected(sync_objects.error());
   }
-  if (auto imgui = init_imgui_overlay(impl->init, impl->render_data); !imgui) {
-    return std::unexpected(imgui.error());
+  if (config.enable_imgui) {
+    if (auto imgui = init_imgui_overlay(impl->init, impl->render_data); !imgui) {
+      return std::unexpected(imgui.error());
+    }
   }
 
   return Renderer{ std::move(impl) };

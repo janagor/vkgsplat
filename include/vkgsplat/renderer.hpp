@@ -18,6 +18,7 @@ struct RendererConfig
   u32 splat_count = 64;
   std::string ply_path;
   bool enable_validation = false;
+  bool enable_imgui = true;
 };
 
 class VKGSPLAT_EXPORT Renderer
