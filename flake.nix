@@ -32,8 +32,56 @@
           }
         );
 
+        # VTune GPU hardware metrics need Metrics Discovery API (libigdmd.so).
+        # Not shipped with the nix intel-oneapi-vtune package and not in nixpkgs yet.
+        intel-metrics-discovery = pkgs.stdenv.mkDerivation rec {
+          pname = "intel-metrics-discovery";
+          version = "1.14.182";
+
+          src = pkgs.fetchFromGitHub {
+            owner = "intel";
+            repo = "metrics-discovery";
+            rev = "metrics-discovery-${version}";
+            hash = "sha256-AgrCJR10B1rtk/VLx7k5I3A4ZVhHoF3p4oxyiY4yAnI=";
+          };
+
+          nativeBuildInputs = with pkgs; [
+            cmake
+            pkg-config
+          ];
+
+          buildInputs = with pkgs; [
+            libdrm
+          ];
+
+          # Upstream writes artifacts under dump/; still installs via GNUInstallDirs.
+          cmakeFlags = [
+            "-DCMAKE_BUILD_TYPE=Release"
+          ];
+
+          meta = with pkgs.lib; {
+            description = "Intel Metrics Discovery API (libigdmd) for GPU performance metrics";
+            homepage = "https://github.com/intel/metrics-discovery";
+            license = licenses.mit;
+            platforms = platforms.linux;
+          };
+        };
+
+        # Wrap vtune so libigdmd is visible even under `sudo` (which strips LD_LIBRARY_PATH
+        # on NixOS despite --preserve-env).
+        intel-oneapi-vtune = pkgs.symlinkJoin {
+          name = "intel-oneapi-vtune-with-mdapi";
+          paths = [ pkgsVtune.intel-oneapi-vtune ];
+          nativeBuildInputs = [ pkgs.makeWrapper ];
+          postBuild = ''
+            wrapProgram "$out/bin/vtune" \
+              --prefix LD_LIBRARY_PATH : "${intel-metrics-discovery}/lib"
+          '';
+        };
+
         vtune_packages = pkgs.lib.optionals pkgs.stdenv.isLinux [
-          pkgsVtune.intel-oneapi-vtune
+          intel-oneapi-vtune
+          intel-metrics-discovery
         ];
 
         project_packages = with pkgs; [
@@ -65,6 +113,7 @@
 
             vulkan-loader
           ]
+          ++ pkgs.lib.optionals pkgs.stdenv.isLinux [ intel-metrics-discovery ]
         );
 
         clangShell = pkgs.mkShell.override { stdenv = llvmStdenv; } {
