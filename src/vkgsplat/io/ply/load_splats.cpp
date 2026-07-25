@@ -73,29 +73,35 @@ namespace {
     return {};
   }
 
-  [[nodiscard]] auto pack_splat(u32 splat_idx, ExtractedSplatAttributes const &attrs) -> GaussianSplat
-  {
-    size_t const base3 = static_cast<size_t>(splat_idx) * 3U;
-    size_t const base4 = static_cast<size_t>(splat_idx) * 4U;
-    size_t const rest_base = static_cast<size_t>(splat_idx) * k_sh_rest_coeffs;
 
-    GaussianSplat splat{};
-    splat.geometry.position = {
-      attrs.positions.at(base3), attrs.positions.at(base3 + 1U), attrs.positions.at(base3 + 2U)
-    };
-    splat.geometry.scale = { attrs.scales.at(base3), attrs.scales.at(base3 + 1U), attrs.scales.at(base3 + 2U) };
-    splat.geometry.rotation = { attrs.rotations.at(base4),
-      attrs.rotations.at(base4 + 1U),
-      attrs.rotations.at(base4 + 2U),
-      attrs.rotations.at(base4 + 3U) };
-    splat.geometry.opacity = attrs.opacities.at(splat_idx);
+[[nodiscard]] auto pack_splat(u32 splat_idx, ExtractedSplatAttributes const &attrs) -> GaussianSplat
+{
+  //NOLINTBEGIN(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+auto const idx = static_cast<std::ptrdiff_t>(splat_idx);
+  
+  // Note: we also drop the 'U' suffix on the multipliers so they default to signed integers
+  auto const pos_it  = attrs.positions.begin() + (idx * 3);
+  auto const scl_it  = attrs.scales.begin() + (idx * 3);
+  auto const rot_it  = attrs.rotations.begin() + (idx * 4);
+  auto const dc_it   = attrs.f_dc.begin() + (idx * 3);
+  auto const rest_it = attrs.f_rest.begin() + (idx * static_cast<std::ptrdiff_t>(k_sh_rest_coeffs));
 
-    splat.appearance.f_dc = { attrs.f_dc.at(base3), attrs.f_dc.at(base3 + 1U), attrs.f_dc.at(base3 + 2U) };
-    for (u32 rest_idx = 0; rest_idx < k_sh_rest_coeffs; ++rest_idx) {
-      splat.appearance.f_rest.at(rest_idx) = attrs.f_rest.at(rest_base + rest_idx);
-    }
-    return splat;
-  }
+  GaussianSplat splat{};
+
+  splat.geometry.position = { pos_it[0], pos_it[1], pos_it[2] };
+  splat.geometry.scale    = { scl_it[0], scl_it[1], scl_it[2] };
+  splat.geometry.rotation = { rot_it[0], rot_it[1], rot_it[2], rot_it[3] };
+  
+  // operator[] expects size_t (unsigned), so we cast it back or use splat_idx directly
+  splat.geometry.opacity  = attrs.opacities[static_cast<size_t>(splat_idx)];
+
+  splat.appearance.f_dc   = { dc_it[0], dc_it[1], dc_it[2] };
+
+  std::copy_n(rest_it, k_sh_rest_coeffs, std::begin(splat.appearance.f_rest));
+
+  return splat;
+  //NOLINTEND(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+}
 
   [[nodiscard]] auto load_vertex_splats(miniply::PLYReader &reader, u32 count) -> std::expected<SplatCpuData, Error>
   {
