@@ -6,7 +6,8 @@ target_link_libraries(
           vkgsplat::vkgsplat_input_handler
           vkgsplat::vkgsplat_window
           vkgsplat::vkgsplat_options
-          vkgsplat::vkgsplat_warnings)
+          vkgsplat::vkgsplat_warnings
+          CLI11::CLI11)
 
 vkgsplat_configure_linker(vkgsplat_app)
 

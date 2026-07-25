@@ -3,6 +3,7 @@
 #include <exception>
 #include <print>
 #include <span>
+#include <system_error>
 
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat/renderer.hpp>
@@ -19,6 +20,7 @@ auto run(std::span<char *const> args) noexcept -> int
   try {
     auto const config = parse_app_config(args);
     if (!config) {
+      if (config.error().code() == std::make_error_code(std::errc::operation_canceled)) { return 0; }
       std::println(
         stderr, "Failed to parse app config ({}): {}", config.error().code().value(), config.error().message());
       return -1;
