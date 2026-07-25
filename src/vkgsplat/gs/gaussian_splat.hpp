@@ -71,7 +71,7 @@ inline constexpr u32 k_projected_floats = 11;
 struct GaussianProjected
 {
   std::array<f32, 2> screen_position{};// pixel-space mean
-  std::array<f32, 3> conic{};// Σ₂D⁻¹ as (xx, yy, xy)
+  std::array<f32, 3> conic{};// Σ₂D as (xx, xy, yy) for oriented-quad HW path
   f32 depth{};// view-space z
   f32 radius{};// screen-space extent in pixels
   std::array<f32, 3> color{};// view-dependent SH RGB (precomputed once per frame)

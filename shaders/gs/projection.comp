@@ -187,19 +187,18 @@ void main()
 		geometry_buffers[HEAP_GEOMETRY].data[geom_base + GEOM_ROT + 3u]);
 
 	vec4 mean_world = vec4(mean, 1.0);
-	vec4 mean_view_gl = camera.view * mean_world;
-	// Camera / glm view is OpenGL-style (-Z forward). 3DGS EWA expects +Z depth.
-	vec3 mean_view = vec3(mean_view_gl.x, mean_view_gl.y, -mean_view_gl.z);
-	if (mean_view.z <= NEAR_PLANE) {
+	// OpenGL / glm view: camera looks down -Z (matches PlayCanvas gsplatCorner).
+	vec4 mean_view = camera.view * mean_world;
+	if (mean_view.z > -NEAR_PLANE) {
 		write_culled(proj_base);
 		return;
 	}
 
-	vec4 mean_clip = camera.proj * mean_view_gl;
+	vec4 mean_clip = camera.proj * mean_view;
 	float inv_w = 1.0 / (mean_clip.w + 1e-7);
 	vec3 mean_ndc = mean_clip.xyz * inv_w;
 
-	// Projection only flips Y for Vulkan; NDC z stays OpenGL [-1, 1].
+	// Projection flips Y for Vulkan; NDC z stays OpenGL [-1, 1].
 	if (mean_ndc.z < -1.0 || mean_ndc.z > 1.0 || abs(mean_ndc.x) > 1.3 || abs(mean_ndc.y) > 1.3) {
 		write_culled(proj_base);
 		return;
@@ -218,7 +217,7 @@ void main()
 	float tan_fovx = width / (2.0 * focal_x);
 	float tan_fovy = height / (2.0 * focal_y);
 
-	vec3 t = mean_view;
+	vec3 t = mean_view.xyz;
 	float limx = 1.3 * tan_fovx;
 	float limy = 1.3 * tan_fovy;
 	float txtz = t.x / t.z;
@@ -226,25 +225,22 @@ void main()
 	t.x = clamp(txtz, -limx, limx) * t.z;
 	t.y = clamp(tytz, -limy, limy) * t.z;
 
+	// PlayCanvas / Inria layout: J stored as Jᵀ columns, W = viewᵀ → Σ' = J W Σ Wᵀ Jᵀ.
 	float tz = t.z;
 	float tz2 = tz * tz;
 	mat3 J = mat3(
 		focal_x / tz, 0.0, -(focal_x * t.x) / tz2,
 		0.0, focal_y / tz, -(focal_y * t.y) / tz2,
 		0.0, 0.0, 0.0);
-
-	// Match +Z view space used for t above.
-	mat3 W = mat3(camera.view);
-	W[0][2] = -W[0][2];
-	W[1][2] = -W[1][2];
-	W[2][2] = -W[2][2];
-	// 3DGS: T = W * J, cov2d = transpose(T) * Sigma * T
+	mat3 W = transpose(mat3(camera.view));
 	mat3 T = W * J;
 	mat3 cov3 = transpose(T) * Sigma * T;
 
 	float cov_xx = cov3[0][0] + COV_FILTER;
 	float cov_yy = cov3[1][1] + COV_FILTER;
-	float cov_xy = cov3[0][1];
+	// Vulkan screen Y grows downward (proj[1][1] flipped); Jacobian is OpenGL-style.
+	// Map Σ into Vulkan pixel axes: F=diag(1,-1) → cov_xy flips sign.
+	float cov_xy = -cov3[0][1];
 
 	float det = cov_xx * cov_yy - cov_xy * cov_xy;
 	if (det <= 1e-10) {
@@ -252,16 +248,13 @@ void main()
 		return;
 	}
 
-	float inv_det = 1.0 / det;
-	float conic_xx = cov_yy * inv_det;
-	float conic_yy = cov_xx * inv_det;
-	float conic_xy = -cov_xy * inv_det;
-
+	// Eigenvalues of Σ₂D (PlayCanvas gsplatCorner).
 	float mid = 0.5 * (cov_xx + cov_yy);
-	float lambda_delta = sqrt(max(0.1, mid * mid - det));
-	float lambda1 = mid + lambda_delta;
-	float lambda2 = mid - lambda_delta;
-	float radius = ceil(RADIUS_SCALE * sqrt(max(lambda1, lambda2)));
+	float radius_eig = length(vec2((cov_xx - cov_yy) * 0.5, cov_xy));
+	float lambda1 = mid + radius_eig;
+	float lambda2 = max(mid - radius_eig, 0.1);
+	float extent = 2.0 * sqrt(2.0 * max(lambda1, lambda2));
+	float radius = ceil(extent);
 	if (radius < 1.0) {
 		write_culled(proj_base);
 		return;
@@ -277,10 +270,11 @@ void main()
 
 	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_MEAN] = screen.x;
 	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_MEAN + 1u] = screen.y;
-	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_CONIC] = conic_xx;
-	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_CONIC + 1u] = conic_yy;
-	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_CONIC + 2u] = conic_xy;
-	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_DEPTH] = mean_view.z;
+	// Store Σ₂D (xx, xy, yy) for oriented-quad construction in the vertex shader.
+	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_CONIC] = cov_xx;
+	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_CONIC + 1u] = cov_xy;
+	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_CONIC + 2u] = cov_yy;
+	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_DEPTH] = -mean_view.z;
 	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_RADIUS] = radius;
 	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_COLOR] = color.r;
 	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_COLOR + 1u] = color.g;

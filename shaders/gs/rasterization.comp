@@ -117,8 +117,9 @@ void main()
 				}
 
 				vec3 conic = s_conic[j];
-				float power = -0.5 * (conic.x * delta.x * delta.x + conic.y * delta.y * delta.y)
-					- conic.z * delta.x * delta.y;
+				// conic = (xx, xy, yy)
+				float power = -0.5 * (conic.x * delta.x * delta.x + conic.z * delta.y * delta.y)
+					- conic.y * delta.x * delta.y;
 				if (power > 0.0) {
 					continue;
 				}
