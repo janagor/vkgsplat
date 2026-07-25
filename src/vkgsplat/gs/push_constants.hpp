@@ -69,7 +69,7 @@ struct RasterPushConstants
   glm::uvec2 viewport{};// width, height in pixels
   u32 tile_size{ 16 };
   u32 tiles_x{};
-  glm::vec4 background{ 0.02F, 0.02F, 0.05F, 0.0F };// rgb used
+  glm::vec4 background{ 0.0F, 0.0F, 0.0F, 0.0F };// rgb used
   u32 sh_degree{ 0 };// 0 = SH0 only; 3 = full degree-3
   u32 pad0{};
   u32 pad1{};
