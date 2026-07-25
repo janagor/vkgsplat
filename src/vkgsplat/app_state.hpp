@@ -54,7 +54,6 @@ struct RenderData
   vulkan::Buffer sort_histogram_buffer{};
   vulkan::Buffer radix_dispatch_buffer{};
   vulkan::Buffer tile_ranges_buffer{};
-  vulkan::Buffer color_buffer{};
   VkImage color_image{};
   VmaAllocation color_allocation{};
   VkFormat color_format{ VK_FORMAT_R32G32B32A32_SFLOAT };
@@ -72,6 +71,8 @@ struct RenderData
   VkDeviceSize reserved_range_offset{};
   VkDeviceSize reserved_range_size{};
   size_t descriptor_stride{};
+  size_t buffer_descriptor_size{};
+  size_t image_descriptor_size{};
 
   compute::Algorithm sphere_setup_algorithm{};
   compute::Algorithm project_algorithm{};

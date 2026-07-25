@@ -35,6 +35,11 @@ inline constexpr size_t k_heap_descriptor_count = 12;
   VkDeviceSize buffer_size,
   std::span<std::byte> destination) -> bool;
 
+[[nodiscard]] auto write_storage_image_descriptor(Init &init,
+  VkImageViewCreateInfo const &view_info,
+  VkImageLayout layout,
+  std::span<std::byte> destination) -> bool;
+
 [[nodiscard]] auto query_descriptor_heap_layout(Init const &init, RenderData &data) -> bool;
 
 void destroy_descriptor_heap(Init &init, RenderData &data);

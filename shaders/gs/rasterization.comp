@@ -23,7 +23,6 @@ const uint RANGE_STRIDE = 2u;
 const uint RANGE_START = 0u;
 const uint RANGE_END = 1u;
 
-const uint COLOR_STRIDE = 4u;
 const uint BATCH_SIZE = 256u;
 
 const float T_EPS = 1e-4;
@@ -41,9 +40,7 @@ layout(descriptor_heap, std430) readonly buffer TileRangesBuffer {
 	uint data[];
 } tile_ranges_buffers[];
 
-layout(descriptor_heap, std430) writeonly buffer ColorBuffer {
-	float data[];
-} color_buffers[];
+layout(descriptor_heap, rgba32f) writeonly uniform image2D color_images[];
 
 layout(push_constant) uniform RasterPush {
 	vec4 camera_position;
@@ -79,49 +76,42 @@ void main()
 
 	vec3 color = push.background.rgb;
 	float T = 1.0;
-	vec2 pixel = vec2(float(pixel_x) + 0.5, float(pixel_y) + 0.5);
 
-	uint num_splats = range_end > range_start ? (range_end - range_start) : 0u;
-	uint batches = (num_splats + BATCH_SIZE - 1u) / BATCH_SIZE;
+	uint local_id = gl_LocalInvocationIndex;
 
-	for (uint b = 0u; b < batches; ++b) {
-		uint batch_base = range_start + b * BATCH_SIZE;
-		uint load_idx = batch_base + gl_LocalInvocationIndex;
-
+	for (uint batch_start = range_start; batch_start < range_end; batch_start += BATCH_SIZE) {
+		uint load_idx = batch_start + local_id;
 		if (load_idx < range_end) {
 			uint gaussian_id = sorted_values_buffers[HEAP_SORTED_VALUES].data[load_idx];
 			uint proj_base = gaussian_id * PROJECTED_STRIDE;
-			s_mean_radius[gl_LocalInvocationIndex] = vec3(
+			s_mean_radius[local_id] = vec3(
 				projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_MEAN],
 				projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_MEAN + 1u],
 				projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_RADIUS]);
-			s_conic[gl_LocalInvocationIndex] = vec3(
+			s_conic[local_id] = vec3(
 				projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_CONIC],
 				projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_CONIC + 1u],
 				projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_CONIC + 2u]);
-			s_color_opacity[gl_LocalInvocationIndex] = vec4(
+			s_color_opacity[local_id] = vec4(
 				projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_COLOR],
 				projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_COLOR + 1u],
 				projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_COLOR + 2u],
 				projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_OPACITY]);
 		} else {
-			s_mean_radius[gl_LocalInvocationIndex] = vec3(0.0);
-			s_conic[gl_LocalInvocationIndex] = vec3(0.0);
-			s_color_opacity[gl_LocalInvocationIndex] = vec4(0.0);
+			s_mean_radius[local_id] = vec3(0.0);
+			s_conic[local_id] = vec3(0.0);
+			s_color_opacity[local_id] = vec4(0.0);
 		}
 		barrier();
 
-		uint splats_in_batch = min(BATCH_SIZE, range_end - batch_base);
+		uint batch_count = min(BATCH_SIZE, range_end - batch_start);
 		if (write_pixel && T >= T_EPS) {
-			for (uint j = 0u; j < splats_in_batch; ++j) {
+			vec2 pix = vec2(float(pixel_x) + 0.5, float(pixel_y) + 0.5);
+			for (uint j = 0u; j < batch_count; ++j) {
 				vec3 mean_radius = s_mean_radius[j];
-				float radius = mean_radius.z;
-				if (radius <= 0.0) {
-					continue;
-				}
-
 				vec2 mean = mean_radius.xy;
-				vec2 delta = pixel - mean;
+				float radius = mean_radius.z;
+				vec2 delta = mean - pix;
 				if (dot(delta, delta) > radius * radius) {
 					continue;
 				}
@@ -150,10 +140,6 @@ void main()
 	}
 
 	if (write_pixel) {
-		uint color_base = (pixel_y * push.viewport.x + pixel_x) * COLOR_STRIDE;
-		color_buffers[HEAP_COLOR].data[color_base] = color.r;
-		color_buffers[HEAP_COLOR].data[color_base + 1u] = color.g;
-		color_buffers[HEAP_COLOR].data[color_base + 2u] = color.b;
-		color_buffers[HEAP_COLOR].data[color_base + 3u] = 1.0 - T;
+		imageStore(color_images[HEAP_COLOR], ivec2(int(pixel_x), int(pixel_y)), vec4(color, 1.0 - T));
 	}
 }

@@ -1,5 +1,6 @@
 #include "backend/vulkan/descriptor/descriptor_heap.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -8,6 +9,7 @@
 #include <vector>
 
 #include "app_state.hpp"
+#include "backend/vulkan/initializers.hpp"
 #include "gs/gaussian_splat.hpp"
 #include "vulkan_context.hpp"
 #include <vkgsplat_utility/types.hpp>
@@ -37,6 +39,26 @@ auto write_storage_buffer_descriptor(Init &init,
   return init.write_resource_descriptors(init.device, 1, &resource_info, &host_range) == VK_SUCCESS;
 }
 
+auto write_storage_image_descriptor(Init &init,
+  VkImageViewCreateInfo const &view_info,
+  VkImageLayout layout,
+  std::span<std::byte> destination) -> bool
+{
+  VkImageDescriptorInfoEXT image_info{};
+  image_info.sType = VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT;
+  image_info.pView = &view_info;
+  image_info.layout = layout;
+
+  VkResourceDescriptorInfoEXT resource_info{};
+  resource_info.sType = VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT;
+  resource_info.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+  resource_info.data.pImage = &image_info;
+
+  VkHostAddressRangeEXT const host_range = { .address = destination.data(), .size = destination.size() };
+
+  return init.write_resource_descriptors(init.device, 1, &resource_info, &host_range) == VK_SUCCESS;
+}
+
 auto query_descriptor_heap_layout(Init const &init, RenderData &data) -> bool
 {
   VkPhysicalDeviceDescriptorHeapPropertiesEXT heap_props{};
@@ -49,12 +71,16 @@ auto query_descriptor_heap_layout(Init const &init, RenderData &data) -> bool
   };
   init.inst_disp.getPhysicalDeviceProperties2(init.device.physical_device, &props2);
 
-  auto const descriptor_size = static_cast<size_t>(heap_props.bufferDescriptorSize);
-  if (descriptor_size == 0
-      || (heap_props.bufferDescriptorAlignment != 0
-          && heap_props.bufferDescriptorSize % heap_props.bufferDescriptorAlignment != 0)) {
+  // Mix storage buffers and a storage image in one heap; stride must fit both.
+  auto const descriptor_size = static_cast<size_t>(
+    std::max(heap_props.bufferDescriptorSize, heap_props.imageDescriptorSize));
+  auto const descriptor_alignment =
+    std::max(heap_props.bufferDescriptorAlignment, heap_props.imageDescriptorAlignment);
+  if (descriptor_size == 0 || (descriptor_alignment != 0 && descriptor_size % descriptor_alignment != 0)) {
     return false;
   }
+  data.buffer_descriptor_size = static_cast<size_t>(heap_props.bufferDescriptorSize);
+  data.image_descriptor_size = static_cast<size_t>(heap_props.imageDescriptorSize);
   data.descriptor_stride = descriptor_size;
   auto const descriptor_region_size = data.descriptor_stride * k_heap_descriptor_count;
   data.reserved_range_offset = align_up(descriptor_region_size, heap_props.resourceHeapAlignment);
@@ -80,7 +106,7 @@ auto refresh_descriptor_heap(Init &init, RenderData &data) -> bool
       || data.projected_buffer.handle == VK_NULL_HANDLE || data.unsorted_keys_buffer.handle == VK_NULL_HANDLE
       || data.unsorted_values_buffer.handle == VK_NULL_HANDLE || data.sorted_keys_buffer.handle == VK_NULL_HANDLE
       || data.sorted_values_buffer.handle == VK_NULL_HANDLE || data.sort_histogram_buffer.handle == VK_NULL_HANDLE
-      || data.tile_ranges_buffer.handle == VK_NULL_HANDLE || data.color_buffer.handle == VK_NULL_HANDLE
+      || data.tile_ranges_buffer.handle == VK_NULL_HANDLE || data.color_image == VK_NULL_HANDLE
       || data.sorted_indices.buffer().handle == VK_NULL_HANDLE || data.sort_entries.buffer().handle == VK_NULL_HANDLE) {
     return true;
   }
@@ -102,68 +128,84 @@ auto refresh_descriptor_heap(Init &init, RenderData &data) -> bool
   auto const sort_histogram_buffer_size = static_cast<VkDeviceSize>(
     static_cast<size_t>(data.radix_num_workgroups) * 256U * sizeof(u32));
   auto const tile_ranges_buffer_size = static_cast<VkDeviceSize>(data.tile_count * sizeof(TileRange));
-  auto const color_buffer_size =
-    static_cast<VkDeviceSize>(data.color_width) * static_cast<VkDeviceSize>(data.color_height) * 4U * sizeof(f32);
   auto const sorted_indices_buffer_size = data.sorted_indices.byte_size();
   auto const sort_entries_buffer_size = data.sort_entries.byte_size();
 
   std::vector<std::byte> descriptor_data(data.descriptor_stride * k_heap_descriptor_count);
-  std::array<VkDeviceAddressRangeEXT, k_heap_descriptor_count> address_ranges = {
-    VkDeviceAddressRangeEXT{
-      .address = init.gpu_allocator.get_buffer_device_address(data.geometry_buffer),
-      .size = geometry_buffer_size,
-    },
-    VkDeviceAddressRangeEXT{
-      .address = init.gpu_allocator.get_buffer_device_address(data.appearance_buffer),
-      .size = appearance_buffer_size,
-    },
-    VkDeviceAddressRangeEXT{
-      .address = init.gpu_allocator.get_buffer_device_address(data.sorted_indices.buffer()),
-      .size = sorted_indices_buffer_size,
-    },
-    VkDeviceAddressRangeEXT{
-      .address = init.gpu_allocator.get_buffer_device_address(data.sort_entries.buffer()),
-      .size = sort_entries_buffer_size,
-    },
-    VkDeviceAddressRangeEXT{
-      .address = init.gpu_allocator.get_buffer_device_address(data.projected_buffer),
-      .size = projected_buffer_size,
-    },
-    VkDeviceAddressRangeEXT{
-      .address = init.gpu_allocator.get_buffer_device_address(data.unsorted_keys_buffer),
-      .size = unsorted_keys_buffer_size,
-    },
-    VkDeviceAddressRangeEXT{
-      .address = init.gpu_allocator.get_buffer_device_address(data.unsorted_values_buffer),
-      .size = unsorted_values_buffer_size,
-    },
-    VkDeviceAddressRangeEXT{
-      .address = init.gpu_allocator.get_buffer_device_address(data.sorted_keys_buffer),
-      .size = sorted_keys_buffer_size,
-    },
-    VkDeviceAddressRangeEXT{
-      .address = init.gpu_allocator.get_buffer_device_address(data.sorted_values_buffer),
-      .size = sorted_values_buffer_size,
-    },
-    VkDeviceAddressRangeEXT{
-      .address = init.gpu_allocator.get_buffer_device_address(data.tile_ranges_buffer),
-      .size = tile_ranges_buffer_size,
-    },
-    VkDeviceAddressRangeEXT{
-      .address = init.gpu_allocator.get_buffer_device_address(data.color_buffer),
-      .size = color_buffer_size,
-    },
-    VkDeviceAddressRangeEXT{
-      .address = init.gpu_allocator.get_buffer_device_address(data.sort_histogram_buffer),
-      .size = sort_histogram_buffer_size,
-    },
+  std::array<VkDeviceAddressRangeEXT, k_heap_descriptor_count> address_ranges{};
+  address_ranges.at(static_cast<size_t>(HeapSlot::Geometry)) = {
+    .address = init.gpu_allocator.get_buffer_device_address(data.geometry_buffer),
+    .size = geometry_buffer_size,
+  };
+  address_ranges.at(static_cast<size_t>(HeapSlot::Appearance)) = {
+    .address = init.gpu_allocator.get_buffer_device_address(data.appearance_buffer),
+    .size = appearance_buffer_size,
+  };
+  address_ranges.at(static_cast<size_t>(HeapSlot::SortedIndices)) = {
+    .address = init.gpu_allocator.get_buffer_device_address(data.sorted_indices.buffer()),
+    .size = sorted_indices_buffer_size,
+  };
+  address_ranges.at(static_cast<size_t>(HeapSlot::SortEntries)) = {
+    .address = init.gpu_allocator.get_buffer_device_address(data.sort_entries.buffer()),
+    .size = sort_entries_buffer_size,
+  };
+  address_ranges.at(static_cast<size_t>(HeapSlot::Projected)) = {
+    .address = init.gpu_allocator.get_buffer_device_address(data.projected_buffer),
+    .size = projected_buffer_size,
+  };
+  address_ranges.at(static_cast<size_t>(HeapSlot::UnsortedKeys)) = {
+    .address = init.gpu_allocator.get_buffer_device_address(data.unsorted_keys_buffer),
+    .size = unsorted_keys_buffer_size,
+  };
+  address_ranges.at(static_cast<size_t>(HeapSlot::UnsortedValues)) = {
+    .address = init.gpu_allocator.get_buffer_device_address(data.unsorted_values_buffer),
+    .size = unsorted_values_buffer_size,
+  };
+  address_ranges.at(static_cast<size_t>(HeapSlot::SortedKeys)) = {
+    .address = init.gpu_allocator.get_buffer_device_address(data.sorted_keys_buffer),
+    .size = sorted_keys_buffer_size,
+  };
+  address_ranges.at(static_cast<size_t>(HeapSlot::SortedValues)) = {
+    .address = init.gpu_allocator.get_buffer_device_address(data.sorted_values_buffer),
+    .size = sorted_values_buffer_size,
+  };
+  address_ranges.at(static_cast<size_t>(HeapSlot::TileRanges)) = {
+    .address = init.gpu_allocator.get_buffer_device_address(data.tile_ranges_buffer),
+    .size = tile_ranges_buffer_size,
+  };
+  address_ranges.at(static_cast<size_t>(HeapSlot::SortHistogram)) = {
+    .address = init.gpu_allocator.get_buffer_device_address(data.sort_histogram_buffer),
+    .size = sort_histogram_buffer_size,
   };
 
   for (size_t i = 0; i < k_heap_descriptor_count; ++i) {
+    auto const slot = static_cast<HeapSlot>(i);
+    auto destination = std::span{ descriptor_data }.subspan(i * data.descriptor_stride, descriptor_size);
+
+    if (slot == HeapSlot::ColorTarget) {
+      VkImageSubresourceRange const subresource_range = {
+        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+        .baseMipLevel = 0,
+        .levelCount = 1,
+        .baseArrayLayer = 0,
+        .layerCount = 1,
+      };
+      auto const view_info = initializers::ImageViewCreateInfo(
+        data.color_image, VK_IMAGE_VIEW_TYPE_2D, data.color_format, subresource_range);
+      if (!write_storage_image_descriptor(init,
+            view_info,
+            VK_IMAGE_LAYOUT_GENERAL,
+            destination.first(data.image_descriptor_size))) {
+        std::println("Failed to write color storage image descriptor!");
+        return false;
+      }
+      continue;
+    }
+
     if (!write_storage_buffer_descriptor(init,
           address_ranges.at(i).address,
           address_ranges.at(i).size,
-          std::span{ descriptor_data }.subspan(i * data.descriptor_stride, descriptor_size))) {
+          destination.first(data.buffer_descriptor_size))) {
       std::println("Failed to write descriptor heap slot {}!", i);
       return false;
     }
