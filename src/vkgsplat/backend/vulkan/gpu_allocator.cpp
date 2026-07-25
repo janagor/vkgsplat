@@ -75,8 +75,9 @@ std::expected<Buffer, void *> GPUAllocator::create_storage_buffer(VkDeviceSize s
 
   VmaAllocationCreateInfo alloc_info = {};
   alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
-  alloc_info.flags =
-    VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
+  // Host uploads via write_buffer() are contiguous memcpy; VMA forbids combining
+  // SEQUENTIAL_WRITE with RANDOM.
+  alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
 
   Buffer buffer{ .size = size };
   if (vmaCreateBuffer(allocator_, &buffer_info, &alloc_info, &buffer.handle, &buffer.allocation, nullptr)
@@ -116,8 +117,8 @@ std::expected<Buffer, void *> GPUAllocator::create_heap_buffer(VkDeviceSize size
   VmaAllocationCreateInfo alloc_info = {};
   alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
   // NOLINTBEGIN(hicpp-signed-bitwise)
-  alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
-                     | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT
+  // Persistently mapped descriptor heaps are written at arbitrary slot offsets.
+  alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT
                      // ANV (Gfx < 12.5) bindless heap addressing assumes a 4 KiB-aligned
                      // device address; VMA suballocs of tiny heaps often are not.
                      | VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
