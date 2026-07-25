@@ -35,6 +35,7 @@ auto run(std::span<char *const> args) noexcept -> int
       .ply_path = config->ply_path,
       .enable_validation = config->enable_validation,
       .enable_imgui = config->enable_imgui,
+      .enable_gpu_timers = config->enable_gpu_timers,
     };
 
     auto renderer = vkgsplat::Renderer::create(renderer_config, *window);

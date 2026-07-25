@@ -32,6 +32,7 @@ add_library(
   compute/op_tensor_sync_device.cpp
   compute/op_tensor_sync_local.cpp
   backend/vulkan/descriptor/descriptor_heap.cpp
+  backend/vulkan/gpu_pass_timer.cpp
   backend/vulkan/imgui_overlay.cpp)
 
 add_library(vkgsplat::vkgsplat ALIAS vkgsplat)

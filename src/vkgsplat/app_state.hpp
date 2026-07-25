@@ -9,6 +9,7 @@
 #include "backend/vulkan/command/buffer.hpp"
 #include "backend/vulkan/command/pool.hpp"
 #include "backend/vulkan/gpu_allocator.hpp"
+#include "backend/vulkan/gpu_pass_timer.hpp"
 #include "backend/vulkan/sync_objects/fence.hpp"
 #include "backend/vulkan/sync_objects/semaphore.hpp"
 #include "compute/algorithm.hpp"
@@ -103,6 +104,7 @@ struct RenderData
   std::vector<Fence> in_flight_fences;
   std::vector<VkFence> image_in_flight;
   size_t current_frame = {};
+  GpuPassTimer gpu_pass_timer{};
   std::unique_ptr<ImGuiOverlayState> imgui;
 
   RenderData();

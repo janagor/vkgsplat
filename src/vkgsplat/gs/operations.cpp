@@ -1,6 +1,7 @@
 #include "gs/operations.hpp"
 
 #include "app_state.hpp"
+#include "backend/vulkan/gpu_pass_timer.hpp"
 #include "backend/vulkan/sync_objects/barrier.hpp"
 #include "gs/push_constants.hpp"
 #include "gs/rasterization.hpp"
@@ -23,6 +24,33 @@ namespace {
   {
     u32 group_count_x{};
     u32 group_count_y{};
+  };
+
+  class ScopedGpuPass
+  {
+  public:
+    ScopedGpuPass(Init const &init, RenderData const &data, VkCommandBuffer command_buffer, GpuPass pass)
+      : init_(init), data_(data), command_buffer_(command_buffer), pass_(pass), active_(data.gpu_pass_timer.enabled())
+    {
+      if (active_) { data_.gpu_pass_timer.write(init_, data_.current_frame, pass_, false, command_buffer_); }
+    }
+
+    ScopedGpuPass(ScopedGpuPass const &) = delete;
+    auto operator=(ScopedGpuPass const &) -> ScopedGpuPass & = delete;
+    ScopedGpuPass(ScopedGpuPass &&) = delete;
+    auto operator=(ScopedGpuPass &&) -> ScopedGpuPass & = delete;
+
+    ~ScopedGpuPass()
+    {
+      if (active_) { data_.gpu_pass_timer.write(init_, data_.current_frame, pass_, true, command_buffer_); }
+    }
+
+  private:
+    Init const &init_;
+    RenderData const &data_;
+    VkCommandBuffer command_buffer_;
+    GpuPass pass_;
+    bool active_;
   };
 
   void push_constants(Init const &init, void const *data, size_t size, VkCommandBuffer command_buffer)
@@ -74,6 +102,8 @@ namespace {
 
 void OpProjection::record(Init const &init, RenderData const &data, VkCommandBuffer command_buffer)
 {
+  ScopedGpuPass const timer{ init, data, command_buffer, GpuPass::Projection };
+
   init.disp.cmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, data.project_algorithm.pipeline());
   push_constants(init, &data.project_push, sizeof(ProjectPushConstants), command_buffer);
 
@@ -84,6 +114,8 @@ void OpProjection::record(Init const &init, RenderData const &data, VkCommandBuf
 
 void OpBinning::record(Init const &init, RenderData const &data, VkCommandBuffer command_buffer)
 {
+  ScopedGpuPass const timer{ init, data, command_buffer, GpuPass::Binning };
+
   init.disp.cmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, data.bin_algorithm.pipeline());
   push_constants(init, &data.bin_push, sizeof(BinPushConstants), command_buffer);
 
@@ -94,6 +126,8 @@ void OpBinning::record(Init const &init, RenderData const &data, VkCommandBuffer
 
 void OpPrepareSort::record(Init const &init, RenderData const &data, VkCommandBuffer command_buffer)
 {
+  ScopedGpuPass const timer{ init, data, command_buffer, GpuPass::PrepareSort };
+
   Dispatch2D const sort_grid = dispatch_2d_for_threads(init, data.gaussian_sort_size, k_compute_local_size_x);
 
   dispatch_compute_pass(init,
@@ -107,6 +141,8 @@ void OpPrepareSort::record(Init const &init, RenderData const &data, VkCommandBu
 
 void OpRadixSort::record(Init const &init, RenderData const &data, VkCommandBuffer command_buffer)
 {
+  ScopedGpuPass const timer{ init, data, command_buffer, GpuPass::RadixSort };
+
   constexpr u32 k_radix_passes = 4U;// packed uint32 key, 8 bits per pass
   u64 const instance_count_address = init.gpu_allocator.get_buffer_device_address(data.instance_count_buffer);
 
@@ -136,6 +172,8 @@ void OpRadixSort::record(Init const &init, RenderData const &data, VkCommandBuff
 
 void OpIdentifyRanges::record(Init const &init, RenderData const &data, VkCommandBuffer command_buffer)
 {
+  ScopedGpuPass const timer{ init, data, command_buffer, GpuPass::IdentifyRanges };
+
   Dispatch2D const sort_grid = dispatch_2d_for_threads(init, data.gaussian_sort_size, k_compute_local_size_x);
 
   dispatch_compute_pass(init,
@@ -148,6 +186,9 @@ void OpIdentifyRanges::record(Init const &init, RenderData const &data, VkComman
 }
 
 void OpRasterization::record(Init const &init, RenderData const &data, VkCommandBuffer command_buffer)
-{ dispatch_rasterization(init, data, data.raster_push, command_buffer, data.present_image_index); }
+{
+  ScopedGpuPass const timer{ init, data, command_buffer, GpuPass::Rasterize };
+  dispatch_rasterization(init, data, data.raster_push, command_buffer, data.present_image_index);
+}
 
 }// namespace vkgsplat::gs

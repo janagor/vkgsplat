@@ -2,6 +2,7 @@
 
 #include "app_state.hpp"
 #include "backend/vulkan/gpu_allocator.hpp"
+#include "backend/vulkan/gpu_pass_timer.hpp"
 #include "backend/vulkan/initializers.hpp"
 #include "vulkan_context.hpp"
 #include <vkgsplat_utility/error.hpp>
@@ -36,6 +37,7 @@ namespace vkgsplat {
 
 namespace {
   constexpr size_t k_fps_label_capacity = 64;
+  constexpr size_t k_gpu_label_capacity = 256;
 }// namespace
 
 struct ImGuiOverlayState
@@ -68,6 +70,7 @@ struct ImGuiOverlayState
   std::array<uint64_t, k_max_frames_in_flight> secondary_generation{};
   uint64_t ui_generation = 1;
   std::array<char, k_fps_label_capacity> fps_label{ "FPS: --" };
+  std::array<char, k_gpu_label_capacity> gpu_label{};
   std::chrono::steady_clock::time_point last_fps_update;
   std::chrono::steady_clock::time_point last_frame_time;
   float fps_ema = 0.0F;
@@ -216,7 +219,7 @@ namespace {
     };
   }
 
-  void draw_fps_window(char const *fps_label)
+  void draw_fps_window(char const *fps_label, char const *gpu_label)
   {
     ImGuiIO const &imgui_io = ImGui::GetIO();
     ImGui::SetNextWindowPos(
@@ -227,7 +230,11 @@ namespace {
                                    | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing
                                    | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoMove;
     // NOLINTEND(hicpp-signed-bitwise)
-    if (ImGui::Begin("FPS", nullptr, flags)) { ImGui::TextUnformatted(fps_label); }
+    if (ImGui::Begin("FPS", nullptr, flags)) {
+      ImGui::TextUnformatted(fps_label);
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+      if (gpu_label != nullptr && gpu_label[0] != '\0') { ImGui::TextUnformatted(gpu_label); }
+    }
     ImGui::End();
   }
 
@@ -341,7 +348,7 @@ namespace {
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
-    draw_fps_window(overlay.fps_label.data());
+    draw_fps_window(overlay.fps_label.data(), overlay.gpu_label.data());
     ImGui::Render();
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), secondary);
 
@@ -369,6 +376,38 @@ RenderData::RenderData() = default;
 RenderData::~RenderData() = default;
 RenderData::RenderData(RenderData &&) noexcept = default;
 auto RenderData::operator=(RenderData &&) noexcept -> RenderData & = default;
+
+void update_imgui_gpu_timings(RenderData &data)
+{
+  if (data.imgui == nullptr || !data.gpu_pass_timer.enabled()) { return; }
+
+  static auto last_update = std::chrono::steady_clock::time_point{};
+  auto const now = std::chrono::steady_clock::now();
+  constexpr auto k_gpu_label_update_interval = std::chrono::milliseconds{ 100 };
+  if (last_update.time_since_epoch().count() != 0 && now - last_update < k_gpu_label_update_interval) { return; }
+  last_update = now;
+
+  auto const &pass_ms = data.gpu_pass_timer.last_ms();
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
+  (void)std::snprintf(data.imgui->gpu_label.data(),
+    data.imgui->gpu_label.size(),
+    "GPU: %.2f ms\n  %s %.2f  %s %.2f  %s %.2f\n  %s %.2f  %s %.2f  %s %.2f",
+    static_cast<double>(data.gpu_pass_timer.total_ms()),
+    gpu_pass_name(GpuPass::Projection),
+    static_cast<double>(pass_ms.at(static_cast<size_t>(GpuPass::Projection))),
+    gpu_pass_name(GpuPass::Binning),
+    static_cast<double>(pass_ms.at(static_cast<size_t>(GpuPass::Binning))),
+    gpu_pass_name(GpuPass::PrepareSort),
+    static_cast<double>(pass_ms.at(static_cast<size_t>(GpuPass::PrepareSort))),
+    gpu_pass_name(GpuPass::RadixSort),
+    static_cast<double>(pass_ms.at(static_cast<size_t>(GpuPass::RadixSort))),
+    gpu_pass_name(GpuPass::IdentifyRanges),
+    static_cast<double>(pass_ms.at(static_cast<size_t>(GpuPass::IdentifyRanges))),
+    gpu_pass_name(GpuPass::Rasterize),
+    static_cast<double>(pass_ms.at(static_cast<size_t>(GpuPass::Rasterize))));
+  ++data.imgui->ui_generation;
+  data.imgui->secondary_generation.fill(0);
+}
 
 auto init_imgui_overlay(Init &init, RenderData &data) -> std::expected<void, Error>
 {

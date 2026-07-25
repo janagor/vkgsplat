@@ -55,10 +55,11 @@ namespace {
   void print_usage(std::string_view program_name)
   {
     std::println(stderr, "Usage:");
-    std::println(stderr, "  {} [--validation] [--no-imgui] [--ply] <count> [ply_path]", program_name);
+    std::println(stderr, "  {} [--validation] [--no-imgui] [--gpu-timers] [--ply] <count> [ply_path]", program_name);
     std::println(stderr, "");
     std::println(stderr, "  --validation  enable Vulkan validation layers (off by default)");
     std::println(stderr, "  --no-imgui    disable ImGui overlay (useful when profiling)");
+    std::println(stderr, "  --gpu-timers  enable in-app Vulkan GPU pass timestamps");
     std::println(stderr, "  --ply         load first N splats from a PLY file (default)");
     std::println(stderr, "  <count>       number of splats to load (default: 64)");
     std::println(stderr, "  [ply_path]    path to PLY file (default: resources/scene.ply)");
@@ -144,6 +145,12 @@ auto parse_app_config(std::span<char *const> args) -> std::expected<AppConfig, v
 
     if (arg == "--no-imgui") {
       config.enable_imgui = false;
+      ++index;
+      continue;
+    }
+
+    if (arg == "--gpu-timers") {
+      config.enable_gpu_timers = true;
       ++index;
       continue;
     }

@@ -124,6 +124,11 @@ auto Renderer::create(RendererConfig const &config, Window &window) -> std::expe
   if (auto sync_objects = create_sync_objects(impl->init, impl->render_data); !sync_objects) {
     return std::unexpected(sync_objects.error());
   }
+  if (config.enable_gpu_timers) {
+    if (!impl->render_data.gpu_pass_timer.create(impl->init)) {
+      return std::unexpected(make_error(std::errc::invalid_argument, "Failed to create GPU pass timestamp query pool"));
+    }
+  }
   if (config.enable_imgui) {
     if (auto imgui = init_imgui_overlay(impl->init, impl->render_data); !imgui) {
       return std::unexpected(imgui.error());

@@ -9,6 +9,7 @@
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat_utility/types.hpp>
 
+#include <cstddef>
 #include <memory>
 
 #include <glm/ext/vector_float3.hpp>
@@ -85,8 +86,13 @@ void update_gs_frame_state(Init const &init, RenderData &data, GsFrameParams con
   };
 }
 
-void eval_gs_pipeline(Init &init, RenderData const &data, VkCommandBuffer command_buffer)
-{ data.gs_sequence.eval(init, data, command_buffer); }
+void eval_gs_pipeline(Init &init, RenderData &data, VkCommandBuffer command_buffer)
+{
+  size_t const slot = data.current_frame;
+  if (data.gpu_pass_timer.enabled()) { data.gpu_pass_timer.begin_frame(init, slot, command_buffer); }
+  data.gs_sequence.eval(init, data, command_buffer);
+  if (data.gpu_pass_timer.enabled()) { data.gpu_pass_timer.mark_submitted(slot); }
+}
 
 void destroy_gs_pipeline(RenderData &data) { data.gs_sequence.clear(); }
 

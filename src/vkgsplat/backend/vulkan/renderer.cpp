@@ -1,10 +1,12 @@
 #include "backend/vulkan/renderer.hpp"
 
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
 #include <functional>
+#include <print>
 #include <span>
 #include <string>
 #include <system_error>
@@ -16,6 +18,7 @@
 #include "backend/vulkan/depth_buffer.hpp"
 #include "backend/vulkan/descriptor/descriptor_heap.hpp"
 #include "backend/vulkan/graphics_pipeline.hpp"
+#include "backend/vulkan/gpu_pass_timer.hpp"
 #include "backend/vulkan/imgui_overlay.hpp"
 #include "backend/vulkan/initializers.hpp"
 #include "backend/vulkan/vulkan_bootstrap.hpp"
@@ -162,6 +165,29 @@ auto draw_frame(Init &init, RenderData &data, Camera const &camera) -> std::expe
   auto *in_flight_fence = data.in_flight_fences.at(data.current_frame).handle();
   init.disp.waitForFences(1, &in_flight_fence, VK_TRUE, UINT64_MAX);
 
+  if (data.gpu_pass_timer.enabled()) {
+    data.gpu_pass_timer.resolve(init, data.current_frame);
+    if (data.imgui != nullptr) {
+      update_imgui_gpu_timings(data);
+    } else {
+      static auto last_print = std::chrono::steady_clock::time_point{};
+      auto const now = std::chrono::steady_clock::now();
+      if (last_print.time_since_epoch().count() == 0 || now - last_print >= std::chrono::seconds{ 1 }) {
+        last_print = now;
+        auto const &pass_ms = data.gpu_pass_timer.last_ms();
+        std::println(
+          "GPU: {:.2f} ms (proj {:.2f} bin {:.2f} prep {:.2f} radix {:.2f} ranges {:.2f} raster {:.2f})",
+          data.gpu_pass_timer.total_ms(),
+          pass_ms.at(static_cast<size_t>(GpuPass::Projection)),
+          pass_ms.at(static_cast<size_t>(GpuPass::Binning)),
+          pass_ms.at(static_cast<size_t>(GpuPass::PrepareSort)),
+          pass_ms.at(static_cast<size_t>(GpuPass::RadixSort)),
+          pass_ms.at(static_cast<size_t>(GpuPass::IdentifyRanges)),
+          pass_ms.at(static_cast<size_t>(GpuPass::Rasterize)));
+      }
+    }
+  }
+
   uint32_t image_index = 0;
   auto *available_semaphore = data.available_semaphores.at(data.current_frame).handle();
   VkResult result = init.disp.acquireNextImageKHR(
@@ -236,6 +262,8 @@ void cleanup(Init &init, RenderData &data)
   destroy_projection(init, data);
   destroy_sphere_setup(init, data);
   destroy_descriptor_heap(init, data);
+
+  data.gpu_pass_timer.destroy(init);
 
   destroy_graphics_pipeline(init, data);
 

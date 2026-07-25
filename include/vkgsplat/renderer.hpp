@@ -19,6 +19,7 @@ struct RendererConfig
   std::string ply_path;
   bool enable_validation = false;
   bool enable_imgui = true;
+  bool enable_gpu_timers = false;
 };
 
 class VKGSPLAT_EXPORT Renderer
