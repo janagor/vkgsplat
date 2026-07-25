@@ -34,10 +34,27 @@
         "type": "github"
       }
     },
+    "nixpkgs-vtune": {
+      "locked": {
+        "lastModified": 1738526496,
+        "narHash": "sha256-2i0xOpevpoe8e0k1aj9F5nTbEM0Wpo2Z5gc4TXRKN90=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "4a32ac7311f23d4a17f6f294d19e1df5afc4f90d",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "refs/pull/307132/head",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "flake-utils": "flake-utils",
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": "nixpkgs",
+        "nixpkgs-vtune": "nixpkgs-vtune"
       }
     },
     "systems": {

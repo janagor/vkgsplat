@@ -3,12 +3,15 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    # intel-oneapi-vtune is not in nixos-unstable yet; pull from the packaging PR.
+    nixpkgs-vtune.url = "github:NixOS/nixpkgs?ref=refs/pull/307132/head";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
   outputs =
     {
       nixpkgs,
+      nixpkgs-vtune,
       flake-utils,
       ...
     }:
@@ -16,6 +19,11 @@
       system:
       let
         pkgs = import nixpkgs { inherit system; };
+        # VTune is proprietary; only needed on Linux.
+        pkgsVtune = import nixpkgs-vtune {
+          inherit system;
+          config.allowUnfree = true;
+        };
         llvm = pkgs.llvmPackages_22;
 
         llvmStdenv = pkgs.overrideCC llvm.stdenv (
@@ -23,6 +31,10 @@
             bintools = llvm.bintools;
           }
         );
+
+        vtune_packages = pkgs.lib.optionals pkgs.stdenv.isLinux [
+          pkgsVtune.intel-oneapi-vtune
+        ];
 
         project_packages = with pkgs; [
           libXi
@@ -71,7 +83,8 @@
               llvm.clang-tools
               glslang
             ]
-            ++ project_packages;
+            ++ project_packages
+            ++ vtune_packages;
 
           LD_LIBRARY_PATH = ld_library_path;
         };
@@ -94,7 +107,8 @@
 
               mold
             ]
-            ++ project_packages;
+            ++ project_packages
+            ++ vtune_packages;
 
           LD_LIBRARY_PATH = ld_library_path;
         };
