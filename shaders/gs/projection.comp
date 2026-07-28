@@ -144,7 +144,8 @@ vec3 eval_sh(uint gaussian_id, vec3 view_dir)
 		}
 	}
 
-	return clamp(result + 0.5, 0.0, 1.0);
+	// Inria: only clamp negatives; values >1 are valid and blend in the float target.
+	return max(result + 0.5, vec3(0.0));
 }
 
 void write_culled(uint base)
@@ -253,7 +254,7 @@ void main()
 	float radius_eig = length(vec2((cov_xx - cov_yy) * 0.5, cov_xy));
 	float lambda1 = mid + radius_eig;
 	float lambda2 = max(mid - radius_eig, 0.1);
-	float extent = 2.0 * sqrt(2.0 * max(lambda1, lambda2));
+	float extent = 2.0 * sqrt(max(lambda1, lambda2));
 	float radius = ceil(extent);
 	if (radius < 1.0) {
 		write_culled(proj_base);

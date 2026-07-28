@@ -9,7 +9,6 @@
 #include <vector>
 
 #include "app_state.hpp"
-#include "backend/vulkan/initializers.hpp"
 #include "gs/gaussian_splat.hpp"
 #include "vulkan_context.hpp"
 #include <vkgsplat_utility/types.hpp>
@@ -182,24 +181,7 @@ auto refresh_descriptor_heap(Init &init, RenderData &data) -> bool
     auto destination = std::span{ descriptor_data }.subspan(i * data.descriptor_stride, descriptor_size);
 
     if (slot == HeapSlot::ColorTarget) {
-      if (data.color_image == VK_NULL_HANDLE) {
-        // HW quad path has no compute color target; leave slot unused.
-        continue;
-      }
-      VkImageSubresourceRange const subresource_range = {
-        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-        .baseMipLevel = 0,
-        .levelCount = 1,
-        .baseArrayLayer = 0,
-        .layerCount = 1,
-      };
-      auto const view_info = initializers::ImageViewCreateInfo(
-        data.color_image, VK_IMAGE_VIEW_TYPE_2D, data.color_format, subresource_range);
-      if (!write_storage_image_descriptor(
-            init, view_info, VK_IMAGE_LAYOUT_GENERAL, destination.first(data.image_descriptor_size))) {
-        std::println("Failed to write color storage image descriptor!");
-        return false;
-      }
+      // HW path: float color attachment + blit; not a storage image.
       continue;
     }
 

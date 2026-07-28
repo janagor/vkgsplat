@@ -8,14 +8,87 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
+#include <print>
 
 #include <glm/gtc/type_ptr.hpp>
+#include <vk_mem_alloc.h>
 #include <vulkan/vulkan_core.h>
 
 namespace vkgsplat::gs {
 
 namespace {
+
+  void destroy_color_target(Init const &init, RenderData &data)
+  {
+    if (data.color_image_view != VK_NULL_HANDLE) {
+      init.disp.destroyImageView(data.color_image_view, nullptr);
+      data.color_image_view = VK_NULL_HANDLE;
+    }
+    if (data.color_image != VK_NULL_HANDLE || data.color_allocation != VK_NULL_HANDLE) {
+      vmaDestroyImage(init.gpu_allocator.vma_allocator(), data.color_image, data.color_allocation);
+      data.color_image = VK_NULL_HANDLE;
+      data.color_allocation = VK_NULL_HANDLE;
+    }
+    data.color_width = 0;
+    data.color_height = 0;
+  }
+
+  [[nodiscard]] auto create_color_target(Init &init, RenderData &data) -> bool
+  {
+    destroy_color_target(init, data);
+
+    data.color_width = init.swapchain->extent().width;
+    data.color_height = init.swapchain->extent().height;
+    if (data.color_width == 0 || data.color_height == 0) {
+      std::println("Rasterize requires a non-zero swapchain extent!");
+      return false;
+    }
+
+    auto image_info = initializers::ImageCreateInfo();
+    image_info.imageType = VK_IMAGE_TYPE_2D;
+    image_info.format = data.color_format;
+    image_info.extent = { .width = data.color_width, .height = data.color_height, .depth = 1 };
+    image_info.mipLevels = 1;
+    image_info.arrayLayers = 1;
+    image_info.samples = VK_SAMPLE_COUNT_1_BIT;
+    image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+    image_info.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    image_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    VmaAllocationCreateInfo alloc_info = {};
+    alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+    if (vmaCreateImage(init.gpu_allocator.vma_allocator(),
+          &image_info,
+          &alloc_info,
+          &data.color_image,
+          &data.color_allocation,
+          nullptr)
+        != VK_SUCCESS) {
+      std::println("Failed to create raster color target!");
+      destroy_color_target(init, data);
+      return false;
+    }
+
+    VkImageSubresourceRange const subresource_range = {
+      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+      .baseMipLevel = 0,
+      .levelCount = 1,
+      .baseArrayLayer = 0,
+      .layerCount = 1,
+    };
+    auto const view_info = initializers::ImageViewCreateInfo(
+      data.color_image, VK_IMAGE_VIEW_TYPE_2D, data.color_format, subresource_range);
+    if (init.disp.createImageView(&view_info, nullptr, &data.color_image_view) != VK_SUCCESS) {
+      std::println("Failed to create raster color target view!");
+      destroy_color_target(init, data);
+      return false;
+    }
+
+    return true;
+  }
 
   void
     push_raster_constants(Init const &init, RasterPushConstants const &push_constants, VkCommandBuffer command_buffer)
@@ -31,19 +104,11 @@ namespace {
 
 }// namespace
 
-auto init_rasterization(Init & /*init*/, RenderData &data) -> bool
-{
-  // HW quad path draws directly to the swapchain; no compute color target.
-  data.color_width = 0;
-  data.color_height = 0;
-  return true;
-}
+auto init_rasterization(Init &init, RenderData &data) -> bool { return create_color_target(init, data); }
 
 auto recreate_rasterization_color_target(Init &init, RenderData &data) -> bool
 {
-  data.color_width = init.swapchain->extent().width;
-  data.color_height = init.swapchain->extent().height;
-  return true;
+  return create_color_target(init, data);
 }
 
 void dispatch_rasterization(Init const &init,
@@ -52,12 +117,9 @@ void dispatch_rasterization(Init const &init,
   VkCommandBuffer command_buffer,
   size_t image_index)
 {
-  // Sorted instance IDs + draw indirect args must be visible to VS / DrawIndirect.
   Barrier::compute_to_graphics(init.disp, command_buffer);
 
-  VkImage swapchain_image = init.swapchain->images().at(image_index);
-  VkImageView swapchain_view = init.swapchain->image_views().at(image_index);
-  VkExtent2D const extent = init.swapchain->extent();
+  VkExtent2D const extent = { .width = data.color_width, .height = data.color_height };
 
   VkImageSubresourceRange const color_range = {
     .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -67,19 +129,27 @@ void dispatch_rasterization(Init const &init,
     .layerCount = 1,
   };
 
-  auto to_color = initializers::ImageMemoryBarrier(
-    VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, swapchain_image, color_range);
-  to_color.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+  auto target_to_color = initializers::ImageMemoryBarrier(
+    VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, data.color_image, color_range);
+  target_to_color.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+  auto swap_to_dst = initializers::ImageMemoryBarrier(VK_IMAGE_LAYOUT_UNDEFINED,
+    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+    init.swapchain->images().at(image_index),
+    color_range);
+  swap_to_dst.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
+  std::array<VkImageMemoryBarrier, 2> prep_barriers = { target_to_color, swap_to_dst };
   init.disp.cmdPipelineBarrier(command_buffer,
     VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
     0,
     0,
     nullptr,
     0,
     nullptr,
-    1,
-    &to_color);
+    static_cast<uint32_t>(prep_barriers.size()),
+    prep_barriers.data());
 
   std::array<float, 4> clear_rgba{};
   std::memcpy(clear_rgba.data(), glm::value_ptr(push_constants.background), 3U * sizeof(float));
@@ -89,7 +159,7 @@ void dispatch_rasterization(Init const &init,
   VkRenderingAttachmentInfo const color_attachment = {
     .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
     .pNext = nullptr,
-    .imageView = swapchain_view,
+    .imageView = data.color_image_view,
     .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
     .resolveMode = VK_RESOLVE_MODE_NONE,
     .resolveImageView = VK_NULL_HANDLE,
@@ -135,16 +205,65 @@ void dispatch_rasterization(Init const &init,
 
   init.disp.cmdEndRendering(command_buffer);
 
-  // Leave swapchain in COLOR_ATTACHMENT_OPTIMAL for ImGui overlay / present transition.
+  auto target_to_src = initializers::ImageMemoryBarrier(
+    VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, data.color_image, color_range);
+  target_to_src.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+  target_to_src.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+  init.disp.cmdPipelineBarrier(command_buffer,
+    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+    VK_PIPELINE_STAGE_TRANSFER_BIT,
+    0,
+    0,
+    nullptr,
+    0,
+    nullptr,
+    1,
+    &target_to_src);
+
+  VkImageBlit const blit = {
+    .srcSubresource =
+      {
+        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+        .mipLevel = 0,
+        .baseArrayLayer = 0,
+        .layerCount = 1,
+      },
+    .srcOffsets =
+      {
+        { .x = 0, .y = 0, .z = 0 },
+        { .x = static_cast<int32_t>(data.color_width), .y = static_cast<int32_t>(data.color_height), .z = 1 },
+      },
+    .dstSubresource =
+      {
+        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+        .mipLevel = 0,
+        .baseArrayLayer = 0,
+        .layerCount = 1,
+      },
+    .dstOffsets =
+      {
+        { .x = 0, .y = 0, .z = 0 },
+        { .x = static_cast<int32_t>(init.swapchain->extent().width),
+          .y = static_cast<int32_t>(init.swapchain->extent().height),
+          .z = 1 },
+      },
+  };
+  init.disp.cmdBlitImage(command_buffer,
+    data.color_image,
+    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+    init.swapchain->images().at(image_index),
+    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+    1,
+    &blit,
+    VK_FILTER_NEAREST);
+
+  // Leave swapchain in TRANSFER_DST_OPTIMAL for ImGui / present.
 }
 
 void destroy_rasterization(Init &init, RenderData &data)
 {
   data.rasterize_algorithm.destroy(init);
-  data.color_image = VK_NULL_HANDLE;
-  data.color_allocation = VK_NULL_HANDLE;
-  data.color_width = 0;
-  data.color_height = 0;
+  destroy_color_target(init, data);
 }
 
 }// namespace vkgsplat::gs

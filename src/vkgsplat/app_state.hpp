@@ -58,7 +58,10 @@ struct RenderData
   vulkan::Buffer tile_ranges_buffer{};
   VkImage color_image{};
   VmaAllocation color_allocation{};
-  VkFormat color_format{ VK_FORMAT_R32G32B32A32_SFLOAT };
+  VkImageView color_image_view{};
+  // 3DGS is trained for gamma-space blending (typical WebGL UNORM8). A float RT
+  // blends the same gamma-coded SH colors with linear-like precision and shifts hue.
+  VkFormat color_format{ VK_FORMAT_R8G8B8A8_UNORM };
   u32 max_bin_instances = 0;
   u32 gaussian_sort_size = 0;
   u32 radix_num_workgroups = 0;

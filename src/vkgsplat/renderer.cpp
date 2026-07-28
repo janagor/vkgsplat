@@ -74,6 +74,13 @@ auto Renderer::create(RendererConfig const &config, Window &window) -> std::expe
   if (!loaded) { return std::unexpected(loaded.error()); }
   SplatCpuData const splats = std::move(*loaded);
   std::println("Loaded {} splats from {}", splats.geometries.size(), config.ply_path);
+  {
+    auto const &first_appearance = splats.appearances.at(0);
+    std::println("appearance[0] f_dc=({}, {}, {})",
+      first_appearance.f_dc.at(0),
+      first_appearance.f_dc.at(1),
+      first_appearance.f_dc.at(2));
+  }
 
   auto const init_result = device_initialization(impl->init, config.enable_validation);
   if (!init_result.has_value()) { return std::unexpected(init_result.error()); }

@@ -573,13 +573,13 @@ void record_imgui_overlay(Init &init, RenderData const &data, VkCommandBuffer co
     .layerCount = 1,
   };
 
-  // Raster leaves the swapchain in COLOR_ATTACHMENT; always finish with PRESENT.
+  // Raster blits into TRANSFER_DST; always finish with PRESENT.
   if (data.imgui == nullptr || !data.imgui->initialized) {
     auto to_present = initializers::ImageMemoryBarrier(
-      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, swapchain_image, color_range);
-    to_present.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, swapchain_image, color_range);
+    to_present.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
     init.disp.cmdPipelineBarrier(command_buffer,
-      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+      VK_PIPELINE_STAGE_TRANSFER_BIT,
       VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
       0,
       0,
@@ -603,10 +603,10 @@ void record_imgui_overlay(Init &init, RenderData const &data, VkCommandBuffer co
   size_t const frame_slot = data.current_frame;
   if (overlay.overlay_secondaries.at(frame_slot) == VK_NULL_HANDLE) {
     auto to_present = initializers::ImageMemoryBarrier(
-      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, swapchain_image, color_range);
-    to_present.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, swapchain_image, color_range);
+    to_present.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
     init.disp.cmdPipelineBarrier(command_buffer,
-      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+      VK_PIPELINE_STAGE_TRANSFER_BIT,
       VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
       0,
       0,
@@ -624,7 +624,20 @@ void record_imgui_overlay(Init &init, RenderData const &data, VkCommandBuffer co
 
   VkImageView swapchain_view = init.swapchain->image_views().at(image_index);
 
-  // Already in COLOR_ATTACHMENT_OPTIMAL after the Gaussian quad pass.
+  auto to_color_attachment = initializers::ImageMemoryBarrier(
+    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, swapchain_image, color_range);
+  to_color_attachment.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+  to_color_attachment.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+  init.disp.cmdPipelineBarrier(command_buffer,
+    VK_PIPELINE_STAGE_TRANSFER_BIT,
+    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+    0,
+    0,
+    nullptr,
+    0,
+    nullptr,
+    1,
+    &to_color_attachment);
 
   VkRenderingAttachmentInfo const color_attachment = {
     .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,

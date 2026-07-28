@@ -13,7 +13,7 @@ namespace vkgsplat::gs {
 // 3DGS SH degree 3: (degree + 1)^2 = 16 coeffs/channel × 3 channels = 48.
 // Stored as DC (f_dc_0..2) plus higher-order rest (f_rest_0..44).
 inline constexpr u32 k_sh_degree = 3;// max SH degree stored in appearance; runtime uses project_push.sh_degree
-inline constexpr u32 k_viewer_sh_degree = 0;// default for interactive viewing (skip SH1–3)
+inline constexpr u32 k_viewer_sh_degree = 3;// full view-dependent SH (0 = SH0 only, faster proj)
 inline constexpr u32 k_sh_dc_coeffs = 3;
 inline constexpr u32 k_sh_rest_coeffs = 45;
 inline constexpr u32 k_sh_total_coeffs = k_sh_dc_coeffs + k_sh_rest_coeffs;

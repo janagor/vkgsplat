@@ -80,7 +80,7 @@ auto create_graphics_pipeline(Init &init, RenderData &data) -> int
   color_blend_attachment.colorWriteMask =
     VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
   // NOLINTEND(hicpp-signed-bitwise)
-  // Premultiplied alpha (frag writes rgb*a)
+  // Premultiplied over (SuperSplat / PlayCanvas): src already has rgb*alpha.
   color_blend_attachment.blendEnable = VK_TRUE;
   color_blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
   color_blend_attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
@@ -97,13 +97,13 @@ auto create_graphics_pipeline(Init &init, RenderData &data) -> int
 
   auto dynamic_info = initializers::PipelineDynamicStateCreateInfo(dynamic_states);
 
-  VkFormat const swapchain_format = init.swapchain->format();
+  VkFormat const color_format = data.color_format;
   VkPipelineRenderingCreateInfo pipeline_rendering_info = {
     .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
     .pNext = nullptr,
     .viewMask = 0,
     .colorAttachmentCount = 1,
-    .pColorAttachmentFormats = &swapchain_format,
+    .pColorAttachmentFormats = &color_format,
     .depthAttachmentFormat = VK_FORMAT_UNDEFINED,
     .stencilAttachmentFormat = VK_FORMAT_UNDEFINED,
   };

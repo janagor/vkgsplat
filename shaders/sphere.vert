@@ -2,9 +2,9 @@
 #extension GL_EXT_descriptor_heap : require
 #extension GL_EXT_nonuniform_qualifier : enable
 
-// Oriented screen-space Gaussian quads (PlayCanvas-style).
+// Oriented screen-space Gaussian quads (PlayCanvas / SuperSplat style).
 layout(location = 0) flat out vec3 fragColor;
-layout(location = 1) out vec2 fragUV;
+layout(location = 1) out vec2 fragCorner;// unit-disk UV in [-1, 1]
 layout(location = 2) flat out float fragOpacity;
 
 layout(push_constant) uniform RasterPush {
@@ -37,7 +37,6 @@ layout(descriptor_heap, std430) readonly buffer SortedValuesBuffer {
 	uint data[];
 } sorted_values_buffers[];
 
-// cornerUV in [-1, 1]
 const vec2 QUAD_VERTS[6] = vec2[](
 	vec2(-1.0, -1.0), vec2(1.0, -1.0), vec2(-1.0, 1.0),
 	vec2(-1.0, 1.0), vec2(1.0, -1.0), vec2(1.0, 1.0)
@@ -64,21 +63,25 @@ void main()
 	if (radius < 1.0) {
 		gl_Position = vec4(2.0, 2.0, 0.0, 1.0);
 		fragColor = vec3(0.0);
-		fragUV = vec2(0.0);
+		fragCorner = vec2(0.0);
 		fragOpacity = 0.0;
 		return;
 	}
 
-	// Eigenbasis of Σ₂D → oriented quad axes (PlayCanvas gsplatCorner).
 	float mid = 0.5 * (cov_xx + cov_yy);
 	float radius_eig = length(vec2((cov_xx - cov_yy) * 0.5, cov_xy));
 	float lambda1 = mid + radius_eig;
 	float lambda2 = max(mid - radius_eig, 0.1);
 
-	float l1 = 2.0 * sqrt(2.0 * lambda1);
-	float l2 = 2.0 * sqrt(2.0 * lambda2);
+	// PlayCanvas gsplatCorner: extent = 2 * sqrt(λ) on each eigenaxis.
+	float l1 = 2.0 * sqrt(lambda1);
+	float l2 = 2.0 * sqrt(lambda2);
 
-	vec2 diagonal_vector = normalize(vec2(cov_xy, lambda1 - cov_xx));
+	// Axis-aligned Σ has cov_xy=0 and λ1=cov_xx → (0,0); normalize(0,0) is NaN.
+	vec2 diagonal_vector = vec2(cov_xy, lambda1 - cov_xx);
+	float diag_len2 = dot(diagonal_vector, diagonal_vector);
+	diagonal_vector = (diag_len2 > 1e-12) ? (diagonal_vector * inversesqrt(diag_len2)) : vec2(1.0, 0.0);
+
 	vec2 v1 = l1 * diagonal_vector;
 	vec2 v2 = l2 * vec2(diagonal_vector.y, -diagonal_vector.x);
 
@@ -92,6 +95,6 @@ void main()
 	gl_Position = vec4(ndc, 0.0, 1.0);
 
 	fragColor = color;
-	fragUV = local;
+	fragCorner = local;
 	fragOpacity = opacity;
 }
