@@ -39,9 +39,9 @@ auto property_type_name(miniply::PLYPropertyType type) -> std::string_view
 
 void print_property(miniply::PLYProperty const &prop)
 {
-  if (prop.countType != miniply::PLYPropertyType::None) {
+  if (prop.count_type != miniply::PLYPropertyType::None) {
     std::println(
-      "    property '{}' list<{}> {}", prop.name, property_type_name(prop.countType), property_type_name(prop.type));
+      "    property '{}' list<{}> {}", prop.name, property_type_name(prop.count_type), property_type_name(prop.type));
     return;
   }
 
