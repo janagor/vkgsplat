@@ -15,7 +15,7 @@ namespace vkgsplat::compute {
 
 Algorithm::Algorithm(Algorithm &&other) noexcept : pipeline_(std::exchange(other.pipeline_, VK_NULL_HANDLE)) {}
 
-Algorithm &Algorithm::operator=(Algorithm &&other) noexcept
+auto Algorithm::operator=(Algorithm &&other) noexcept -> Algorithm &
 {
   if (this != &other) { pipeline_ = std::exchange(other.pipeline_, VK_NULL_HANDLE); }
   return *this;

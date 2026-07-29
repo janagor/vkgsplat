@@ -22,7 +22,7 @@ GPUAllocator::GPUAllocator(GPUAllocator &&other) noexcept
     get_buffer_device_address_(other.get_buffer_device_address_)
 {}
 
-GPUAllocator &GPUAllocator::operator=(GPUAllocator &&other) noexcept
+auto GPUAllocator::operator=(GPUAllocator &&other) noexcept -> GPUAllocator &
 {
   if (this != &other) {
     if (allocator_ != VK_NULL_HANDLE) { vmaDestroyAllocator(allocator_); }
@@ -34,8 +34,8 @@ GPUAllocator &GPUAllocator::operator=(GPUAllocator &&other) noexcept
 }
 
 // TODO: add correct error
-std::expected<GPUAllocator, void *>
-  GPUAllocator::create(VkInstance instance, VkDevice device, VkPhysicalDevice physical_device) noexcept
+auto
+  GPUAllocator::create(VkInstance instance, VkDevice device, VkPhysicalDevice physical_device) noexcept -> std::expected<GPUAllocator, void *>
 {
   // NOLINTBEGIN(cppcoreguidelines-pro-type-reinterpret-cast)
   auto const get_buffer_device_address_fn =
@@ -65,7 +65,7 @@ GPUAllocator::GPUAllocator(VmaAllocator allocator,
   : allocator_{ allocator }, device_{ device }, get_buffer_device_address_{ get_buffer_device_address }
 {}
 
-std::expected<Buffer, void *> GPUAllocator::create_storage_buffer(VkDeviceSize size) noexcept
+auto GPUAllocator::create_storage_buffer(VkDeviceSize size) noexcept -> std::expected<Buffer, void *>
 {
   // NOLINTBEGIN(hicpp-signed-bitwise)
   auto const buffer_info = initializers::BufferCreateInfo(size,
@@ -88,7 +88,7 @@ std::expected<Buffer, void *> GPUAllocator::create_storage_buffer(VkDeviceSize s
   return buffer;
 }
 
-std::expected<Buffer, void *> GPUAllocator::create_device_storage_buffer(VkDeviceSize size) noexcept
+auto GPUAllocator::create_device_storage_buffer(VkDeviceSize size) noexcept -> std::expected<Buffer, void *>
 {
   // NOLINTBEGIN(hicpp-signed-bitwise)
   auto const buffer_info = initializers::BufferCreateInfo(size,
@@ -109,7 +109,7 @@ std::expected<Buffer, void *> GPUAllocator::create_device_storage_buffer(VkDevic
   return buffer;
 }
 
-std::expected<Buffer, void *> GPUAllocator::create_heap_buffer(VkDeviceSize size) noexcept
+auto GPUAllocator::create_heap_buffer(VkDeviceSize size) noexcept -> std::expected<Buffer, void *>
 {
   auto const buffer_info = initializers::BufferCreateInfo(
     size, VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
@@ -144,7 +144,7 @@ std::expected<Buffer, void *> GPUAllocator::create_heap_buffer(VkDeviceSize size
   return buffer;
 }
 
-VkDeviceAddress GPUAllocator::get_buffer_device_address(Buffer const &buffer) const noexcept
+auto GPUAllocator::get_buffer_device_address(Buffer const &buffer) const noexcept -> VkDeviceAddress
 {
   VkBufferDeviceAddressInfo const info{
     .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
@@ -162,7 +162,7 @@ void GPUAllocator::destroy_buffer(Buffer &buffer) noexcept
   }
 }
 
-std::expected<std::span<std::byte>, void *> GPUAllocator::map_buffer(Buffer const &buffer) noexcept
+auto GPUAllocator::map_buffer(Buffer const &buffer) noexcept -> std::expected<std::span<std::byte>, void *>
 {
   void *data = nullptr;
   if (vmaMapMemory(allocator_, buffer.allocation, &data) != VK_SUCCESS) { return std::unexpected(nullptr); }

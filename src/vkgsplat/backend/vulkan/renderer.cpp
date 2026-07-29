@@ -17,8 +17,8 @@
 #include "backend/vulkan/command/pool.hpp"
 #include "backend/vulkan/depth_buffer.hpp"
 #include "backend/vulkan/descriptor/descriptor_heap.hpp"
-#include "backend/vulkan/graphics_pipeline.hpp"
 #include "backend/vulkan/gpu_pass_timer.hpp"
+#include "backend/vulkan/graphics_pipeline.hpp"
 #include "backend/vulkan/imgui_overlay.hpp"
 #include "backend/vulkan/initializers.hpp"
 #include "backend/vulkan/vulkan_bootstrap.hpp"
@@ -68,11 +68,11 @@ namespace {
 auto get_queues(Init &init, RenderData &data) -> std::expected<void, Error>
 {
   return VKBResultToExpected(init.device.get_queue(vkb::QueueType::graphics))
-    .and_then([&](auto const &graphics_queue) {
+    .and_then([&](VkQueue const &graphics_queue) -> std::expected<VkQueue, Error> {
       data.graphics_queue = graphics_queue;
       return VKBResultToExpected(init.device.get_queue(vkb::QueueType::present));
     })
-    .and_then([&](auto const &present_queue) {
+    .and_then([&](VkQueue const &present_queue) -> std::expected<void, Error> {
       data.present_queue = present_queue;
       return std::expected<void, Error>{};
     });
@@ -175,8 +175,7 @@ auto draw_frame(Init &init, RenderData &data, Camera const &camera) -> std::expe
       if (last_print.time_since_epoch().count() == 0 || now - last_print >= std::chrono::seconds{ 1 }) {
         last_print = now;
         auto const &pass_ms = data.gpu_pass_timer.last_ms();
-        std::println(
-          "GPU: {:.2f} ms (proj {:.2f} bin {:.2f} prep {:.2f} radix {:.2f} raster {:.2f})",
+        std::println("GPU: {:.2f} ms (proj {:.2f} bin {:.2f} prep {:.2f} radix {:.2f} raster {:.2f})",
           data.gpu_pass_timer.total_ms(),
           pass_ms.at(static_cast<size_t>(GpuPass::Projection)),
           pass_ms.at(static_cast<size_t>(GpuPass::Binning)),
@@ -204,8 +203,9 @@ auto draw_frame(Init &init, RenderData &data, Camera const &camera) -> std::expe
   }
   data.image_in_flight.at(image_index) = in_flight_fence;
 
-  auto recorded = vulkan::with_command(
-    std::ref(init.disp), data.command_buffers.at(image_index).handle(), [&](vkb::DispatchTable &, VkCommandBuffer cmd) {
+  auto recorded = vulkan::with_command(std::ref(init.disp),
+    data.command_buffers.at(image_index).handle(),
+    [&](vkb::DispatchTable &, VkCommandBuffer cmd) -> void {
       record_sphere_draw(init, data, camera, aspect_ratio, cmd, image_index);
     });
   if (!recorded) { return std::unexpected{ recorded.error() }; }

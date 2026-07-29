@@ -135,81 +135,81 @@ namespace {
     float z;
   };
 
-  [[nodiscard]] constexpr double double_digit(char character) { return static_cast<double>(character - '0'); }
+  [[nodiscard]] constexpr auto double_digit(char character) -> double { return static_cast<double>(character - '0'); }
 
-  [[nodiscard]] Vec2 operator-(Vec2 lhs, Vec2 rhs) { return Vec2{ .x = lhs.x - rhs.x, .y = lhs.y - rhs.y }; }
+  [[nodiscard]] auto operator-(Vec2 lhs, Vec2 rhs) -> Vec2 { return Vec2{ .x = lhs.x - rhs.x, .y = lhs.y - rhs.y }; }
 
-  [[nodiscard]] float dot(Vec2 lhs, Vec2 rhs) { return (lhs.x * rhs.x) + (lhs.y * rhs.y); }
+  [[nodiscard]] auto dot(Vec2 lhs, Vec2 rhs) -> float { return (lhs.x * rhs.x) + (lhs.y * rhs.y); }
 
-  [[nodiscard]] float length(Vec2 vec) { return std::sqrt(dot(vec, vec)); }
+  [[nodiscard]] auto length(Vec2 vec) -> float { return std::sqrt(dot(vec, vec)); }
 
-  [[nodiscard]] Vec2 normalize(Vec2 vec)
+  [[nodiscard]] auto normalize(Vec2 vec) -> Vec2
   {
     float const len = length(vec);
     return Vec2{ .x = vec.x / len, .y = vec.y / len };
   }
 
-  [[nodiscard]] Vec3 operator-(Vec3 lhs, Vec3 rhs)
+  [[nodiscard]] auto operator-(Vec3 lhs, Vec3 rhs) -> Vec3
   { return Vec3{ .x = lhs.x - rhs.x, .y = lhs.y - rhs.y, .z = lhs.z - rhs.z }; }
 
-  [[nodiscard]] float dot(Vec3 lhs, Vec3 rhs) { return (lhs.x * rhs.x) + (lhs.y * rhs.y) + (lhs.z * rhs.z); }
+  [[nodiscard]] auto dot(Vec3 lhs, Vec3 rhs) -> float { return (lhs.x * rhs.x) + (lhs.y * rhs.y) + (lhs.z * rhs.z); }
 
-  [[nodiscard]] float length(Vec3 vec) { return std::sqrt(dot(vec, vec)); }
+  [[nodiscard]] auto length(Vec3 vec) -> float { return std::sqrt(dot(vec, vec)); }
 
-  [[nodiscard]] Vec3 normalize(Vec3 vec)
+  [[nodiscard]] auto normalize(Vec3 vec) -> Vec3
   {
     float const len = length(vec);
     return Vec3{ .x = vec.x / len, .y = vec.y / len, .z = vec.z / len };
   }
 
-  [[nodiscard]] Vec3 cross(Vec3 lhs, Vec3 rhs)
+  [[nodiscard]] auto cross(Vec3 lhs, Vec3 rhs) -> Vec3
   {
     return Vec3{ .x = (lhs.y * rhs.z) - (lhs.z * rhs.y),
       .y = (lhs.z * rhs.x) - (lhs.x * rhs.z),
       .z = (lhs.x * rhs.y) - (lhs.y * rhs.x) };
   }
 
-  [[nodiscard]] bool is_whitespace(char character)
+  [[nodiscard]] auto is_whitespace(char character) -> bool
   { return character == ' ' || character == '\t' || character == '\r'; }
 
-  [[nodiscard]] bool is_digit(char character) { return character >= '0' && character <= '9'; }
+  [[nodiscard]] auto is_digit(char character) -> bool { return character >= '0' && character <= '9'; }
 
-  [[nodiscard]] char to_lower_ascii(char character)
+  [[nodiscard]] auto to_lower_ascii(char character) -> char
   { return static_cast<char>(static_cast<unsigned char>(character) | kAsciiToLowerBit); }
 
 
-  [[nodiscard]] char span_char(std::span<const char> buffer, size_t index) { return buffer.subspan(index, 1U).front(); }
+  [[nodiscard]] auto span_char(std::span<const char> buffer, size_t index) -> char { return buffer.subspan(index, 1U).front(); }
 
-  template<typename T> [[nodiscard]] T span_at(std::span<T> span, size_t index)
+  template<typename T> [[nodiscard]] auto span_at(std::span<T> span, size_t index) -> T
   { return span.subspan(index, 1U).front(); }
 
-  template<typename T> [[nodiscard]] T &span_ref(std::span<T> span, size_t index)
+  template<typename T> [[nodiscard]] auto span_ref(std::span<T> span, size_t index) -> T &
   { return *std::next(span.begin(), static_cast<std::ptrdiff_t>(index)); }
 
-  template<typename T> [[nodiscard]] T span_at(std::span<const T> span, size_t index)
+  template<typename T> [[nodiscard]] auto span_at(std::span<const T> span, size_t index) -> T
   { return span.subspan(index, 1U).front(); }
 
   using FileHandle = std::unique_ptr<FILE, decltype(&fclose)>;
 
-  [[nodiscard]] std::span<std::byte> byte_span(void *dest, size_t size)
+  [[nodiscard]] auto byte_span(void *dest, size_t size) -> std::span<std::byte>
   { return { static_cast<std::byte *>(dest), size }; }
 
-  [[nodiscard]] bool is_letter(char character)
+  [[nodiscard]] auto is_letter(char character) -> bool
   {
     char const lower = to_lower_ascii(character);
     return lower >= 'a' && lower <= 'z';
   }
 
-  [[nodiscard]] bool is_alnum(char character) { return is_digit(character) || is_letter(character); }
+  [[nodiscard]] auto is_alnum(char character) -> bool { return is_digit(character) || is_letter(character); }
 
-  [[nodiscard]] bool is_keyword_start(char character) { return is_letter(character) || character == '_'; }
+  [[nodiscard]] auto is_keyword_start(char character) -> bool { return is_letter(character) || character == '_'; }
 
-  [[nodiscard]] bool is_keyword_part(char character) { return is_alnum(character) || character == '_'; }
+  [[nodiscard]] auto is_keyword_part(char character) -> bool { return is_alnum(character) || character == '_'; }
 
-  [[nodiscard]] bool is_safe_buffer_end(char character)
+  [[nodiscard]] auto is_safe_buffer_end(char character) -> bool
   { return (character > 0 && character <= kAsciiControlMax) || (character >= kAsciiDelete); }
 
-  [[nodiscard]] FileHandle open_file(const char *filename, const char *mode)
+  [[nodiscard]] auto open_file(const char *filename, const char *mode) -> FileHandle
   {
 #ifdef _WIN32
     FILE *file = nullptr;
@@ -222,7 +222,7 @@ namespace {
 #endif
   }
 
-  [[nodiscard]] bool file_seek(FILE *file, int64_t offset, int origin)
+  [[nodiscard]] auto file_seek(FILE *file, int64_t offset, int origin) -> bool
   {
 #ifdef _WIN32
     return _fseeki64(file, offset, origin) == 0;
@@ -231,7 +231,7 @@ namespace {
 #endif
   }
 
-  template<typename T> [[nodiscard]] T read_value(std::span<const std::byte> bytes)
+  template<typename T> [[nodiscard]] auto read_value(std::span<const std::byte> bytes) -> T
   {
     std::array<std::byte, sizeof(T)> storage{};
     std::memcpy(storage.data(), bytes.data(), sizeof(T));
@@ -398,7 +398,7 @@ namespace {
     std::span<const uint32_t> next;
   };
 
-  [[nodiscard]] bool compatible_types(PLYPropertyType srcType, PLYPropertyType destType)
+  [[nodiscard]] auto compatible_types(PLYPropertyType srcType, PLYPropertyType destType) -> bool
   {
     TypePair const types{ .src = srcType, .dest = destType };
     return (types.src == types.dest)
@@ -414,7 +414,7 @@ namespace {
     bool hasFracDigits = false;
   };
 
-  [[nodiscard]] bool int_literal(std::span<const char> buffer, size_t startPos, size_t &endPos, int *val)
+  [[nodiscard]] auto int_literal(std::span<const char> buffer, size_t startPos, size_t &endPos, int *val) -> bool
   {
     if (startPos >= buffer.size()) { return false; }
     size_t pos = startPos;
@@ -452,7 +452,7 @@ namespace {
     return true;
   }
 
-  [[nodiscard]] bool parse_double_integer_part(std::span<const char> buffer, DoubleParseState &state)
+  [[nodiscard]] auto parse_double_integer_part(std::span<const char> buffer, DoubleParseState &state) -> bool
   {
     state.hasIntDigits = state.pos < buffer.size() && is_digit(span_char(buffer, state.pos));
     if (state.hasIntDigits) {
@@ -466,7 +466,7 @@ namespace {
     return true;
   }
 
-  [[nodiscard]] bool parse_double_fraction_part(std::span<const char> buffer, DoubleParseState &state)
+  [[nodiscard]] auto parse_double_fraction_part(std::span<const char> buffer, DoubleParseState &state) -> bool
   {
     if (state.pos >= buffer.size() || span_char(buffer, state.pos) != '.') { return true; }
 
@@ -483,7 +483,7 @@ namespace {
     return true;
   }
 
-  [[nodiscard]] bool parse_double_exponent(std::span<const char> buffer, DoubleParseState &state, bool applyExponent)
+  [[nodiscard]] auto parse_double_exponent(std::span<const char> buffer, DoubleParseState &state, bool applyExponent) -> bool
   {
     if (state.pos >= buffer.size() || (span_char(buffer, state.pos) != 'e' && span_char(buffer, state.pos) != 'E')) {
       return true;
@@ -513,7 +513,7 @@ namespace {
     return true;
   }
 
-  [[nodiscard]] bool double_literal(std::span<const char> buffer, size_t startPos, size_t &endPos, double *val)
+  [[nodiscard]] auto double_literal(std::span<const char> buffer, size_t startPos, size_t &endPos, double *val) -> bool
   {
     if (startPos >= buffer.size()) { return false; }
 
@@ -545,7 +545,7 @@ namespace {
     return true;
   }
 
-  [[nodiscard]] bool float_literal(std::span<const char> buffer, size_t startPos, size_t &endPos, float *val)
+  [[nodiscard]] auto float_literal(std::span<const char> buffer, size_t startPos, size_t &endPos, float *val) -> bool
   {
     double parsed = 0.0;
     bool const success = double_literal(buffer, startPos, endPos, &parsed);
@@ -553,7 +553,7 @@ namespace {
     return success;
   }
 
-  [[nodiscard]] Vec3 vertex_at(std::span<const float> pos, int index)
+  [[nodiscard]] auto vertex_at(std::span<const float> pos, int index) -> Vec3
   {
     size_t const base = static_cast<size_t>(index) * kVerticesPerTriangle;
     return Vec3{ .x = span_at(pos, base), .y = span_at(pos, base + 1U), .z = span_at(pos, base + 2U) };
@@ -567,13 +567,13 @@ namespace {
     uint32_t expectedOffset = 0;
   };
 
-  [[nodiscard]] bool validate_property_indices(PLYElement const &elem, std::span<const uint32_t> propIdxs)
+  [[nodiscard]] auto validate_property_indices(PLYElement const &elem, std::span<const uint32_t> propIdxs) -> bool
   {
-    return std::ranges::all_of(propIdxs, [&](uint32_t const propIdx) { return propIdx < elem.properties.size(); });
+    return std::ranges::all_of(propIdxs, [&](uint32_t const propIdx) -> bool { return propIdx < elem.properties.size(); });
   }
 
-  [[nodiscard]] PropertyLayoutInfo
-    analyze_property_layout(PLYElement const &elem, std::span<const uint32_t> propIdxs, PLYPropertyType destType)
+  [[nodiscard]] auto
+    analyze_property_layout(PLYElement const &elem, std::span<const uint32_t> propIdxs, PLYPropertyType destType) -> PropertyLayoutInfo
   {
     PropertyLayoutInfo info{};
     info.expectedOffset = elem.properties.at(propIdxs.front()).offset;
@@ -662,7 +662,7 @@ namespace {
     }
   }
 
-  [[nodiscard]] float angle_at_vert(uint32_t idx, std::span<const Vec2> points2D, RingLinks ring)
+  [[nodiscard]] auto angle_at_vert(uint32_t idx, std::span<const Vec2> points2D, RingLinks ring) -> float
   {
     Vec2 const xaxis = normalize(span_at(points2D, span_at(ring.next, idx)) - span_at(points2D, idx));
     Vec2 const yaxis = Vec2{ .x = -xaxis.y, .y = xaxis.x };
@@ -681,7 +681,7 @@ namespace {
 void PLYElement::calculate_offsets()
 {
   fixedSize =
-    !std::ranges::any_of(properties, [](PLYProperty const &prop) { return prop.countType != PLYPropertyType::None; });
+    !std::ranges::any_of(properties, [](PLYProperty const &prop) -> bool { return prop.countType != PLYPropertyType::None; });
 
   rowStride = 0;
   for (PLYProperty &prop : properties) {
@@ -692,7 +692,7 @@ void PLYElement::calculate_offsets()
 }
 
 
-uint32_t PLYElement::find_property(const char *propName) const
+auto PLYElement::find_property(const char *propName) const -> uint32_t
 {
   for (uint32_t index = 0; index < static_cast<uint32_t>(properties.size()); ++index) {
     if (strcmp(propName, properties.at(index).name.c_str()) == 0) { return index; }
@@ -701,7 +701,7 @@ uint32_t PLYElement::find_property(const char *propName) const
 }
 
 
-bool PLYElement::find_properties(std::span<uint32_t> propIdxs, std::span<const char *const> propNames) const
+auto PLYElement::find_properties(std::span<uint32_t> propIdxs, std::span<const char *const> propNames) const -> bool
 {
   if (propIdxs.size() != propNames.size()) { return false; }
   for (size_t index = 0; index < propNames.size(); ++index) {
@@ -712,9 +712,9 @@ bool PLYElement::find_properties(std::span<uint32_t> propIdxs, std::span<const c
 }
 
 
-bool PLYElement::convert_list_to_fixed_size(ListPropertyIndex listPropIdx,
+auto PLYElement::convert_list_to_fixed_size(ListPropertyIndex listPropIdx,
   FixedListSize listSize,
-  std::span<uint32_t> newPropIdxs)
+  std::span<uint32_t> newPropIdxs) -> bool
 {
   auto const listPropIndex = static_cast<uint32_t>(listPropIdx);
   auto const fixedListSize = static_cast<uint32_t>(listSize);
@@ -790,20 +790,20 @@ PLYReader::PLYReader(const char *filename)
 PLYReader::~PLYReader() = default;
 
 
-bool PLYReader::valid() const { return m_valid; }
+auto PLYReader::valid() const -> bool { return m_valid; }
 
 
-bool PLYReader::has_element() const { return m_valid && m_currentElement < m_elements.size(); }
+auto PLYReader::has_element() const -> bool { return m_valid && m_currentElement < m_elements.size(); }
 
 
-const PLYElement *PLYReader::element() const
+auto PLYReader::element() const -> const PLYElement *
 {
   assert(has_element());
   return &m_elements.at(m_currentElement);
 }
 
 
-bool PLYReader::load_element()
+auto PLYReader::load_element() -> bool
 {
   assert(has_element());
   if (m_elementLoaded) { return true; }
@@ -813,10 +813,10 @@ bool PLYReader::load_element()
 }
 
 
-char PLYReader::char_at(size_t index) const { return m_buf.at(index); }
+auto PLYReader::char_at(size_t index) const -> char { return m_buf.at(index); }
 
 
-bool PLYReader::ensure_bytes_available(size_t numBytes)
+auto PLYReader::ensure_bytes_available(size_t numBytes) -> bool
 {
   if (m_pos + numBytes > m_bufDataEnd) {
     if (!refill_buffer() || m_pos + numBytes > m_bufDataEnd) {
@@ -959,19 +959,19 @@ void PLYReader::next_element()
 }
 
 
-PLYFileType PLYReader::file_type() const { return m_fileType; }
+auto PLYReader::file_type() const -> PLYFileType { return m_fileType; }
 
 
-int PLYReader::version_major() const { return m_majorVersion; }
+auto PLYReader::version_major() const -> int { return m_majorVersion; }
 
 
-int PLYReader::version_minor() const { return m_minorVersion; }
+auto PLYReader::version_minor() const -> int { return m_minorVersion; }
 
 
-uint32_t PLYReader::num_elements() const { return m_valid ? static_cast<uint32_t>(m_elements.size()) : 0U; }
+auto PLYReader::num_elements() const -> uint32_t { return m_valid ? static_cast<uint32_t>(m_elements.size()) : 0U; }
 
 
-uint32_t PLYReader::find_element(const char *name) const
+auto PLYReader::find_element(const char *name) const -> uint32_t
 {
   for (uint32_t index = 0; index < num_elements(); ++index) {
     if (strcmp(m_elements.at(index).name.c_str(), name) == 0) { return index; }
@@ -980,28 +980,28 @@ uint32_t PLYReader::find_element(const char *name) const
 }
 
 
-PLYElement *PLYReader::get_element(uint32_t idx) { return (idx < num_elements()) ? &m_elements.at(idx) : nullptr; }
+auto PLYReader::get_element(uint32_t idx) -> PLYElement * { return (idx < num_elements()) ? &m_elements.at(idx) : nullptr; }
 
 
-bool PLYReader::element_is(const char *name) const
+auto PLYReader::element_is(const char *name) const -> bool
 { return has_element() && strcmp(element()->name.c_str(), name) == 0; }
 
 
-uint32_t PLYReader::num_rows() const { return has_element() ? element()->count : 0U; }
+auto PLYReader::num_rows() const -> uint32_t { return has_element() ? element()->count : 0U; }
 
 
-uint32_t PLYReader::find_property(const char *name) const
+auto PLYReader::find_property(const char *name) const -> uint32_t
 { return has_element() ? element()->find_property(name) : kInvalidIndex; }
 
 
-bool PLYReader::find_properties(std::span<uint32_t> propIdxs, std::span<const char *const> propNames) const
+auto PLYReader::find_properties(std::span<uint32_t> propIdxs, std::span<const char *const> propNames) const -> bool
 {
   if (!has_element()) { return false; }
   return element()->find_properties(propIdxs, propNames);
 }
 
 
-bool PLYReader::extract_properties(std::span<const uint32_t> propIdxs, PLYPropertyType destType, void *dest) const
+auto PLYReader::extract_properties(std::span<const uint32_t> propIdxs, PLYPropertyType destType, void *dest) const -> bool
 {
   if (propIdxs.empty() || dest == nullptr) { return false; }
 
@@ -1027,10 +1027,10 @@ bool PLYReader::extract_properties(std::span<const uint32_t> propIdxs, PLYProper
 }
 
 
-bool PLYReader::extract_properties_with_stride(std::span<const uint32_t> propIdxs,
+auto PLYReader::extract_properties_with_stride(std::span<const uint32_t> propIdxs,
   PLYPropertyType destType,
   void *dest,
-  uint32_t destStride) const
+  uint32_t destStride) const -> bool
 {
   if (propIdxs.empty() || dest == nullptr) { return false; }
 
@@ -1078,7 +1078,7 @@ bool PLYReader::extract_properties_with_stride(std::span<const uint32_t> propIdx
 }
 
 
-const uint32_t *PLYReader::get_list_counts(uint32_t propIdx) const
+auto PLYReader::get_list_counts(uint32_t propIdx) const -> const uint32_t *
 {
   if (!has_element() || propIdx >= element()->properties.size()
       || element()->properties.at(propIdx).countType == PLYPropertyType::None) {
@@ -1088,7 +1088,7 @@ const uint32_t *PLYReader::get_list_counts(uint32_t propIdx) const
 }
 
 
-uint32_t PLYReader::sum_of_list_counts(uint32_t propIdx) const
+auto PLYReader::sum_of_list_counts(uint32_t propIdx) const -> uint32_t
 {
   if (!has_element() || propIdx >= element()->properties.size()
       || element()->properties.at(propIdx).countType == PLYPropertyType::None) {
@@ -1099,7 +1099,7 @@ uint32_t PLYReader::sum_of_list_counts(uint32_t propIdx) const
 }
 
 
-const uint8_t *PLYReader::get_list_data(uint32_t propIdx) const
+auto PLYReader::get_list_data(uint32_t propIdx) const -> const uint8_t *
 {
   if (!has_element() || propIdx >= element()->properties.size()
       || element()->properties.at(propIdx).countType == PLYPropertyType::None) {
@@ -1109,7 +1109,7 @@ const uint8_t *PLYReader::get_list_data(uint32_t propIdx) const
 }
 
 
-bool PLYReader::extract_list_property(uint32_t propIdx, PLYPropertyType destType, void *dest) const
+auto PLYReader::extract_list_property(uint32_t propIdx, PLYPropertyType destType, void *dest) const -> bool
 {
   if (!has_element() || propIdx >= element()->properties.size()
       || element()->properties.at(propIdx).countType == PLYPropertyType::None || dest == nullptr) {
@@ -1139,7 +1139,7 @@ bool PLYReader::extract_list_property(uint32_t propIdx, PLYPropertyType destType
 }
 
 
-uint32_t PLYReader::num_triangles(uint32_t propIdx) const
+auto PLYReader::num_triangles(uint32_t propIdx) const -> uint32_t
 {
   uint32_t const *counts = get_list_counts(propIdx);
   if (counts == nullptr) { return 0U; }
@@ -1153,7 +1153,7 @@ uint32_t PLYReader::num_triangles(uint32_t propIdx) const
 }
 
 
-bool PLYReader::requires_triangulation(uint32_t propIdx) const
+auto PLYReader::requires_triangulation(uint32_t propIdx) const -> bool
 {
   uint32_t const *counts = get_list_counts(propIdx);
   if (counts == nullptr) { return false; }
@@ -1166,11 +1166,11 @@ bool PLYReader::requires_triangulation(uint32_t propIdx) const
 }
 
 
-bool PLYReader::extract_triangles(uint32_t propIdx,
+auto PLYReader::extract_triangles(uint32_t propIdx,
   std::span<const float> positions,
   MeshVertexCount meshVertexCount,
   PLYPropertyType destType,
-  void *dest) const
+  void *dest) const -> bool
 {
   if (dest == nullptr) { return false; }
   if (!requires_triangulation(propIdx)) { return extract_list_property(propIdx, destType, dest); }
@@ -1188,11 +1188,11 @@ bool PLYReader::extract_triangles(uint32_t propIdx,
 }
 
 
-bool PLYReader::extract_triangles_convert_both(uint32_t propIdx,
+auto PLYReader::extract_triangles_convert_both(uint32_t propIdx,
   std::span<const float> positions,
   MeshVertexCount meshVertexCount,
   PLYPropertyType destType,
-  void *dest) const
+  void *dest) const -> bool
 {
   PLYElement const *elem = element();
   PLYProperty const &prop = elem->properties.at(propIdx);
@@ -1235,11 +1235,11 @@ bool PLYReader::extract_triangles_convert_both(uint32_t propIdx,
 }
 
 
-bool PLYReader::extract_triangles_convert_src(uint32_t propIdx,
+auto PLYReader::extract_triangles_convert_src(uint32_t propIdx,
   std::span<const float> positions,
   MeshVertexCount meshVertexCount,
   PLYPropertyType destType,
-  void *dest) const
+  void *dest) const -> bool
 {
   PLYElement const *elem = element();
   PLYProperty const &prop = elem->properties.at(propIdx);
@@ -1273,11 +1273,11 @@ bool PLYReader::extract_triangles_convert_src(uint32_t propIdx,
 }
 
 
-bool PLYReader::extract_triangles_convert_dst(uint32_t propIdx,
+auto PLYReader::extract_triangles_convert_dst(uint32_t propIdx,
   std::span<const float> positions,
   MeshVertexCount meshVertexCount,
   PLYPropertyType destType,
-  void *dest) const
+  void *dest) const -> bool
 {
   PLYElement const *elem = element();
   PLYProperty const &prop = elem->properties.at(propIdx);
@@ -1319,11 +1319,11 @@ bool PLYReader::extract_triangles_convert_dst(uint32_t propIdx,
 }
 
 
-bool PLYReader::extract_triangles_native(uint32_t propIdx,
+auto PLYReader::extract_triangles_native(uint32_t propIdx,
   std::span<const float> positions,
   MeshVertexCount meshVertexCount,
   PLYPropertyType destType,
-  void *dest) const
+  void *dest) const -> bool
 {
   PLYElement const *elem = element();
   PLYProperty const &prop = elem->properties.at(propIdx);
@@ -1355,21 +1355,21 @@ bool PLYReader::extract_triangles_native(uint32_t propIdx,
 }
 
 
-bool PLYReader::find_pos(std::span<uint32_t, 3> propIdxs) const
+auto PLYReader::find_pos(std::span<uint32_t, 3> propIdxs) const -> bool
 {
   static constexpr std::array<const char *, 3> names{ "x", "y", "z" };
   return find_properties(propIdxs, names);
 }
 
 
-bool PLYReader::find_normal(std::span<uint32_t, 3> propIdxs) const
+auto PLYReader::find_normal(std::span<uint32_t, 3> propIdxs) const -> bool
 {
   static constexpr std::array<const char *, 3> names{ "nx", "ny", "nz" };
   return find_properties(propIdxs, names);
 }
 
 
-bool PLYReader::find_texcoord(std::span<uint32_t, 2> propIdxs) const
+auto PLYReader::find_texcoord(std::span<uint32_t, 2> propIdxs) const -> bool
 {
   static constexpr std::array<const char *, 2> uvNames{ "u", "v" };
   static constexpr std::array<const char *, 2> stNames{ "s", "t" };
@@ -1380,7 +1380,7 @@ bool PLYReader::find_texcoord(std::span<uint32_t, 2> propIdxs) const
 }
 
 
-bool PLYReader::find_color(std::span<uint32_t, 3> propIdxs) const
+auto PLYReader::find_color(std::span<uint32_t, 3> propIdxs) const -> bool
 {
   static constexpr std::array<const char *, 3> shortNames{ "r", "g", "b" };
   static constexpr std::array<const char *, 3> longNames{ "red", "green", "blue" };
@@ -1388,7 +1388,7 @@ bool PLYReader::find_color(std::span<uint32_t, 3> propIdxs) const
 }
 
 
-bool PLYReader::find_indices(std::span<uint32_t, 1> propIdxs) const
+auto PLYReader::find_indices(std::span<uint32_t, 1> propIdxs) const -> bool
 {
   static constexpr std::array<const char *, 1> pluralNames{ "vertex_indices" };
   static constexpr std::array<const char *, 1> singularNames{ "vertex_index" };
@@ -1396,7 +1396,7 @@ bool PLYReader::find_indices(std::span<uint32_t, 1> propIdxs) const
 }
 
 
-bool PLYReader::refill_buffer()
+auto PLYReader::refill_buffer() -> bool
 {
   if (m_file == nullptr || m_atEOF) { return false; }
 
@@ -1435,7 +1435,7 @@ bool PLYReader::refill_buffer()
 }
 
 
-bool PLYReader::rewind_to_safe_char()
+auto PLYReader::rewind_to_safe_char() -> bool
 {
   if (!m_atEOF && m_bufDataEnd > 0U
       && (m_buf.at(m_bufDataEnd - 1U) == '\n' || !is_safe_buffer_end(m_buf.at(m_bufDataEnd - 1U)))) {
@@ -1454,14 +1454,14 @@ bool PLYReader::rewind_to_safe_char()
 }
 
 
-bool PLYReader::accept()
+auto PLYReader::accept() -> bool
 {
   m_pos = m_end;
   return true;
 }
 
 
-bool PLYReader::advance()
+auto PLYReader::advance() -> bool
 {
   m_pos = m_end;
   while (true) {
@@ -1478,7 +1478,7 @@ bool PLYReader::advance()
 }
 
 
-bool PLYReader::next_line()
+auto PLYReader::next_line() -> bool
 {
   m_pos = m_end;
   while (true) {
@@ -1495,7 +1495,7 @@ bool PLYReader::next_line()
 }
 
 
-bool PLYReader::match(std::string_view str)
+auto PLYReader::match(std::string_view str) -> bool
 {
   m_end = m_pos;
   size_t strIndex = 0U;
@@ -1507,7 +1507,7 @@ bool PLYReader::match(std::string_view str)
 }
 
 
-bool PLYReader::which(std::span<const std::string_view> values, uint32_t *index)
+auto PLYReader::which(std::span<const std::string_view> values, uint32_t *index) -> bool
 {
   for (uint32_t valueIndex = 0; valueIndex < static_cast<uint32_t>(values.size()); ++valueIndex) {
     if (keyword(span_at(values, valueIndex))) {
@@ -1519,7 +1519,7 @@ bool PLYReader::which(std::span<const std::string_view> values, uint32_t *index)
 }
 
 
-bool PLYReader::which_property_type(PLYPropertyType *type)
+auto PLYReader::which_property_type(PLYPropertyType *type) -> bool
 {
   for (PLYTypeAlias const &alias : kTypeAliases) {
     if (alias.name.empty()) { break; }
@@ -1532,11 +1532,11 @@ bool PLYReader::which_property_type(PLYPropertyType *type)
 }
 
 
-bool PLYReader::keyword(std::string_view keywordText)
+auto PLYReader::keyword(std::string_view keywordText) -> bool
 { return match(keywordText) && (m_end >= m_bufDataEnd || !is_keyword_part(char_at(m_end))); }
 
 
-bool PLYReader::identifier(std::span<char> dest)
+auto PLYReader::identifier(std::span<char> dest) -> bool
 {
   m_end = m_pos;
   if (dest.empty() || m_end >= m_bufDataEnd || !is_keyword_start(char_at(m_end))) { return false; }
@@ -1550,7 +1550,7 @@ bool PLYReader::identifier(std::span<char> dest)
 }
 
 
-bool PLYReader::int_literal(int *value)
+auto PLYReader::int_literal(int *value) -> bool
 {
   size_t endPos = m_pos;
   bool const success = miniply::int_literal(std::span{ m_buf }.subspan(0, m_bufDataEnd), m_pos, endPos, value);
@@ -1559,7 +1559,7 @@ bool PLYReader::int_literal(int *value)
 }
 
 
-bool PLYReader::float_literal(float *value)
+auto PLYReader::float_literal(float *value) -> bool
 {
   size_t endPos = m_pos;
   bool const success = miniply::float_literal(std::span{ m_buf }.subspan(0, m_bufDataEnd), m_pos, endPos, value);
@@ -1568,7 +1568,7 @@ bool PLYReader::float_literal(float *value)
 }
 
 
-bool PLYReader::double_literal(double *value)
+auto PLYReader::double_literal(double *value) -> bool
 {
   size_t endPos = m_pos;
   bool const success = miniply::double_literal(std::span{ m_buf }.subspan(0, m_bufDataEnd), m_pos, endPos, value);
@@ -1577,7 +1577,7 @@ bool PLYReader::double_literal(double *value)
 }
 
 
-bool PLYReader::parse_elements()
+auto PLYReader::parse_elements() -> bool
 {
   m_elements.reserve(kElementReserve);
   while (m_valid && keyword("element")) { parse_element(); }
@@ -1585,7 +1585,7 @@ bool PLYReader::parse_elements()
 }
 
 
-bool PLYReader::parse_element()
+auto PLYReader::parse_element() -> bool
 {
   int count = 0;
   auto tmpSpan = std::span{ m_tmpBuf }.subspan(0, static_cast<size_t>(kPLYTempBufferSize));
@@ -1604,7 +1604,7 @@ bool PLYReader::parse_element()
 }
 
 
-bool PLYReader::parse_property(std::vector<PLYProperty> &properties)
+auto PLYReader::parse_property(std::vector<PLYProperty> &properties) -> bool
 {
   PLYPropertyType type = PLYPropertyType::None;
   PLYPropertyType countType = PLYPropertyType::None;
@@ -1630,7 +1630,7 @@ bool PLYReader::parse_property(std::vector<PLYProperty> &properties)
 }
 
 
-bool PLYReader::load_fixed_size_element(PLYElement &elem)
+auto PLYReader::load_fixed_size_element(PLYElement &elem) -> bool
 {
   size_t const numBytes = static_cast<size_t>(elem.count) * static_cast<size_t>(elem.rowStride);
   m_elementData.resize(numBytes);
@@ -1646,7 +1646,7 @@ bool PLYReader::load_fixed_size_element(PLYElement &elem)
 }
 
 
-bool PLYReader::load_fixed_ascii_element(PLYElement &elem)
+auto PLYReader::load_fixed_ascii_element(PLYElement &elem) -> bool
 {
   size_t back = 0U;
   for (uint32_t row = 0; row < elem.count; ++row) {
@@ -1662,7 +1662,7 @@ bool PLYReader::load_fixed_ascii_element(PLYElement &elem)
 }
 
 
-bool PLYReader::load_fixed_binary_element(PLYElement const &elem, size_t numBytes)
+auto PLYReader::load_fixed_binary_element(PLYElement const &elem, size_t numBytes) -> bool
 {
   size_t dstOffset = 0U;
   while (dstOffset < numBytes) {
@@ -1699,7 +1699,7 @@ void PLYReader::endian_swap_loaded_fixed_element(PLYElement const &elem)
 }
 
 
-bool PLYReader::load_variable_size_element(PLYElement &elem)
+auto PLYReader::load_variable_size_element(PLYElement &elem) -> bool
 {
   m_elementData.resize(static_cast<size_t>(elem.count) * static_cast<size_t>(elem.rowStride));
 
@@ -1723,7 +1723,7 @@ bool PLYReader::load_variable_size_element(PLYElement &elem)
 }
 
 
-bool PLYReader::load_variable_binary_element(PLYElement &elem)
+auto PLYReader::load_variable_binary_element(PLYElement &elem) -> bool
 {
   size_t back = 0U;
   for (uint32_t row = 0; row < elem.count; ++row) {
@@ -1739,7 +1739,7 @@ bool PLYReader::load_variable_binary_element(PLYElement &elem)
 }
 
 
-bool PLYReader::load_variable_ascii_element(PLYElement &elem)
+auto PLYReader::load_variable_ascii_element(PLYElement &elem) -> bool
 {
   size_t back = 0U;
   for (uint32_t row = 0; row < elem.count; ++row) {
@@ -1756,7 +1756,7 @@ bool PLYReader::load_variable_ascii_element(PLYElement &elem)
 }
 
 
-bool PLYReader::load_variable_binary_big_endian_element(PLYElement &elem)
+auto PLYReader::load_variable_binary_big_endian_element(PLYElement &elem) -> bool
 {
   size_t back = 0U;
   for (uint32_t row = 0; row < elem.count; ++row) {
@@ -1772,7 +1772,7 @@ bool PLYReader::load_variable_binary_big_endian_element(PLYElement &elem)
 }
 
 
-bool PLYReader::load_ascii_scalar_property(PLYProperty &prop, size_t &destIndex)
+auto PLYReader::load_ascii_scalar_property(PLYProperty &prop, size_t &destIndex) -> bool
 {
   std::array<uint8_t, kScalarValueBytes> value{};
   if (!ascii_value(prop.type, value)) { return false; }
@@ -1784,7 +1784,7 @@ bool PLYReader::load_ascii_scalar_property(PLYProperty &prop, size_t &destIndex)
 }
 
 
-bool PLYReader::load_ascii_list_property(PLYProperty &prop)
+auto PLYReader::load_ascii_list_property(PLYProperty &prop) -> bool
 {
   int count = 0;
   m_valid = (prop.countType < PLYPropertyType::Float) && int_literal(&count) && advance() && (count >= 0);
@@ -1806,7 +1806,7 @@ bool PLYReader::load_ascii_list_property(PLYProperty &prop)
 }
 
 
-bool PLYReader::load_binary_scalar_property(PLYProperty &prop, size_t &destIndex)
+auto PLYReader::load_binary_scalar_property(PLYProperty &prop, size_t &destIndex) -> bool
 {
   size_t const numBytes = kPLYPropertySize.at(static_cast<size_t>(prop.type));
   if (!ensure_bytes_available(numBytes)) { return false; }
@@ -1820,7 +1820,7 @@ bool PLYReader::load_binary_scalar_property(PLYProperty &prop, size_t &destIndex
 }
 
 
-bool PLYReader::load_binary_list_property(PLYProperty &prop)
+auto PLYReader::load_binary_list_property(PLYProperty &prop) -> bool
 {
   size_t const countBytes = kPLYPropertySize.at(static_cast<size_t>(prop.countType));
   if (!ensure_bytes_available(countBytes)) { return false; }
@@ -1851,7 +1851,7 @@ bool PLYReader::load_binary_list_property(PLYProperty &prop)
 }
 
 
-bool PLYReader::load_binary_scalar_property_big_endian(PLYProperty &prop, size_t &destIndex)
+auto PLYReader::load_binary_scalar_property_big_endian(PLYProperty &prop, size_t &destIndex) -> bool
 {
   size_t const startIndex = destIndex;
   if (load_binary_scalar_property(prop, destIndex)) {
@@ -1864,7 +1864,7 @@ bool PLYReader::load_binary_scalar_property_big_endian(PLYProperty &prop, size_t
 }
 
 
-bool PLYReader::load_binary_list_property_big_endian(PLYProperty &prop)
+auto PLYReader::load_binary_list_property_big_endian(PLYProperty &prop) -> bool
 {
   size_t const countBytes = kPLYPropertySize.at(static_cast<size_t>(prop.countType));
   if (!ensure_bytes_available(countBytes)) { return false; }
@@ -1901,7 +1901,7 @@ bool PLYReader::load_binary_list_property_big_endian(PLYProperty &prop)
 }
 
 
-bool PLYReader::ascii_value(PLYPropertyType propType, std::span<uint8_t> value)
+auto PLYReader::ascii_value(PLYPropertyType propType, std::span<uint8_t> value) -> bool
 {
   auto valueBytes = std::as_writable_bytes(value.subspan(0, kScalarValueBytes));
   int tmpInt = 0;
@@ -1958,11 +1958,11 @@ bool PLYReader::ascii_value(PLYPropertyType propType, std::span<uint8_t> value)
 }
 
 
-uint32_t triangulate_polygon(PolygonVertexCount vertexCount,
+auto triangulate_polygon(PolygonVertexCount vertexCount,
   std::span<const float> positions,
   MeshVertexCount meshVertexCount,
   PolygonIndices indices,
-  TriangleDestination destination)
+  TriangleDestination destination) -> uint32_t
 {
   auto const count = static_cast<uint32_t>(vertexCount);
   if (count < kVerticesPerTriangle) { return 0U; }

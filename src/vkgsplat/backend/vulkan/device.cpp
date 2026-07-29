@@ -68,7 +68,7 @@ auto device_initialization(Init &init, bool enable_validation) -> std::expected<
           .set_required_features_13(features_13)
           .select());
     })
-    .and_then([&](vkb::PhysicalDevice const &physical_device) {
+    .and_then([&](vkb::PhysicalDevice const &physical_device) -> std::expected<vkb::Device, Error> {
       vkb::DeviceBuilder const device_builder{ physical_device };
 
       return VKBResultToExpected(device_builder.build());
