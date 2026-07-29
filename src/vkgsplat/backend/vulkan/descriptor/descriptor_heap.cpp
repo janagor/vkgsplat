@@ -17,8 +17,6 @@
 
 namespace vkgsplat {
 
-using namespace gs;
-
 auto align_up(VkDeviceSize value, VkDeviceSize alignment) -> VkDeviceSize
 { return (value + alignment - 1) / alignment * alignment; }
 
@@ -116,16 +114,16 @@ auto refresh_descriptor_heap(Init &init, RenderData &data) -> bool
   }
 
   auto const descriptor_size = data.descriptor_stride;
-  auto const geometry_buffer_size = static_cast<VkDeviceSize>(data.splat_count * sizeof(GaussianGeometry));
-  auto const appearance_buffer_size = static_cast<VkDeviceSize>(data.splat_count * sizeof(GaussianAppearance));
-  auto const projected_buffer_size = static_cast<VkDeviceSize>(data.splat_count * sizeof(GaussianProjected));
-  auto const unsorted_keys_buffer_size = static_cast<VkDeviceSize>(data.max_bin_instances * sizeof(BinningKey));
+  auto const geometry_buffer_size = static_cast<VkDeviceSize>(data.splat_count * sizeof(gs::GaussianGeometry));
+  auto const appearance_buffer_size = static_cast<VkDeviceSize>(data.splat_count * sizeof(gs::GaussianAppearance));
+  auto const projected_buffer_size = static_cast<VkDeviceSize>(data.splat_count * sizeof(gs::GaussianProjected));
+  auto const unsorted_keys_buffer_size = static_cast<VkDeviceSize>(data.max_bin_instances * sizeof(gs::BinningKey));
   auto const unsorted_values_buffer_size = static_cast<VkDeviceSize>(data.max_bin_instances * sizeof(u32));
-  auto const sorted_keys_buffer_size = static_cast<VkDeviceSize>(data.gaussian_sort_size * sizeof(BinningKey));
+  auto const sorted_keys_buffer_size = static_cast<VkDeviceSize>(data.gaussian_sort_size * sizeof(gs::BinningKey));
   auto const sorted_values_buffer_size = static_cast<VkDeviceSize>(data.gaussian_sort_size * sizeof(u32));
   auto const sort_histogram_buffer_size =
     static_cast<VkDeviceSize>(static_cast<size_t>(data.radix_num_workgroups) * 256U * sizeof(u32));
-  auto const tile_ranges_buffer_size = static_cast<VkDeviceSize>(data.tile_count * sizeof(TileRange));
+  auto const tile_ranges_buffer_size = static_cast<VkDeviceSize>(data.tile_count * sizeof(gs::TileRange));
   auto const sorted_indices_buffer_size = data.sorted_indices.byte_size();
   auto const sort_entries_buffer_size = data.sort_entries.byte_size();
 

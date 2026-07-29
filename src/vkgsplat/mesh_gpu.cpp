@@ -13,8 +13,6 @@
 
 namespace vkgsplat {
 
-using namespace gs;
-
 void destroy_sphere_buffers(Init &init, RenderData &data)
 {
   init.gpu_allocator.destroy_buffer(data.geometry_buffer);
@@ -35,9 +33,9 @@ auto create_sphere_buffers(Init &init, RenderData &data, SplatCpuData const &cpu
   }
   data.splat_count = static_cast<u32>(cpu_data.geometries.size());
 
-  auto const geometry_buffer_size = static_cast<VkDeviceSize>(data.splat_count * sizeof(GaussianGeometry));
-  auto const appearance_buffer_size = static_cast<VkDeviceSize>(data.splat_count * sizeof(GaussianAppearance));
-  auto const projected_buffer_size = static_cast<VkDeviceSize>(data.splat_count * sizeof(GaussianProjected));
+  auto const geometry_buffer_size = static_cast<VkDeviceSize>(data.splat_count * sizeof(gs::GaussianGeometry));
+  auto const appearance_buffer_size = static_cast<VkDeviceSize>(data.splat_count * sizeof(gs::GaussianAppearance));
+  auto const projected_buffer_size = static_cast<VkDeviceSize>(data.splat_count * sizeof(gs::GaussianProjected));
 
   auto geometry_buffer = init.gpu_allocator.create_storage_buffer(geometry_buffer_size);
   auto appearance_buffer = init.gpu_allocator.create_storage_buffer(appearance_buffer_size);

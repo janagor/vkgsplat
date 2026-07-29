@@ -36,8 +36,6 @@
 
 namespace vkgsplat {
 
-using namespace gs;
-
 namespace {
 
   [[nodiscard]] auto next_power_of_2(u32 value) -> u32
@@ -106,19 +104,19 @@ auto Renderer::create(RendererConfig const &config, Window &window) -> std::expe
   if (!init_sphere_setup(impl->init, impl->render_data)) {
     return std::unexpected(make_error(std::errc::invalid_argument, "Failed to initialize sphere setup"));
   }
-  if (!init_binning(impl->init, impl->render_data)) {
+  if (!gs::init_binning(impl->init, impl->render_data)) {
     return std::unexpected(make_error(std::errc::invalid_argument, "Failed to initialize gaussian binning"));
   }
-  if (!init_projection(impl->init, impl->render_data)) {
+  if (!gs::init_projection(impl->init, impl->render_data)) {
     return std::unexpected(make_error(std::errc::invalid_argument, "Failed to initialize gaussian projection"));
   }
-  if (!init_sorting(impl->init, impl->render_data)) {
+  if (!gs::init_sorting(impl->init, impl->render_data)) {
     return std::unexpected(make_error(std::errc::invalid_argument, "Failed to initialize gaussian sorting"));
   }
-  if (!init_rasterization(impl->init, impl->render_data)) {
+  if (!gs::init_rasterization(impl->init, impl->render_data)) {
     return std::unexpected(make_error(std::errc::invalid_argument, "Failed to initialize gaussian rasterization"));
   }
-  record_gs_pipeline(impl->render_data);
+  gs::record_gs_pipeline(impl->render_data);
   if (0 != create_graphics_pipeline(impl->init, impl->render_data)) {
     return std::unexpected(make_error(std::errc::invalid_argument, "Failed to create graphics pipeline"));
   }

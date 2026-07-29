@@ -43,7 +43,6 @@
 
 namespace vkgsplat {
 
-using namespace gs;
 
 namespace {
 
@@ -58,8 +57,9 @@ namespace {
     // Sphere luminance bitonic setup is only needed for the unused graphics draw path;
     // re-uploading those tensors every frame was a multi-MB memcpy in pre_eval.
 
-    update_gs_frame_state(init, data, { .camera = camera, .image_index = image_index, .aspect_ratio = aspect_ratio });
-    eval_gs_pipeline(init, data, command_buffer);
+    gs::update_gs_frame_state(
+      init, data, { .camera = camera, .image_index = image_index, .aspect_ratio = aspect_ratio });
+    gs::eval_gs_pipeline(init, data, command_buffer);
     record_imgui_overlay(init, data, command_buffer, image_index);
   }
 
@@ -147,7 +147,7 @@ auto recreate_swapchain(Init &init, RenderData &data) -> std::expected<void, Err
   if (!create_depth_buffer(init, data)) {
     return std::unexpected{ make_error(std::errc::io_error, "failed to recreate depth buffer") };
   }
-  if (!recreate_rasterization_color_target(init, data)) {
+  if (!gs::recreate_rasterization_color_target(init, data)) {
     return std::unexpected{ make_error(std::errc::io_error, "failed to recreate rasterize color target") };
   }
   if (auto command_resources = create_command_resources(init, data); !command_resources) {
@@ -253,12 +253,12 @@ void cleanup(Init &init, RenderData &data)
   shutdown_imgui_overlay(init, data);
 
   destroy_depth_buffer(init, data);
-  destroy_gs_pipeline(data);
+  gs::destroy_gs_pipeline(data);
   destroy_sphere_buffers(init, data);
-  destroy_rasterization(init, data);
-  destroy_sorting(init, data);
-  destroy_binning(init, data);
-  destroy_projection(init, data);
+  gs::destroy_rasterization(init, data);
+  gs::destroy_sorting(init, data);
+  gs::destroy_binning(init, data);
+  gs::destroy_projection(init, data);
   destroy_sphere_setup(init, data);
   destroy_descriptor_heap(init, data);
 

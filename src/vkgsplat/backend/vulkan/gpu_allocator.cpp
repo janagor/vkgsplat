@@ -33,7 +33,7 @@ auto GPUAllocator::operator=(GPUAllocator &&other) noexcept -> GPUAllocator &
   return *this;
 }
 
-// TODO: add correct error
+// TODO: janagor - add correct error
 auto
   GPUAllocator::create(VkInstance instance, VkDevice device, VkPhysicalDevice physical_device) noexcept -> std::expected<GPUAllocator, void *>
 {
