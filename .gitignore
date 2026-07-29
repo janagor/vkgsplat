@@ -34,3 +34,6 @@ $RECYCLE.BIN/
 .TemporaryItems
 ehthumbs.db
 Thumbs.db
+
+# im-gui
+imgui.ini
