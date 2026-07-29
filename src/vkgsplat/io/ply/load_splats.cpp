@@ -34,7 +34,7 @@ namespace {
     std::vector<f32> f_rest;
   };
 
-  template<size_t N> [[nodiscard]] auto make_indexed_names(char const *prefix) -> std::array<std::string, N>
+  template<size_t N> [[nodiscard]] auto MakeIndexedNames(char const *prefix) -> std::array<std::string, N>
   {
     std::array<std::string, N> names{};
     for (size_t i = 0; i < N; ++i) { names.at(i) = std::string{ prefix } + std::to_string(i); }
@@ -42,7 +42,7 @@ namespace {
   }
 
   template<size_t N>
-  [[nodiscard]] auto names_as_c_strs(std::array<std::string, N> const &names) -> std::array<char const *, N>
+  [[nodiscard]] auto NamesAsCStrs(std::array<std::string, N> const &names) -> std::array<char const *, N>
   {
     std::array<char const *, N> c_strs{};
     for (size_t i = 0; i < N; ++i) { c_strs.at(i) = names.at(i).c_str(); }
@@ -50,7 +50,7 @@ namespace {
   }
 
   template<size_t N>
-  [[nodiscard]] auto require_properties(miniply::PLYReader &reader,
+  [[nodiscard]] auto RequireProperties(miniply::PLYReader &reader,
     std::array<uint32_t, N> &indexes,
     std::array<char const *, N> const &names,
     std::string_view missing_message) -> std::expected<void, Error>
@@ -62,7 +62,7 @@ namespace {
   }
 
   template<size_t N>
-  [[nodiscard]] auto extract_floats(miniply::PLYReader &reader,
+  [[nodiscard]] auto ExtractFloats(miniply::PLYReader &reader,
     std::array<uint32_t, N> const &indexes,
     std::vector<f32> &destination,
     std::string_view failure_message) -> std::expected<void, Error>
@@ -74,7 +74,7 @@ namespace {
   }
 
 
-  [[nodiscard]] auto pack_splat(u32 splat_idx, ExtractedSplatAttributes const &attrs) -> GaussianSplat
+  [[nodiscard]] auto PackSplat(u32 splat_idx, ExtractedSplatAttributes const &attrs) -> GaussianSplat
   {
     // NOLINTBEGIN(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     auto const idx = static_cast<std::ptrdiff_t>(splat_idx);
@@ -103,7 +103,7 @@ namespace {
     // NOLINTEND(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   }
 
-  [[nodiscard]] auto load_vertex_splats(miniply::PLYReader &reader, u32 count) -> std::expected<SplatCpuData, Error>
+  [[nodiscard]] auto LoadVertexSplats(miniply::PLYReader &reader, u32 count) -> std::expected<SplatCpuData, Error>
   {
     u32 const available = reader.num_rows();
     if (available == 0) {
@@ -124,25 +124,25 @@ namespace {
     static constexpr std::array<char const *, 4> kRotationNames{ "rot_0", "rot_1", "rot_2", "rot_3" };
     static constexpr std::array<char const *, 1> kOpacityNames{ "opacity" };
     static constexpr std::array<char const *, 3> kFDcNames{ "f_dc_0", "f_dc_1", "f_dc_2" };
-    auto const f_rest_name_storage = make_indexed_names<k_sh_rest_coeffs>("f_rest_");
-    auto const f_rest_names = names_as_c_strs(f_rest_name_storage);
+    auto const f_rest_name_storage = MakeIndexedNames<k_sh_rest_coeffs>("f_rest_");
+    auto const f_rest_names = NamesAsCStrs(f_rest_name_storage);
 
-    if (auto result = require_properties(reader, position_idx, kPositionNames, "PLY missing x/y/z"); !result) {
+    if (auto result = RequireProperties(reader, position_idx, kPositionNames, "PLY missing x/y/z"); !result) {
       return std::unexpected{ std::move(result.error()) };
     }
-    if (auto result = require_properties(reader, scale_idx, kScaleNames, "PLY missing scale_0/1/2"); !result) {
+    if (auto result = RequireProperties(reader, scale_idx, kScaleNames, "PLY missing scale_0/1/2"); !result) {
       return std::unexpected{ std::move(result.error()) };
     }
-    if (auto result = require_properties(reader, rotation_idx, kRotationNames, "PLY missing rot_0/1/2/3"); !result) {
+    if (auto result = RequireProperties(reader, rotation_idx, kRotationNames, "PLY missing rot_0/1/2/3"); !result) {
       return std::unexpected{ std::move(result.error()) };
     }
-    if (auto result = require_properties(reader, opacity_idx, kOpacityNames, "PLY missing opacity"); !result) {
+    if (auto result = RequireProperties(reader, opacity_idx, kOpacityNames, "PLY missing opacity"); !result) {
       return std::unexpected{ std::move(result.error()) };
     }
-    if (auto result = require_properties(reader, f_dc_idx, kFDcNames, "PLY missing f_dc_0/1/2"); !result) {
+    if (auto result = RequireProperties(reader, f_dc_idx, kFDcNames, "PLY missing f_dc_0/1/2"); !result) {
       return std::unexpected{ std::move(result.error()) };
     }
-    if (auto result = require_properties(reader, f_rest_idx, f_rest_names, "PLY missing f_rest_0..44"); !result) {
+    if (auto result = RequireProperties(reader, f_rest_idx, f_rest_names, "PLY missing f_rest_0..44"); !result) {
       return std::unexpected{ std::move(result.error()) };
     }
 
@@ -155,22 +155,22 @@ namespace {
       .f_rest = std::vector<f32>(static_cast<size_t>(available) * k_sh_rest_coeffs),
     };
 
-    if (auto result = extract_floats(reader, position_idx, attrs.positions, "failed to extract positions"); !result) {
+    if (auto result = ExtractFloats(reader, position_idx, attrs.positions, "failed to extract positions"); !result) {
       return std::unexpected{ std::move(result.error()) };
     }
-    if (auto result = extract_floats(reader, scale_idx, attrs.scales, "failed to extract scales"); !result) {
+    if (auto result = ExtractFloats(reader, scale_idx, attrs.scales, "failed to extract scales"); !result) {
       return std::unexpected{ std::move(result.error()) };
     }
-    if (auto result = extract_floats(reader, rotation_idx, attrs.rotations, "failed to extract rotations"); !result) {
+    if (auto result = ExtractFloats(reader, rotation_idx, attrs.rotations, "failed to extract rotations"); !result) {
       return std::unexpected{ std::move(result.error()) };
     }
-    if (auto result = extract_floats(reader, opacity_idx, attrs.opacities, "failed to extract opacity"); !result) {
+    if (auto result = ExtractFloats(reader, opacity_idx, attrs.opacities, "failed to extract opacity"); !result) {
       return std::unexpected{ std::move(result.error()) };
     }
-    if (auto result = extract_floats(reader, f_dc_idx, attrs.f_dc, "failed to extract f_dc"); !result) {
+    if (auto result = ExtractFloats(reader, f_dc_idx, attrs.f_dc, "failed to extract f_dc"); !result) {
       return std::unexpected{ std::move(result.error()) };
     }
-    if (auto result = extract_floats(reader, f_rest_idx, attrs.f_rest, "failed to extract f_rest"); !result) {
+    if (auto result = ExtractFloats(reader, f_rest_idx, attrs.f_rest, "failed to extract f_rest"); !result) {
       return std::unexpected{ std::move(result.error()) };
     }
 
@@ -179,7 +179,7 @@ namespace {
     splats.appearances.resize(splat_count);
 
     for (u32 splat_idx = 0; splat_idx < splat_count; ++splat_idx) {
-      auto const packed = pack_splat(splat_idx, attrs);
+      auto const packed = PackSplat(splat_idx, attrs);
       splats.geometries.at(splat_idx) = packed.geometry;
       splats.appearances.at(splat_idx) = packed.appearance;
     }
@@ -210,7 +210,7 @@ auto load_splats_from_ply(std::string_view ply_path, u32 count) -> std::expected
     if (!reader.load_element()) {
       return std::unexpected{ make_error(ErrorIO::load_element_failed, "failed to load vertex element from PLY") };
     }
-    return load_vertex_splats(reader, count);
+    return LoadVertexSplats(reader, count);
   }
 
   return std::unexpected{ make_error(ErrorIO::missing_vertex_element, "PLY file does not contain a vertex element") };

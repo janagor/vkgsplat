@@ -46,7 +46,7 @@ namespace vkgsplat {
 
 namespace {
 
-  void record_sphere_draw(Init &init,
+  void RecordSphereDraw(Init &init,
     RenderData &data,
     Camera const &camera,
     f64 aspect_ratio,
@@ -206,7 +206,7 @@ auto draw_frame(Init &init, RenderData &data, Camera const &camera) -> std::expe
   auto recorded = vulkan::with_command(std::ref(init.disp),
     data.command_buffers.at(image_index).handle(),
     [&](vkb::DispatchTable &, VkCommandBuffer cmd) -> void {
-      record_sphere_draw(init, data, camera, aspect_ratio, cmd, image_index);
+      RecordSphereDraw(init, data, camera, aspect_ratio, cmd, image_index);
     });
   if (!recorded) { return std::unexpected{ recorded.error() }; }
 

@@ -17,7 +17,7 @@ namespace vkgsplat::vulkan {
 
 namespace {
 
-  auto build_swapchain(vkb::Device const &device, Extent2D extent, vkb::Swapchain const &old_swapchain = {})
+  auto BuildSwapchain(vkb::Device const &device, Extent2D extent, vkb::Swapchain const &old_swapchain = {})
     -> std::expected<vkb::Swapchain, Error>
   {
     vkb::SwapchainBuilder swapchain_builder{ device };
@@ -80,7 +80,7 @@ auto Swapchain::init_images_and_views() -> std::expected<void, Error>
 auto Swapchain::create(vkb::Device const &device, Extent2D extent, std::reference_wrapper<vkb::DispatchTable> disp)
   -> std::expected<Swapchain, Error>
 {
-  auto vkb_swapchain = build_swapchain(device, extent);
+  auto vkb_swapchain = BuildSwapchain(device, extent);
   if (!vkb_swapchain) { return std::unexpected(vkb_swapchain.error()); }
 
   Swapchain swapchain(*vkb_swapchain, disp);
@@ -93,7 +93,7 @@ auto Swapchain::create(vkb::Device const &device, Extent2D extent, std::referenc
 auto Swapchain::recreate(vkb::Device const &device, Extent2D extent) -> std::expected<void, Error>
 {
   vkb::Swapchain const old_swapchain = swapchain_;
-  auto vkb_swapchain = build_swapchain(device, extent, old_swapchain);
+  auto vkb_swapchain = BuildSwapchain(device, extent, old_swapchain);
   if (!vkb_swapchain) { return std::unexpected(vkb_swapchain.error()); }
 
   cleanup();

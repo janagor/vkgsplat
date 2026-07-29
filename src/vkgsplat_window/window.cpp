@@ -24,7 +24,7 @@ struct Window::Impl
 
 namespace {
 
-  [[nodiscard]] auto make_error_from_glfw(std::string message) -> Error
+  [[nodiscard]] auto MakeErrorFromGlfw(std::string message) -> Error
   {
     char const *glfw_message = nullptr;
     glfwGetError(&glfw_message);
@@ -52,7 +52,7 @@ Window::~Window()
 
 auto Window::create(WindowConfig const &config) -> std::expected<Window, Error>
 {
-  if (glfwInit() == 0) { return std::unexpected{ make_error_from_glfw("Failed to initialize GLFW") }; }
+  if (glfwInit() == 0) { return std::unexpected{ MakeErrorFromGlfw("Failed to initialize GLFW") }; }
 
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
   glfwWindowHint(GLFW_RESIZABLE, config.resizable ? GLFW_TRUE : GLFW_FALSE);
@@ -61,7 +61,7 @@ auto Window::create(WindowConfig const &config) -> std::expected<Window, Error>
     static_cast<int>(config.width), static_cast<int>(config.height), config.title.c_str(), nullptr, nullptr);
   if (handle == nullptr) {
     glfwTerminate();
-    return std::unexpected{ make_error_from_glfw("Failed to create GLFW window") };
+    return std::unexpected{ MakeErrorFromGlfw("Failed to create GLFW window") };
   }
 
   beman::indirect::indirect<Impl> impl;
@@ -90,7 +90,7 @@ auto Window::create_surface(VkInstance instance) const -> std::expected<VkSurfac
   VkSurfaceKHR surface = VK_NULL_HANDLE;
   VkResult const result = glfwCreateWindowSurface(instance, impl_->handle, nullptr, &surface);
   if (result != VK_SUCCESS) {
-    return std::unexpected{ make_error_from_glfw("Failed to create Vulkan window surface") };
+    return std::unexpected{ MakeErrorFromGlfw("Failed to create Vulkan window surface") };
   }
   return surface;
 }

@@ -3,7 +3,7 @@
 #include <fmt/base.h>
 #include <iterator>
 
-[[nodiscard]] auto sum_values(const uint8_t *data, size_t size) -> int
+[[nodiscard]] auto SumValues(const uint8_t *data, size_t size) -> int
 {
   constexpr auto kScale = 1000;
 
@@ -18,6 +18,6 @@
 // cppcheck-suppress unusedFunction symbolName=LLVMFuzzerTestOneInput
 extern "C" auto LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) -> int
 {
-  fmt::print("Value sum: {}, len{}\n", sum_values(data, size), size);
+  fmt::print("Value sum: {}, len{}\n", SumValues(data, size), size);
   return 0;
 }

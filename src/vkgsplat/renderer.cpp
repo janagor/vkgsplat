@@ -38,7 +38,7 @@ namespace vkgsplat {
 
 namespace {
 
-  [[nodiscard]] auto next_power_of_2(u32 value) -> u32
+  [[nodiscard]] auto NextPowerOf2(u32 value) -> u32
   {
     if (value <= 1U) { return 1U; }
     return 1U << static_cast<unsigned>(std::bit_width(static_cast<unsigned>(value - 1U)));
@@ -100,7 +100,7 @@ auto Renderer::create(RendererConfig const &config, Window &window) -> std::expe
     return std::unexpected(make_error(std::errc::invalid_argument, "Failed to create PLY sphere buffers"));
   }
 
-  impl->render_data.sort_size = next_power_of_2(impl->render_data.splat_count);
+  impl->render_data.sort_size = NextPowerOf2(impl->render_data.splat_count);
   if (!init_sphere_setup(impl->init, impl->render_data)) {
     return std::unexpected(make_error(std::errc::invalid_argument, "Failed to initialize sphere setup"));
   }

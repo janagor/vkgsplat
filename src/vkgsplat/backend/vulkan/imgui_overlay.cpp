@@ -88,13 +88,13 @@ namespace {
   constexpr auto kFpsUpdateInterval = std::chrono::milliseconds{ 100 };
   constexpr float kFpsEmaAlpha = 0.1F;
 
-  [[nodiscard]] auto align_buffer_size(VkDeviceSize size, VkDeviceSize alignment) -> VkDeviceSize
+  [[nodiscard]] auto AlignBufferSize(VkDeviceSize size, VkDeviceSize alignment) -> VkDeviceSize
   {
     if (alignment == 0) { return size; }
     return (size + alignment - 1) & ~(alignment - 1);
   }
 
-  [[nodiscard]] auto allocate_slot(uint64_t &freelist) -> uint32_t
+  [[nodiscard]] auto AllocateSlot(uint64_t &freelist) -> uint32_t
   {
     for (uint32_t bit_index = 0; bit_index < kFreelistBitCount; ++bit_index) {
       uint64_t const bit = uint64_t{ 1 } << bit_index;
@@ -106,18 +106,18 @@ namespace {
     return 0;
   }
 
-  void free_slot(uint64_t &freelist, uint32_t index) { freelist |= (uint64_t{ 1 } << index); }
+  void FreeSlot(uint64_t &freelist, uint32_t index) { freelist |= (uint64_t{ 1 } << index); }
 
-  [[nodiscard]] auto host_descriptor_address(void *mapped, VkDeviceSize stride, uint32_t index) -> void *
+  [[nodiscard]] auto HostDescriptorAddress(void *mapped, VkDeviceSize stride, uint32_t index) -> void *
   {
     auto const bytes = std::span{ static_cast<std::byte *>(mapped), static_cast<size_t>((index + 1U) * stride) };
     return bytes.subspan(static_cast<size_t>(index * stride)).data();
   }
 
-  auto register_image(void *user_context, VkImageViewCreateInfo const *create_info) -> uint32_t
+  auto RegisterImage(void *user_context, VkImageViewCreateInfo const *create_info) -> uint32_t
   {
     auto *overlay = static_cast<ImGuiOverlayState *>(user_context);
-    uint32_t const index = allocate_slot(overlay->resource_freelist);
+    uint32_t const index = AllocateSlot(overlay->resource_freelist);
 
     VkImageDescriptorInfoEXT image_info{};
     image_info.sType = VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT;
@@ -130,7 +130,7 @@ namespace {
     resource_info.data.pImage = &image_info;
 
     VkHostAddressRangeEXT const host_range{
-      .address = host_descriptor_address(overlay->resource_mapped, overlay->resource_stride, index),
+      .address = HostDescriptorAddress(overlay->resource_mapped, overlay->resource_stride, index),
       .size = overlay->resource_stride,
     };
     if (overlay->write_resource_descriptors(overlay->device, 1, &resource_info, &host_range) != VK_SUCCESS) {
@@ -140,19 +140,19 @@ namespace {
     return index;
   }
 
-  void unregister_image(void *user_context, uint32_t index)
+  void UnregisterImage(void *user_context, uint32_t index)
   {
     auto *overlay = static_cast<ImGuiOverlayState *>(user_context);
-    free_slot(overlay->resource_freelist, index);
+    FreeSlot(overlay->resource_freelist, index);
   }
 
-  auto register_sampler(void *user_context, VkSamplerCreateInfo const *create_info) -> uint32_t
+  auto RegisterSampler(void *user_context, VkSamplerCreateInfo const *create_info) -> uint32_t
   {
     auto *overlay = static_cast<ImGuiOverlayState *>(user_context);
-    uint32_t const index = allocate_slot(overlay->sampler_freelist);
+    uint32_t const index = AllocateSlot(overlay->sampler_freelist);
 
     VkHostAddressRangeEXT const host_range{
-      .address = host_descriptor_address(overlay->sampler_mapped, overlay->sampler_stride, index),
+      .address = HostDescriptorAddress(overlay->sampler_mapped, overlay->sampler_stride, index),
       .size = overlay->sampler_stride,
     };
     if (overlay->write_sampler_descriptors(overlay->device, 1, create_info, &host_range) != VK_SUCCESS) {
@@ -162,13 +162,13 @@ namespace {
     return index;
   }
 
-  void unregister_sampler(void *user_context, uint32_t index)
+  void UnregisterSampler(void *user_context, uint32_t index)
   {
     auto *overlay = static_cast<ImGuiOverlayState *>(user_context);
-    free_slot(overlay->sampler_freelist, index);
+    FreeSlot(overlay->sampler_freelist, index);
   }
 
-  [[nodiscard]] auto is_instance_proc_name(char const *function_name) -> bool
+  [[nodiscard]] auto IsInstanceProcName(char const *function_name) -> bool
   {
     // Avoid WARNING-vkGetDeviceProcAddr-device for instance-level entry points
     // while still resolving device extensions (e.g. vkCmdPushDataEXT) via the device.
@@ -183,13 +183,13 @@ namespace {
            || std::strstr(function_name, "DebugUtils") != nullptr;
   }
 
-  [[nodiscard]] auto load_imgui_vulkan_functions(Init &init) -> bool
+  [[nodiscard]] auto LoadImguiVulkanFunctions(Init &init) -> bool
   {
     return ImGui_ImplVulkan_LoadFunctions(
       VK_API_VERSION_1_4,
       [](char const *function_name, void *user_data) -> PFN_vkVoidFunction {
         auto *ctx = static_cast<Init *>(user_data);
-        if (is_instance_proc_name(function_name)) { return vkGetInstanceProcAddr(ctx->instance, function_name); }
+        if (IsInstanceProcName(function_name)) { return vkGetInstanceProcAddr(ctx->instance, function_name); }
         if (PFN_vkVoidFunction const device_fn = vkGetDeviceProcAddr(ctx->device, function_name);
           device_fn != nullptr) {
           return device_fn;
@@ -199,13 +199,13 @@ namespace {
       &init);
   }
 
-  void check_imgui_vk_result(VkResult result)
+  void CheckImguiVkResult(VkResult result)
   {
     if (result == VK_SUCCESS) { return; }
     std::println(stderr, "[imgui] Vulkan error: VkResult={}", static_cast<int>(result));
   }
 
-  void fill_pipeline_rendering_info(Init const &init, ImGuiOverlayState &overlay)
+  void FillPipelineRenderingInfo(Init const &init, ImGuiOverlayState &overlay)
   {
     overlay.color_format = init.swapchain->format();
     overlay.pipeline_rendering = {
@@ -219,7 +219,7 @@ namespace {
     };
   }
 
-  void draw_fps_window(char const *fps_label, char const *gpu_label)
+  void DrawFpsWindow(char const *fps_label, char const *gpu_label)
   {
     ImGuiIO const &imgui_io = ImGui::GetIO();
     ImGui::SetNextWindowPos(
@@ -238,13 +238,13 @@ namespace {
     ImGui::End();
   }
 
-  void invalidate_overlay_secondaries(ImGuiOverlayState &overlay)
+  void InvalidateOverlaySecondaries(ImGuiOverlayState &overlay)
   {
     ++overlay.ui_generation;
     overlay.secondary_generation.fill(0);
   }
 
-  [[nodiscard]] auto allocate_overlay_secondaries(RenderData &data) -> bool
+  [[nodiscard]] auto AllocateOverlaySecondaries(RenderData &data) -> bool
   {
     if (data.imgui == nullptr || !data.command_pool) { return false; }
 
@@ -259,7 +259,7 @@ namespace {
     return true;
   }
 
-  void sample_frame_time(ImGuiOverlayState &overlay)
+  void SampleFrameTime(ImGuiOverlayState &overlay)
   {
     auto const now = std::chrono::steady_clock::now();
     if (overlay.last_frame_time.time_since_epoch().count() != 0) {
@@ -280,11 +280,11 @@ namespace {
       // NOLINTNEXTLINE(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
       (void)std::snprintf(
         overlay.fps_label.data(), overlay.fps_label.size(), "FPS: %.1f (%.2f ms)", static_cast<double>(fps), frame_ms);
-      invalidate_overlay_secondaries(overlay);
+      InvalidateOverlaySecondaries(overlay);
     }
   }
 
-  void record_overlay_secondary(Init &init, RenderData const &data, size_t frame_slot)
+  void RecordOverlaySecondary(Init &init, RenderData const &data, size_t frame_slot)
   {
     auto &overlay = *data.imgui;
     VkCommandBuffer secondary = overlay.overlay_secondaries.at(frame_slot);
@@ -348,7 +348,7 @@ namespace {
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
-    draw_fps_window(overlay.fps_label.data(), overlay.gpu_label.data());
+    DrawFpsWindow(overlay.fps_label.data(), overlay.gpu_label.data());
     ImGui::Render();
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), secondary);
 
@@ -356,7 +356,7 @@ namespace {
     overlay.secondary_generation.at(frame_slot) = overlay.ui_generation;
   }
 
-  void destroy_imgui_heaps(Init &init, ImGuiOverlayState &overlay)
+  void DestroyImguiHeaps(Init &init, ImGuiOverlayState &overlay)
   {
     if (overlay.resource_mapped != nullptr && overlay.resource_heap.handle != VK_NULL_HANDLE) {
       init.gpu_allocator.unmap_buffer(overlay.resource_heap);
@@ -409,7 +409,7 @@ void update_imgui_gpu_timings(RenderData &data)
 
 auto init_imgui_overlay(Init &init, RenderData &data) -> std::expected<void, Error>
 {
-  if (!load_imgui_vulkan_functions(init)) {
+  if (!LoadImguiVulkanFunctions(init)) {
     return std::unexpected{ make_error(std::errc::function_not_supported, "failed to load ImGui Vulkan functions") };
   }
 
@@ -430,9 +430,9 @@ auto init_imgui_overlay(Init &init, RenderData &data) -> std::expected<void, Err
 
   VkDeviceSize const resource_descriptors_size = heap_props.imageDescriptorSize * kImguiImageSlots;
   VkDeviceSize const sampler_descriptors_size = heap_props.samplerDescriptorSize * kImguiSamplerSlots;
-  VkDeviceSize const resource_size = align_buffer_size(
+  VkDeviceSize const resource_size = AlignBufferSize(
     resource_descriptors_size + heap_props.minResourceHeapReservedRange, heap_props.resourceHeapAlignment);
-  VkDeviceSize const sampler_size = align_buffer_size(
+  VkDeviceSize const sampler_size = AlignBufferSize(
     sampler_descriptors_size + heap_props.minSamplerHeapReservedRange, heap_props.samplerHeapAlignment);
 
   auto resource_heap = init.gpu_allocator.create_heap_buffer(resource_size);
@@ -474,10 +474,10 @@ auto init_imgui_overlay(Init &init, RenderData &data) -> std::expected<void, Err
   overlay->resource_freelist = (uint64_t{ 1 } << kImguiImageSlots) - uint64_t{ 1 };
   overlay->sampler_freelist = (uint64_t{ 1 } << kImguiSamplerSlots) - uint64_t{ 1 };
   overlay->heap_info = {
-    .RegisterSampler = register_sampler,
-    .UnRegisterSampler = unregister_sampler,
-    .RegisterImage = register_image,
-    .UnRegisterImage = unregister_image,
+    .RegisterSampler = RegisterSampler,
+    .UnRegisterSampler = UnregisterSampler,
+    .RegisterImage = RegisterImage,
+    .UnRegisterImage = UnregisterImage,
     .UserContext = overlay.get(),
   };
 
@@ -487,12 +487,12 @@ auto init_imgui_overlay(Init &init, RenderData &data) -> std::expected<void, Err
 
   auto *glfw_window = static_cast<GLFWwindow *>(init.window->native_handle());
   if (!ImGui_ImplGlfw_InitForVulkan(glfw_window, true)) {
-    destroy_imgui_heaps(init, *overlay);
+    DestroyImguiHeaps(init, *overlay);
     ImGui::DestroyContext();
     return std::unexpected{ make_error(std::errc::io_error, "failed to initialize ImGui GLFW backend") };
   }
 
-  fill_pipeline_rendering_info(init, *overlay);
+  FillPipelineRenderingInfo(init, *overlay);
 
   ImGui_ImplVulkan_InitInfo vulkan_init{};
   vulkan_init.ApiVersion = VK_API_VERSION_1_4;
@@ -506,12 +506,12 @@ auto init_imgui_overlay(Init &init, RenderData &data) -> std::expected<void, Err
   vulkan_init.UseDynamicRendering = true;
   vulkan_init.PipelineInfoMain.PipelineRenderingCreateInfo = overlay->pipeline_rendering;
   vulkan_init.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
-  vulkan_init.CheckVkResultFn = check_imgui_vk_result;
+  vulkan_init.CheckVkResultFn = CheckImguiVkResult;
   vulkan_init.DescriptorHeapInfo = &overlay->heap_info;
 
   if (!ImGui_ImplVulkan_Init(&vulkan_init)) {
     ImGui_ImplGlfw_Shutdown();
-    destroy_imgui_heaps(init, *overlay);
+    DestroyImguiHeaps(init, *overlay);
     ImGui::DestroyContext();
     return std::unexpected{ make_error(std::errc::io_error, "failed to initialize ImGui Vulkan backend") };
   }
@@ -519,7 +519,7 @@ auto init_imgui_overlay(Init &init, RenderData &data) -> std::expected<void, Err
   overlay->initialized = true;
   data.imgui = std::move(overlay);
 
-  if (!allocate_overlay_secondaries(data)) {
+  if (!AllocateOverlaySecondaries(data)) {
     shutdown_imgui_overlay(init, data);
     return std::unexpected{ make_error(std::errc::io_error, "failed to allocate ImGui overlay command buffers") };
   }
@@ -538,7 +538,7 @@ void shutdown_imgui_overlay(Init &init, RenderData &data)
     data.imgui->initialized = false;
   }
 
-  destroy_imgui_heaps(init, *data.imgui);
+  DestroyImguiHeaps(init, *data.imgui);
   data.imgui.reset();
 }
 
@@ -546,7 +546,7 @@ void recreate_imgui_overlay_pipeline(Init &init, RenderData &data)
 {
   if (data.imgui == nullptr || !data.imgui->initialized) { return; }
 
-  fill_pipeline_rendering_info(init, *data.imgui);
+  FillPipelineRenderingInfo(init, *data.imgui);
   ImGui_ImplVulkan_SetMinImageCount(static_cast<uint32_t>(init.swapchain->image_count()));
 
   ImGui_ImplVulkan_PipelineInfo pipeline_info{};
@@ -555,10 +555,10 @@ void recreate_imgui_overlay_pipeline(Init &init, RenderData &data)
   ImGui_ImplVulkan_CreateMainPipeline(&pipeline_info);
 
   // Command pool was recreated with the swapchain; reclaim secondary CBs.
-  if (!allocate_overlay_secondaries(data)) {
+  if (!AllocateOverlaySecondaries(data)) {
     std::println(stderr, "[imgui] failed to reallocate overlay command buffers after swapchain recreate");
   }
-  invalidate_overlay_secondaries(*data.imgui);
+  InvalidateOverlaySecondaries(*data.imgui);
   data.imgui->last_extent = {};
 }
 
@@ -592,12 +592,12 @@ void record_imgui_overlay(Init &init, RenderData const &data, VkCommandBuffer co
   }
 
   auto &overlay = *data.imgui;
-  sample_frame_time(overlay);
+  SampleFrameTime(overlay);
 
   VkExtent2D const extent = init.swapchain->extent();
   if (extent.width != overlay.last_extent.width || extent.height != overlay.last_extent.height) {
     overlay.last_extent = extent;
-    invalidate_overlay_secondaries(overlay);
+    InvalidateOverlaySecondaries(overlay);
   }
 
   size_t const frame_slot = data.current_frame;
@@ -619,7 +619,7 @@ void record_imgui_overlay(Init &init, RenderData const &data, VkCommandBuffer co
   }
 
   if (overlay.secondary_generation.at(frame_slot) != overlay.ui_generation) {
-    record_overlay_secondary(init, data, frame_slot);
+    RecordOverlaySecondary(init, data, frame_slot);
   }
 
   VkImageView swapchain_view = init.swapchain->image_views().at(image_index);

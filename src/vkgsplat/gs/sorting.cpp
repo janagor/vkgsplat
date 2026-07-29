@@ -26,7 +26,7 @@ namespace {
   constexpr u32 kRadixBins = 256U;
   constexpr u32 kRadixBlocksPerWorkgroup = 32U;
 
-  [[nodiscard]] auto radix_workgroup_count(u32 num_elements) -> u32
+  [[nodiscard]] auto RadixWorkgroupCount(u32 num_elements) -> u32
   {
     if (num_elements == 0U) { return 1U; }
     u32 const threads = (num_elements + kRadixBlocksPerWorkgroup - 1U) / kRadixBlocksPerWorkgroup;
@@ -34,7 +34,7 @@ namespace {
     return wgs == 0U ? 1U : wgs;
   }
 
-  void destroy_sort_buffers(Init &init, RenderData &data)
+  void DestroySortBuffers(Init &init, RenderData &data)
   {
     init.gpu_allocator.destroy_buffer(data.sorted_keys_buffer);
     init.gpu_allocator.destroy_buffer(data.sorted_values_buffer);
@@ -53,9 +53,9 @@ namespace {
     data.tile_count = 0;
   }
 
-  [[nodiscard]] auto create_sort_buffers(Init &init, RenderData &data) -> bool
+  [[nodiscard]] auto CreateSortBuffers(Init &init, RenderData &data) -> bool
   {
-    destroy_sort_buffers(init, data);
+    DestroySortBuffers(init, data);
 
     if (data.max_bin_instances == 0) {
       std::println("Sort gaussians requires binning buffers first!");
@@ -66,7 +66,7 @@ namespace {
     data.tile_count = k_max_tiles;
     data.radix_blocks_per_workgroup = kRadixBlocksPerWorkgroup;
     // Histogram sized for worst-case capacity; live frames dispatch fewer groups.
-    data.radix_num_workgroups = radix_workgroup_count(data.gaussian_sort_size);
+    data.radix_num_workgroups = RadixWorkgroupCount(data.gaussian_sort_size);
 
     auto const keys_size = static_cast<VkDeviceSize>(data.gaussian_sort_size * sizeof(BinningKey));
     auto const values_size = static_cast<VkDeviceSize>(data.gaussian_sort_size * sizeof(u32));
@@ -84,7 +84,7 @@ namespace {
     auto ranges = init.gpu_allocator.create_device_storage_buffer(ranges_size);
     if (!keys || !values || !histogram || !dispatch || !draw_indirect || !ranges) {
       std::println("Failed to create sort buffers!");
-      destroy_sort_buffers(init, data);
+      DestroySortBuffers(init, data);
       return false;
     }
 
@@ -103,7 +103,7 @@ namespace {
 
 auto init_sorting(Init &init, RenderData &data) -> bool
 {
-  if (!create_sort_buffers(init, data)) { return false; }
+  if (!CreateSortBuffers(init, data)) { return false; }
 
   std::array<uint32_t, 1> const sort_size_spec{ data.gaussian_sort_size };
   std::string const prepare_path = std::string(SHADER_DIRECTORY) + "/prepare_sorting.comp.spv";
@@ -112,7 +112,7 @@ auto init_sorting(Init &init, RenderData &data) -> bool
 
   if (!data.prepare_sort_algorithm.init(init, prepare_path, std::span{ sort_size_spec })
       || !data.radix_histogram_algorithm.init(init, hist_path) || !data.radix_scatter_algorithm.init(init, scatter_path)) {
-    destroy_sort_buffers(init, data);
+    DestroySortBuffers(init, data);
     return false;
   }
 
@@ -124,7 +124,7 @@ void destroy_sorting(Init &init, RenderData &data)
   data.prepare_sort_algorithm.destroy(init);
   data.radix_histogram_algorithm.destroy(init);
   data.radix_scatter_algorithm.destroy(init);
-  destroy_sort_buffers(init, data);
+  DestroySortBuffers(init, data);
 }
 
 }// namespace vkgsplat::gs

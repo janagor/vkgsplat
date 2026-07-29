@@ -20,7 +20,7 @@ namespace vkgsplat::gs {
 
 namespace {
 
-  void destroy_color_target(Init const &init, RenderData &data)
+  void DestroyColorTarget(Init const &init, RenderData &data)
   {
     if (data.color_image_view != VK_NULL_HANDLE) {
       init.disp.destroyImageView(data.color_image_view, nullptr);
@@ -35,9 +35,9 @@ namespace {
     data.color_height = 0;
   }
 
-  [[nodiscard]] auto create_color_target(Init &init, RenderData &data) -> bool
+  [[nodiscard]] auto CreateColorTarget(Init &init, RenderData &data) -> bool
   {
-    destroy_color_target(init, data);
+    DestroyColorTarget(init, data);
 
     data.color_width = init.swapchain->extent().width;
     data.color_height = init.swapchain->extent().height;
@@ -68,7 +68,7 @@ namespace {
           nullptr)
         != VK_SUCCESS) {
       std::println("Failed to create raster color target!");
-      destroy_color_target(init, data);
+      DestroyColorTarget(init, data);
       return false;
     }
 
@@ -83,7 +83,7 @@ namespace {
       data.color_image, VK_IMAGE_VIEW_TYPE_2D, data.color_format, subresource_range);
     if (init.disp.createImageView(&view_info, nullptr, &data.color_image_view) != VK_SUCCESS) {
       std::println("Failed to create raster color target view!");
-      destroy_color_target(init, data);
+      DestroyColorTarget(init, data);
       return false;
     }
 
@@ -91,7 +91,7 @@ namespace {
   }
 
   void
-    push_raster_constants(Init const &init, RasterPushConstants const &push_constants, VkCommandBuffer command_buffer)
+    PushRasterConstants(Init const &init, RasterPushConstants const &push_constants, VkCommandBuffer command_buffer)
   {
     VkPushDataInfoEXT const push_info = {
       .sType = VK_STRUCTURE_TYPE_PUSH_DATA_INFO_EXT,
@@ -104,11 +104,11 @@ namespace {
 
 }// namespace
 
-auto init_rasterization(Init &init, RenderData &data) -> bool { return create_color_target(init, data); }
+auto init_rasterization(Init &init, RenderData &data) -> bool { return CreateColorTarget(init, data); }
 
 auto recreate_rasterization_color_target(Init &init, RenderData &data) -> bool
 {
-  return create_color_target(init, data);
+  return CreateColorTarget(init, data);
 }
 
 void dispatch_rasterization(Init const &init,
@@ -200,7 +200,7 @@ void dispatch_rasterization(Init const &init,
   init.disp.cmdSetScissor(command_buffer, 0, 1, &scissor);
 
   init.disp.cmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, data.graphics_pipeline);
-  push_raster_constants(init, push_constants, command_buffer);
+  PushRasterConstants(init, push_constants, command_buffer);
   init.disp.cmdDrawIndirect(command_buffer, data.draw_indirect_buffer.handle, 0, 1, sizeof(VkDrawIndirectCommand));
 
   init.disp.cmdEndRendering(command_buffer);
@@ -263,7 +263,7 @@ void dispatch_rasterization(Init const &init,
 void destroy_rasterization(Init &init, RenderData &data)
 {
   data.rasterize_algorithm.destroy(init);
-  destroy_color_target(init, data);
+  DestroyColorTarget(init, data);
 }
 
 }// namespace vkgsplat::gs

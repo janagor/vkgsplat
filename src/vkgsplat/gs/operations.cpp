@@ -53,7 +53,7 @@ namespace {
     bool active_;
   };
 
-  void push_constants(Init const &init, void const *data, size_t size, VkCommandBuffer command_buffer)
+  void PushConstants(Init const &init, void const *data, size_t size, VkCommandBuffer command_buffer)
   {
     VkPushDataInfoEXT const push_info = {
       .sType = VK_STRUCTURE_TYPE_PUSH_DATA_INFO_EXT,
@@ -64,7 +64,7 @@ namespace {
     init.cmd_push_data(command_buffer, &push_info);
   }
 
-  [[nodiscard]] auto dispatch_2d_for_threads(Init const &init, u32 thread_count, u32 local_size_x) -> Dispatch2D
+  [[nodiscard]] auto Dispatch2dForThreads(Init const &init, u32 thread_count, u32 local_size_x) -> Dispatch2D
   {
     u32 const groups = (thread_count + local_size_x - 1U) / local_size_x;
     u32 const max_x = init.device.physical_device.properties.limits.maxComputeWorkGroupCount[0];
@@ -80,13 +80,13 @@ namespace {
     return { .group_count_x = group_count_x, .group_count_y = group_count_y };
   }
 
-  void dispatch_compute_1d(Init const &init, VkCommandBuffer command_buffer, u32 workgroup_count)
+  void DispatchCompute1d(Init const &init, VkCommandBuffer command_buffer, u32 workgroup_count)
   { init.disp.cmdDispatch(command_buffer, workgroup_count, 1U, 1U); }
 
-  void dispatch_compute_2d(Init const &init, VkCommandBuffer command_buffer, Dispatch2D const grid)
+  void DispatchCompute2d(Init const &init, VkCommandBuffer command_buffer, Dispatch2D const grid)
   { init.disp.cmdDispatch(command_buffer, grid.group_count_x, grid.group_count_y, 1U); }
 
-  void dispatch_compute_pass(Init const &init,
+  void DispatchComputePass(Init const &init,
     VkCommandBuffer command_buffer,
     VkPipeline pipeline,
     void const *push_data,
@@ -94,8 +94,8 @@ namespace {
     Dispatch2D const grid)
   {
     init.disp.cmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
-    push_constants(init, push_data, push_size, command_buffer);
-    dispatch_compute_2d(init, command_buffer, grid);
+    PushConstants(init, push_data, push_size, command_buffer);
+    DispatchCompute2d(init, command_buffer, grid);
   }
 
 }// namespace
@@ -105,10 +105,10 @@ void OpProjection::record(Init const &init, RenderData const &data, VkCommandBuf
   ScopedGpuPass const timer{ init, data, command_buffer, GpuPass::Projection };
 
   init.disp.cmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, data.project_algorithm.pipeline());
-  push_constants(init, &data.project_push, sizeof(ProjectPushConstants), command_buffer);
+  PushConstants(init, &data.project_push, sizeof(ProjectPushConstants), command_buffer);
 
   u32 const workgroup_count = (data.splat_count + kComputeLocalSizeX - 1U) / kComputeLocalSizeX;
-  dispatch_compute_1d(init, command_buffer, workgroup_count);
+  DispatchCompute1d(init, command_buffer, workgroup_count);
   Barrier::compute_read(init.disp, command_buffer);
 }
 
@@ -117,10 +117,10 @@ void OpBinning::record(Init const &init, RenderData const &data, VkCommandBuffer
   ScopedGpuPass const timer{ init, data, command_buffer, GpuPass::Binning };
 
   init.disp.cmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, data.bin_algorithm.pipeline());
-  push_constants(init, &data.bin_push, sizeof(BinPushConstants), command_buffer);
+  PushConstants(init, &data.bin_push, sizeof(BinPushConstants), command_buffer);
 
   u32 const workgroup_count = (data.splat_count + kComputeLocalSizeX - 1U) / kComputeLocalSizeX;
-  dispatch_compute_1d(init, command_buffer, workgroup_count);
+  DispatchCompute1d(init, command_buffer, workgroup_count);
   Barrier::compute_read(init.disp, command_buffer);
 }
 
@@ -128,9 +128,9 @@ void OpPrepareSort::record(Init const &init, RenderData const &data, VkCommandBu
 {
   ScopedGpuPass const timer{ init, data, command_buffer, GpuPass::PrepareSort };
 
-  Dispatch2D const sort_grid = dispatch_2d_for_threads(init, data.gaussian_sort_size, kComputeLocalSizeX);
+  Dispatch2D const sort_grid = Dispatch2dForThreads(init, data.gaussian_sort_size, kComputeLocalSizeX);
 
-  dispatch_compute_pass(init,
+  DispatchComputePass(init,
     command_buffer,
     data.prepare_sort_algorithm.pipeline(),
     &data.sort_push,
@@ -159,12 +159,12 @@ void OpRadixSort::record(Init const &init, RenderData const &data, VkCommandBuff
 
     init.disp.cmdBindPipeline(
       command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, data.radix_histogram_algorithm.pipeline());
-    push_constants(init, &radix_push, sizeof(RadixPushConstants), command_buffer);
+    PushConstants(init, &radix_push, sizeof(RadixPushConstants), command_buffer);
     init.disp.cmdDispatchIndirect(command_buffer, data.radix_dispatch_buffer.handle, 0);
     Barrier::compute_to_compute(init.disp, command_buffer);
 
     init.disp.cmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, data.radix_scatter_algorithm.pipeline());
-    push_constants(init, &radix_push, sizeof(RadixPushConstants), command_buffer);
+    PushConstants(init, &radix_push, sizeof(RadixPushConstants), command_buffer);
     init.disp.cmdDispatchIndirect(command_buffer, data.radix_dispatch_buffer.handle, 0);
     Barrier::compute_to_compute(init.disp, command_buffer);
   }

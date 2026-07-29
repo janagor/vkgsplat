@@ -12,7 +12,7 @@
 
 namespace {
 
-auto property_type_name(miniply::PLYPropertyType type) -> std::string_view
+auto PropertyTypeName(miniply::PLYPropertyType type) -> std::string_view
 {
   switch (type) {
   case miniply::PLYPropertyType::Char:
@@ -37,15 +37,15 @@ auto property_type_name(miniply::PLYPropertyType type) -> std::string_view
   return std::string_view{ "unknown" };
 }
 
-void print_property(miniply::PLYProperty const &prop)
+void PrintProperty(miniply::PLYProperty const &prop)
 {
   if (prop.count_type != miniply::PLYPropertyType::None) {
     std::println(
-      "    property '{}' list<{}> {}", prop.name, property_type_name(prop.count_type), property_type_name(prop.type));
+      "    property '{}' list<{}> {}", prop.name, PropertyTypeName(prop.count_type), PropertyTypeName(prop.type));
     return;
   }
 
-  std::println("    property '{}' {}", prop.name, property_type_name(prop.type));
+  std::println("    property '{}' {}", prop.name, PropertyTypeName(prop.type));
 }
 
 }// namespace
@@ -71,7 +71,7 @@ auto main(int argc, char *argv[]) -> int
       std::println("  element '{}' rows={}", elem->name, elem->count);
       std::println("  properties: {}", elem->properties.size());
 
-      for (auto const &prop : elem->properties) { print_property(prop); }
+      for (auto const &prop : elem->properties) { PrintProperty(prop); }
 
       reader.next_element();
     }
