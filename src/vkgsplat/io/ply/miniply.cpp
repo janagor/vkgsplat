@@ -515,8 +515,7 @@ namespace {
     return true;
   }
 
-  [[nodiscard]] auto DoubleLiteral(std::span<const char> buffer, size_t start_pos, size_t &end_pos, double *val)
-    -> bool
+  [[nodiscard]] auto DoubleLiteral(std::span<const char> buffer, size_t start_pos, size_t &end_pos, double *val) -> bool
   {
     if (start_pos >= buffer.size()) { return false; }
 
@@ -1868,8 +1867,8 @@ auto PLYReader::load_binary_scalar_property_big_endian(PLYProperty &prop, size_t
 {
   size_t const start_index = dest_index;
   if (load_binary_scalar_property(prop, dest_index)) {
-    EndianSwap(std::as_writable_bytes(std::span{ m_element_data }.subspan(
-                  start_index, kPLYPropertySize.at(static_cast<size_t>(prop.type)))),
+    EndianSwap(std::as_writable_bytes(
+                 std::span{ m_element_data }.subspan(start_index, kPLYPropertySize.at(static_cast<size_t>(prop.type)))),
       prop.type);
     return true;
   }

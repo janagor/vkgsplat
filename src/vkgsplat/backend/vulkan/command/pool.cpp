@@ -65,7 +65,8 @@ auto CommandPool::allocate_buffers(u32 count, VkCommandBufferLevel level) const
   }
 
   std::vector<CommandBuffer> buffers(handles.size());
-  std::ranges::transform(handles, buffers.begin(), [](VkCommandBuffer vk_handle) -> CommandBuffer { return CommandBuffer(vk_handle); });
+  std::ranges::transform(
+    handles, buffers.begin(), [](VkCommandBuffer vk_handle) -> CommandBuffer { return CommandBuffer(vk_handle); });
   return buffers;
 }
 

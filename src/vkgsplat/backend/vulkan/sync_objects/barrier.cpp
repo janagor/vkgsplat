@@ -51,7 +51,7 @@ void Barrier::compute_to_graphics(vkb::DispatchTable const &disp, VkCommandBuffe
     {
       .src_stage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
       .dst_stage = VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT
-                    | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                   | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
       .src_access = VK_ACCESS_SHADER_WRITE_BIT,
       .dst_access = VK_ACCESS_INDIRECT_COMMAND_READ_BIT | VK_ACCESS_SHADER_READ_BIT,
     });

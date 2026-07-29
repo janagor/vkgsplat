@@ -145,8 +145,9 @@ struct PLYElement
   enum class ListPropertyIndex : uint32_t {};
   enum class FixedListSize : uint32_t {};
 
-  bool
-    convert_list_to_fixed_size(ListPropertyIndex list_prop_idx, FixedListSize list_size, std::span<uint32_t> new_prop_idxs);
+  bool convert_list_to_fixed_size(ListPropertyIndex list_prop_idx,
+    FixedListSize list_size,
+    std::span<uint32_t> new_prop_idxs);
 };
 
 

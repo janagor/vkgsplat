@@ -111,7 +111,8 @@ auto init_sorting(Init &init, RenderData &data) -> bool
   std::string const scatter_path = std::string(SHADER_DIRECTORY) + "/multi_radixsort.comp.spv";
 
   if (!data.prepare_sort_algorithm.init(init, prepare_path, std::span{ sort_size_spec })
-      || !data.radix_histogram_algorithm.init(init, hist_path) || !data.radix_scatter_algorithm.init(init, scatter_path)) {
+      || !data.radix_histogram_algorithm.init(init, hist_path)
+      || !data.radix_scatter_algorithm.init(init, scatter_path)) {
     DestroySortBuffers(init, data);
     return false;
   }

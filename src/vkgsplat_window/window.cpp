@@ -89,9 +89,7 @@ auto Window::create_surface(VkInstance instance) const -> std::expected<VkSurfac
 {
   VkSurfaceKHR surface = VK_NULL_HANDLE;
   VkResult const result = glfwCreateWindowSurface(instance, impl_->handle, nullptr, &surface);
-  if (result != VK_SUCCESS) {
-    return std::unexpected{ MakeErrorFromGlfw("Failed to create Vulkan window surface") };
-  }
+  if (result != VK_SUCCESS) { return std::unexpected{ MakeErrorFromGlfw("Failed to create Vulkan window surface") }; }
   return surface;
 }
 

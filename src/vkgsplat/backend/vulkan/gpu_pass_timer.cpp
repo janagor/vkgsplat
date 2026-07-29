@@ -41,11 +41,8 @@ auto gpu_pass_name(GpuPass pass) -> char const *
 }
 
 GpuPassTimer::GpuPassTimer(GpuPassTimer &&other) noexcept
-  : pool_(std::exchange(other.pool_, VK_NULL_HANDLE))
-  , timestamp_period_ns_(other.timestamp_period_ns_)
-  , enabled_(other.enabled_)
-  , pending_(other.pending_)
-  , last_ms_(other.last_ms_)
+  : pool_(std::exchange(other.pool_, VK_NULL_HANDLE)), timestamp_period_ns_(other.timestamp_period_ns_),
+    enabled_(other.enabled_), pending_(other.pending_), last_ms_(other.last_ms_)
 {}
 
 auto GpuPassTimer::operator=(GpuPassTimer &&other) noexcept -> GpuPassTimer &
@@ -61,9 +58,7 @@ auto GpuPassTimer::operator=(GpuPassTimer &&other) noexcept -> GpuPassTimer &
 }
 
 auto GpuPassTimer::query_index(size_t slot, GpuPass pass, bool is_end) -> u32
-{
-  return (static_cast<u32>(slot) * kQueriesPerSlot) + (static_cast<u32>(pass) * 2U) + (is_end ? 1U : 0U);
-}
+{ return (static_cast<u32>(slot) * kQueriesPerSlot) + (static_cast<u32>(pass) * 2U) + (is_end ? 1U : 0U); }
 
 auto GpuPassTimer::create(Init &init) -> bool
 {
@@ -110,11 +105,7 @@ void GpuPassTimer::begin_frame(Init const &init, size_t slot, VkCommandBuffer co
   init.disp.cmdResetQueryPool(command_buffer, pool_, first, kQueriesPerSlot);
 }
 
-void GpuPassTimer::write(Init const &init,
-  size_t slot,
-  GpuPass pass,
-  bool is_end,
-  VkCommandBuffer command_buffer) const
+void GpuPassTimer::write(Init const &init, size_t slot, GpuPass pass, bool is_end, VkCommandBuffer command_buffer) const
 {
   if (!enabled()) { return; }
   init.disp.cmdWriteTimestamp(

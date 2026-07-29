@@ -34,8 +34,8 @@ auto GPUAllocator::operator=(GPUAllocator &&other) noexcept -> GPUAllocator &
 }
 
 // TODO: janagor - add correct error
-auto
-  GPUAllocator::create(VkInstance instance, VkDevice device, VkPhysicalDevice physical_device) noexcept -> std::expected<GPUAllocator, void *>
+auto GPUAllocator::create(VkInstance instance, VkDevice device, VkPhysicalDevice physical_device) noexcept
+  -> std::expected<GPUAllocator, void *>
 {
   // NOLINTBEGIN(cppcoreguidelines-pro-type-reinterpret-cast)
   auto const get_buffer_device_address_fn =
@@ -130,13 +130,8 @@ auto GPUAllocator::create_heap_buffer(VkDeviceSize size) noexcept -> std::expect
   constexpr VkDeviceSize kHeapDeviceAddressAlignment = 4096;
 
   Buffer buffer{ .size = size };
-  if (vmaCreateBufferWithAlignment(allocator_,
-        &buffer_info,
-        &alloc_info,
-        kHeapDeviceAddressAlignment,
-        &buffer.handle,
-        &buffer.allocation,
-        nullptr)
+  if (vmaCreateBufferWithAlignment(
+        allocator_, &buffer_info, &alloc_info, kHeapDeviceAddressAlignment, &buffer.handle, &buffer.allocation, nullptr)
       != VK_SUCCESS) {
     return std::unexpected(nullptr);
   }

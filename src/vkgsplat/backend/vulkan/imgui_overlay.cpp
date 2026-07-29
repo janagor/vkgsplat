@@ -432,8 +432,8 @@ auto init_imgui_overlay(Init &init, RenderData &data) -> std::expected<void, Err
   VkDeviceSize const sampler_descriptors_size = heap_props.samplerDescriptorSize * kImguiSamplerSlots;
   VkDeviceSize const resource_size = AlignBufferSize(
     resource_descriptors_size + heap_props.minResourceHeapReservedRange, heap_props.resourceHeapAlignment);
-  VkDeviceSize const sampler_size = AlignBufferSize(
-    sampler_descriptors_size + heap_props.minSamplerHeapReservedRange, heap_props.samplerHeapAlignment);
+  VkDeviceSize const sampler_size =
+    AlignBufferSize(sampler_descriptors_size + heap_props.minSamplerHeapReservedRange, heap_props.samplerHeapAlignment);
 
   auto resource_heap = init.gpu_allocator.create_heap_buffer(resource_size);
   if (!resource_heap) {

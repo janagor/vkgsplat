@@ -73,7 +73,8 @@ auto create_graphics_pipeline(Init &init, RenderData &data) -> int
 
   auto const multisampling = initializers::PipelineMultisampleStateCreateInfo(VK_SAMPLE_COUNT_1_BIT);
 
-  auto const depth_stencil = initializers::PipelineDepthStencilStateCreateInfo(VK_FALSE, VK_FALSE, VK_COMPARE_OP_ALWAYS);
+  auto const depth_stencil =
+    initializers::PipelineDepthStencilStateCreateInfo(VK_FALSE, VK_FALSE, VK_COMPARE_OP_ALWAYS);
 
   VkPipelineColorBlendAttachmentState color_blend_attachment = {};
   // NOLINTBEGIN(hicpp-signed-bitwise)

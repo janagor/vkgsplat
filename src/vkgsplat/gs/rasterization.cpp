@@ -79,8 +79,8 @@ namespace {
       .baseArrayLayer = 0,
       .layerCount = 1,
     };
-    auto const view_info = initializers::ImageViewCreateInfo(
-      data.color_image, VK_IMAGE_VIEW_TYPE_2D, data.color_format, subresource_range);
+    auto const view_info =
+      initializers::ImageViewCreateInfo(data.color_image, VK_IMAGE_VIEW_TYPE_2D, data.color_format, subresource_range);
     if (init.disp.createImageView(&view_info, nullptr, &data.color_image_view) != VK_SUCCESS) {
       std::println("Failed to create raster color target view!");
       DestroyColorTarget(init, data);
@@ -90,8 +90,7 @@ namespace {
     return true;
   }
 
-  void
-    PushRasterConstants(Init const &init, RasterPushConstants const &push_constants, VkCommandBuffer command_buffer)
+  void PushRasterConstants(Init const &init, RasterPushConstants const &push_constants, VkCommandBuffer command_buffer)
   {
     VkPushDataInfoEXT const push_info = {
       .sType = VK_STRUCTURE_TYPE_PUSH_DATA_INFO_EXT,
@@ -106,10 +105,7 @@ namespace {
 
 auto init_rasterization(Init &init, RenderData &data) -> bool { return CreateColorTarget(init, data); }
 
-auto recreate_rasterization_color_target(Init &init, RenderData &data) -> bool
-{
-  return CreateColorTarget(init, data);
-}
+auto recreate_rasterization_color_target(Init &init, RenderData &data) -> bool { return CreateColorTarget(init, data); }
 
 void dispatch_rasterization(Init const &init,
   RenderData const &data,
