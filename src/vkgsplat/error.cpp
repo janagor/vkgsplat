@@ -14,11 +14,11 @@ namespace detail {
     [[nodiscard]] auto message(int err) const -> std::string override { return to_string(static_cast<ErrorIO>(err)); }
   };
 
-  ErrorIOCategory const io_error_category;
+  ErrorIOCategory const kIoErrorCategory;
 
 }// namespace detail
 
-auto make_error_code(ErrorIO err) -> std::error_code { return { static_cast<int>(err), detail::io_error_category }; }
+auto make_error_code(ErrorIO err) -> std::error_code { return { static_cast<int>(err), detail::kIoErrorCategory }; }
 
 auto to_string(ErrorIO err) -> char const *
 {

@@ -36,8 +36,8 @@
 namespace vkgsplat {
 
 namespace {
-  constexpr size_t k_fps_label_capacity = 64;
-  constexpr size_t k_gpu_label_capacity = 256;
+  constexpr size_t kFpsLabelCapacity = 64;
+  constexpr size_t kGpuLabelCapacity = 256;
 }// namespace
 
 struct ImGuiOverlayState
@@ -69,8 +69,8 @@ struct ImGuiOverlayState
   std::array<VkCommandBuffer, k_max_frames_in_flight> overlay_secondaries{};
   std::array<uint64_t, k_max_frames_in_flight> secondary_generation{};
   uint64_t ui_generation = 1;
-  std::array<char, k_fps_label_capacity> fps_label{ "FPS: --" };
-  std::array<char, k_gpu_label_capacity> gpu_label{};
+  std::array<char, kFpsLabelCapacity> fps_label{ "FPS: --" };
+  std::array<char, kGpuLabelCapacity> gpu_label{};
   std::chrono::steady_clock::time_point last_fps_update;
   std::chrono::steady_clock::time_point last_frame_time;
   float fps_ema = 0.0F;
@@ -79,14 +79,14 @@ struct ImGuiOverlayState
 
 namespace {
 
-  constexpr uint32_t k_imgui_image_slots = IMGUI_IMPL_VULKAN_MINIMUM_SAMPLED_IMAGE_POOL_SIZE;
-  constexpr uint32_t k_imgui_sampler_slots = IMGUI_IMPL_VULKAN_MINIMUM_SAMPLER_POOL_SIZE;
-  constexpr uint32_t k_freelist_bit_count = 64;
-  constexpr float k_fps_window_margin = 12.0F;
-  constexpr float k_fps_window_alpha = 0.45F;
-  constexpr double k_ms_per_second = 1000.0;
-  constexpr auto k_fps_update_interval = std::chrono::milliseconds{ 100 };
-  constexpr float k_fps_ema_alpha = 0.1F;
+  constexpr uint32_t kImguiImageSlots = IMGUI_IMPL_VULKAN_MINIMUM_SAMPLED_IMAGE_POOL_SIZE;
+  constexpr uint32_t kImguiSamplerSlots = IMGUI_IMPL_VULKAN_MINIMUM_SAMPLER_POOL_SIZE;
+  constexpr uint32_t kFreelistBitCount = 64;
+  constexpr float kFpsWindowMargin = 12.0F;
+  constexpr float kFpsWindowAlpha = 0.45F;
+  constexpr double kMsPerSecond = 1000.0;
+  constexpr auto kFpsUpdateInterval = std::chrono::milliseconds{ 100 };
+  constexpr float kFpsEmaAlpha = 0.1F;
 
   [[nodiscard]] auto align_buffer_size(VkDeviceSize size, VkDeviceSize alignment) -> VkDeviceSize
   {
@@ -96,7 +96,7 @@ namespace {
 
   [[nodiscard]] auto allocate_slot(uint64_t &freelist) -> uint32_t
   {
-    for (uint32_t bit_index = 0; bit_index < k_freelist_bit_count; ++bit_index) {
+    for (uint32_t bit_index = 0; bit_index < kFreelistBitCount; ++bit_index) {
       uint64_t const bit = uint64_t{ 1 } << bit_index;
       if ((freelist & bit) != 0) {
         freelist ^= bit;
@@ -223,8 +223,8 @@ namespace {
   {
     ImGuiIO const &imgui_io = ImGui::GetIO();
     ImGui::SetNextWindowPos(
-      ImVec2(k_fps_window_margin, imgui_io.DisplaySize.y - k_fps_window_margin), ImGuiCond_Always, ImVec2(0.0F, 1.0F));
-    ImGui::SetNextWindowBgAlpha(k_fps_window_alpha);
+      ImVec2(kFpsWindowMargin, imgui_io.DisplaySize.y - kFpsWindowMargin), ImGuiCond_Always, ImVec2(0.0F, 1.0F));
+    ImGui::SetNextWindowBgAlpha(kFpsWindowAlpha);
     // NOLINTBEGIN(hicpp-signed-bitwise)
     ImGuiWindowFlags const flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize
                                    | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing
@@ -267,16 +267,16 @@ namespace {
       if (frame_delta > 0.0F) {
         float const fps = 1.0F / frame_delta;
         overlay.fps_ema =
-          overlay.fps_ema > 0.0F ? ((1.0F - k_fps_ema_alpha) * overlay.fps_ema) + (k_fps_ema_alpha * fps) : fps;
+          overlay.fps_ema > 0.0F ? ((1.0F - kFpsEmaAlpha) * overlay.fps_ema) + (kFpsEmaAlpha * fps) : fps;
       }
     }
     overlay.last_frame_time = now;
 
     bool const first_sample = overlay.last_fps_update.time_since_epoch().count() == 0;
-    if (first_sample || now - overlay.last_fps_update >= k_fps_update_interval) {
+    if (first_sample || now - overlay.last_fps_update >= kFpsUpdateInterval) {
       overlay.last_fps_update = now;
       float const fps = overlay.fps_ema > 0.0F ? overlay.fps_ema : 0.0F;
-      double const frame_ms = fps > 0.0F ? k_ms_per_second / static_cast<double>(fps) : 0.0;
+      double const frame_ms = fps > 0.0F ? kMsPerSecond / static_cast<double>(fps) : 0.0;
       // NOLINTNEXTLINE(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
       (void)std::snprintf(
         overlay.fps_label.data(), overlay.fps_label.size(), "FPS: %.1f (%.2f ms)", static_cast<double>(fps), frame_ms);
@@ -383,8 +383,8 @@ void update_imgui_gpu_timings(RenderData &data)
 
   static auto last_update = std::chrono::steady_clock::time_point{};
   auto const now = std::chrono::steady_clock::now();
-  constexpr auto k_gpu_label_update_interval = std::chrono::milliseconds{ 100 };
-  if (last_update.time_since_epoch().count() != 0 && now - last_update < k_gpu_label_update_interval) { return; }
+  constexpr auto kGpuLabelUpdateInterval = std::chrono::milliseconds{ 100 };
+  if (last_update.time_since_epoch().count() != 0 && now - last_update < kGpuLabelUpdateInterval) { return; }
   last_update = now;
 
   auto const &pass_ms = data.gpu_pass_timer.last_ms();
@@ -428,8 +428,8 @@ auto init_imgui_overlay(Init &init, RenderData &data) -> std::expected<void, Err
   };
   init.inst_disp.getPhysicalDeviceProperties2(init.device.physical_device, &props2);
 
-  VkDeviceSize const resource_descriptors_size = heap_props.imageDescriptorSize * k_imgui_image_slots;
-  VkDeviceSize const sampler_descriptors_size = heap_props.samplerDescriptorSize * k_imgui_sampler_slots;
+  VkDeviceSize const resource_descriptors_size = heap_props.imageDescriptorSize * kImguiImageSlots;
+  VkDeviceSize const sampler_descriptors_size = heap_props.samplerDescriptorSize * kImguiSamplerSlots;
   VkDeviceSize const resource_size = align_buffer_size(
     resource_descriptors_size + heap_props.minResourceHeapReservedRange, heap_props.resourceHeapAlignment);
   VkDeviceSize const sampler_size = align_buffer_size(
@@ -471,8 +471,8 @@ auto init_imgui_overlay(Init &init, RenderData &data) -> std::expected<void, Err
   overlay->resource_reserved_size = heap_props.minResourceHeapReservedRange;
   overlay->sampler_reserved_offset = sampler_descriptors_size;
   overlay->sampler_reserved_size = heap_props.minSamplerHeapReservedRange;
-  overlay->resource_freelist = (uint64_t{ 1 } << k_imgui_image_slots) - uint64_t{ 1 };
-  overlay->sampler_freelist = (uint64_t{ 1 } << k_imgui_sampler_slots) - uint64_t{ 1 };
+  overlay->resource_freelist = (uint64_t{ 1 } << kImguiImageSlots) - uint64_t{ 1 };
+  overlay->sampler_freelist = (uint64_t{ 1 } << kImguiSamplerSlots) - uint64_t{ 1 };
   overlay->heap_info = {
     .RegisterSampler = register_sampler,
     .UnRegisterSampler = unregister_sampler,

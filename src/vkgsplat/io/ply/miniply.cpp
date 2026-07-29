@@ -1357,42 +1357,42 @@ auto PLYReader::extract_triangles_native(uint32_t propIdx,
 
 auto PLYReader::find_pos(std::span<uint32_t, 3> propIdxs) const -> bool
 {
-  static constexpr std::array<const char *, 3> names{ "x", "y", "z" };
-  return find_properties(propIdxs, names);
+  static constexpr std::array<const char *, 3> kNames{ "x", "y", "z" };
+  return find_properties(propIdxs, kNames);
 }
 
 
 auto PLYReader::find_normal(std::span<uint32_t, 3> propIdxs) const -> bool
 {
-  static constexpr std::array<const char *, 3> names{ "nx", "ny", "nz" };
-  return find_properties(propIdxs, names);
+  static constexpr std::array<const char *, 3> kNames{ "nx", "ny", "nz" };
+  return find_properties(propIdxs, kNames);
 }
 
 
 auto PLYReader::find_texcoord(std::span<uint32_t, 2> propIdxs) const -> bool
 {
-  static constexpr std::array<const char *, 2> uvNames{ "u", "v" };
-  static constexpr std::array<const char *, 2> stNames{ "s", "t" };
-  static constexpr std::array<const char *, 2> textureUvNames{ "texture_u", "texture_v" };
-  static constexpr std::array<const char *, 2> textureStNames{ "texture_s", "texture_t" };
-  return find_properties(propIdxs, uvNames) || find_properties(propIdxs, stNames)
-         || find_properties(propIdxs, textureUvNames) || find_properties(propIdxs, textureStNames);
+  static constexpr std::array<const char *, 2> kUvNames{ "u", "v" };
+  static constexpr std::array<const char *, 2> kStNames{ "s", "t" };
+  static constexpr std::array<const char *, 2> kTextureUvNames{ "texture_u", "texture_v" };
+  static constexpr std::array<const char *, 2> kTextureStNames{ "texture_s", "texture_t" };
+  return find_properties(propIdxs, kUvNames) || find_properties(propIdxs, kStNames)
+         || find_properties(propIdxs, kTextureUvNames) || find_properties(propIdxs, kTextureStNames);
 }
 
 
 auto PLYReader::find_color(std::span<uint32_t, 3> propIdxs) const -> bool
 {
-  static constexpr std::array<const char *, 3> shortNames{ "r", "g", "b" };
-  static constexpr std::array<const char *, 3> longNames{ "red", "green", "blue" };
-  return find_properties(propIdxs, shortNames) || find_properties(propIdxs, longNames);
+  static constexpr std::array<const char *, 3> kShortNames{ "r", "g", "b" };
+  static constexpr std::array<const char *, 3> kLongNames{ "red", "green", "blue" };
+  return find_properties(propIdxs, kShortNames) || find_properties(propIdxs, kLongNames);
 }
 
 
 auto PLYReader::find_indices(std::span<uint32_t, 1> propIdxs) const -> bool
 {
-  static constexpr std::array<const char *, 1> pluralNames{ "vertex_indices" };
-  static constexpr std::array<const char *, 1> singularNames{ "vertex_index" };
-  return find_properties(propIdxs, pluralNames) || find_properties(propIdxs, singularNames);
+  static constexpr std::array<const char *, 1> kPluralNames{ "vertex_indices" };
+  static constexpr std::array<const char *, 1> kSingularNames{ "vertex_index" };
+  return find_properties(propIdxs, kPluralNames) || find_properties(propIdxs, kSingularNames);
 }
 
 

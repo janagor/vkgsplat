@@ -15,9 +15,9 @@ namespace vkgsplat {
 
 namespace {
 
-  constexpr u32 k_queries_per_slot = k_gpu_pass_count * 2U;
-  constexpr u32 k_query_pool_size = static_cast<u32>(k_max_frames_in_flight) * k_queries_per_slot;
-  constexpr float k_ns_to_ms = 1.0e-6F;
+  constexpr u32 kQueriesPerSlot = k_gpu_pass_count * 2U;
+  constexpr u32 kQueryPoolSize = static_cast<u32>(k_max_frames_in_flight) * kQueriesPerSlot;
+  constexpr float kNsToMs = 1.0e-6F;
 
 }// namespace
 
@@ -62,7 +62,7 @@ auto GpuPassTimer::operator=(GpuPassTimer &&other) noexcept -> GpuPassTimer &
 
 auto GpuPassTimer::query_index(size_t slot, GpuPass pass, bool is_end) -> u32
 {
-  return (static_cast<u32>(slot) * k_queries_per_slot) + (static_cast<u32>(pass) * 2U) + (is_end ? 1U : 0U);
+  return (static_cast<u32>(slot) * kQueriesPerSlot) + (static_cast<u32>(pass) * 2U) + (is_end ? 1U : 0U);
 }
 
 auto GpuPassTimer::create(Init &init) -> bool
@@ -77,7 +77,7 @@ auto GpuPassTimer::create(Init &init) -> bool
     .pNext = nullptr,
     .flags = 0,
     .queryType = VK_QUERY_TYPE_TIMESTAMP,
-    .queryCount = k_query_pool_size,
+    .queryCount = kQueryPoolSize,
     .pipelineStatistics = 0,
   };
 
@@ -106,8 +106,8 @@ void GpuPassTimer::destroy(Init &init)
 void GpuPassTimer::begin_frame(Init const &init, size_t slot, VkCommandBuffer command_buffer) const
 {
   if (!enabled()) { return; }
-  u32 const first = static_cast<u32>(slot) * k_queries_per_slot;
-  init.disp.cmdResetQueryPool(command_buffer, pool_, first, k_queries_per_slot);
+  u32 const first = static_cast<u32>(slot) * kQueriesPerSlot;
+  init.disp.cmdResetQueryPool(command_buffer, pool_, first, kQueriesPerSlot);
 }
 
 void GpuPassTimer::write(Init const &init,
@@ -131,11 +131,11 @@ void GpuPassTimer::resolve(Init const &init, size_t slot)
 {
   if (!enabled() || slot >= pending_.size() || !pending_.at(slot)) { return; }
 
-  std::array<u64, k_queries_per_slot> timestamps{};
-  u32 const first = static_cast<u32>(slot) * k_queries_per_slot;
+  std::array<u64, kQueriesPerSlot> timestamps{};
+  u32 const first = static_cast<u32>(slot) * kQueriesPerSlot;
   VkResult const result = init.disp.getQueryPoolResults(pool_,
     first,
-    k_queries_per_slot,
+    kQueriesPerSlot,
     timestamps.size() * sizeof(u64),
     timestamps.data(),
     sizeof(u64),
@@ -151,7 +151,7 @@ void GpuPassTimer::resolve(Init const &init, size_t slot)
     u64 const end_ticks = timestamps.at(end_index);
     float pass_ms = 0.0F;
     if (end_ticks >= begin_ticks) {
-      pass_ms = static_cast<float>(end_ticks - begin_ticks) * timestamp_period_ns_ * k_ns_to_ms;
+      pass_ms = static_cast<float>(end_ticks - begin_ticks) * timestamp_period_ns_ * kNsToMs;
     }
     last_ms_.at(pass_index) = pass_ms;
   }

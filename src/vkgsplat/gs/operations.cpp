@@ -18,7 +18,7 @@ namespace vkgsplat::gs {
 
 namespace {
 
-  constexpr u32 k_compute_local_size_x = 64U;
+  constexpr u32 kComputeLocalSizeX = 64U;
 
   struct Dispatch2D
   {
@@ -107,7 +107,7 @@ void OpProjection::record(Init const &init, RenderData const &data, VkCommandBuf
   init.disp.cmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, data.project_algorithm.pipeline());
   push_constants(init, &data.project_push, sizeof(ProjectPushConstants), command_buffer);
 
-  u32 const workgroup_count = (data.splat_count + k_compute_local_size_x - 1U) / k_compute_local_size_x;
+  u32 const workgroup_count = (data.splat_count + kComputeLocalSizeX - 1U) / kComputeLocalSizeX;
   dispatch_compute_1d(init, command_buffer, workgroup_count);
   Barrier::compute_read(init.disp, command_buffer);
 }
@@ -119,7 +119,7 @@ void OpBinning::record(Init const &init, RenderData const &data, VkCommandBuffer
   init.disp.cmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, data.bin_algorithm.pipeline());
   push_constants(init, &data.bin_push, sizeof(BinPushConstants), command_buffer);
 
-  u32 const workgroup_count = (data.splat_count + k_compute_local_size_x - 1U) / k_compute_local_size_x;
+  u32 const workgroup_count = (data.splat_count + kComputeLocalSizeX - 1U) / kComputeLocalSizeX;
   dispatch_compute_1d(init, command_buffer, workgroup_count);
   Barrier::compute_read(init.disp, command_buffer);
 }
@@ -128,7 +128,7 @@ void OpPrepareSort::record(Init const &init, RenderData const &data, VkCommandBu
 {
   ScopedGpuPass const timer{ init, data, command_buffer, GpuPass::PrepareSort };
 
-  Dispatch2D const sort_grid = dispatch_2d_for_threads(init, data.gaussian_sort_size, k_compute_local_size_x);
+  Dispatch2D const sort_grid = dispatch_2d_for_threads(init, data.gaussian_sort_size, kComputeLocalSizeX);
 
   dispatch_compute_pass(init,
     command_buffer,
@@ -143,10 +143,10 @@ void OpRadixSort::record(Init const &init, RenderData const &data, VkCommandBuff
 {
   ScopedGpuPass const timer{ init, data, command_buffer, GpuPass::RadixSort };
 
-  constexpr u32 k_radix_passes = 4U;// packed uint32 key, 8 bits per pass
+  constexpr u32 kRadixPasses = 4U;// packed uint32 key, 8 bits per pass
   u64 const instance_count_address = init.gpu_allocator.get_buffer_device_address(data.instance_count_buffer);
 
-  for (u32 pass = 0U; pass < k_radix_passes; ++pass) {
+  for (u32 pass = 0U; pass < kRadixPasses; ++pass) {
     RadixPushConstants const radix_push{
       .instance_count_address = instance_count_address,
       .capacity = data.gaussian_sort_size,

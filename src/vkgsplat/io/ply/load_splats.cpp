@@ -119,27 +119,27 @@ namespace {
     std::array<uint32_t, k_sh_dc_coeffs> f_dc_idx{};
     std::array<uint32_t, k_sh_rest_coeffs> f_rest_idx{};
 
-    static constexpr std::array<char const *, 3> position_names{ "x", "y", "z" };
-    static constexpr std::array<char const *, 3> scale_names{ "scale_0", "scale_1", "scale_2" };
-    static constexpr std::array<char const *, 4> rotation_names{ "rot_0", "rot_1", "rot_2", "rot_3" };
-    static constexpr std::array<char const *, 1> opacity_names{ "opacity" };
-    static constexpr std::array<char const *, 3> f_dc_names{ "f_dc_0", "f_dc_1", "f_dc_2" };
+    static constexpr std::array<char const *, 3> kPositionNames{ "x", "y", "z" };
+    static constexpr std::array<char const *, 3> kScaleNames{ "scale_0", "scale_1", "scale_2" };
+    static constexpr std::array<char const *, 4> kRotationNames{ "rot_0", "rot_1", "rot_2", "rot_3" };
+    static constexpr std::array<char const *, 1> kOpacityNames{ "opacity" };
+    static constexpr std::array<char const *, 3> kFDcNames{ "f_dc_0", "f_dc_1", "f_dc_2" };
     auto const f_rest_name_storage = make_indexed_names<k_sh_rest_coeffs>("f_rest_");
     auto const f_rest_names = names_as_c_strs(f_rest_name_storage);
 
-    if (auto result = require_properties(reader, position_idx, position_names, "PLY missing x/y/z"); !result) {
+    if (auto result = require_properties(reader, position_idx, kPositionNames, "PLY missing x/y/z"); !result) {
       return std::unexpected{ std::move(result.error()) };
     }
-    if (auto result = require_properties(reader, scale_idx, scale_names, "PLY missing scale_0/1/2"); !result) {
+    if (auto result = require_properties(reader, scale_idx, kScaleNames, "PLY missing scale_0/1/2"); !result) {
       return std::unexpected{ std::move(result.error()) };
     }
-    if (auto result = require_properties(reader, rotation_idx, rotation_names, "PLY missing rot_0/1/2/3"); !result) {
+    if (auto result = require_properties(reader, rotation_idx, kRotationNames, "PLY missing rot_0/1/2/3"); !result) {
       return std::unexpected{ std::move(result.error()) };
     }
-    if (auto result = require_properties(reader, opacity_idx, opacity_names, "PLY missing opacity"); !result) {
+    if (auto result = require_properties(reader, opacity_idx, kOpacityNames, "PLY missing opacity"); !result) {
       return std::unexpected{ std::move(result.error()) };
     }
-    if (auto result = require_properties(reader, f_dc_idx, f_dc_names, "PLY missing f_dc_0/1/2"); !result) {
+    if (auto result = require_properties(reader, f_dc_idx, kFDcNames, "PLY missing f_dc_0/1/2"); !result) {
       return std::unexpected{ std::move(result.error()) };
     }
     if (auto result = require_properties(reader, f_rest_idx, f_rest_names, "PLY missing f_rest_0..44"); !result) {

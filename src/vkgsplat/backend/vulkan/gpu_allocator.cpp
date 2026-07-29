@@ -127,13 +127,13 @@ auto GPUAllocator::create_heap_buffer(VkDeviceSize size) noexcept -> std::expect
   alloc_info.preferredFlags = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 
   // Match ANV's BindlessSurfaceStateBaseAddress 4 KiB granularity.
-  constexpr VkDeviceSize k_heap_device_address_alignment = 4096;
+  constexpr VkDeviceSize kHeapDeviceAddressAlignment = 4096;
 
   Buffer buffer{ .size = size };
   if (vmaCreateBufferWithAlignment(allocator_,
         &buffer_info,
         &alloc_info,
-        k_heap_device_address_alignment,
+        kHeapDeviceAddressAlignment,
         &buffer.handle,
         &buffer.allocation,
         nullptr)

@@ -5,11 +5,11 @@
 
 [[nodiscard]] auto sum_values(const uint8_t *Data, size_t Size) -> int
 {
-  constexpr auto scale = 1000;
+  constexpr auto kScale = 1000;
 
   int value = 0;
   for (std::size_t offset = 0; offset < Size; ++offset) {
-    value += static_cast<int>(*std::next(Data, static_cast<int64_t>(offset))) * scale;
+    value += static_cast<int>(*std::next(Data, static_cast<int64_t>(offset))) * kScale;
   }
   return value;
 }

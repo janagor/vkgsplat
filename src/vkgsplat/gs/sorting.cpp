@@ -22,15 +22,15 @@ namespace vkgsplat::gs {
 
 namespace {
 
-  constexpr u32 k_radix_workgroup_size = 256U;
-  constexpr u32 k_radix_bins = 256U;
-  constexpr u32 k_radix_blocks_per_workgroup = 32U;
+  constexpr u32 kRadixWorkgroupSize = 256U;
+  constexpr u32 kRadixBins = 256U;
+  constexpr u32 kRadixBlocksPerWorkgroup = 32U;
 
   [[nodiscard]] auto radix_workgroup_count(u32 num_elements) -> u32
   {
     if (num_elements == 0U) { return 1U; }
-    u32 const threads = (num_elements + k_radix_blocks_per_workgroup - 1U) / k_radix_blocks_per_workgroup;
-    u32 const wgs = (threads + k_radix_workgroup_size - 1U) / k_radix_workgroup_size;
+    u32 const threads = (num_elements + kRadixBlocksPerWorkgroup - 1U) / kRadixBlocksPerWorkgroup;
+    u32 const wgs = (threads + kRadixWorkgroupSize - 1U) / kRadixWorkgroupSize;
     return wgs == 0U ? 1U : wgs;
   }
 
@@ -64,13 +64,13 @@ namespace {
 
     data.gaussian_sort_size = data.max_bin_instances;
     data.tile_count = k_max_tiles;
-    data.radix_blocks_per_workgroup = k_radix_blocks_per_workgroup;
+    data.radix_blocks_per_workgroup = kRadixBlocksPerWorkgroup;
     // Histogram sized for worst-case capacity; live frames dispatch fewer groups.
     data.radix_num_workgroups = radix_workgroup_count(data.gaussian_sort_size);
 
     auto const keys_size = static_cast<VkDeviceSize>(data.gaussian_sort_size * sizeof(BinningKey));
     auto const values_size = static_cast<VkDeviceSize>(data.gaussian_sort_size * sizeof(u32));
-    auto const histogram_entries = static_cast<size_t>(data.radix_num_workgroups) * static_cast<size_t>(k_radix_bins);
+    auto const histogram_entries = static_cast<size_t>(data.radix_num_workgroups) * static_cast<size_t>(kRadixBins);
     auto const histogram_size = static_cast<VkDeviceSize>(histogram_entries * sizeof(u32));
     auto const ranges_size = static_cast<VkDeviceSize>(data.tile_count * sizeof(TileRange));
     auto const dispatch_size = static_cast<VkDeviceSize>(sizeof(VkDispatchIndirectCommand));
