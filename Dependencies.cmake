@@ -184,36 +184,6 @@ function(vkgsplat_setup_dependencies)
       SYSTEM
       YES)
 
-    # When both dynamic rendering and descriptor heaps are enabled, the fork
-    # overwrites PipelineRenderingCreateInfo with heap flags (colorAttachmentCount
-    # becomes 0). Patch adds the missing else so heap flags only apply without
-    # dynamic rendering.
-    set(_imgui_patch "${PROJECT_SOURCE_DIR}/cmake/patches/imgui-dynamic-rendering-descriptor-heap.patch")
-    if(NOT EXISTS "${_imgui_patch}")
-      message(FATAL_ERROR "Missing imgui patch: ${_imgui_patch}")
-    endif()
-    execute_process(
-      COMMAND patch -p1 -N -r - -i "${_imgui_patch}"
-      WORKING_DIRECTORY "${imgui_SOURCE_DIR}"
-      RESULT_VARIABLE _imgui_patch_result
-      OUTPUT_VARIABLE _imgui_patch_output
-      ERROR_VARIABLE _imgui_patch_error)
-    # 0 = applied, 1 = already applied (-N). Anything else is a hard failure.
-    if(NOT
-       _imgui_patch_result
-       EQUAL
-       0
-       AND NOT
-           _imgui_patch_result
-           EQUAL
-           1)
-      message(
-        FATAL_ERROR
-          "Failed to apply ${_imgui_patch} (exit ${_imgui_patch_result}):\n${_imgui_patch_output}${_imgui_patch_error}")
-    elseif(_imgui_patch_result EQUAL 0)
-      message(STATUS "imgui: applied ${_imgui_patch}")
-    endif()
-
     add_library(
       imgui STATIC
       ${imgui_SOURCE_DIR}/imgui.cpp
