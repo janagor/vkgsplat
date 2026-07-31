@@ -45,6 +45,8 @@ struct ImGuiOverlayState
   bool initialized = false;
   vulkan::Buffer resource_heap{};
   vulkan::Buffer sampler_heap{};
+  VkBindHeapInfoEXT resource_bind{};
+  VkBindHeapInfoEXT sampler_bind{};
   void *resource_mapped = nullptr;
   void *sampler_mapped = nullptr;
   VkDeviceSize resource_stride{};
@@ -300,9 +302,17 @@ namespace {
       .stencilAttachmentFormat = VK_FORMAT_UNDEFINED,
       .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
     };
+
+    VkCommandBufferInheritanceDescriptorHeapInfoEXT inheritance_heap{
+      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_DESCRIPTOR_HEAP_INFO_EXT,
+      .pNext = &inheritance_rendering,
+      .pSamplerHeapBindInfo = &overlay.sampler_bind,
+      .pResourceHeapBindInfo = &overlay.resource_bind,
+    };
+
     VkCommandBufferInheritanceInfo const inheritance{
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
-      .pNext = &inheritance_rendering,
+      .pNext = &inheritance_heap,
       .renderPass = VK_NULL_HANDLE,
       .subpass = 0,
       .framebuffer = VK_NULL_HANDLE,
@@ -310,6 +320,7 @@ namespace {
       .queryFlags = 0,
       .pipelineStatistics = 0,
     };
+
     VkCommandBufferBeginInfo const begin_info{
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
       .pNext = nullptr,
@@ -319,31 +330,6 @@ namespace {
 
     init.disp.resetCommandBuffer(secondary, 0);
     init.disp.beginCommandBuffer(secondary, &begin_info);
-
-    VkBindHeapInfoEXT const resource_bind = {
-      .sType = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
-      .pNext = nullptr,
-      .heapRange =
-        {
-          .address = init.gpu_allocator.get_buffer_device_address(overlay.resource_heap),
-          .size = overlay.resource_heap_size,
-        },
-      .reservedRangeOffset = overlay.resource_reserved_offset,
-      .reservedRangeSize = overlay.resource_reserved_size,
-    };
-    VkBindHeapInfoEXT const sampler_bind = {
-      .sType = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
-      .pNext = nullptr,
-      .heapRange =
-        {
-          .address = init.gpu_allocator.get_buffer_device_address(overlay.sampler_heap),
-          .size = overlay.sampler_heap_size,
-        },
-      .reservedRangeOffset = overlay.sampler_reserved_offset,
-      .reservedRangeSize = overlay.sampler_reserved_size,
-    };
-    init.cmd_bind_resource_heap(secondary, &resource_bind);
-    init.cmd_bind_sampler_heap(secondary, &sampler_bind);
 
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplGlfw_NewFrame();
@@ -480,6 +466,29 @@ auto init_imgui_overlay(Init &init, RenderData &data) -> std::expected<void, Err
     .UnRegisterImage = UnregisterImage,
     .UserContext = overlay.get(),
   };
+
+  overlay->resource_bind = {
+    .sType = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
+    .pNext = nullptr,
+    .heapRange = {
+      .address = init.gpu_allocator.get_buffer_device_address(*resource_heap),
+      .size = overlay->resource_heap_size,
+    },
+    .reservedRangeOffset = overlay->resource_reserved_offset,
+    .reservedRangeSize = overlay->resource_reserved_size,
+  };
+
+  overlay->sampler_bind = {
+    .sType = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
+    .pNext = nullptr,
+    .heapRange = {
+      .address = init.gpu_allocator.get_buffer_device_address(*sampler_heap),
+      .size = overlay->sampler_heap_size,
+    },
+    .reservedRangeOffset = overlay->sampler_reserved_offset,
+    .reservedRangeSize = overlay->sampler_reserved_size,
+  };
+
 
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
@@ -621,6 +630,9 @@ void record_imgui_overlay(Init &init, RenderData const &data, VkCommandBuffer co
   if (overlay.secondary_generation.at(frame_slot) != overlay.ui_generation) {
     RecordOverlaySecondary(init, data, frame_slot);
   }
+
+  init.cmd_bind_resource_heap(command_buffer, &overlay.resource_bind);
+  init.cmd_bind_sampler_heap(command_buffer, &overlay.sampler_bind);
 
   VkImageView swapchain_view = init.swapchain->image_views().at(image_index);
 
