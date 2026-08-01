@@ -4,10 +4,10 @@
 #include <print>
 #include <system_error>
 
-#include "backend/vulkan/vulkan_bootstrap.hpp"
+#include "vulkan_bootstrap.hpp"
 #include "vulkan_context.hpp"
+#include "vulkan_platform.hpp"
 #include <vkgsplat_utility/error.hpp>
-#include <vkgsplat_window/window.hpp>
 
 #include <vulkan/vulkan_core.h>
 
@@ -17,8 +17,8 @@ namespace vkgsplat {
 
 auto device_initialization(Init &init, bool enable_validation) -> std::expected<void, Error>
 {
-  if (init.window == nullptr) {
-    return std::unexpected{ Error{ std::make_error_code(std::errc::invalid_argument), "Window is required" } };
+  if (init.platform == nullptr) {
+    return std::unexpected{ Error{ std::make_error_code(std::errc::invalid_argument), "Platform is required" } };
   }
 
   VkPhysicalDeviceDescriptorHeapFeaturesEXT descriptor_heap_features{};
@@ -52,7 +52,7 @@ auto device_initialization(Init &init, bool enable_validation) -> std::expected<
       init.instance = instance;
       init.inst_disp = init.instance.make_table();
 
-      auto surface = init.window->create_surface(init.instance);
+      auto surface = vulkan::create_surface_from_native_window(init.instance, init.platform->native_window());
       if (!surface) { return std::unexpected{ surface.error() }; }
       init.surface = *surface;
 

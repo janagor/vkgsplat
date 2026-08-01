@@ -1,11 +1,11 @@
-#include "backend/vulkan/swapchain.hpp"
+#include "swapchain_resource.hpp"
 
 #include <expected>
 #include <functional>
 #include <utility>
 #include <vector>
 
-#include "backend/vulkan/vulkan_bootstrap.hpp"
+#include "vulkan_bootstrap.hpp"
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
 
@@ -17,7 +17,7 @@ namespace vkgsplat::vulkan {
 
 namespace {
 
-  auto BuildSwapchain(vkb::Device const &device, Extent2D extent, vkb::Swapchain const &old_swapchain = {})
+  auto BuildSwapchainResource(vkb::Device const &device, Extent2D extent, vkb::Swapchain const &old_swapchain = {})
     -> std::expected<vkb::Swapchain, Error>
   {
     vkb::SwapchainBuilder swapchain_builder{ device };
@@ -29,16 +29,16 @@ namespace {
 
 }// namespace
 
-Swapchain::Swapchain(vkb::Swapchain swapchain, std::reference_wrapper<vkb::DispatchTable> disp) noexcept
+SwapchainResource::SwapchainResource(vkb::Swapchain swapchain, std::reference_wrapper<vkb::DispatchTable> disp) noexcept
   : swapchain_(swapchain), disp_(disp)
 {}
 
-Swapchain::Swapchain(Swapchain &&other) noexcept
+SwapchainResource::SwapchainResource(SwapchainResource &&other) noexcept
   : swapchain_(std::exchange(other.swapchain_, {})), images_(std::move(other.images_)),
     image_views_(std::move(other.image_views_)), disp_(other.disp_)
 {}
 
-auto Swapchain::operator=(Swapchain &&other) noexcept -> Swapchain &
+auto SwapchainResource::operator=(SwapchainResource &&other) noexcept -> SwapchainResource &
 {
   if (this != &other) {
     cleanup();
@@ -50,9 +50,9 @@ auto Swapchain::operator=(Swapchain &&other) noexcept -> Swapchain &
   return *this;
 }
 
-Swapchain::~Swapchain() noexcept { cleanup(); }
+SwapchainResource::~SwapchainResource() noexcept { cleanup(); }
 
-void Swapchain::cleanup() noexcept
+void SwapchainResource::cleanup() noexcept
 {
   if (swapchain_.swapchain != VK_NULL_HANDLE) {
     swapchain_.destroy_image_views(image_views_);
@@ -63,7 +63,7 @@ void Swapchain::cleanup() noexcept
   images_.clear();
 }
 
-auto Swapchain::init_images_and_views() -> std::expected<void, Error>
+auto SwapchainResource::init_images_and_views() -> std::expected<void, Error>
 {
   auto swapchain_images = VKBResultToExpected(swapchain_.get_images());
   if (!swapchain_images) { return std::unexpected(swapchain_images.error()); }
@@ -76,23 +76,24 @@ auto Swapchain::init_images_and_views() -> std::expected<void, Error>
   return {};
 }
 
-auto Swapchain::create(vkb::Device const &device, Extent2D extent, std::reference_wrapper<vkb::DispatchTable> disp)
-  -> std::expected<Swapchain, Error>
+auto SwapchainResource::create(vkb::Device const &device,
+  Extent2D extent,
+  std::reference_wrapper<vkb::DispatchTable> disp) -> std::expected<SwapchainResource, Error>
 {
-  auto vkb_swapchain = BuildSwapchain(device, extent);
+  auto vkb_swapchain = BuildSwapchainResource(device, extent);
   if (!vkb_swapchain) { return std::unexpected(vkb_swapchain.error()); }
 
-  Swapchain swapchain(*vkb_swapchain, disp);
+  SwapchainResource swapchain(*vkb_swapchain, disp);
   if (auto images_and_views = swapchain.init_images_and_views(); !images_and_views) {
     return std::unexpected(images_and_views.error());
   }
   return swapchain;
 }
 
-auto Swapchain::recreate(vkb::Device const &device, Extent2D extent) -> std::expected<void, Error>
+auto SwapchainResource::recreate(vkb::Device const &device, Extent2D extent) -> std::expected<void, Error>
 {
   vkb::Swapchain const old_swapchain = swapchain_;
-  auto vkb_swapchain = BuildSwapchain(device, extent, old_swapchain);
+  auto vkb_swapchain = BuildSwapchainResource(device, extent, old_swapchain);
   if (!vkb_swapchain) { return std::unexpected(vkb_swapchain.error()); }
 
   cleanup();

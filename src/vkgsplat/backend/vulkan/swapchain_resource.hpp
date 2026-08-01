@@ -13,21 +13,21 @@
 
 namespace vkgsplat::vulkan {
 
-class Swapchain
+class SwapchainResource
 {
 public:
-  Swapchain() = delete;
-  ~Swapchain() noexcept;
+  SwapchainResource() = delete;
+  ~SwapchainResource() noexcept;
 
-  Swapchain(Swapchain const &) = delete;
-  auto operator=(Swapchain const &) -> Swapchain & = delete;
+  SwapchainResource(SwapchainResource const &) = delete;
+  auto operator=(SwapchainResource const &) -> SwapchainResource & = delete;
 
-  Swapchain(Swapchain &&other) noexcept;
-  auto operator=(Swapchain &&other) noexcept -> Swapchain &;
+  SwapchainResource(SwapchainResource &&other) noexcept;
+  auto operator=(SwapchainResource &&other) noexcept -> SwapchainResource &;
 
   [[nodiscard]] static auto create(vkb::Device const &device,
     Extent2D extent,
-    std::reference_wrapper<vkb::DispatchTable> disp) -> std::expected<Swapchain, Error>;
+    std::reference_wrapper<vkb::DispatchTable> disp) -> std::expected<SwapchainResource, Error>;
 
   [[nodiscard]] auto recreate(vkb::Device const &device, Extent2D extent) -> std::expected<void, Error>;
 
@@ -39,7 +39,7 @@ public:
   [[nodiscard]] auto image_views() const noexcept -> std::vector<VkImageView> const & { return image_views_; }
 
 private:
-  Swapchain(vkb::Swapchain swapchain, std::reference_wrapper<vkb::DispatchTable> disp) noexcept;
+  SwapchainResource(vkb::Swapchain swapchain, std::reference_wrapper<vkb::DispatchTable> disp) noexcept;
 
   void cleanup() noexcept;
   [[nodiscard]] auto init_images_and_views() -> std::expected<void, Error>;

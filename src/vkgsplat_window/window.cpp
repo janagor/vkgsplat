@@ -1,5 +1,6 @@
 #include <vkgsplat_window/window.hpp>
 
+#include <vkgsplat/platform.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
 
@@ -12,8 +13,6 @@
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
-
-#include <vulkan/vulkan_core.h>
 
 namespace vkgsplat {
 
@@ -84,13 +83,7 @@ auto Window::framebuffer_extent() const noexcept -> Extent2D
   return Extent2D{ .width = static_cast<u32>(width), .height = static_cast<u32>(height) };
 }
 
-auto Window::create_surface(VkInstance instance) const -> std::expected<VkSurfaceKHR, Error>
-{
-  VkSurfaceKHR surface = VK_NULL_HANDLE;
-  VkResult const result = glfwCreateWindowSurface(instance, impl_->handle, nullptr, &surface);
-  if (result != VK_SUCCESS) { return std::unexpected{ MakeErrorFromGlfw("Failed to create Vulkan window surface") }; }
-  return surface;
-}
+auto Window::native_window() const noexcept -> NativeWindowHandle { return impl_->handle; }
 
 auto Window::native_handle() const noexcept -> void * { return impl_->handle; }
 

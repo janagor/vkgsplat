@@ -63,7 +63,7 @@ auto create_graphics_pipeline(Init &init, RenderData &data) -> int
 
   VkRect2D scissor = {};
   scissor.offset = { .x = 0, .y = 0 };
-  scissor.extent = init.swapchain->extent();
+  scissor.extent = init.swapchain->vk_extent();
 
   auto const viewport_state =
     initializers::PipelineViewportStateCreateInfo(std::span{ &viewport, 1 }, std::span{ &scissor, 1 });

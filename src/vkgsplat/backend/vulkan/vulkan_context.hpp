@@ -1,27 +1,28 @@
 #pragma once
 
 #include <memory>
+
 #include <vulkan/vulkan_core.h>
 
 #include <VkBootstrap.h>
 #include <VkBootstrapDispatch.h>
 
-#include <backend/vulkan/gpu_allocator.hpp>
-#include <backend/vulkan/swapchain.hpp>
+#include "gpu_allocator.hpp"
+#include "presentable_swapchain.hpp"
+#include <vkgsplat/platform.hpp>
 
 namespace vkgsplat {
 
-class Window;
-
+// Hardware context for the Vulkan backend (Filament Driver equivalent state).
 struct Init
 {
-  Window *window{};
+  Platform *platform{};
   vkb::Instance instance{};
   vkb::InstanceDispatchTable inst_disp;
   VkSurfaceKHR surface{};
   vkb::Device device{};
   vkb::DispatchTable disp;
-  std::unique_ptr<vulkan::Swapchain> swapchain;
+  std::unique_ptr<vulkan::PresentableSwapchain> swapchain;
   vulkan::GPUAllocator gpu_allocator;
   PFN_vkWriteResourceDescriptorsEXT write_resource_descriptors{};
   PFN_vkWriteSamplerDescriptorsEXT write_sampler_descriptors{};
@@ -31,3 +32,9 @@ struct Init
 };
 
 }// namespace vkgsplat
+
+namespace vkgsplat::vulkan {
+
+using Context = Init;
+
+}// namespace vkgsplat::vulkan

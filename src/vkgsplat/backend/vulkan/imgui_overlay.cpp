@@ -5,9 +5,9 @@
 #include "backend/vulkan/gpu_pass_timer.hpp"
 #include "backend/vulkan/initializers.hpp"
 #include "vulkan_context.hpp"
+#include <vkgsplat/platform.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
-#include <vkgsplat_window/window.hpp>
 
 #include <array>
 #include <chrono>
@@ -494,7 +494,7 @@ auto init_imgui_overlay(Init &init, RenderData &data) -> std::expected<void, Err
   ImGui::CreateContext();
   ImGui::StyleColorsDark();
 
-  auto *glfw_window = static_cast<GLFWwindow *>(init.window->native_handle());
+  auto *glfw_window = static_cast<GLFWwindow *>(init.platform->native_window());
   if (!ImGui_ImplGlfw_InitForVulkan(glfw_window, true)) {
     DestroyImguiHeaps(init, *overlay);
     ImGui::DestroyContext();
@@ -603,7 +603,7 @@ void record_imgui_overlay(Init &init, RenderData const &data, VkCommandBuffer co
   auto &overlay = *data.imgui;
   SampleFrameTime(overlay);
 
-  VkExtent2D const extent = init.swapchain->extent();
+  VkExtent2D const extent = init.swapchain->vk_extent();
   if (extent.width != overlay.last_extent.width || extent.height != overlay.last_extent.height) {
     overlay.last_extent = extent;
     InvalidateOverlaySecondaries(overlay);

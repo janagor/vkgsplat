@@ -35,7 +35,6 @@
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
-#include <vkgsplat_window/window.hpp>
 
 #include <vulkan/vulkan_core.h>
 
@@ -138,7 +137,7 @@ auto recreate_swapchain(Init &init, RenderData &data) -> std::expected<void, Err
   if (init.swapchain == nullptr) {
     return std::unexpected{ make_error(std::errc::state_not_recoverable, "swapchain is not initialized") };
   }
-  if (auto recreated = init.swapchain->recreate(init.device, init.window->framebuffer_extent()); !recreated) {
+  if (auto recreated = init.swapchain->recreate(init.device, init.platform->framebuffer_extent()); !recreated) {
     return std::unexpected{ recreated.error() };
   }
   if (0 != create_graphics_pipeline(init, data)) {
@@ -266,14 +265,7 @@ void cleanup(Init &init, RenderData &data)
 
   destroy_graphics_pipeline(init, data);
 
-  init.swapchain.reset();
-
-  // VMA keeps VkDeviceMemory blocks until the allocator is destroyed.
-  init.gpu_allocator = vulkan::GPUAllocator{};
-
-  vkb::destroy_device(init.device);
-  vkb::destroy_surface(init.instance, init.surface);
-  vkb::destroy_instance(init.instance);
+  // Swapchain, allocator, and device are owned by VulkanDriver / Engine.
 }
 
 }// namespace vkgsplat
