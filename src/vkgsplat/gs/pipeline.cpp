@@ -10,7 +10,6 @@
 #include <vkgsplat_utility/types.hpp>
 
 #include <cstddef>
-#include <memory>
 
 #include <glm/ext/vector_float3.hpp>
 #include <glm/ext/vector_float4.hpp>
@@ -21,17 +20,17 @@ namespace vkgsplat::gs {
 
 void record_gs_pipeline(RenderData &data)
 {
-  data.gs_sequence.record(std::make_shared<OpProjection>())
-    .record(std::make_shared<compute::OpFillBuffer>(compute::FillBufferParams{
+  data.gs_sequence.emplace<OpProjection>()
+    .emplace<compute::OpFillBuffer>(compute::FillBufferParams{
       .buffer = data.instance_count_buffer.handle,
       .offset = 0,
       .size = sizeof(u32),
       .value = 0U,
-    }))
-    .record(std::make_shared<OpBinning>())
-    .record(std::make_shared<OpPrepareSort>())
-    .record(std::make_shared<OpRadixSort>())
-    .record(std::make_shared<OpRasterization>());
+    })
+    .emplace<OpBinning>()
+    .emplace<OpPrepareSort>()
+    .emplace<OpRadixSort>()
+    .emplace<OpRasterization>();
 }
 
 void update_gs_frame_state(Init const &init, RenderData &data, GsFrameParams const &frame)

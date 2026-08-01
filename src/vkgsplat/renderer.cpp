@@ -1,6 +1,5 @@
 #include <vkgsplat/renderer.hpp>
 
-#include <bit>
 #include <expected>
 #include <functional>
 #include <memory>
@@ -13,7 +12,7 @@
 
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat_utility/error.hpp>
-#include <vkgsplat_utility/types.hpp>
+#include <vkgsplat_utility/utils.hpp>
 #include <vkgsplat_window/window.hpp>
 
 #include "app_state.hpp"
@@ -36,16 +35,6 @@
 
 namespace vkgsplat {
 
-namespace {
-
-  [[nodiscard]] auto NextPowerOf2(u32 value) -> u32
-  {
-    if (value <= 1U) { return 1U; }
-    return 1U << static_cast<unsigned>(std::bit_width(static_cast<unsigned>(value - 1U)));
-  }
-
-}// namespace
-
 struct Renderer::Impl
 {
   Init init{};
@@ -57,7 +46,7 @@ Renderer::Renderer(beman::indirect::indirect<Impl> impl) : impl_(std::move(impl)
 Renderer::Renderer(Renderer &&) noexcept = default;
 auto Renderer::operator=(Renderer &&) noexcept -> Renderer & = default;
 
-Renderer::~Renderer()
+Renderer::~Renderer() noexcept
 {
   if (impl_.valueless_after_move()) { return; }
   cleanup(impl_->init, impl_->render_data);
@@ -85,9 +74,7 @@ auto Renderer::create(RendererConfig const &config, Window &window) -> std::expe
 
   auto gpu_allocator =
     vulkan::GPUAllocator::create(impl->init.instance, impl->init.device, impl->init.device.physical_device);
-  if (!gpu_allocator) {
-    return std::unexpected(make_error(std::errc::invalid_argument, "Failed to create GPU allocator"));
-  }
+  if (!gpu_allocator) { return std::unexpected(gpu_allocator.error()); }
   impl->init.gpu_allocator = std::move(*gpu_allocator);
 
   auto swapchain = vulkan::Swapchain::create(impl->init.device, window.framebuffer_extent(), std::ref(impl->init.disp));
@@ -100,7 +87,7 @@ auto Renderer::create(RendererConfig const &config, Window &window) -> std::expe
     return std::unexpected(make_error(std::errc::invalid_argument, "Failed to create PLY sphere buffers"));
   }
 
-  impl->render_data.sort_size = NextPowerOf2(impl->render_data.splat_count);
+  impl->render_data.sort_size = next_power_of_2(impl->render_data.splat_count);
   if (!init_sphere_setup(impl->init, impl->render_data)) {
     return std::unexpected(make_error(std::errc::invalid_argument, "Failed to initialize sphere setup"));
   }
@@ -151,6 +138,6 @@ auto Renderer::draw(Camera const &camera) -> std::expected<void, Error>
   return {};
 }
 
-void Renderer::wait_idle() const { impl_->init.disp.deviceWaitIdle(); }
+void Renderer::wait_idle() const noexcept { impl_->init.disp.deviceWaitIdle(); }
 
 }// namespace vkgsplat

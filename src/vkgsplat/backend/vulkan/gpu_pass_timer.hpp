@@ -51,7 +51,8 @@ public:
   [[nodiscard]] auto total_ms() const noexcept -> float;
 
 private:
-  [[nodiscard]] static auto query_index(size_t slot, GpuPass pass, bool is_end) -> u32;
+  [[nodiscard]] static auto query_index(size_t slot, GpuPass pass, bool is_end) noexcept -> u32;
+
 
   VkQueryPool pool_ = VK_NULL_HANDLE;
   float timestamp_period_ns_ = 0.0F;

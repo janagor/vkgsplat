@@ -61,6 +61,8 @@ struct Extent2D
 {
   u32 width = 0;
   u32 height = 0;
+
+  [[nodiscard]] constexpr auto operator==(Extent2D const &) const noexcept -> bool = default;
 };
 
 }// namespace vkgsplat

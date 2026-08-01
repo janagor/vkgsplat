@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -37,7 +38,10 @@ namespace {
   template<size_t N> [[nodiscard]] auto MakeIndexedNames(char const *prefix) -> std::array<std::string, N>
   {
     std::array<std::string, N> names{};
-    for (size_t i = 0; i < N; ++i) { names.at(i) = std::string{ prefix } + std::to_string(i); }
+    std::ranges::copy(std::views::iota(size_t{ 0 }, N) | std::views::transform([prefix](size_t index) -> auto {
+      return std::string{ prefix } + std::to_string(index);
+    }),
+      names.begin());
     return names;
   }
 
@@ -45,7 +49,7 @@ namespace {
   [[nodiscard]] auto NamesAsCStrs(std::array<std::string, N> const &names) -> std::array<char const *, N>
   {
     std::array<char const *, N> c_strs{};
-    for (size_t i = 0; i < N; ++i) { c_strs.at(i) = names.at(i).c_str(); }
+    std::ranges::transform(names, c_strs.begin(), [](std::string const &name) -> auto { return name.c_str(); });
     return c_strs;
   }
 

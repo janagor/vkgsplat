@@ -11,7 +11,6 @@
 
 #include <array>
 #include <cstdint>
-#include <memory>
 #include <print>
 #include <string>
 #include <utility>
@@ -52,9 +51,8 @@ auto init_sphere_setup(Init &init, RenderData &data) -> bool
 
   // Host mirrors are uploaded once in Tensor::create; do not re-sync every dispatch.
   uint32_t const workgroup_count = (data.sort_size + 63U) / 64U;
-  auto dispatch_op = std::make_shared<compute::OpAlgoDispatch>(
+  data.compute_sequence.emplace<compute::OpAlgoDispatch>(
     data.sphere_setup_algorithm, std::array<uint32_t, 3>{ workgroup_count, 1U, 1U });
-  data.compute_sequence.record(dispatch_op);
 
   return true;
 }

@@ -3,9 +3,11 @@
 #include "shader.hpp"
 #include "vulkan_context.hpp"
 #include <array>
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <print>
+#include <ranges>
 #include <span>
 #include <string>
 #include <utility>
@@ -38,13 +40,14 @@ auto Algorithm::init(Init &init, std::string const &shader_path, std::span<const
   constexpr size_t kMaxSpecializationConstants = 8;
   std::array<VkSpecializationMapEntry, kMaxSpecializationConstants> specialization_map{};
   if (!specialization_constants.empty()) {
-    for (size_t i = 0; i < specialization_constants.size() && i < specialization_map.size(); ++i) {
-      specialization_map.at(i) = VkSpecializationMapEntry{
-        .constantID = static_cast<uint32_t>(i),
-        .offset = static_cast<uint32_t>(i * sizeof(uint32_t)),
+    auto const count = std::min(specialization_constants.size(), specialization_map.size());
+    std::ranges::for_each(std::views::iota(size_t{ 0 }, count), [&](size_t index) -> void {
+      specialization_map.at(index) = VkSpecializationMapEntry{
+        .constantID = static_cast<uint32_t>(index),
+        .offset = static_cast<uint32_t>(index * sizeof(uint32_t)),
         .size = sizeof(uint32_t),
       };
-    }
+    });
     specialization_info.mapEntryCount = static_cast<uint32_t>(specialization_constants.size());
     specialization_info.pMapEntries = specialization_map.data();
     specialization_info.dataSize = specialization_constants.size_bytes();
@@ -78,11 +81,10 @@ auto Algorithm::init(Init &init, std::string const &shader_path, std::span<const
   return true;
 }
 
-void Algorithm::destroy(Init &init)
+void Algorithm::destroy(Init &init) noexcept
 {
   if (pipeline_ != VK_NULL_HANDLE) {
-    init.disp.destroyPipeline(pipeline_, nullptr);
-    pipeline_ = VK_NULL_HANDLE;
+    init.disp.destroyPipeline(std::exchange(pipeline_, VK_NULL_HANDLE), nullptr);
   }
 }
 

@@ -34,24 +34,23 @@ Swapchain::Swapchain(vkb::Swapchain swapchain, std::reference_wrapper<vkb::Dispa
 {}
 
 Swapchain::Swapchain(Swapchain &&other) noexcept
-  : swapchain_(other.swapchain_), images_(std::move(other.images_)), image_views_(std::move(other.image_views_)),
-    disp_(other.disp_)
-{ other.swapchain_.swapchain = VK_NULL_HANDLE; }
+  : swapchain_(std::exchange(other.swapchain_, {})), images_(std::move(other.images_)),
+    image_views_(std::move(other.image_views_)), disp_(other.disp_)
+{}
 
 auto Swapchain::operator=(Swapchain &&other) noexcept -> Swapchain &
 {
   if (this != &other) {
     cleanup();
-    swapchain_ = other.swapchain_;
+    swapchain_ = std::exchange(other.swapchain_, {});
     images_ = std::move(other.images_);
     image_views_ = std::move(other.image_views_);
     disp_ = other.disp_;
-    other.swapchain_.swapchain = VK_NULL_HANDLE;
   }
   return *this;
 }
 
-Swapchain::~Swapchain() { cleanup(); }
+Swapchain::~Swapchain() noexcept { cleanup(); }
 
 void Swapchain::cleanup() noexcept
 {

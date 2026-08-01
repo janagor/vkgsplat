@@ -29,13 +29,13 @@ public:
 
   Renderer(Renderer &&) noexcept;
   auto operator=(Renderer &&) noexcept -> Renderer &;
-  ~Renderer();
+  ~Renderer() noexcept;
 
   Renderer(Renderer const &) = delete;
   auto operator=(Renderer const &) -> Renderer & = delete;
 
   [[nodiscard]] auto draw(Camera const &camera) -> std::expected<void, Error>;
-  void wait_idle() const;
+  void wait_idle() const noexcept;
 
 private:
   struct Impl;

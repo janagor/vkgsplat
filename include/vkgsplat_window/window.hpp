@@ -26,14 +26,14 @@ public:
 
   Window(Window &&) noexcept;
   auto operator=(Window &&) noexcept -> Window &;
-  ~Window();
+  ~Window() noexcept;
 
   Window(Window const &) = delete;
   auto operator=(Window const &) -> Window & = delete;
 
-  void poll_events() const;
-  [[nodiscard]] auto should_close() const -> bool;
-  [[nodiscard]] auto framebuffer_extent() const -> Extent2D;
+  void poll_events() const noexcept;
+  [[nodiscard]] auto should_close() const noexcept -> bool;
+  [[nodiscard]] auto framebuffer_extent() const noexcept -> Extent2D;
   [[nodiscard]] auto create_surface(VkInstance instance) const -> std::expected<VkSurfaceKHR, Error>;
   [[nodiscard]] auto native_handle() const noexcept -> void *;
 

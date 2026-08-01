@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <type_traits>
 
+#include <vkgsplat_utility/concepts.hpp>
 #include <vkgsplat_utility/types.hpp>
 
 namespace vkgsplat::gs {
@@ -37,7 +38,7 @@ struct GaussianGeometry
 
 static_assert(sizeof(GaussianGeometry) == k_geometry_floats * sizeof(f32));
 static_assert(alignof(GaussianGeometry) == alignof(f32));
-static_assert(std::is_trivially_copyable_v<GaussianGeometry>);
+static_assert(TriviallyCopyable<GaussianGeometry>);
 static_assert(std::is_standard_layout_v<GaussianGeometry>);
 
 // Appearance buffer element: view-dependent color via spherical harmonics.
@@ -50,7 +51,7 @@ struct GaussianAppearance
 
 static_assert(sizeof(GaussianAppearance) == k_appearance_floats * sizeof(f32));
 static_assert(alignof(GaussianAppearance) == alignof(f32));
-static_assert(std::is_trivially_copyable_v<GaussianAppearance>);
+static_assert(TriviallyCopyable<GaussianAppearance>);
 static_assert(std::is_standard_layout_v<GaussianAppearance>);
 
 // Full per-splat record (CPU-side convenience; GPU keeps geometry/appearance split).
@@ -61,7 +62,7 @@ struct GaussianSplat
 };
 
 static_assert(sizeof(GaussianSplat) == sizeof(GaussianGeometry) + sizeof(GaussianAppearance));
-static_assert(std::is_trivially_copyable_v<GaussianSplat>);
+static_assert(TriviallyCopyable<GaussianSplat>);
 static_assert(std::is_standard_layout_v<GaussianSplat>);
 
 // Stage 1 projection output (AoS). radius == 0 marks a culled splat.
@@ -80,7 +81,7 @@ struct GaussianProjected
 
 static_assert(sizeof(GaussianProjected) == k_projected_floats * sizeof(f32));
 static_assert(alignof(GaussianProjected) == alignof(f32));
-static_assert(std::is_trivially_copyable_v<GaussianProjected>);
+static_assert(TriviallyCopyable<GaussianProjected>);
 static_assert(std::is_standard_layout_v<GaussianProjected>);
 
 // Stage 2 tile binning.
@@ -97,7 +98,7 @@ struct BinningKey
 };
 
 static_assert(sizeof(BinningKey) == 8U);
-static_assert(std::is_trivially_copyable_v<BinningKey>);
+static_assert(TriviallyCopyable<BinningKey>);
 static_assert(std::is_standard_layout_v<BinningKey>);
 
 // Stage 3: per-tile start/end into the sorted instance list.
@@ -108,7 +109,7 @@ struct TileRange
 };
 
 static_assert(sizeof(TileRange) == 8U);
-static_assert(std::is_trivially_copyable_v<TileRange>);
+static_assert(TriviallyCopyable<TileRange>);
 static_assert(std::is_standard_layout_v<TileRange>);
 
 // Max tile grid supported for tile_ranges allocation (16px tiles → up to 4096² viewport).

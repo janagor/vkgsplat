@@ -1,16 +1,28 @@
+#include <string>
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan.h>// NOLINT
 #include <vulkan/vulkan_core.h>
 
 #include <backend/vulkan/gpu_allocator.hpp>
 #include <backend/vulkan/initializers.hpp>
+#include <vkgsplat_utility/error.hpp>
 
 #include <cstddef>
 #include <expected>
 #include <span>
+#include <system_error>
 #include <utility>
 
 namespace vkgsplat::vulkan {
+
+namespace {
+
+  [[nodiscard]] auto MakeAllocatorError(std::string message) -> Error
+  {
+    return make_error(std::errc::io_error, std::move(message));
+  }
+
+}// namespace
 
 GPUAllocator::~GPUAllocator() noexcept
 {
@@ -18,29 +30,31 @@ GPUAllocator::~GPUAllocator() noexcept
 }
 
 GPUAllocator::GPUAllocator(GPUAllocator &&other) noexcept
-  : allocator_(std::exchange(other.allocator_, VK_NULL_HANDLE)), device_(other.device_),
-    get_buffer_device_address_(other.get_buffer_device_address_)
+  : allocator_(std::exchange(other.allocator_, VK_NULL_HANDLE)),
+    device_(std::exchange(other.device_, VK_NULL_HANDLE)),
+    get_buffer_device_address_(std::exchange(other.get_buffer_device_address_, nullptr))
 {}
 
 auto GPUAllocator::operator=(GPUAllocator &&other) noexcept -> GPUAllocator &
 {
   if (this != &other) {
-    if (allocator_ != VK_NULL_HANDLE) { vmaDestroyAllocator(allocator_); }
+    if (allocator_ != VK_NULL_HANDLE) { vmaDestroyAllocator(std::exchange(allocator_, VK_NULL_HANDLE)); }
     allocator_ = std::exchange(other.allocator_, VK_NULL_HANDLE);
-    device_ = other.device_;
-    get_buffer_device_address_ = other.get_buffer_device_address_;
+    device_ = std::exchange(other.device_, VK_NULL_HANDLE);
+    get_buffer_device_address_ = std::exchange(other.get_buffer_device_address_, nullptr);
   }
   return *this;
 }
 
-// TODO: janagor - add correct error
 auto GPUAllocator::create(VkInstance instance, VkDevice device, VkPhysicalDevice physical_device) noexcept
-  -> std::expected<GPUAllocator, void *>
+  -> std::expected<GPUAllocator, Error>
 {
   // NOLINTBEGIN(cppcoreguidelines-pro-type-reinterpret-cast)
   auto const get_buffer_device_address_fn =
     reinterpret_cast<PFN_vkGetBufferDeviceAddress>(vkGetDeviceProcAddr(device, "vkGetBufferDeviceAddress"));
-  if (get_buffer_device_address_fn == nullptr) { return std::unexpected(nullptr); }
+  if (get_buffer_device_address_fn == nullptr) {
+    return std::unexpected(MakeAllocatorError("vkGetBufferDeviceAddress unavailable"));
+  }
   // NOLINTEND(cppcoreguidelines-pro-type-reinterpret-cast)
 
   VmaAllocatorCreateInfo info = {};
@@ -53,7 +67,7 @@ auto GPUAllocator::create(VkInstance instance, VkDevice device, VkPhysicalDevice
   VmaAllocator allocator = nullptr;
   VkResult const result = vmaCreateAllocator(&info, &allocator);
 
-  if (result != VK_SUCCESS) { return std::unexpected(nullptr); }
+  if (result != VK_SUCCESS) { return std::unexpected(MakeAllocatorError("Failed to create VMA allocator")); }
 
   return GPUAllocator{ allocator, device, get_buffer_device_address_fn };
 }
@@ -65,7 +79,7 @@ GPUAllocator::GPUAllocator(VmaAllocator allocator,
   : allocator_{ allocator }, device_{ device }, get_buffer_device_address_{ get_buffer_device_address }
 {}
 
-auto GPUAllocator::create_storage_buffer(VkDeviceSize size) noexcept -> std::expected<Buffer, void *>
+auto GPUAllocator::create_storage_buffer(VkDeviceSize size) noexcept -> std::expected<Buffer, Error>
 {
   // NOLINTBEGIN(hicpp-signed-bitwise)
   auto const buffer_info = initializers::BufferCreateInfo(size,
@@ -82,13 +96,13 @@ auto GPUAllocator::create_storage_buffer(VkDeviceSize size) noexcept -> std::exp
   Buffer buffer{ .size = size };
   if (vmaCreateBuffer(allocator_, &buffer_info, &alloc_info, &buffer.handle, &buffer.allocation, nullptr)
       != VK_SUCCESS) {
-    return std::unexpected(nullptr);
+    return std::unexpected(MakeAllocatorError("Failed to create storage buffer"));
   }
 
   return buffer;
 }
 
-auto GPUAllocator::create_device_storage_buffer(VkDeviceSize size) noexcept -> std::expected<Buffer, void *>
+auto GPUAllocator::create_device_storage_buffer(VkDeviceSize size) noexcept -> std::expected<Buffer, Error>
 {
   // NOLINTBEGIN(hicpp-signed-bitwise)
   auto const buffer_info = initializers::BufferCreateInfo(size,
@@ -103,13 +117,13 @@ auto GPUAllocator::create_device_storage_buffer(VkDeviceSize size) noexcept -> s
   Buffer buffer{ .size = size };
   if (vmaCreateBuffer(allocator_, &buffer_info, &alloc_info, &buffer.handle, &buffer.allocation, nullptr)
       != VK_SUCCESS) {
-    return std::unexpected(nullptr);
+    return std::unexpected(MakeAllocatorError("Failed to create device storage buffer"));
   }
 
   return buffer;
 }
 
-auto GPUAllocator::create_heap_buffer(VkDeviceSize size) noexcept -> std::expected<Buffer, void *>
+auto GPUAllocator::create_heap_buffer(VkDeviceSize size) noexcept -> std::expected<Buffer, Error>
 {
   auto const buffer_info = initializers::BufferCreateInfo(
     size, VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
@@ -133,7 +147,7 @@ auto GPUAllocator::create_heap_buffer(VkDeviceSize size) noexcept -> std::expect
   if (vmaCreateBufferWithAlignment(
         allocator_, &buffer_info, &alloc_info, kHeapDeviceAddressAlignment, &buffer.handle, &buffer.allocation, nullptr)
       != VK_SUCCESS) {
-    return std::unexpected(nullptr);
+    return std::unexpected(MakeAllocatorError("Failed to create descriptor heap buffer"));
   }
 
   return buffer;
@@ -157,10 +171,12 @@ void GPUAllocator::destroy_buffer(Buffer &buffer) noexcept
   }
 }
 
-auto GPUAllocator::map_buffer(Buffer const &buffer) noexcept -> std::expected<std::span<std::byte>, void *>
+auto GPUAllocator::map_buffer(Buffer const &buffer) noexcept -> std::expected<std::span<std::byte>, Error>
 {
   void *data = nullptr;
-  if (vmaMapMemory(allocator_, buffer.allocation, &data) != VK_SUCCESS) { return std::unexpected(nullptr); }
+  if (vmaMapMemory(allocator_, buffer.allocation, &data) != VK_SUCCESS) {
+    return std::unexpected(MakeAllocatorError("Failed to map buffer"));
+  }
   return std::span<std::byte>(static_cast<std::byte *>(data), buffer.size);
 }
 

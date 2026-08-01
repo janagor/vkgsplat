@@ -59,14 +59,14 @@ public:
     update_camera_vectors();
   }
 
-  [[nodiscard]] auto view_matrix() const -> glm::mat4
+  [[nodiscard]] auto view_matrix() const noexcept -> glm::mat4
   {
     auto const rotate = glm::mat4_cast(glm::conjugate(orientation_));
     auto const translate = glm::translate(glm::dmat4(1.0), -position_);
     return rotate * translate;
   }
 
-  [[nodiscard]] auto projection_matrix(f64 aspect_ratio) const -> glm::mat4
+  [[nodiscard]] auto projection_matrix(f64 aspect_ratio) const noexcept -> glm::mat4
   {
     auto proj =
       glm::perspective(glm::radians(static_cast<float>(zoom_)), static_cast<float>(aspect_ratio), 0.1F, 100.0F);

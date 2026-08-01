@@ -42,11 +42,10 @@ Window::Window(beman::indirect::indirect<Impl> impl) : impl_(std::move(impl)) {}
 Window::Window(Window &&) noexcept = default;
 auto Window::operator=(Window &&) noexcept -> Window & = default;
 
-Window::~Window()
+Window::~Window() noexcept
 {
   if (impl_.valueless_after_move() || impl_->handle == nullptr) { return; }
-  glfwDestroyWindow(impl_->handle);
-  impl_->handle = nullptr;
+  glfwDestroyWindow(std::exchange(impl_->handle, nullptr));
   glfwTerminate();
 }
 
@@ -69,15 +68,15 @@ auto Window::create(WindowConfig const &config) -> std::expected<Window, Error>
   return Window{ std::move(impl) };
 }
 
-void Window::poll_events() const
+void Window::poll_events() const noexcept
 {
   (void)impl_;
   glfwPollEvents();
 }
 
-auto Window::should_close() const -> bool { return glfwWindowShouldClose(impl_->handle) != 0; }
+auto Window::should_close() const noexcept -> bool { return glfwWindowShouldClose(impl_->handle) != 0; }
 
-auto Window::framebuffer_extent() const -> Extent2D
+auto Window::framebuffer_extent() const noexcept -> Extent2D
 {
   int width = 0;
   int height = 0;

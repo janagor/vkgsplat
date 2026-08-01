@@ -3,9 +3,10 @@
 #include "compute/operation.hpp"
 #include "compute/tensor.hpp"
 
+#include <vkgsplat_utility/concepts.hpp>
+
 #include <functional>
 #include <print>
-#include <type_traits>
 #include <vector>
 
 namespace vkgsplat::compute {
@@ -13,8 +14,7 @@ namespace vkgsplat::compute {
 class OpTensorSyncLocal : public Operation
 {
 public:
-  template<typename T>
-    requires std::is_trivially_copyable_v<T>
+  template<TriviallyCopyable T>
   void add(Tensor<T> &tensor)
   {
     syncs_.emplace_back([&tensor](Init &init) { return tensor.sync_from_device(init); });

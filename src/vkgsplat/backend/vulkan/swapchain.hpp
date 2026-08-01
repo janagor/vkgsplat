@@ -17,7 +17,7 @@ class Swapchain
 {
 public:
   Swapchain() = delete;
-  ~Swapchain();
+  ~Swapchain() noexcept;
 
   Swapchain(Swapchain const &) = delete;
   auto operator=(Swapchain const &) -> Swapchain & = delete;

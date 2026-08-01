@@ -17,9 +17,6 @@
 
 namespace vkgsplat {
 
-auto align_up(VkDeviceSize value, VkDeviceSize alignment) -> VkDeviceSize
-{ return (value + alignment - 1) / alignment * alignment; }
-
 auto write_storage_buffer_descriptor(Init &init,
   VkDeviceAddress buffer_address,
   VkDeviceSize buffer_size,

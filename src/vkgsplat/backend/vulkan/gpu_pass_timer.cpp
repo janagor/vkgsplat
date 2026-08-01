@@ -3,10 +3,12 @@
 #include "app_state.hpp"
 #include "vulkan_context.hpp"
 
+#include <algorithm>
 #include <vkgsplat_utility/types.hpp>
 
 #include <array>
 #include <cstddef>
+#include <functional>
 #include <utility>
 
 #include <vulkan/vulkan_core.h>
@@ -57,7 +59,7 @@ auto GpuPassTimer::operator=(GpuPassTimer &&other) noexcept -> GpuPassTimer &
   return *this;
 }
 
-auto GpuPassTimer::query_index(size_t slot, GpuPass pass, bool is_end) -> u32
+auto GpuPassTimer::query_index(size_t slot, GpuPass pass, bool is_end) noexcept -> u32
 { return (static_cast<u32>(slot) * kQueriesPerSlot) + (static_cast<u32>(pass) * 2U) + (is_end ? 1U : 0U); }
 
 auto GpuPassTimer::create(Init &init) -> bool
@@ -150,10 +152,7 @@ void GpuPassTimer::resolve(Init const &init, size_t slot)
 
 auto GpuPassTimer::total_ms() const noexcept -> float
 {
-  float total = 0.0F;
-  // NOLINTNEXTLINE(modernize-loop-convert,cppcoreguidelines-narrowing-conversions)
-  for (size_t index = 0; index < last_ms_.size(); ++index) { total += last_ms_.at(index); }
-  return total;
+  return std::ranges::fold_left(last_ms_, 0.0F, std::plus<>{});
 }
 
 }// namespace vkgsplat
