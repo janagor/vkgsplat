@@ -14,8 +14,7 @@
 
 namespace vkgsplat::compute {
 
-template<TriviallyCopyable T>
-class Tensor
+template<TriviallyCopyable T> class Tensor
 {
 public:
   Tensor() = default;
@@ -36,9 +35,7 @@ public:
   [[nodiscard]] auto host_data() noexcept -> std::vector<T> & { return host_data_; }
   [[nodiscard]] auto size() const noexcept -> size_t { return host_data_.size(); }
   [[nodiscard]] auto byte_size() const noexcept -> VkDeviceSize
-  {
-    return static_cast<VkDeviceSize>(host_data_.size() * sizeof(T));
-  }
+  { return static_cast<VkDeviceSize>(host_data_.size() * sizeof(T)); }
 
   [[nodiscard]] auto sync_to_device(Init &init) const noexcept -> bool;
   [[nodiscard]] auto sync_from_device(Init &init) noexcept -> bool;
@@ -50,15 +47,11 @@ private:
 
 template<TriviallyCopyable T>
 [[nodiscard]] auto tensor(Init &init, std::initializer_list<T> values) -> std::expected<Tensor<T>, Error>
-{
-  return Tensor<T>::create(init, std::vector<T>{ values });
-}
+{ return Tensor<T>::create(init, std::vector<T>{ values }); }
 
 template<TriviallyCopyable T>
 [[nodiscard]] auto tensor(Init &init, size_t count, T fill = {}) -> std::expected<Tensor<T>, Error>
-{
-  return Tensor<T>::create(init, count, fill);
-}
+{ return Tensor<T>::create(init, count, fill); }
 
 }// namespace vkgsplat::compute
 

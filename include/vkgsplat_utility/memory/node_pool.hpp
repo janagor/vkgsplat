@@ -6,8 +6,7 @@
 
 namespace vkgsplat {
 
-template<typename ValueTp, typename AllocatorTp = std::allocator<ValueTp>>
-class NodePool
+template<typename ValueTp, typename AllocatorTp = std::allocator<ValueTp>> class NodePool
 {
 public:
   struct Node

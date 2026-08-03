@@ -18,9 +18,7 @@ namespace vkgsplat::vulkan {
 namespace {
 
   [[nodiscard]] auto MakeAllocatorError(std::string message) -> Error
-  {
-    return make_error(std::errc::io_error, std::move(message));
-  }
+  { return make_error(std::errc::io_error, std::move(message)); }
 
 }// namespace
 
@@ -30,8 +28,7 @@ GPUAllocator::~GPUAllocator() noexcept
 }
 
 GPUAllocator::GPUAllocator(GPUAllocator &&other) noexcept
-  : allocator_(std::exchange(other.allocator_, VK_NULL_HANDLE)),
-    device_(std::exchange(other.device_, VK_NULL_HANDLE)),
+  : allocator_(std::exchange(other.allocator_, VK_NULL_HANDLE)), device_(std::exchange(other.device_, VK_NULL_HANDLE)),
     get_buffer_device_address_(std::exchange(other.get_buffer_device_address_, nullptr))
 {}
 

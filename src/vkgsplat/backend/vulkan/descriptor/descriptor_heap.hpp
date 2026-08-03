@@ -29,9 +29,7 @@ enum class HeapSlot : size_t {
 inline constexpr size_t k_heap_descriptor_count = 12;
 
 [[nodiscard]] constexpr auto align_up(VkDeviceSize value, VkDeviceSize alignment) noexcept -> VkDeviceSize
-{
-  return (value + alignment - 1) / alignment * alignment;
-}
+{ return (value + alignment - 1) / alignment * alignment; }
 
 [[nodiscard]] auto write_storage_buffer_descriptor(Init &init,
   VkDeviceAddress buffer_address,

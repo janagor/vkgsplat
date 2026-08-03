@@ -37,8 +37,7 @@ auto PresentableSwapchain::extent() const noexcept -> Extent2D
 
 auto PresentableSwapchain::image_count() const noexcept -> u32 { return swapchain_->image_count(); }
 
-auto PresentableSwapchain::recreate(Extent2D extent) -> std::expected<void, Error>
-{ return recreate(device_, extent); }
+auto PresentableSwapchain::recreate(Extent2D extent) -> std::expected<void, Error> { return recreate(device_, extent); }
 
 auto PresentableSwapchain::recreate(vkb::Device const &device, Extent2D extent) -> std::expected<void, Error>
 { return swapchain_->recreate(device, extent); }

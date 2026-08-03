@@ -2,8 +2,8 @@
 #include "backend/vulkan/initializers.hpp"
 #include "shader.hpp"
 #include "vulkan_context.hpp"
-#include <array>
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <print>
@@ -83,9 +83,7 @@ auto Algorithm::init(Init &init, std::string const &shader_path, std::span<const
 
 void Algorithm::destroy(Init &init) noexcept
 {
-  if (pipeline_ != VK_NULL_HANDLE) {
-    init.disp.destroyPipeline(std::exchange(pipeline_, VK_NULL_HANDLE), nullptr);
-  }
+  if (pipeline_ != VK_NULL_HANDLE) { init.disp.destroyPipeline(std::exchange(pipeline_, VK_NULL_HANDLE), nullptr); }
 }
 
 }// namespace vkgsplat::compute

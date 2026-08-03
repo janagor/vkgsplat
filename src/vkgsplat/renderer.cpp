@@ -19,17 +19,17 @@
 #include "backend/vulkan/app_state.hpp"
 #include "backend/vulkan/depth_buffer.hpp"
 #include "backend/vulkan/graphics_pipeline.hpp"
+#include "backend/vulkan/gs/binning.hpp"
+#include "backend/vulkan/gs/pipeline.hpp"
+#include "backend/vulkan/gs/projection.hpp"
+#include "backend/vulkan/gs/rasterization.hpp"
+#include "backend/vulkan/gs/sorting.hpp"
 #include "backend/vulkan/imgui_overlay.hpp"
 #include "backend/vulkan/mesh_gpu.hpp"
 #include "backend/vulkan/renderer.hpp"
 #include "backend/vulkan/sphere_setup.hpp"
 #include "backend/vulkan/vulkan_context.hpp"
 #include "backend/vulkan/vulkan_driver.hpp"
-#include "backend/vulkan/gs/binning.hpp"
-#include "backend/vulkan/gs/pipeline.hpp"
-#include "backend/vulkan/gs/projection.hpp"
-#include "backend/vulkan/gs/rasterization.hpp"
-#include "backend/vulkan/gs/sorting.hpp"
 #include "io/ply/load_splats.hpp"
 
 namespace vkgsplat {
@@ -136,7 +136,7 @@ auto Renderer::create(RendererConfig const &config, Platform &platform) -> std::
   impl->engine = impl->owned_engine.get();
 
   if (auto built = BuildRendererResources(AsVulkanDriver(impl->engine->driver()).init(), impl->render_data, config);
-      !built) {
+    !built) {
     return std::unexpected(built.error());
   }
 

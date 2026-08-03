@@ -36,9 +36,7 @@ public:
   [[nodiscard]] auto vk_extent() const noexcept -> VkExtent2D const & { return swapchain_->extent(); }
   [[nodiscard]] auto images() const noexcept -> std::vector<VkImage> const & { return swapchain_->images(); }
   [[nodiscard]] auto image_views() const noexcept -> std::vector<VkImageView> const &
-  {
-    return swapchain_->image_views();
-  }
+  { return swapchain_->image_views(); }
 
 private:
   PresentableSwapchain(std::unique_ptr<SwapchainResource> swapchain, vkb::Device device) noexcept;

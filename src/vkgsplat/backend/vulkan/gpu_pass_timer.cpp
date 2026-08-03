@@ -150,9 +150,6 @@ void GpuPassTimer::resolve(Init const &init, size_t slot)
   }
 }
 
-auto GpuPassTimer::total_ms() const noexcept -> float
-{
-  return std::ranges::fold_left(last_ms_, 0.0F, std::plus<>{});
-}
+auto GpuPassTimer::total_ms() const noexcept -> float { return std::ranges::fold_left(last_ms_, 0.0F, std::plus<>{}); }
 
 }// namespace vkgsplat

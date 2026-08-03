@@ -14,8 +14,7 @@ namespace vkgsplat::compute {
 class OpTensorSyncLocal : public Operation
 {
 public:
-  template<TriviallyCopyable T>
-  void add(Tensor<T> &tensor)
+  template<TriviallyCopyable T> void add(Tensor<T> &tensor)
   {
     syncs_.emplace_back([&tensor](Init &init) { return tensor.sync_from_device(init); });
   }

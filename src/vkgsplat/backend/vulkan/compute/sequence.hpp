@@ -18,8 +18,7 @@ struct RenderData;
 
 namespace compute {
 
-  template<typename AllocatorTp = std::allocator<std::unique_ptr<Operation>>>
-  class BasicSequence
+  template<typename AllocatorTp = std::allocator<std::unique_ptr<Operation>>> class BasicSequence
   {
   public:
     using allocator_type = AllocatorTp;
@@ -69,9 +68,7 @@ namespace compute {
     template<typename OpTp, typename... Args>
       requires std::derived_from<OpTp, Operation> && std::constructible_from<OpTp, Args...>
     auto emplace(Args &&...args) -> BasicSequence &
-    {
-      return record(std::make_unique<OpTp>(std::forward<Args>(args)...));
-    }
+    { return record(std::make_unique<OpTp>(std::forward<Args>(args)...)); }
 
     void eval(Init &init, RenderData const &data, VkCommandBuffer cmd) const
     {

@@ -7,9 +7,7 @@ add_library(vkgsplat::vkgsplat_window ALIAS vkgsplat_window)
 target_link_libraries(
   vkgsplat_window
   PRIVATE vkgsplat::vkgsplat_options vkgsplat::vkgsplat_warnings
-  PUBLIC vkgsplat::vkgsplat_utility
-         glfw::glfw
-         beman::indirect)
+  PUBLIC vkgsplat::vkgsplat_utility glfw::glfw beman::indirect)
 
 target_compile_features(vkgsplat_window PUBLIC cxx_std_${CMAKE_CXX_STANDARD})
 
