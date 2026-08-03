@@ -68,8 +68,8 @@ struct ImGuiOverlayState
   VkFormat color_format{ VK_FORMAT_UNDEFINED };
 
   // Rebuild ImGui draw data infrequently; reuse per-frame secondary CBs between updates.
-  std::array<VkCommandBuffer, k_max_frames_in_flight> overlay_secondaries{};
-  std::array<uint64_t, k_max_frames_in_flight> secondary_generation{};
+  std::array<VkCommandBuffer, kMaxFramesInFlight> overlay_secondaries{};
+  std::array<uint64_t, kMaxFramesInFlight> secondary_generation{};
   uint64_t ui_generation = 1;
   std::array<char, kFpsLabelCapacity> fps_label{ "FPS: --" };
   std::array<char, kGpuLabelCapacity> gpu_label{};
@@ -251,10 +251,10 @@ namespace {
     if (data.imgui == nullptr || !data.command_pool) { return false; }
 
     auto buffers =
-      data.command_pool->allocate_buffers(static_cast<u32>(k_max_frames_in_flight), VK_COMMAND_BUFFER_LEVEL_SECONDARY);
+      data.command_pool->allocate_buffers(static_cast<u32>(kMaxFramesInFlight), VK_COMMAND_BUFFER_LEVEL_SECONDARY);
     if (!buffers) { return false; }
 
-    for (size_t i = 0; i < k_max_frames_in_flight; ++i) {
+    for (size_t i = 0; i < kMaxFramesInFlight; ++i) {
       data.imgui->overlay_secondaries.at(i) = buffers->at(i).handle();
       data.imgui->secondary_generation.at(i) = 0;
     }
@@ -363,7 +363,7 @@ RenderData::~RenderData() = default;
 RenderData::RenderData(RenderData &&) noexcept = default;
 auto RenderData::operator=(RenderData &&) noexcept -> RenderData & = default;
 
-void update_imgui_gpu_timings(RenderData &data)
+void UpdateImguiGpuTimings(RenderData &data)
 {
   if (data.imgui == nullptr || !data.gpu_pass_timer.enabled()) { return; }
 
@@ -379,24 +379,24 @@ void update_imgui_gpu_timings(RenderData &data)
     data.imgui->gpu_label.size(),
     "GPU: %.2f ms\n  %s %.2f  %s %.2f  %s %.2f\n  %s %.2f  %s %.2f",
     static_cast<double>(data.gpu_pass_timer.total_ms()),
-    gpu_pass_name(GpuPass::Projection),
-    static_cast<double>(pass_ms.at(static_cast<size_t>(GpuPass::Projection))),
-    gpu_pass_name(GpuPass::Binning),
-    static_cast<double>(pass_ms.at(static_cast<size_t>(GpuPass::Binning))),
-    gpu_pass_name(GpuPass::PrepareSort),
-    static_cast<double>(pass_ms.at(static_cast<size_t>(GpuPass::PrepareSort))),
-    gpu_pass_name(GpuPass::RadixSort),
-    static_cast<double>(pass_ms.at(static_cast<size_t>(GpuPass::RadixSort))),
-    gpu_pass_name(GpuPass::Rasterize),
-    static_cast<double>(pass_ms.at(static_cast<size_t>(GpuPass::Rasterize))));
+    GpuPassName(GpuPass::kProjection),
+    static_cast<double>(pass_ms.at(static_cast<size_t>(GpuPass::kProjection))),
+    GpuPassName(GpuPass::kBinning),
+    static_cast<double>(pass_ms.at(static_cast<size_t>(GpuPass::kBinning))),
+    GpuPassName(GpuPass::kPrepareSort),
+    static_cast<double>(pass_ms.at(static_cast<size_t>(GpuPass::kPrepareSort))),
+    GpuPassName(GpuPass::kRadixSort),
+    static_cast<double>(pass_ms.at(static_cast<size_t>(GpuPass::kRadixSort))),
+    GpuPassName(GpuPass::kRasterize),
+    static_cast<double>(pass_ms.at(static_cast<size_t>(GpuPass::kRasterize))));
   ++data.imgui->ui_generation;
   data.imgui->secondary_generation.fill(0);
 }
 
-auto init_imgui_overlay(Init &init, RenderData &data) -> std::expected<void, Error>
+auto InitImguiOverlay(Init &init, RenderData &data) -> std::expected<void, Error>
 {
   if (!LoadImguiVulkanFunctions(init)) {
-    return std::unexpected{ make_error(std::errc::function_not_supported, "failed to load ImGui Vulkan functions") };
+    return std::unexpected{ MakeError(std::errc::function_not_supported, "failed to load ImGui Vulkan functions") };
   }
 
   auto overlay = std::make_unique<ImGuiOverlayState>();
@@ -423,26 +423,26 @@ auto init_imgui_overlay(Init &init, RenderData &data) -> std::expected<void, Err
 
   auto resource_heap = init.gpu_allocator.create_heap_buffer(resource_size);
   if (!resource_heap) {
-    return std::unexpected{ make_error(std::errc::not_enough_memory, "failed to create ImGui resource heap") };
+    return std::unexpected{ MakeError(std::errc::not_enough_memory, "failed to create ImGui resource heap") };
   }
   auto sampler_heap = init.gpu_allocator.create_heap_buffer(sampler_size);
   if (!sampler_heap) {
     init.gpu_allocator.destroy_buffer(*resource_heap);
-    return std::unexpected{ make_error(std::errc::not_enough_memory, "failed to create ImGui sampler heap") };
+    return std::unexpected{ MakeError(std::errc::not_enough_memory, "failed to create ImGui sampler heap") };
   }
 
   auto resource_mapped = init.gpu_allocator.map_buffer(*resource_heap);
   if (!resource_mapped) {
     init.gpu_allocator.destroy_buffer(*sampler_heap);
     init.gpu_allocator.destroy_buffer(*resource_heap);
-    return std::unexpected{ make_error(std::errc::io_error, "failed to map ImGui resource heap") };
+    return std::unexpected{ MakeError(std::errc::io_error, "failed to map ImGui resource heap") };
   }
   auto sampler_mapped = init.gpu_allocator.map_buffer(*sampler_heap);
   if (!sampler_mapped) {
     init.gpu_allocator.unmap_buffer(*resource_heap);
     init.gpu_allocator.destroy_buffer(*sampler_heap);
     init.gpu_allocator.destroy_buffer(*resource_heap);
-    return std::unexpected{ make_error(std::errc::io_error, "failed to map ImGui sampler heap") };
+    return std::unexpected{ MakeError(std::errc::io_error, "failed to map ImGui sampler heap") };
   }
 
   overlay->resource_heap = *resource_heap;
@@ -498,7 +498,7 @@ auto init_imgui_overlay(Init &init, RenderData &data) -> std::expected<void, Err
   if (!ImGui_ImplGlfw_InitForVulkan(glfw_window, true)) {
     DestroyImguiHeaps(init, *overlay);
     ImGui::DestroyContext();
-    return std::unexpected{ make_error(std::errc::io_error, "failed to initialize ImGui GLFW backend") };
+    return std::unexpected{ MakeError(std::errc::io_error, "failed to initialize ImGui GLFW backend") };
   }
 
   FillPipelineRenderingInfo(init, *overlay);
@@ -522,21 +522,21 @@ auto init_imgui_overlay(Init &init, RenderData &data) -> std::expected<void, Err
     ImGui_ImplGlfw_Shutdown();
     DestroyImguiHeaps(init, *overlay);
     ImGui::DestroyContext();
-    return std::unexpected{ make_error(std::errc::io_error, "failed to initialize ImGui Vulkan backend") };
+    return std::unexpected{ MakeError(std::errc::io_error, "failed to initialize ImGui Vulkan backend") };
   }
 
   overlay->initialized = true;
   data.imgui = std::move(overlay);
 
   if (!AllocateOverlaySecondaries(data)) {
-    shutdown_imgui_overlay(init, data);
-    return std::unexpected{ make_error(std::errc::io_error, "failed to allocate ImGui overlay command buffers") };
+    ShutdownImguiOverlay(init, data);
+    return std::unexpected{ MakeError(std::errc::io_error, "failed to allocate ImGui overlay command buffers") };
   }
 
   return {};
 }
 
-void shutdown_imgui_overlay(Init &init, RenderData &data)
+void ShutdownImguiOverlay(Init &init, RenderData &data)
 {
   if (data.imgui == nullptr) { return; }
 
@@ -551,7 +551,7 @@ void shutdown_imgui_overlay(Init &init, RenderData &data)
   data.imgui.reset();
 }
 
-void recreate_imgui_overlay_pipeline(Init &init, RenderData &data)
+void RecreateImguiOverlayPipeline(Init &init, RenderData &data)
 {
   if (data.imgui == nullptr || !data.imgui->initialized) { return; }
 
@@ -571,7 +571,7 @@ void recreate_imgui_overlay_pipeline(Init &init, RenderData &data)
   data.imgui->last_extent = {};
 }
 
-void record_imgui_overlay(Init &init, RenderData const &data, VkCommandBuffer command_buffer, size_t image_index)
+void RecordImguiOverlay(Init &init, RenderData const &data, VkCommandBuffer command_buffer, size_t image_index)
 {
   VkImage swapchain_image = init.swapchain->images().at(image_index);
   VkImageSubresourceRange const color_range = {

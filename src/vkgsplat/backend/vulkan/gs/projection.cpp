@@ -16,7 +16,7 @@
 
 namespace vkgsplat::gs {
 
-auto init_projection(Init &init, RenderData &data) -> bool
+auto InitProjection(Init &init, RenderData &data) -> bool
 {
   if (data.splat_count == 0) {
     std::println("Project gaussians requires non-zero splat_count!");
@@ -28,7 +28,7 @@ auto init_projection(Init &init, RenderData &data) -> bool
   return data.project_algorithm.init(init, shader_path, std::span{ specialization_constants });
 }
 
-void dispatch_projection(Init const &init,
+void DispatchProjection(Init const &init,
   RenderData const &data,
   ProjectPushConstants const &push_constants,
   VkCommandBuffer command_buffer)
@@ -64,6 +64,6 @@ void dispatch_projection(Init const &init,
     nullptr);
 }
 
-void destroy_projection(Init &init, RenderData &data) { data.project_algorithm.destroy(init); }
+void DestroyProjection(Init &init, RenderData &data) { data.project_algorithm.destroy(init); }
 
 }// namespace vkgsplat::gs

@@ -28,7 +28,7 @@ auto Tensor<T>::create(Init &init, std::vector<T> data) -> std::expected<Tensor,
 
   if (!result.sync_to_device(init)) {
     init.gpu_allocator.destroy_buffer(result.buffer_);
-    return std::unexpected(make_error(std::errc::io_error, "Failed to sync tensor to device"));
+    return std::unexpected(MakeError(std::errc::io_error, "Failed to sync tensor to device"));
   }
 
   return result;

@@ -13,7 +13,7 @@
 
 namespace vkgsplat {
 
-void destroy_sphere_buffers(Init &init, RenderData &data)
+void DestroySphereBuffers(Init &init, RenderData &data)
 {
   init.gpu_allocator.destroy_buffer(data.geometry_buffer);
   init.gpu_allocator.destroy_buffer(data.appearance_buffer);
@@ -23,9 +23,9 @@ void destroy_sphere_buffers(Init &init, RenderData &data)
   data.projected_buffer = {};
 }
 
-auto create_sphere_buffers(Init &init, RenderData &data, SplatCpuData const &cpu_data) -> bool
+auto CreateSphereBuffers(Init &init, RenderData &data, SplatCpuData const &cpu_data) -> bool
 {
-  destroy_sphere_buffers(init, data);
+  DestroySphereBuffers(init, data);
 
   if (cpu_data.geometries.size() != cpu_data.appearances.size() || cpu_data.geometries.empty()) {
     std::println("Invalid splat CPU data!");

@@ -23,13 +23,13 @@ namespace vkgsplat {
 
 using CameraMovement = ViewMovement;
 
-constexpr f64 k_camera_speed = 2.5;
-constexpr f64 k_camera_sensitivity = 0.1;
-constexpr f64 k_camera_default_zoom = 45.0;
-constexpr f64 k_camera_min_zoom = 1.0;
-constexpr f64 k_camera_max_zoom = 45.0;
+constexpr f64 kCameraSpeed = 2.5;
+constexpr f64 kCameraSensitivity = 0.1;
+constexpr f64 kCameraDefaultZoom = 45.0;
+constexpr f64 kCameraMinZoom = 1.0;
+constexpr f64 kCameraMaxZoom = 45.0;
 
-inline constexpr glm::dvec3 k_default_camera_position{ 0.0, 1.5, 10.0 };
+inline constexpr glm::dvec3 kDefaultCameraPosition{ 0.0, 1.5, 10.0 };
 
 struct CameraPushConstants
 {
@@ -78,20 +78,20 @@ public:
   {
     auto const velocity = movement_speed_ * delta_time;
 
-    if (direction == ViewMovement::Forward) { position_ += front_ * velocity; }
-    if (direction == ViewMovement::Backward) { position_ -= front_ * velocity; }
-    if (direction == ViewMovement::Left) { position_ -= right_ * velocity; }
-    if (direction == ViewMovement::Right) { position_ += right_ * velocity; }
-    if (direction == ViewMovement::Up) { position_ += up_ * velocity; }
-    if (direction == ViewMovement::Down) { position_ -= up_ * velocity; }
+    if (direction == ViewMovement::kForward) { position_ += front_ * velocity; }
+    if (direction == ViewMovement::kBackward) { position_ -= front_ * velocity; }
+    if (direction == ViewMovement::kLeft) { position_ -= right_ * velocity; }
+    if (direction == ViewMovement::kRight) { position_ += right_ * velocity; }
+    if (direction == ViewMovement::kUp) { position_ += up_ * velocity; }
+    if (direction == ViewMovement::kDown) { position_ -= up_ * velocity; }
 
-    if (direction == ViewMovement::RollLeft) {
+    if (direction == ViewMovement::kRollLeft) {
       auto const q_roll = glm::angleAxis(glm::radians(-50.0 * delta_time), front_);
       orientation_ = q_roll * orientation_;
       orientation_ = glm::normalize(orientation_);
       update_camera_vectors();
     }
-    if (direction == ViewMovement::RollRight) {
+    if (direction == ViewMovement::kRollRight) {
       auto const q_roll = glm::angleAxis(glm::radians(50.0 * delta_time), front_);
       orientation_ = q_roll * orientation_;
       orientation_ = glm::normalize(orientation_);
@@ -116,7 +116,7 @@ public:
   void process_mouse_scroll(f64 yoffset)
   {
     zoom_ -= yoffset;
-    zoom_ = std::clamp(zoom_, k_camera_min_zoom, k_camera_max_zoom);
+    zoom_ = std::clamp(zoom_, kCameraMinZoom, kCameraMaxZoom);
   }
 
 private:
@@ -134,9 +134,9 @@ private:
   glm::dvec3 up_{};
   glm::dvec3 right_{};
 
-  f64 movement_speed_{ k_camera_speed };
-  f64 mouse_sensitivity_{ k_camera_sensitivity };
-  f64 zoom_{ k_camera_default_zoom };
+  f64 movement_speed_{ kCameraSpeed };
+  f64 mouse_sensitivity_{ kCameraSensitivity };
+  f64 zoom_{ kCameraDefaultZoom };
 };
 
 static_assert(KeyboardControllable<Camera>);

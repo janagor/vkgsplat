@@ -22,8 +22,8 @@ namespace vkgsplat {
 namespace {
 
   using gs::GaussianSplat;
-  using gs::k_sh_dc_coeffs;
-  using gs::k_sh_rest_coeffs;
+  using gs::kShDcCoeffs;
+  using gs::kShRestCoeffs;
 
   struct ExtractedSplatAttributes
   {
@@ -60,7 +60,7 @@ namespace {
     std::string_view missing_message) -> std::expected<void, Error>
   {
     if (!reader.find_properties(indexes, names)) {
-      return std::unexpected{ make_error(ErrorIO::missing_property, std::string{ missing_message }) };
+      return std::unexpected{ MakeError(ErrorIO::kMissingProperty, std::string{ missing_message }) };
     }
     return {};
   }
@@ -71,8 +71,8 @@ namespace {
     std::vector<f32> &destination,
     std::string_view failure_message) -> std::expected<void, Error>
   {
-    if (!reader.extract_properties(indexes, miniply::PLYPropertyType::Float, destination.data())) {
-      return std::unexpected{ make_error(ErrorIO::extract_property_failed, std::string{ failure_message }) };
+    if (!reader.extract_properties(indexes, miniply::PLYPropertyType::kFloat, destination.data())) {
+      return std::unexpected{ MakeError(ErrorIO::kExtractPropertyFailed, std::string{ failure_message }) };
     }
     return {};
   }
@@ -88,7 +88,7 @@ namespace {
     auto const scl_it = attrs.scales.begin() + (idx * 3);
     auto const rot_it = attrs.rotations.begin() + (idx * 4);
     auto const dc_it = attrs.f_dc.begin() + (idx * 3);
-    auto const rest_it = attrs.f_rest.begin() + (idx * static_cast<std::ptrdiff_t>(k_sh_rest_coeffs));
+    auto const rest_it = attrs.f_rest.begin() + (idx * static_cast<std::ptrdiff_t>(kShRestCoeffs));
 
     GaussianSplat splat{};
 
@@ -101,7 +101,7 @@ namespace {
 
     splat.appearance.f_dc = { dc_it[0], dc_it[1], dc_it[2] };
 
-    std::copy_n(rest_it, k_sh_rest_coeffs, std::begin(splat.appearance.f_rest));
+    std::copy_n(rest_it, kShRestCoeffs, std::begin(splat.appearance.f_rest));
 
     return splat;
     // NOLINTEND(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
@@ -111,7 +111,7 @@ namespace {
   {
     u32 const available = reader.num_rows();
     if (available == 0) {
-      return std::unexpected{ make_error(ErrorIO::empty_vertex_element, "PLY vertex element is empty") };
+      return std::unexpected{ MakeError(ErrorIO::kEmptyVertexElement, "PLY vertex element is empty") };
     }
 
     u32 const splat_count = std::min(count, available);
@@ -120,15 +120,15 @@ namespace {
     std::array<uint32_t, 3> scale_idx{};
     std::array<uint32_t, 4> rotation_idx{};
     std::array<uint32_t, 1> opacity_idx{};
-    std::array<uint32_t, k_sh_dc_coeffs> f_dc_idx{};
-    std::array<uint32_t, k_sh_rest_coeffs> f_rest_idx{};
+    std::array<uint32_t, kShDcCoeffs> f_dc_idx{};
+    std::array<uint32_t, kShRestCoeffs> f_rest_idx{};
 
     static constexpr std::array<char const *, 3> kPositionNames{ "x", "y", "z" };
     static constexpr std::array<char const *, 3> kScaleNames{ "scale_0", "scale_1", "scale_2" };
     static constexpr std::array<char const *, 4> kRotationNames{ "rot_0", "rot_1", "rot_2", "rot_3" };
     static constexpr std::array<char const *, 1> kOpacityNames{ "opacity" };
     static constexpr std::array<char const *, 3> kFDcNames{ "f_dc_0", "f_dc_1", "f_dc_2" };
-    auto const f_rest_name_storage = MakeIndexedNames<k_sh_rest_coeffs>("f_rest_");
+    auto const f_rest_name_storage = MakeIndexedNames<kShRestCoeffs>("f_rest_");
     auto const f_rest_names = NamesAsCStrs(f_rest_name_storage);
 
     if (auto result = RequireProperties(reader, position_idx, kPositionNames, "PLY missing x/y/z"); !result) {
@@ -155,8 +155,8 @@ namespace {
       .scales = std::vector<f32>(static_cast<size_t>(available) * 3U),
       .rotations = std::vector<f32>(static_cast<size_t>(available) * 4U),
       .opacities = std::vector<f32>(static_cast<size_t>(available)),
-      .f_dc = std::vector<f32>(static_cast<size_t>(available) * k_sh_dc_coeffs),
-      .f_rest = std::vector<f32>(static_cast<size_t>(available) * k_sh_rest_coeffs),
+      .f_dc = std::vector<f32>(static_cast<size_t>(available) * kShDcCoeffs),
+      .f_rest = std::vector<f32>(static_cast<size_t>(available) * kShRestCoeffs),
     };
 
     if (auto result = ExtractFloats(reader, position_idx, attrs.positions, "failed to extract positions"); !result) {
@@ -193,16 +193,16 @@ namespace {
 
 }// namespace
 
-auto load_splats_from_ply(std::string_view ply_path, u32 count) -> std::expected<SplatCpuData, Error>
+auto LoadSplatsFromPly(std::string_view ply_path, u32 count) -> std::expected<SplatCpuData, Error>
 {
   if (count == 0) {
-    return std::unexpected{ make_error(ErrorIO::invalid_splat_count, "splat count must be greater than zero") };
+    return std::unexpected{ MakeError(ErrorIO::kInvalidSplatCount, "splat count must be greater than zero") };
   }
 
   std::string const path{ ply_path };
   miniply::PLYReader reader(path.c_str());
   if (!reader.valid()) {
-    return std::unexpected{ make_error(ErrorIO::failed_open, "failed to open or parse PLY header: " + path) };
+    return std::unexpected{ MakeError(ErrorIO::kFailedOpen, "failed to open or parse PLY header: " + path) };
   }
 
   while (reader.has_element()) {
@@ -212,12 +212,12 @@ auto load_splats_from_ply(std::string_view ply_path, u32 count) -> std::expected
     }
 
     if (!reader.load_element()) {
-      return std::unexpected{ make_error(ErrorIO::load_element_failed, "failed to load vertex element from PLY") };
+      return std::unexpected{ MakeError(ErrorIO::kLoadElementFailed, "failed to load vertex element from PLY") };
     }
     return LoadVertexSplats(reader, count);
   }
 
-  return std::unexpected{ make_error(ErrorIO::missing_vertex_element, "PLY file does not contain a vertex element") };
+  return std::unexpected{ MakeError(ErrorIO::kMissingVertexElement, "PLY file does not contain a vertex element") };
 }
 
 }// namespace vkgsplat

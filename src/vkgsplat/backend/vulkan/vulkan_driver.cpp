@@ -45,7 +45,7 @@ auto VulkanDriver::create(Platform &platform, DriverConfig const &config)
   -> std::expected<std::unique_ptr<VulkanDriver>, Error>
 {
   auto driver = std::unique_ptr<VulkanDriver>(new VulkanDriver(platform));
-  if (auto initialized = device_initialization(driver->context_, config.enable_validation); !initialized) {
+  if (auto initialized = DeviceInitialization(driver->context_, config.enable_validation); !initialized) {
     return std::unexpected(initialized.error());
   }
 
@@ -83,7 +83,7 @@ void VulkanDriver::wait_idle() const noexcept
 
 namespace vkgsplat {
 
-auto create_vulkan_driver(Platform &platform, DriverConfig const &config)
+auto CreateVulkanDriver(Platform &platform, DriverConfig const &config)
   -> std::expected<std::unique_ptr<Driver>, Error>
 {
   auto driver = vulkan::VulkanDriver::create(platform, config);

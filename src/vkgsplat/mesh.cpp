@@ -11,12 +11,12 @@ namespace vkgsplat {
 
 namespace {
 
-  inline constexpr f32 k_min_color_component = 0.05F;
-  inline constexpr f32 k_max_color_component = 1.0F;
+  inline constexpr f32 kMinColorComponent = 0.05F;
+  inline constexpr f32 kMaxColorComponent = 1.0F;
 
-  [[nodiscard]] auto random_color(std::mt19937 &rng) -> std::array<f32, 3>
+  [[nodiscard]] auto RandomColor(std::mt19937 &rng) -> std::array<f32, 3>
   {
-    std::uniform_real_distribution<f32> dist(k_min_color_component, k_max_color_component);
+    std::uniform_real_distribution<f32> dist(kMinColorComponent, kMaxColorComponent);
     return { dist(rng), dist(rng), dist(rng) };
   }
 
@@ -42,7 +42,7 @@ u32 Mesh::draw_vertex_count() const { return static_cast<u32>(positions.size());
 
 Mesh Mesh::make_default_triangle()
 {
-  static constexpr std::array<std::array<f32, 2>, 6> k_default_positions = { {
+  static constexpr std::array<std::array<f32, 2>, 6> kDefaultPositions = { {
     { 0.75F, 0.75F },
     { -0.75F, 0.75F },
     { -0.75F, -0.75F },
@@ -50,7 +50,7 @@ Mesh Mesh::make_default_triangle()
     { -0.75F, -0.75F },
     { 0.75F, -0.75F },
   } };
-  static constexpr std::array<std::array<f32, 3>, 6> k_default_colors = { {
+  static constexpr std::array<std::array<f32, 3>, 6> kDefaultColors = { {
     { 0.0F, 0.0F, 0.0F },
     { 1.0F, 0.0F, 0.0F },
     { 0.0F, 1.0F, 0.0F },
@@ -60,8 +60,8 @@ Mesh Mesh::make_default_triangle()
   } };
 
   Mesh mesh{};
-  for (size_t i = 0; i < k_default_positions.size(); ++i) {
-    mesh.add_vertex(k_default_positions.at(i), k_default_colors.at(i));
+  for (size_t i = 0; i < kDefaultPositions.size(); ++i) {
+    mesh.add_vertex(kDefaultPositions.at(i), kDefaultColors.at(i));
   }
   return mesh;
 }
@@ -72,14 +72,14 @@ Mesh Mesh::make_triangle_grid()
   std::random_device random_device;
   std::mt19937 rng{ random_device() };
 
-  f32 const cell_w = 2.0F / static_cast<f32>(k_grid_cols);
-  f32 const cell_h = 2.0F / static_cast<f32>(k_grid_rows);
+  f32 const cell_w = 2.0F / static_cast<f32>(kGridCols);
+  f32 const cell_h = 2.0F / static_cast<f32>(kGridRows);
 
-  for (u32 row = 0; row < k_grid_rows; ++row) {
-    for (u32 col = 0; col < k_grid_cols; ++col) {
+  for (u32 row = 0; row < kGridRows; ++row) {
+    for (u32 col = 0; col < kGridCols; ++col) {
       f32 const x0 = -1.0F + (static_cast<f32>(col) * cell_w);
       f32 const y0 = 1.0F - (static_cast<f32>(row + 1) * cell_h);
-      auto const color = random_color(rng);
+      auto const color = RandomColor(rng);
 
       mesh.add_vertex({ x0, y0 }, color);
       mesh.add_vertex({ x0 + cell_w, y0 }, color);

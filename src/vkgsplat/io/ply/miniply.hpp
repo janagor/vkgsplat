@@ -63,32 +63,32 @@ constexpr std::string_view kPLYFaceElement = "face";
 //
 
 enum class PLYFileType {
-  ASCII,
-  Binary,
-  BinaryBigEndian,
+  kAscii,
+  kBinary,
+  kBinaryBigEndian,
 };
 
 
 enum class PLYPropertyType {
-  Char,
-  UChar,
-  Short,
-  UShort,
-  Int,
-  UInt,
-  Float,
-  Double,
+  kChar,
+  kUChar,
+  kShort,
+  kUShort,
+  kInt,
+  kUInt,
+  kFloat,
+  kDouble,
 
-  None,//!< Special value used in Element::listCountType to indicate a non-list property.
+  kNone,//!< Special value used in Element::listCountType to indicate a non-list property.
 };
 
 
 struct PLYProperty
 {
   std::string name;
-  PLYPropertyType type = PLYPropertyType::None;//!< Type of the data. Must be set to a value other than None.
+  PLYPropertyType type = PLYPropertyType::kNone;//!< Type of the data. Must be set to a value other than None.
   PLYPropertyType count_type =
-    PLYPropertyType::None;//!< None indicates this is not a list type, otherwise it's the type for the list count.
+    PLYPropertyType::kNone;//!< None indicates this is not a list type, otherwise it's the type for the list count.
   uint32_t offset = 0;//!< Byte offset from the start of the row.
   uint32_t stride = 0;
 
@@ -325,26 +325,26 @@ private:
   bool ensure_bytes_available(size_t num_bytes);
   char char_at(size_t index) const;
 
-  FileHandle m_file{ nullptr, &fclose };
-  std::vector<char> m_buf;
-  std::vector<char> m_tmp_buf;
-  size_t m_pos = 0;
-  size_t m_end = 0;
-  size_t m_buf_data_end = 0;
-  bool m_in_data_section = false;
-  bool m_at_Eof = false;
-  int64_t m_buf_offset = 0;
+  FileHandle file_{ nullptr, &fclose };
+  std::vector<char> buf_;
+  std::vector<char> tmp_buf_;
+  size_t pos_ = 0;
+  size_t end_ = 0;
+  size_t buf_data_end_ = 0;
+  bool in_data_section_ = false;
+  bool at_eof_ = false;
+  int64_t buf_offset_ = 0;
 
-  bool m_valid = false;
+  bool valid_ = false;
 
-  PLYFileType m_file_type = PLYFileType::ASCII;
-  int m_major_version = 0;
-  int m_minor_version = 0;
-  std::vector<PLYElement> m_elements;
+  PLYFileType file_type_ = PLYFileType::kAscii;
+  int major_version_ = 0;
+  int minor_version_ = 0;
+  std::vector<PLYElement> elements_;
 
-  size_t m_current_element = 0;
-  bool m_element_loaded = false;
-  std::vector<uint8_t> m_element_data;
+  size_t current_element_ = 0;
+  bool element_loaded_ = false;
+  std::vector<uint8_t> element_data_;
 };
 
 
@@ -358,7 +358,7 @@ private:
 /// `vertex_count < 3`, nothing gets written to dst.
 ///
 /// The return value is the number of triangles.
-uint32_t triangulate_polygon(PolygonVertexCount vertex_count,
+uint32_t TriangulatePolygon(PolygonVertexCount vertex_count,
   std::span<const float> positions,
   MeshVertexCount mesh_vertex_count,
   PolygonIndices indices,

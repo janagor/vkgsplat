@@ -15,23 +15,23 @@ namespace {
 auto PropertyTypeName(miniply::PLYPropertyType type) -> std::string_view
 {
   switch (type) {
-  case miniply::PLYPropertyType::Char:
+  case miniply::PLYPropertyType::kChar:
     return std::string_view{ "char" };
-  case miniply::PLYPropertyType::UChar:
+  case miniply::PLYPropertyType::kUChar:
     return std::string_view{ "uchar" };
-  case miniply::PLYPropertyType::Short:
+  case miniply::PLYPropertyType::kShort:
     return std::string_view{ "short" };
-  case miniply::PLYPropertyType::UShort:
+  case miniply::PLYPropertyType::kUShort:
     return std::string_view{ "ushort" };
-  case miniply::PLYPropertyType::Int:
+  case miniply::PLYPropertyType::kInt:
     return std::string_view{ "int" };
-  case miniply::PLYPropertyType::UInt:
+  case miniply::PLYPropertyType::kUInt:
     return std::string_view{ "uint" };
-  case miniply::PLYPropertyType::Float:
+  case miniply::PLYPropertyType::kFloat:
     return std::string_view{ "float" };
-  case miniply::PLYPropertyType::Double:
+  case miniply::PLYPropertyType::kDouble:
     return std::string_view{ "double" };
-  case miniply::PLYPropertyType::None:
+  case miniply::PLYPropertyType::kNone:
     return std::string_view{ "none" };
   }
   return std::string_view{ "unknown" };
@@ -39,7 +39,7 @@ auto PropertyTypeName(miniply::PLYPropertyType type) -> std::string_view
 
 void PrintProperty(miniply::PLYProperty const &prop)
 {
-  if (prop.count_type != miniply::PLYPropertyType::None) {
+  if (prop.count_type != miniply::PLYPropertyType::kNone) {
     std::println(
       "    property '{}' list<{}> {}", prop.name, PropertyTypeName(prop.count_type), PropertyTypeName(prop.type));
     return;

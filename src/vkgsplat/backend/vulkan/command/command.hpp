@@ -16,7 +16,7 @@ namespace vkgsplat::vulkan {
 
 template<typename RecordFn>
   requires std::invocable<RecordFn, vkb::DispatchTable &, VkCommandBuffer>
-auto with_command(std::reference_wrapper<vkb::DispatchTable> disp,
+auto WithCommand(std::reference_wrapper<vkb::DispatchTable> disp,
   VkCommandBuffer command_buffer,
   RecordFn &&record,
   VkCommandBufferUsageFlags flags = 0) -> std::expected<void, Error>

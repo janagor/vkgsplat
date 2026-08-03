@@ -38,7 +38,7 @@ protected:
   auto operator=(Driver &&) noexcept -> Driver & = default;
 };
 
-[[nodiscard]] VKGSPLAT_EXPORT auto create_vulkan_driver(Platform &platform, DriverConfig const &config)
+[[nodiscard]] VKGSPLAT_EXPORT auto CreateVulkanDriver(Platform &platform, DriverConfig const &config)
   -> std::expected<std::unique_ptr<Driver>, Error>;
 
 }// namespace vkgsplat

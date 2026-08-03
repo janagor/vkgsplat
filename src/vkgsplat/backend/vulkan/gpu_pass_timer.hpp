@@ -12,17 +12,17 @@ namespace vkgsplat {
 struct Init;
 
 enum class GpuPass : u32 {
-  Projection = 0,
-  Binning,
-  PrepareSort,
-  RadixSort,
-  Rasterize,
-  Count,
+  kProjection = 0,
+  kBinning,
+  kPrepareSort,
+  kRadixSort,
+  kRasterize,
+  kCount,
 };
 
-inline constexpr u32 k_gpu_pass_count = static_cast<u32>(GpuPass::Count);
+inline constexpr u32 kGpuPassCount = static_cast<u32>(GpuPass::kCount);
 
-[[nodiscard]] auto gpu_pass_name(GpuPass pass) -> char const *;
+[[nodiscard]] auto GpuPassName(GpuPass pass) -> char const *;
 
 class GpuPassTimer
 {
@@ -47,7 +47,7 @@ public:
   void mark_submitted(size_t slot);
   void resolve(Init const &init, size_t slot);
 
-  [[nodiscard]] auto last_ms() const noexcept -> std::array<float, k_gpu_pass_count> const & { return last_ms_; }
+  [[nodiscard]] auto last_ms() const noexcept -> std::array<float, kGpuPassCount> const & { return last_ms_; }
   [[nodiscard]] auto total_ms() const noexcept -> float;
 
 private:
@@ -58,7 +58,7 @@ private:
   float timestamp_period_ns_ = 0.0F;
   bool enabled_ = false;
   std::array<bool, 2> pending_{};
-  std::array<float, k_gpu_pass_count> last_ms_{};
+  std::array<float, kGpuPassCount> last_ms_{};
 };
 
 }// namespace vkgsplat

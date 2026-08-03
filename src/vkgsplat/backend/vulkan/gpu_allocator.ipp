@@ -20,12 +20,12 @@ template<TriviallyCopyable T>
 auto GPUAllocator::write_buffer(Buffer const &buffer, std::span<const T> data) noexcept -> std::expected<void, Error>
 {
   if (data.size_bytes() > buffer.size) {
-    return std::unexpected(make_error(std::errc::invalid_argument, "write_buffer: data exceeds buffer size"));
+    return std::unexpected(MakeError(std::errc::invalid_argument, "write_buffer: data exceeds buffer size"));
   }
 
   void *mapped = nullptr;
   if (vmaMapMemory(allocator_, buffer.allocation, &mapped) != VK_SUCCESS) {
-    return std::unexpected(make_error(std::errc::io_error, "write_buffer: failed to map memory"));
+    return std::unexpected(MakeError(std::errc::io_error, "write_buffer: failed to map memory"));
   }
 
   std::memcpy(mapped, data.data(), data.size_bytes());
@@ -39,14 +39,14 @@ template<TriviallyCopyable T>
 auto GPUAllocator::read_buffer(Buffer const &buffer, std::size_t count) noexcept -> std::expected<std::vector<T>, Error>
 {
   if (count * sizeof(T) > buffer.size) {
-    return std::unexpected(make_error(std::errc::invalid_argument, "read_buffer: count exceeds buffer size"));
+    return std::unexpected(MakeError(std::errc::invalid_argument, "read_buffer: count exceeds buffer size"));
   }
 
   invalidate_buffer(buffer);
 
   void *mapped = nullptr;
   if (vmaMapMemory(allocator_, buffer.allocation, &mapped) != VK_SUCCESS) {
-    return std::unexpected(make_error(std::errc::io_error, "read_buffer: failed to map memory"));
+    return std::unexpected(MakeError(std::errc::io_error, "read_buffer: failed to map memory"));
   }
 
   std::vector<T> result(count);

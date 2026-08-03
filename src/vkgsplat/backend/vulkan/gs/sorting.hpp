@@ -4,8 +4,8 @@
 
 namespace vkgsplat::gs {
 
-[[nodiscard]] auto init_sorting(Init &init, RenderData &data) -> bool;
+[[nodiscard]] auto InitSorting(Init &init, RenderData &data) -> bool;
 
-void destroy_sorting(Init &init, RenderData &data);
+void DestroySorting(Init &init, RenderData &data);
 
 }// namespace vkgsplat::gs

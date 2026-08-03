@@ -11,7 +11,7 @@
 
 namespace vkgsplat {
 
-void destroy_depth_buffer(Init &init, RenderData &data)
+void DestroyDepthBuffer(Init &init, RenderData &data)
 {
   if (data.depth_image_view != VK_NULL_HANDLE) {
     init.disp.destroyImageView(data.depth_image_view, nullptr);
@@ -25,9 +25,9 @@ void destroy_depth_buffer(Init &init, RenderData &data)
   }
 }
 
-auto create_depth_buffer(Init &init, RenderData &data) -> bool
+auto CreateDepthBuffer(Init &init, RenderData &data) -> bool
 {
-  destroy_depth_buffer(init, data);
+  DestroyDepthBuffer(init, data);
 
   auto image_info = initializers::ImageCreateInfo();
   image_info.imageType = VK_IMAGE_TYPE_2D;
@@ -70,7 +70,7 @@ auto create_depth_buffer(Init &init, RenderData &data) -> bool
 
   if (init.disp.createImageView(&view_info, nullptr, &data.depth_image_view) != VK_SUCCESS) {
     std::println("Failed to create depth image view!");
-    destroy_depth_buffer(init, data);
+    DestroyDepthBuffer(init, data);
     return false;
   }
 

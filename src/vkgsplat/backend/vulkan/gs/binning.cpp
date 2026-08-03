@@ -64,7 +64,7 @@ namespace {
 
 }// namespace
 
-auto init_binning(Init &init, RenderData &data) -> bool
+auto InitBinning(Init &init, RenderData &data) -> bool
 {
   if (data.splat_count == 0) {
     std::println("Bin gaussians requires non-zero splat_count!");
@@ -83,7 +83,7 @@ auto init_binning(Init &init, RenderData &data) -> bool
   return true;
 }
 
-void destroy_binning(Init &init, RenderData &data)
+void DestroyBinning(Init &init, RenderData &data)
 {
   data.bin_algorithm.destroy(init);
   DestroyBinBuffers(init, data);

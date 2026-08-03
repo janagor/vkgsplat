@@ -18,7 +18,7 @@ namespace vkgsplat::vulkan {
 namespace {
 
   [[nodiscard]] auto MakeAllocatorError(std::string message) -> Error
-  { return make_error(std::errc::io_error, std::move(message)); }
+  { return MakeError(std::errc::io_error, std::move(message)); }
 
 }// namespace
 

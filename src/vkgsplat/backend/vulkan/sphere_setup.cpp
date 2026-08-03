@@ -21,15 +21,15 @@
 
 namespace vkgsplat {
 
-auto init_sphere_setup(Init &init, RenderData &data) -> bool
+auto InitSphereSetup(Init &init, RenderData &data) -> bool
 {
   if (data.splat_count == 0 || data.sort_size == 0) {
     std::println("Sphere setup requires non-zero splat_count and sort_size!");
     return false;
   }
 
-  auto sort_entries = compute::tensor<compute::SortEntry>(init, data.sort_size);
-  auto sorted_indices = compute::tensor<u32>(init, data.splat_count, 0U);
+  auto sort_entries = compute::MakeTensor<compute::SortEntry>(init, data.sort_size);
+  auto sorted_indices = compute::MakeTensor<u32>(init, data.splat_count, 0U);
 
   if (!sort_entries || !sorted_indices) {
     std::println("Failed to create sphere sort tensors!");
@@ -39,7 +39,7 @@ auto init_sphere_setup(Init &init, RenderData &data) -> bool
   data.sort_entries = std::move(*sort_entries);
   data.sorted_indices = std::move(*sorted_indices);
 
-  if (!query_descriptor_heap_layout(init, data)) { return false; }
+  if (!QueryDescriptorHeapLayout(init, data)) { return false; }
 
   std::array<uint32_t, 2> const specialization_constants{
     data.splat_count,
@@ -57,10 +57,10 @@ auto init_sphere_setup(Init &init, RenderData &data) -> bool
   return true;
 }
 
-void dispatch_sphere_setup(Init &init, RenderData const &data, VkCommandBuffer command_buffer)
+void DispatchSphereSetup(Init &init, RenderData const &data, VkCommandBuffer command_buffer)
 { data.compute_sequence.eval(init, data, command_buffer); }
 
-void destroy_sphere_setup(Init &init, RenderData &data)
+void DestroySphereSetup(Init &init, RenderData &data)
 {
   data.compute_sequence.clear();
   data.sphere_setup_algorithm.destroy(init);

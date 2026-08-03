@@ -6,8 +6,8 @@
 
 namespace vkgsplat {
 
-void destroy_sphere_buffers(Init &init, RenderData &data);
+void DestroySphereBuffers(Init &init, RenderData &data);
 
-[[nodiscard]] auto create_sphere_buffers(Init &init, RenderData &data, SplatCpuData const &cpu_data) -> bool;
+[[nodiscard]] auto CreateSphereBuffers(Init &init, RenderData &data, SplatCpuData const &cpu_data) -> bool;
 
 }// namespace vkgsplat

@@ -4,8 +4,8 @@
 
 namespace vkgsplat::gs {
 
-[[nodiscard]] auto init_binning(Init &init, RenderData &data) -> bool;
+[[nodiscard]] auto InitBinning(Init &init, RenderData &data) -> bool;
 
-void destroy_binning(Init &init, RenderData &data);
+void DestroyBinning(Init &init, RenderData &data);
 
 }// namespace vkgsplat::gs

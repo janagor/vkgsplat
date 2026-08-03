@@ -17,6 +17,6 @@ struct SplatCpuData
   std::vector<gs::GaussianAppearance> appearances;
 };
 
-[[nodiscard]] auto load_splats_from_ply(std::string_view ply_path, u32 count) -> std::expected<SplatCpuData, Error>;
+[[nodiscard]] auto LoadSplatsFromPly(std::string_view ply_path, u32 count) -> std::expected<SplatCpuData, Error>;
 
 }// namespace vkgsplat

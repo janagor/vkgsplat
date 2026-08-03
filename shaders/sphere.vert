@@ -14,9 +14,9 @@ layout(push_constant) uniform RasterPush {
 	uint tiles_x;
 	vec4 background;
 	uint sh_degree;
-	uint _pad0;
-	uint _pad1;
-	uint _pad2;
+	uint pad0_;
+	uint pad1_;
+	uint pad2_;
 } push;
 
 const uint HEAP_PROJECTED = 4u;

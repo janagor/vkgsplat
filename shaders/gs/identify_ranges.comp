@@ -34,7 +34,7 @@ layout(push_constant) uniform SortPush {
 	uint sort_size;
 	uint tile_count;
 	uint blocks_per_workgroup;
-	uint _pad;
+	uint pad_;
 } push;
 
 uint flat_invocation_id()

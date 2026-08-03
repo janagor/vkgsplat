@@ -15,7 +15,7 @@
 
 namespace vkgsplat {
 
-auto read_file(const std::string &filename) -> std::vector<char>
+auto ReadFile(const std::string &filename) -> std::vector<char>
 {
   std::ifstream file(filename, std::ios::ate | std::ios::binary);
 
@@ -35,7 +35,7 @@ auto read_file(const std::string &filename) -> std::vector<char>
   return buffer;
 }
 
-auto create_shader_module(Init &init, std::vector<char> const &code) -> VkShaderModule
+auto CreateShaderModule(Init &init, std::vector<char> const &code) -> VkShaderModule
 {
   // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
   auto const code_span = std::span{ reinterpret_cast<u32 const *>(code.data()), code.size() / sizeof(u32) };

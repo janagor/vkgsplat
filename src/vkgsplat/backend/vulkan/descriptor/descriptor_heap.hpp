@@ -12,43 +12,43 @@
 namespace vkgsplat {
 
 enum class HeapSlot : size_t {
-  Geometry = 0,
-  Appearance = 1,
-  SortedIndices = 2,
-  SortEntries = 3,
-  Projected = 4,
-  UnsortedKeys = 5,
-  UnsortedValues = 6,
-  SortedKeys = 7,
-  SortedValues = 8,
-  TileRanges = 9,
-  ColorTarget = 10,
-  SortHistogram = 11,
+  kGeometry = 0,
+  kAppearance = 1,
+  kSortedIndices = 2,
+  kSortEntries = 3,
+  kProjected = 4,
+  kUnsortedKeys = 5,
+  kUnsortedValues = 6,
+  kSortedKeys = 7,
+  kSortedValues = 8,
+  kTileRanges = 9,
+  kColorTarget = 10,
+  kSortHistogram = 11,
 };
 
-inline constexpr size_t k_heap_descriptor_count = 12;
+inline constexpr size_t kHeapDescriptorCount = 12;
 
-[[nodiscard]] constexpr auto align_up(VkDeviceSize value, VkDeviceSize alignment) noexcept -> VkDeviceSize
+[[nodiscard]] constexpr auto AlignUp(VkDeviceSize value, VkDeviceSize alignment) noexcept -> VkDeviceSize
 { return (value + alignment - 1) / alignment * alignment; }
 
-[[nodiscard]] auto write_storage_buffer_descriptor(Init &init,
+[[nodiscard]] auto WriteStorageBufferDescriptor(Init &init,
   VkDeviceAddress buffer_address,
   VkDeviceSize buffer_size,
   std::span<std::byte> destination) -> bool;
 
-[[nodiscard]] auto write_storage_image_descriptor(Init &init,
+[[nodiscard]] auto WriteStorageImageDescriptor(Init &init,
   VkImageViewCreateInfo const &view_info,
   VkImageLayout layout,
   std::span<std::byte> destination) -> bool;
 
-[[nodiscard]] auto query_descriptor_heap_layout(Init const &init, RenderData &data) -> bool;
+[[nodiscard]] auto QueryDescriptorHeapLayout(Init const &init, RenderData &data) -> bool;
 
-void destroy_descriptor_heap(Init &init, RenderData &data);
+void DestroyDescriptorHeap(Init &init, RenderData &data);
 
-[[nodiscard]] auto refresh_descriptor_heap(Init &init, RenderData &data) -> bool;
+[[nodiscard]] auto RefreshDescriptorHeap(Init &init, RenderData &data) -> bool;
 
-void bind_descriptor_heap(Init const &init, RenderData const &data, VkCommandBuffer command_buffer);
+void BindDescriptorHeap(Init const &init, RenderData const &data, VkCommandBuffer command_buffer);
 
-[[nodiscard]] auto heap_slot_byte_offset(RenderData const &data, HeapSlot slot) -> uint32_t;
+[[nodiscard]] auto HeapSlotByteOffset(RenderData const &data, HeapSlot slot) -> uint32_t;
 
 }// namespace vkgsplat

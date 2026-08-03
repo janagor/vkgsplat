@@ -103,11 +103,11 @@ namespace {
 
 }// namespace
 
-auto init_rasterization(Init &init, RenderData &data) -> bool { return CreateColorTarget(init, data); }
+auto InitRasterization(Init &init, RenderData &data) -> bool { return CreateColorTarget(init, data); }
 
-auto recreate_rasterization_color_target(Init &init, RenderData &data) -> bool { return CreateColorTarget(init, data); }
+auto RecreateRasterizationColorTarget(Init &init, RenderData &data) -> bool { return CreateColorTarget(init, data); }
 
-void dispatch_rasterization(Init const &init,
+void DispatchRasterization(Init const &init,
   RenderData const &data,
   RasterPushConstants const &push_constants,
   VkCommandBuffer command_buffer,
@@ -256,7 +256,7 @@ void dispatch_rasterization(Init const &init,
   // Leave swapchain in TRANSFER_DST_OPTIMAL for ImGui / present.
 }
 
-void destroy_rasterization(Init &init, RenderData &data)
+void DestroyRasterization(Init &init, RenderData &data)
 {
   data.rasterize_algorithm.destroy(init);
   DestroyColorTarget(init, data);

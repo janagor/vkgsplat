@@ -19,14 +19,14 @@ void InputHandler::update(View &view, CloseTarget &close)
 
   auto const key_pressed = [this](int key) { return glfwGetKey(window_, key) == GLFW_PRESS; };
 
-  if (key_pressed(GLFW_KEY_W)) { view.process_keyboard(ViewMovement::Forward, delta_time); }
-  if (key_pressed(GLFW_KEY_S)) { view.process_keyboard(ViewMovement::Backward, delta_time); }
-  if (key_pressed(GLFW_KEY_A)) { view.process_keyboard(ViewMovement::Left, delta_time); }
-  if (key_pressed(GLFW_KEY_D)) { view.process_keyboard(ViewMovement::Right, delta_time); }
-  if (key_pressed(GLFW_KEY_SPACE)) { view.process_keyboard(ViewMovement::Up, delta_time); }
-  if (key_pressed(GLFW_KEY_LEFT_CONTROL)) { view.process_keyboard(ViewMovement::Down, delta_time); }
-  if (key_pressed(GLFW_KEY_Q)) { view.process_keyboard(ViewMovement::RollLeft, delta_time); }
-  if (key_pressed(GLFW_KEY_E)) { view.process_keyboard(ViewMovement::RollRight, delta_time); }
+  if (key_pressed(GLFW_KEY_W)) { view.process_keyboard(ViewMovement::kForward, delta_time); }
+  if (key_pressed(GLFW_KEY_S)) { view.process_keyboard(ViewMovement::kBackward, delta_time); }
+  if (key_pressed(GLFW_KEY_A)) { view.process_keyboard(ViewMovement::kLeft, delta_time); }
+  if (key_pressed(GLFW_KEY_D)) { view.process_keyboard(ViewMovement::kRight, delta_time); }
+  if (key_pressed(GLFW_KEY_SPACE)) { view.process_keyboard(ViewMovement::kUp, delta_time); }
+  if (key_pressed(GLFW_KEY_LEFT_CONTROL)) { view.process_keyboard(ViewMovement::kDown, delta_time); }
+  if (key_pressed(GLFW_KEY_Q)) { view.process_keyboard(ViewMovement::kRollLeft, delta_time); }
+  if (key_pressed(GLFW_KEY_E)) { view.process_keyboard(ViewMovement::kRollRight, delta_time); }
 
   f64 cursor_x = 0.0;
   f64 cursor_y = 0.0;

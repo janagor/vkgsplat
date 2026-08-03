@@ -39,7 +39,7 @@ namespace {
   [[nodiscard]] auto BuildRendererResources(Init &init, RenderData &render_data, RendererConfig const &config)
     -> std::expected<void, Error>
   {
-    auto loaded = load_splats_from_ply(config.ply_path, config.splat_count);
+    auto loaded = LoadSplatsFromPly(config.ply_path, config.splat_count);
     if (!loaded) { return std::unexpected(loaded.error()); }
     SplatCpuData const splats = std::move(*loaded);
     std::println("Loaded {} splats from {}", splats.geometries.size(), config.ply_path);
@@ -51,49 +51,49 @@ namespace {
         first_appearance.f_dc.at(2));
     }
 
-    if (auto queues = get_queues(init, render_data); !queues) { return std::unexpected(queues.error()); }
+    if (auto queues = GetQueues(init, render_data); !queues) { return std::unexpected(queues.error()); }
 
-    if (!create_sphere_buffers(init, render_data, splats)) {
-      return std::unexpected(make_error(std::errc::invalid_argument, "Failed to create PLY sphere buffers"));
+    if (!CreateSphereBuffers(init, render_data, splats)) {
+      return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to create PLY sphere buffers"));
     }
 
-    render_data.sort_size = next_power_of_2(render_data.splat_count);
-    if (!init_sphere_setup(init, render_data)) {
-      return std::unexpected(make_error(std::errc::invalid_argument, "Failed to initialize sphere setup"));
+    render_data.sort_size = NextPowerOf2(render_data.splat_count);
+    if (!InitSphereSetup(init, render_data)) {
+      return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to initialize sphere setup"));
     }
-    if (!gs::init_binning(init, render_data)) {
-      return std::unexpected(make_error(std::errc::invalid_argument, "Failed to initialize gaussian binning"));
+    if (!gs::InitBinning(init, render_data)) {
+      return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to initialize gaussian binning"));
     }
-    if (!gs::init_projection(init, render_data)) {
-      return std::unexpected(make_error(std::errc::invalid_argument, "Failed to initialize gaussian projection"));
+    if (!gs::InitProjection(init, render_data)) {
+      return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to initialize gaussian projection"));
     }
-    if (!gs::init_sorting(init, render_data)) {
-      return std::unexpected(make_error(std::errc::invalid_argument, "Failed to initialize gaussian sorting"));
+    if (!gs::InitSorting(init, render_data)) {
+      return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to initialize gaussian sorting"));
     }
-    if (!gs::init_rasterization(init, render_data)) {
-      return std::unexpected(make_error(std::errc::invalid_argument, "Failed to initialize gaussian rasterization"));
+    if (!gs::InitRasterization(init, render_data)) {
+      return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to initialize gaussian rasterization"));
     }
-    gs::record_gs_pipeline(render_data);
-    if (0 != create_graphics_pipeline(init, render_data)) {
-      return std::unexpected(make_error(std::errc::invalid_argument, "Failed to create graphics pipeline"));
+    gs::RecordGsPipeline(render_data);
+    if (0 != CreateGraphicsPipeline(init, render_data)) {
+      return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to create graphics pipeline"));
     }
-    if (!create_depth_buffer(init, render_data)) {
-      return std::unexpected(make_error(std::errc::invalid_argument, "Failed to create depth buffer"));
+    if (!CreateDepthBuffer(init, render_data)) {
+      return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to create depth buffer"));
     }
-    if (auto command_resources = create_command_resources(init, render_data); !command_resources) {
+    if (auto command_resources = CreateCommandResources(init, render_data); !command_resources) {
       return std::unexpected(command_resources.error());
     }
-    if (auto sync_objects = create_sync_objects(init, render_data); !sync_objects) {
+    if (auto sync_objects = CreateSyncObjects(init, render_data); !sync_objects) {
       return std::unexpected(sync_objects.error());
     }
     if (config.enable_gpu_timers) {
       if (!render_data.gpu_pass_timer.create(init)) {
         return std::unexpected(
-          make_error(std::errc::invalid_argument, "Failed to create GPU pass timestamp query pool"));
+          MakeError(std::errc::invalid_argument, "Failed to create GPU pass timestamp query pool"));
       }
     }
     if (config.enable_imgui) {
-      if (auto imgui = init_imgui_overlay(init, render_data); !imgui) { return std::unexpected(imgui.error()); }
+      if (auto imgui = InitImguiOverlay(init, render_data); !imgui) { return std::unexpected(imgui.error()); }
     }
 
     return {};
@@ -123,7 +123,7 @@ auto Renderer::operator=(Renderer &&) noexcept -> Renderer & = default;
 Renderer::~Renderer() noexcept
 {
   if (impl_.valueless_after_move() || impl_->engine == nullptr) { return; }
-  cleanup(AsVulkanDriver(impl_->engine->driver()).init(), impl_->render_data);
+  Cleanup(AsVulkanDriver(impl_->engine->driver()).init(), impl_->render_data);
 }
 
 auto Renderer::create(RendererConfig const &config, Platform &platform) -> std::expected<Renderer, Error>
@@ -157,7 +157,7 @@ auto Renderer::create(RendererConfig const &config, Engine &engine) -> std::expe
 
 auto Renderer::draw(Camera const &camera) -> std::expected<void, Error>
 {
-  if (auto drawn = draw_frame(AsVulkanDriver(impl_->engine->driver()).init(), impl_->render_data, camera); !drawn) {
+  if (auto drawn = DrawFrame(AsVulkanDriver(impl_->engine->driver()).init(), impl_->render_data, camera); !drawn) {
     return std::unexpected(drawn.error());
   }
   return {};

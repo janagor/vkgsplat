@@ -24,17 +24,17 @@ private:
   std::source_location source_location_;
 };
 
-[[nodiscard]] auto make_error(std::error_code code,
+[[nodiscard]] auto MakeError(std::error_code code,
   std::string message = "",
   std::source_location source_location = std::source_location::current()) -> Error;
 
-[[nodiscard]] auto make_error(std::errc code,
+[[nodiscard]] auto MakeError(std::errc code,
   std::string message = "",
   std::source_location source_location = std::source_location::current()) -> Error;
 
 template<class ErrorCodeEnum>
   requires std::is_error_code_enum_v<ErrorCodeEnum>
-[[nodiscard]] auto make_error(ErrorCodeEnum code,
+[[nodiscard]] auto MakeError(ErrorCodeEnum code,
   std::string message = "",
   std::source_location source_location = std::source_location::current()) -> Error;
 

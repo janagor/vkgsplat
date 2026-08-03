@@ -7,14 +7,14 @@
 namespace vkgsplat {
 
 enum class ViewMovement : u8 {
-  Forward,
-  Backward,
-  Left,
-  Right,
-  Up,
-  Down,
-  RollLeft,
-  RollRight,
+  kForward,
+  kBackward,
+  kLeft,
+  kRight,
+  kUp,
+  kDown,
+  kRollLeft,
+  kRollRight,
 };
 
 template<class T>

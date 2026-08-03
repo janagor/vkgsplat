@@ -102,7 +102,7 @@ namespace {
 
 void OpProjection::record(Init const &init, RenderData const &data, VkCommandBuffer command_buffer)
 {
-  ScopedGpuPass const timer{ init, data, command_buffer, GpuPass::Projection };
+  ScopedGpuPass const timer{ init, data, command_buffer, GpuPass::kProjection };
 
   init.disp.cmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, data.project_algorithm.pipeline());
   PushConstants(init, &data.project_push, sizeof(ProjectPushConstants), command_buffer);
@@ -114,7 +114,7 @@ void OpProjection::record(Init const &init, RenderData const &data, VkCommandBuf
 
 void OpBinning::record(Init const &init, RenderData const &data, VkCommandBuffer command_buffer)
 {
-  ScopedGpuPass const timer{ init, data, command_buffer, GpuPass::Binning };
+  ScopedGpuPass const timer{ init, data, command_buffer, GpuPass::kBinning };
 
   init.disp.cmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, data.bin_algorithm.pipeline());
   PushConstants(init, &data.bin_push, sizeof(BinPushConstants), command_buffer);
@@ -126,7 +126,7 @@ void OpBinning::record(Init const &init, RenderData const &data, VkCommandBuffer
 
 void OpPrepareSort::record(Init const &init, RenderData const &data, VkCommandBuffer command_buffer)
 {
-  ScopedGpuPass const timer{ init, data, command_buffer, GpuPass::PrepareSort };
+  ScopedGpuPass const timer{ init, data, command_buffer, GpuPass::kPrepareSort };
 
   Dispatch2D const sort_grid = Dispatch2dForThreads(init, data.gaussian_sort_size, kComputeLocalSizeX);
 
@@ -141,7 +141,7 @@ void OpPrepareSort::record(Init const &init, RenderData const &data, VkCommandBu
 
 void OpRadixSort::record(Init const &init, RenderData const &data, VkCommandBuffer command_buffer)
 {
-  ScopedGpuPass const timer{ init, data, command_buffer, GpuPass::RadixSort };
+  ScopedGpuPass const timer{ init, data, command_buffer, GpuPass::kRadixSort };
 
   constexpr u32 kRadixPasses = 4U;// packed uint32 key, 8 bits per pass
   u64 const instance_count_address = init.gpu_allocator.get_buffer_device_address(data.instance_count_buffer);
@@ -172,8 +172,8 @@ void OpRadixSort::record(Init const &init, RenderData const &data, VkCommandBuff
 
 void OpRasterization::record(Init const &init, RenderData const &data, VkCommandBuffer command_buffer)
 {
-  ScopedGpuPass const timer{ init, data, command_buffer, GpuPass::Rasterize };
-  dispatch_rasterization(init, data, data.raster_push, command_buffer, data.present_image_index);
+  ScopedGpuPass const timer{ init, data, command_buffer, GpuPass::kRasterize };
+  DispatchRasterization(init, data, data.raster_push, command_buffer, data.present_image_index);
 }
 
 }// namespace vkgsplat::gs

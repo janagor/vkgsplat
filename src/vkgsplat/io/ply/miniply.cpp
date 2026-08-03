@@ -101,23 +101,23 @@ namespace {
   };
 
   constexpr std::array<PLYTypeAlias, 17> kTypeAliases = { {
-    { .name = "char", .type = PLYPropertyType::Char },
-    { .name = "uchar", .type = PLYPropertyType::UChar },
-    { .name = "short", .type = PLYPropertyType::Short },
-    { .name = "ushort", .type = PLYPropertyType::UShort },
-    { .name = "int", .type = PLYPropertyType::Int },
-    { .name = "uint", .type = PLYPropertyType::UInt },
-    { .name = "float", .type = PLYPropertyType::Float },
-    { .name = "float32", .type = PLYPropertyType::Float },
-    { .name = "float64", .type = PLYPropertyType::Double },
-    { .name = "double", .type = PLYPropertyType::Double },
-    { .name = "uint8", .type = PLYPropertyType::UChar },
-    { .name = "uint16", .type = PLYPropertyType::UShort },
-    { .name = "uint32", .type = PLYPropertyType::UInt },
-    { .name = "int8", .type = PLYPropertyType::Char },
-    { .name = "int16", .type = PLYPropertyType::Short },
-    { .name = "int32", .type = PLYPropertyType::Int },
-    { .name = "", .type = PLYPropertyType::None },
+    { .name = "char", .type = PLYPropertyType::kChar },
+    { .name = "uchar", .type = PLYPropertyType::kUChar },
+    { .name = "short", .type = PLYPropertyType::kShort },
+    { .name = "ushort", .type = PLYPropertyType::kUShort },
+    { .name = "int", .type = PLYPropertyType::kInt },
+    { .name = "uint", .type = PLYPropertyType::kUInt },
+    { .name = "float", .type = PLYPropertyType::kFloat },
+    { .name = "float32", .type = PLYPropertyType::kFloat },
+    { .name = "float64", .type = PLYPropertyType::kDouble },
+    { .name = "double", .type = PLYPropertyType::kDouble },
+    { .name = "uint8", .type = PLYPropertyType::kUChar },
+    { .name = "uint16", .type = PLYPropertyType::kUShort },
+    { .name = "uint32", .type = PLYPropertyType::kUInt },
+    { .name = "int8", .type = PLYPropertyType::kChar },
+    { .name = "int16", .type = PLYPropertyType::kShort },
+    { .name = "int32", .type = PLYPropertyType::kInt },
+    { .name = "", .type = PLYPropertyType::kNone },
   } };
 
   constexpr float kPi = std::numbers::pi_v<float>;
@@ -299,31 +299,31 @@ namespace {
   template<class T> void CopyAndConvertTo(T *dest, std::span<const std::byte> src, PLYPropertyType src_type)
   {
     switch (src_type) {
-    case PLYPropertyType::Char:
+    case PLYPropertyType::kChar:
       *dest = static_cast<T>(static_cast<unsigned char>(ReadValue<int8_t>(src)));
       break;
-    case PLYPropertyType::UChar:
+    case PLYPropertyType::kUChar:
       *dest = static_cast<T>(std::to_integer<uint8_t>(src.front()));
       break;
-    case PLYPropertyType::Short:
+    case PLYPropertyType::kShort:
       *dest = static_cast<T>(ReadValue<int16_t>(src));
       break;
-    case PLYPropertyType::UShort:
+    case PLYPropertyType::kUShort:
       *dest = static_cast<T>(ReadValue<uint16_t>(src));
       break;
-    case PLYPropertyType::Int:
+    case PLYPropertyType::kInt:
       *dest = static_cast<T>(ReadValue<int32_t>(src));
       break;
-    case PLYPropertyType::UInt:
+    case PLYPropertyType::kUInt:
       *dest = static_cast<T>(ReadValue<uint32_t>(src));
       break;
-    case PLYPropertyType::Float:
+    case PLYPropertyType::kFloat:
       *dest = static_cast<T>(ReadValue<float>(src));
       break;
-    case PLYPropertyType::Double:
+    case PLYPropertyType::kDouble:
       *dest = static_cast<T>(ReadValue<double>(src));
       break;
-    case PLYPropertyType::None:
+    case PLYPropertyType::kNone:
       break;
     }
   }
@@ -334,55 +334,55 @@ namespace {
     PLYPropertyType src_type)
   {
     switch (dest_type) {
-    case PLYPropertyType::Char: {
+    case PLYPropertyType::kChar: {
       int8_t value = 0;
       CopyAndConvertTo(&value, src, src_type);
       WriteValue(dest.subspan(0, 1), value);
       break;
     }
-    case PLYPropertyType::UChar: {
+    case PLYPropertyType::kUChar: {
       uint8_t value = 0;
       CopyAndConvertTo(&value, src, src_type);
       dest.front() = std::byte{ value };
       break;
     }
-    case PLYPropertyType::Short: {
+    case PLYPropertyType::kShort: {
       int16_t value = 0;
       CopyAndConvertTo(&value, src, src_type);
       WriteValue(dest.subspan(0, 2), value);
       break;
     }
-    case PLYPropertyType::UShort: {
+    case PLYPropertyType::kUShort: {
       uint16_t value = 0;
       CopyAndConvertTo(&value, src, src_type);
       WriteValue(dest.subspan(0, 2), value);
       break;
     }
-    case PLYPropertyType::Int: {
+    case PLYPropertyType::kInt: {
       int32_t value = 0;
       CopyAndConvertTo(&value, src, src_type);
       WriteValue(dest.subspan(0, 4), value);
       break;
     }
-    case PLYPropertyType::UInt: {
+    case PLYPropertyType::kUInt: {
       uint32_t value = 0;
       CopyAndConvertTo(&value, src, src_type);
       WriteValue(dest.subspan(0, 4), value);
       break;
     }
-    case PLYPropertyType::Float: {
+    case PLYPropertyType::kFloat: {
       float value = 0.0F;
       CopyAndConvertTo(&value, src, src_type);
       WriteValue(dest.subspan(0, 4), value);
       break;
     }
-    case PLYPropertyType::Double: {
+    case PLYPropertyType::kDouble: {
       double value = 0.0;
       CopyAndConvertTo(&value, src, src_type);
       WriteValue(dest.subspan(0, kDoubleBytes), value);
       break;
     }
-    case PLYPropertyType::None:
+    case PLYPropertyType::kNone:
       break;
     }
   }
@@ -403,7 +403,7 @@ namespace {
   {
     TypePair const types{ .src = src_type, .dest = dest_type };
     return (types.src == types.dest)
-           || (types.src < PLYPropertyType::Float
+           || (types.src < PLYPropertyType::kFloat
                && (static_cast<uint32_t>(types.src) ^ kSignedPairToggle) == static_cast<uint32_t>(types.dest));
   }
 
@@ -685,11 +685,11 @@ namespace {
 void PLYElement::calculate_offsets()
 {
   fixed_size = !std::ranges::any_of(
-    properties, [](PLYProperty const &prop) -> bool { return prop.count_type != PLYPropertyType::None; });
+    properties, [](PLYProperty const &prop) -> bool { return prop.count_type != PLYPropertyType::kNone; });
 
   row_stride = 0;
   for (PLYProperty &prop : properties) {
-    if (prop.count_type != PLYPropertyType::None) { continue; }
+    if (prop.count_type != PLYPropertyType::kNone) { continue; }
     prop.offset = row_stride;
     row_stride += kPLYPropertySize.at(static_cast<size_t>(prop.type));
   }
@@ -723,7 +723,7 @@ auto PLYElement::convert_list_to_fixed_size(ListPropertyIndex list_prop_idx,
   auto const list_prop_index = static_cast<uint32_t>(list_prop_idx);
   auto const fixed_list_size = static_cast<uint32_t>(list_size);
   if (fixed_size || list_prop_index >= properties.size()
-      || properties.at(list_prop_index).count_type == PLYPropertyType::None) {
+      || properties.at(list_prop_index).count_type == PLYPropertyType::kNone) {
     return false;
   }
   if (new_prop_idxs.size() < fixed_list_size) { return false; }
@@ -733,7 +733,7 @@ auto PLYElement::convert_list_to_fixed_size(ListPropertyIndex list_prop_idx,
   PLYProperty &count_prop = properties.at(list_prop_index);
   count_prop.name = std::format("{}_count", old_list_prop.name);
   count_prop.type = old_list_prop.count_type;
-  count_prop.count_type = PLYPropertyType::None;
+  count_prop.count_type = PLYPropertyType::kNone;
   count_prop.stride = kPLYPropertySize.at(static_cast<size_t>(old_list_prop.count_type));
 
   if (fixed_list_size > 0U) {
@@ -751,7 +751,7 @@ auto PLYElement::convert_list_to_fixed_size(ListPropertyIndex list_prop_idx,
       PLYProperty &item_prop = properties.at(prop_idx);
       item_prop.name = std::format("{}_{}", old_list_prop.name, item_index);
       item_prop.type = old_list_prop.type;
-      item_prop.count_type = PLYPropertyType::None;
+      item_prop.count_type = PLYPropertyType::kNone;
       item_prop.stride = kPLYPropertySize.at(static_cast<size_t>(old_list_prop.type));
       SpanRef(new_prop_idxs, item_index) = prop_idx;
     }
@@ -767,64 +767,64 @@ auto PLYElement::convert_list_to_fixed_size(ListPropertyIndex list_prop_idx,
 //
 
 PLYReader::PLYReader(const char *filename)
-  : m_file(OpenFile(filename, "rb")), m_buf(static_cast<size_t>(kPLYReadBufferSize) + 1U, '\0'),
-    m_tmp_buf(static_cast<size_t>(kPLYTempBufferSize) + 1U, '\0'), m_pos(static_cast<size_t>(kPLYReadBufferSize)),
-    m_end(static_cast<size_t>(kPLYReadBufferSize)), m_buf_data_end(static_cast<size_t>(kPLYReadBufferSize))
+  : file_(OpenFile(filename, "rb")), buf_(static_cast<size_t>(kPLYReadBufferSize) + 1U, '\0'),
+    tmp_buf_(static_cast<size_t>(kPLYTempBufferSize) + 1U, '\0'), pos_(static_cast<size_t>(kPLYReadBufferSize)),
+    end_(static_cast<size_t>(kPLYReadBufferSize)), buf_data_end_(static_cast<size_t>(kPLYReadBufferSize))
 {
-  if (m_file == nullptr) {
-    m_valid = false;
+  if (file_ == nullptr) {
+    valid_ = false;
     return;
   }
-  m_valid = true;
+  valid_ = true;
 
   refill_buffer();
 
-  m_valid = keyword("ply") && next_line() && keyword("format") && advance() && typed_which(kPLYFileTypes, &m_file_type)
-            && advance() && int_literal(&m_major_version) && advance() && match(".") && advance()
-            && int_literal(&m_minor_version) && next_line() && parse_elements() && keyword("end_header") && advance()
+  valid_ = keyword("ply") && next_line() && keyword("format") && advance() && typed_which(kPLYFileTypes, &file_type_)
+            && advance() && int_literal(&major_version_) && advance() && match(".") && advance()
+            && int_literal(&minor_version_) && next_line() && parse_elements() && keyword("end_header") && advance()
             && match("\n") && accept();
-  if (!m_valid) { return; }
-  m_in_data_section = true;
-  if (m_file_type == PLYFileType::ASCII) { advance(); }
+  if (!valid_) { return; }
+  in_data_section_ = true;
+  if (file_type_ == PLYFileType::kAscii) { advance(); }
 
-  for (PLYElement &elem : m_elements) { elem.calculate_offsets(); }
+  for (PLYElement &elem : elements_) { elem.calculate_offsets(); }
 }
 
 
 PLYReader::~PLYReader() = default;
 
 
-auto PLYReader::valid() const -> bool { return m_valid; }
+auto PLYReader::valid() const -> bool { return valid_; }
 
 
-auto PLYReader::has_element() const -> bool { return m_valid && m_current_element < m_elements.size(); }
+auto PLYReader::has_element() const -> bool { return valid_ && current_element_ < elements_.size(); }
 
 
 auto PLYReader::element() const -> const PLYElement *
 {
   assert(has_element());
-  return &m_elements.at(m_current_element);
+  return &elements_.at(current_element_);
 }
 
 
 auto PLYReader::load_element() -> bool
 {
   assert(has_element());
-  if (m_element_loaded) { return true; }
+  if (element_loaded_) { return true; }
 
-  PLYElement &elem = m_elements.at(m_current_element);
+  PLYElement &elem = elements_.at(current_element_);
   return elem.fixed_size ? load_fixed_size_element(elem) : load_variable_size_element(elem);
 }
 
 
-auto PLYReader::char_at(size_t index) const -> char { return m_buf.at(index); }
+auto PLYReader::char_at(size_t index) const -> char { return buf_.at(index); }
 
 
 auto PLYReader::ensure_bytes_available(size_t num_bytes) -> bool
 {
-  if (m_pos + num_bytes > m_buf_data_end) {
-    if (!refill_buffer() || m_pos + num_bytes > m_buf_data_end) {
-      m_valid = false;
+  if (pos_ + num_bytes > buf_data_end_) {
+    if (!refill_buffer() || pos_ + num_bytes > buf_data_end_) {
+      valid_ = false;
       return false;
     }
   }
@@ -835,14 +835,14 @@ auto PLYReader::ensure_bytes_available(size_t num_bytes) -> bool
 void PLYReader::clear_list_property_storage(PLYElement &elem)
 {
   for (PLYProperty &prop : elem.properties) {
-    if (prop.count_type == PLYPropertyType::None) { continue; }
+    if (prop.count_type == PLYPropertyType::kNone) { continue; }
     prop.list_data.clear();
     prop.list_data.shrink_to_fit();
     prop.row_count.clear();
     prop.row_count.shrink_to_fit();
   }
-  m_element_data.clear();
-  m_element_loaded = false;
+  element_data_.clear();
+  element_loaded_ = false;
 }
 
 
@@ -854,22 +854,22 @@ void PLYReader::skip_unloaded_ascii_element(PLYElement const &elem)
 
 void PLYReader::skip_unloaded_binary_fixed_element(PLYElement const &elem)
 {
-  auto const element_start = static_cast<int64_t>(m_pos);
+  auto const element_start = static_cast<int64_t>(pos_);
   int64_t const element_size = static_cast<int64_t>(elem.row_stride) * static_cast<int64_t>(elem.count);
   int64_t const element_end = element_start + element_size;
   if (std::cmp_greater_equal(element_end, static_cast<int64_t>(kPLYReadBufferSize))) {
-    m_buf_offset += element_end;
-    if (!FileSeek(m_file.get(), m_buf_offset, SEEK_SET)) {
-      m_valid = false;
+    buf_offset_ += element_end;
+    if (!FileSeek(file_.get(), buf_offset_, SEEK_SET)) {
+      valid_ = false;
       return;
     }
-    m_buf_data_end = static_cast<size_t>(kPLYReadBufferSize);
-    m_pos = m_buf_data_end;
-    m_end = m_buf_data_end;
+    buf_data_end_ = static_cast<size_t>(kPLYReadBufferSize);
+    pos_ = buf_data_end_;
+    end_ = buf_data_end_;
     refill_buffer();
   } else {
-    m_pos = static_cast<size_t>(element_end);
-    m_end = m_pos;
+    pos_ = static_cast<size_t>(element_end);
+    end_ = pos_;
   }
 }
 
@@ -878,11 +878,11 @@ void PLYReader::skip_unloaded_binary_variable_element(PLYElement const &elem)
 {
   for (uint32_t row = 0; row < elem.count; ++row) {
     for (PLYProperty const &prop : elem.properties) {
-      if (prop.count_type == PLYPropertyType::None) {
+      if (prop.count_type == PLYPropertyType::kNone) {
         uint32_t const num_bytes = kPLYPropertySize.at(static_cast<size_t>(prop.type));
         if (!ensure_bytes_available(num_bytes)) { return; }
-        m_pos += num_bytes;
-        m_end = m_pos;
+        pos_ += num_bytes;
+        end_ = pos_;
         continue;
       }
 
@@ -890,16 +890,16 @@ void PLYReader::skip_unloaded_binary_variable_element(PLYElement const &elem)
       if (!ensure_bytes_available(num_bytes)) { return; }
 
       int count = 0;
-      CopyAndConvertTo(&count, std::as_bytes(std::span{ m_buf }.subspan(m_pos, num_bytes)), prop.count_type);
+      CopyAndConvertTo(&count, std::as_bytes(std::span{ buf_ }.subspan(pos_, num_bytes)), prop.count_type);
       if (count < 0) {
-        m_valid = false;
+        valid_ = false;
         return;
       }
 
       num_bytes += static_cast<uint32_t>(count) * kPLYPropertySize.at(static_cast<size_t>(prop.type));
       if (!ensure_bytes_available(num_bytes)) { return; }
-      m_pos += num_bytes;
-      m_end = m_pos;
+      pos_ += num_bytes;
+      end_ = pos_;
     }
   }
 }
@@ -909,11 +909,11 @@ void PLYReader::skip_unloaded_binary_big_endian_variable_element(PLYElement cons
 {
   for (uint32_t row = 0; row < elem.count; ++row) {
     for (PLYProperty const &prop : elem.properties) {
-      if (prop.count_type == PLYPropertyType::None) {
+      if (prop.count_type == PLYPropertyType::kNone) {
         uint32_t const num_bytes = kPLYPropertySize.at(static_cast<size_t>(prop.type));
         if (!ensure_bytes_available(num_bytes)) { return; }
-        m_pos += num_bytes;
-        m_end = m_pos;
+        pos_ += num_bytes;
+        end_ = pos_;
         continue;
       }
 
@@ -922,18 +922,18 @@ void PLYReader::skip_unloaded_binary_big_endian_variable_element(PLYElement cons
 
       int count = 0;
       std::array<std::byte, kScalarValueBytes> tmp{};
-      std::memcpy(tmp.data(), std::span{ m_buf }.subspan(m_pos, num_bytes).data(), num_bytes);
+      std::memcpy(tmp.data(), std::span{ buf_ }.subspan(pos_, num_bytes).data(), num_bytes);
       EndianSwap(std::span{ tmp }.subspan(0, num_bytes), prop.count_type);
       CopyAndConvertTo(&count, std::span<const std::byte>{ tmp }.subspan(0, num_bytes), prop.count_type);
       if (count < 0) {
-        m_valid = false;
+        valid_ = false;
         return;
       }
 
       num_bytes += static_cast<uint32_t>(count) * kPLYPropertySize.at(static_cast<size_t>(prop.type));
       if (!ensure_bytes_available(num_bytes)) { return; }
-      m_pos += num_bytes;
-      m_end = m_pos;
+      pos_ += num_bytes;
+      end_ = pos_;
     }
   }
 }
@@ -943,19 +943,19 @@ void PLYReader::next_element()
 {
   if (!has_element()) { return; }
 
-  PLYElement &elem = m_elements.at(m_current_element);
-  m_current_element++;
+  PLYElement &elem = elements_.at(current_element_);
+  current_element_++;
 
-  if (m_element_loaded) {
+  if (element_loaded_) {
     clear_list_property_storage(elem);
     return;
   }
 
-  if (m_file_type == PLYFileType::ASCII) {
+  if (file_type_ == PLYFileType::kAscii) {
     skip_unloaded_ascii_element(elem);
   } else if (elem.fixed_size) {
     skip_unloaded_binary_fixed_element(elem);
-  } else if (m_file_type == PLYFileType::Binary) {
+  } else if (file_type_ == PLYFileType::kBinary) {
     skip_unloaded_binary_variable_element(elem);
   } else {
     skip_unloaded_binary_big_endian_variable_element(elem);
@@ -963,29 +963,29 @@ void PLYReader::next_element()
 }
 
 
-auto PLYReader::file_type() const -> PLYFileType { return m_file_type; }
+auto PLYReader::file_type() const -> PLYFileType { return file_type_; }
 
 
-auto PLYReader::version_major() const -> int { return m_major_version; }
+auto PLYReader::version_major() const -> int { return major_version_; }
 
 
-auto PLYReader::version_minor() const -> int { return m_minor_version; }
+auto PLYReader::version_minor() const -> int { return minor_version_; }
 
 
-auto PLYReader::num_elements() const -> uint32_t { return m_valid ? static_cast<uint32_t>(m_elements.size()) : 0U; }
+auto PLYReader::num_elements() const -> uint32_t { return valid_ ? static_cast<uint32_t>(elements_.size()) : 0U; }
 
 
 auto PLYReader::find_element(const char *name) const -> uint32_t
 {
   for (uint32_t index = 0; index < num_elements(); ++index) {
-    if (strcmp(m_elements.at(index).name.c_str(), name) == 0) { return index; }
+    if (strcmp(elements_.at(index).name.c_str(), name) == 0) { return index; }
   }
   return kInvalidIndex;
 }
 
 
 auto PLYReader::get_element(uint32_t idx) -> PLYElement *
-{ return (idx < num_elements()) ? &m_elements.at(idx) : nullptr; }
+{ return (idx < num_elements()) ? &elements_.at(idx) : nullptr; }
 
 
 auto PLYReader::element_is(const char *name) const -> bool
@@ -1015,18 +1015,18 @@ auto PLYReader::extract_properties(std::span<const uint32_t> prop_idxs, PLYPrope
   if (!ValidatePropertyIndices(*elem, prop_idxs)) { return false; }
 
   PropertyLayoutInfo const layout = AnalyzePropertyLayout(*elem, prop_idxs, dest_type);
-  auto dest_bytes = std::span{ static_cast<std::byte *>(dest), m_element_data.size() };
+  auto dest_bytes = std::span{ static_cast<std::byte *>(dest), element_data_.size() };
 
   if (!layout.conversion_required) {
     if (layout.contiguous_rows) {
-      ExtractContiguousRows(m_element_data, m_element_data.size(), dest_bytes);
+      ExtractContiguousRows(element_data_, element_data_.size(), dest_bytes);
     } else if (layout.contiguous_cols) {
-      ExtractContiguousColumns(m_element_data, *elem, prop_idxs, layout.expected_offset, dest_bytes);
+      ExtractContiguousColumns(element_data_, *elem, prop_idxs, layout.expected_offset, dest_bytes);
     } else {
-      ExtractScatteredColumns(m_element_data, *elem, prop_idxs, dest_type, dest_bytes);
+      ExtractScatteredColumns(element_data_, *elem, prop_idxs, dest_type, dest_bytes);
     }
   } else {
-    ConvertScatteredColumns(m_element_data, *elem, prop_idxs, dest_type, dest_bytes);
+    ConvertScatteredColumns(element_data_, *elem, prop_idxs, dest_type, dest_bytes);
   }
 
   return true;
@@ -1054,20 +1054,20 @@ auto PLYReader::extract_properties_with_stride(std::span<const uint32_t> prop_id
   size_t dest_offset = 0;
   size_t row_offset = 0;
 
-  while (row_offset < m_element_data.size()) {
+  while (row_offset < element_data_.size()) {
     if (!layout.conversion_required && layout.contiguous_cols) {
       size_t const num_bytes =
         static_cast<size_t>(layout.expected_offset) - elem->properties.at(prop_idxs.front()).offset;
-      std::memcpy(ByteSpan(dest, m_element_data.size()).subspan(dest_offset, num_bytes).data(),
-        std::span{ m_element_data }
+      std::memcpy(ByteSpan(dest, element_data_.size()).subspan(dest_offset, num_bytes).data(),
+        std::span{ element_data_ }
           .subspan(row_offset + elem->properties.at(prop_idxs.front()).offset, num_bytes)
           .data(),
         num_bytes);
     } else {
       for (uint32_t const prop_idx : prop_idxs) {
         PLYProperty const &prop = elem->properties.at(prop_idx);
-        auto dest_span = ByteSpan(dest, m_element_data.size()).subspan(dest_offset, col_bytes);
-        auto src_span = std::as_bytes(std::span{ m_element_data }.subspan(row_offset + prop.offset, col_bytes));
+        auto dest_span = ByteSpan(dest, element_data_.size()).subspan(dest_offset, col_bytes);
+        auto src_span = std::as_bytes(std::span{ element_data_ }.subspan(row_offset + prop.offset, col_bytes));
         if (layout.conversion_required) {
           CopyAndConvert(dest_span, dest_type, src_span, prop.type);
         } else {
@@ -1090,7 +1090,7 @@ auto PLYReader::extract_properties_with_stride(std::span<const uint32_t> prop_id
 auto PLYReader::get_list_counts(uint32_t prop_idx) const -> const uint32_t *
 {
   if (!has_element() || prop_idx >= element()->properties.size()
-      || element()->properties.at(prop_idx).count_type == PLYPropertyType::None) {
+      || element()->properties.at(prop_idx).count_type == PLYPropertyType::kNone) {
     return nullptr;
   }
   return element()->properties.at(prop_idx).row_count.data();
@@ -1100,7 +1100,7 @@ auto PLYReader::get_list_counts(uint32_t prop_idx) const -> const uint32_t *
 auto PLYReader::sum_of_list_counts(uint32_t prop_idx) const -> uint32_t
 {
   if (!has_element() || prop_idx >= element()->properties.size()
-      || element()->properties.at(prop_idx).count_type == PLYPropertyType::None) {
+      || element()->properties.at(prop_idx).count_type == PLYPropertyType::kNone) {
     return 0U;
   }
   PLYProperty const &prop = element()->properties.at(prop_idx);
@@ -1111,7 +1111,7 @@ auto PLYReader::sum_of_list_counts(uint32_t prop_idx) const -> uint32_t
 auto PLYReader::get_list_data(uint32_t prop_idx) const -> const uint8_t *
 {
   if (!has_element() || prop_idx >= element()->properties.size()
-      || element()->properties.at(prop_idx).count_type == PLYPropertyType::None) {
+      || element()->properties.at(prop_idx).count_type == PLYPropertyType::kNone) {
     return nullptr;
   }
   return element()->properties.at(prop_idx).list_data.data();
@@ -1121,7 +1121,7 @@ auto PLYReader::get_list_data(uint32_t prop_idx) const -> const uint8_t *
 auto PLYReader::extract_list_property(uint32_t prop_idx, PLYPropertyType dest_type, void *dest) const -> bool
 {
   if (!has_element() || prop_idx >= element()->properties.size()
-      || element()->properties.at(prop_idx).count_type == PLYPropertyType::None || dest == nullptr) {
+      || element()->properties.at(prop_idx).count_type == PLYPropertyType::kNone || dest == nullptr) {
     return false;
   }
 
@@ -1185,8 +1185,8 @@ auto PLYReader::extract_triangles(uint32_t prop_idx,
   if (!requires_triangulation(prop_idx)) { return extract_list_property(prop_idx, dest_type, dest); }
 
   PLYProperty const &prop = element()->properties.at(prop_idx);
-  bool const convert_src = !CompatibleTypes(prop.type, PLYPropertyType::Int);
-  bool const convert_dst = !CompatibleTypes(PLYPropertyType::Int, dest_type);
+  bool const convert_src = !CompatibleTypes(prop.type, PLYPropertyType::kInt);
+  bool const convert_dst = !CompatibleTypes(PLYPropertyType::kInt, dest_type);
 
   if (convert_src && convert_dst) {
     return extract_triangles_convert_both(prop_idx, positions, mesh_vertex_count, dest_type, dest);
@@ -1225,7 +1225,7 @@ auto PLYReader::extract_triangles_convert_both(uint32_t prop_idx,
       face_offset += src_val_bytes;
     }
     tri_indices.resize(static_cast<size_t>(SpanAt(counts, face_idx) - 2U) * kIndicesPerTriangle);
-    triangulate_polygon(PolygonVertexCount{ SpanAt(counts, face_idx) },
+    TriangulatePolygon(PolygonVertexCount{ SpanAt(counts, face_idx) },
       positions,
       mesh_vertex_count,
       PolygonIndices{ face_indices },
@@ -1236,7 +1236,7 @@ auto PLYReader::extract_triangles_convert_both(uint32_t prop_idx,
       CopyAndConvert(dest_bytes.subspan(dest_byte_offset, dest_val_bytes),
         dest_type,
         std::span<const std::byte>{ idx_bytes }.subspan(0, sizeof(int)),
-        PLYPropertyType::Int);
+        PLYPropertyType::kInt);
       dest_byte_offset += dest_val_bytes;
     }
   }
@@ -1271,7 +1271,7 @@ auto PLYReader::extract_triangles_convert_src(uint32_t prop_idx,
       face_offset += src_val_bytes;
     }
     size_t const tri_capacity = static_cast<size_t>(SpanAt(counts, face_idx) - 2U) * kIndicesPerTriangle;
-    uint32_t const num_tris = triangulate_polygon(PolygonVertexCount{ SpanAt(counts, face_idx) },
+    uint32_t const num_tris = TriangulatePolygon(PolygonVertexCount{ SpanAt(counts, face_idx) },
       positions,
       mesh_vertex_count,
       PolygonIndices{ face_indices },
@@ -1309,7 +1309,7 @@ auto PLYReader::extract_triangles_convert_dst(uint32_t prop_idx,
       face_offset += src_val_bytes;
     }
     tri_indices.resize(static_cast<size_t>(SpanAt(counts, face_idx) - 2U) * kIndicesPerTriangle);
-    triangulate_polygon(PolygonVertexCount{ SpanAt(counts, face_idx) },
+    TriangulatePolygon(PolygonVertexCount{ SpanAt(counts, face_idx) },
       positions,
       mesh_vertex_count,
       PolygonIndices{ face_indices },
@@ -1320,7 +1320,7 @@ auto PLYReader::extract_triangles_convert_dst(uint32_t prop_idx,
       CopyAndConvert(dest_bytes.subspan(dest_byte_offset, dest_val_bytes),
         dest_type,
         std::span<const std::byte>{ idx_bytes }.subspan(0, sizeof(int)),
-        PLYPropertyType::Int);
+        PLYPropertyType::kInt);
       dest_byte_offset += dest_val_bytes;
     }
   }
@@ -1353,7 +1353,7 @@ auto PLYReader::extract_triangles_native(uint32_t prop_idx,
       face_offset += src_val_bytes;
     }
     size_t const tri_capacity = static_cast<size_t>(SpanAt(counts, face_idx) - 2U) * kIndicesPerTriangle;
-    uint32_t const num_tris = triangulate_polygon(PolygonVertexCount{ SpanAt(counts, face_idx) },
+    uint32_t const num_tris = TriangulatePolygon(PolygonVertexCount{ SpanAt(counts, face_idx) },
       positions,
       mesh_vertex_count,
       PolygonIndices{ face_indices },
@@ -1407,100 +1407,100 @@ auto PLYReader::find_indices(std::span<uint32_t, 1> prop_idxs) const -> bool
 
 auto PLYReader::refill_buffer() -> bool
 {
-  if (m_file == nullptr || m_at_Eof) { return false; }
+  if (file_ == nullptr || at_eof_) { return false; }
 
-  if (m_pos == 0U && m_end == m_buf_data_end && m_buf_data_end == static_cast<size_t>(kPLYReadBufferSize)) {
+  if (pos_ == 0U && end_ == buf_data_end_ && buf_data_end_ == static_cast<size_t>(kPLYReadBufferSize)) {
     return false;
   }
 
-  auto const buf_size = static_cast<int64_t>(m_buf_data_end);
+  auto const buf_size = static_cast<int64_t>(buf_data_end_);
   if (std::cmp_less(buf_size, static_cast<int64_t>(kPLYReadBufferSize))) {
 
-    m_buf.at(static_cast<size_t>(kPLYReadBufferSize)) = '\0';
-    m_buf_data_end = static_cast<size_t>(kPLYReadBufferSize);
+    buf_.at(static_cast<size_t>(kPLYReadBufferSize)) = '\0';
+    buf_data_end_ = static_cast<size_t>(kPLYReadBufferSize);
   }
 
-  size_t const keep = m_buf_data_end - m_pos;
-  if (keep > 0U && m_pos > 0U) {
-    std::memmove(m_buf.data(), std::span{ m_buf }.subspan(m_pos, keep).data(), keep);
-    m_buf_offset += static_cast<int64_t>(m_pos);
+  size_t const keep = buf_data_end_ - pos_;
+  if (keep > 0U && pos_ > 0U) {
+    std::memmove(buf_.data(), std::span{ buf_ }.subspan(pos_, keep).data(), keep);
+    buf_offset_ += static_cast<int64_t>(pos_);
   }
-  if (m_end >= m_pos) {
-    m_end -= m_pos;
+  if (end_ >= pos_) {
+    end_ -= pos_;
   } else {
-    m_end = 0U;
+    end_ = 0U;
   }
-  m_pos = 0U;
+  pos_ = 0U;
 
   size_t const read_size = static_cast<size_t>(kPLYReadBufferSize) - keep;
   size_t const read_count =
-    fread(std::span{ m_buf }.subspan(keep, read_size).data(), sizeof(char), read_size, m_file.get());
-  if (read_count < read_size && ferror(m_file.get()) != 0) { return false; }
+    fread(std::span{ buf_ }.subspan(keep, read_size).data(), sizeof(char), read_size, file_.get());
+  if (read_count < read_size && ferror(file_.get()) != 0) { return false; }
 
   size_t const fetched = read_count + keep;
-  m_at_Eof = fetched < static_cast<size_t>(kPLYReadBufferSize);
-  m_buf_data_end = fetched;
+  at_eof_ = fetched < static_cast<size_t>(kPLYReadBufferSize);
+  buf_data_end_ = fetched;
 
-  if (!m_in_data_section || m_file_type == PLYFileType::ASCII) { return rewind_to_safe_char(); }
+  if (!in_data_section_ || file_type_ == PLYFileType::kAscii) { return rewind_to_safe_char(); }
   return true;
 }
 
 
 auto PLYReader::rewind_to_safe_char() -> bool
 {
-  if (!m_at_Eof && m_buf_data_end > 0U
-      && (m_buf.at(m_buf_data_end - 1U) == '\n' || !IsSafeBufferEnd(m_buf.at(m_buf_data_end - 1U)))) {
-    size_t safe = m_buf_data_end - 2U;
-    while (safe >= m_end && (m_buf.at(safe) == '\n' || !IsSafeBufferEnd(m_buf.at(safe)))) {
+  if (!at_eof_ && buf_data_end_ > 0U
+      && (buf_.at(buf_data_end_ - 1U) == '\n' || !IsSafeBufferEnd(buf_.at(buf_data_end_ - 1U)))) {
+    size_t safe = buf_data_end_ - 2U;
+    while (safe >= end_ && (buf_.at(safe) == '\n' || !IsSafeBufferEnd(buf_.at(safe)))) {
       if (safe == 0U) { break; }
       --safe;
     }
-    if (safe < m_end) { return false; }
+    if (safe < end_) { return false; }
     ++safe;
-    m_buf.at(static_cast<size_t>(kPLYReadBufferSize)) = m_buf.at(safe);
-    m_buf_data_end = safe;
+    buf_.at(static_cast<size_t>(kPLYReadBufferSize)) = buf_.at(safe);
+    buf_data_end_ = safe;
   }
-  m_buf.at(m_buf_data_end) = '\0';
+  buf_.at(buf_data_end_) = '\0';
   return true;
 }
 
 
 auto PLYReader::accept() -> bool
 {
-  m_pos = m_end;
+  pos_ = end_;
   return true;
 }
 
 
 auto PLYReader::advance() -> bool
 {
-  m_pos = m_end;
+  pos_ = end_;
   while (true) {
-    while (m_pos < m_buf_data_end && IsWhitespace(char_at(m_pos))) { ++m_pos; }
-    if (m_pos == m_buf_data_end) {
-      m_end = m_pos;
+    while (pos_ < buf_data_end_ && IsWhitespace(char_at(pos_))) { ++pos_; }
+    if (pos_ == buf_data_end_) {
+      end_ = pos_;
       if (refill_buffer()) { continue; }
       return false;
     }
     break;
   }
-  m_end = m_pos;
+  end_ = pos_;
   return true;
 }
 
 
 auto PLYReader::next_line() -> bool
 {
-  m_pos = m_end;
+  pos_ = end_;
   while (true) {
-    while (m_pos < m_buf_data_end && char_at(m_pos) != '\n') { ++m_pos; }
-    if (m_pos == m_buf_data_end) {
-      m_end = m_pos;
+    while (pos_ < buf_data_end_ && char_at(pos_) != '\n') { ++pos_; }
+    if (pos_ == buf_data_end_) {
+      end_ = pos_;
       if (refill_buffer()) { continue; }
       return false;
     }
-    ++m_pos;
-    m_end = m_pos;
+    ++pos_;
+    end_ = pos_;
     if (!match("comment") && !match("obj_info")) { return true; }
   }
 }
@@ -1508,10 +1508,10 @@ auto PLYReader::next_line() -> bool
 
 auto PLYReader::match(std::string_view str) -> bool
 {
-  m_end = m_pos;
+  end_ = pos_;
   size_t str_index = 0U;
-  while (m_end < m_buf_data_end && str_index < str.size() && char_at(m_end) == str.at(str_index)) {
-    ++m_end;
+  while (end_ < buf_data_end_ && str_index < str.size() && char_at(end_) == str.at(str_index)) {
+    ++end_;
     ++str_index;
   }
   return str_index == str.size();
@@ -1544,18 +1544,18 @@ auto PLYReader::which_property_type(PLYPropertyType *type) -> bool
 
 
 auto PLYReader::keyword(std::string_view keyword_text) -> bool
-{ return match(keyword_text) && (m_end >= m_buf_data_end || !IsKeywordPart(char_at(m_end))); }
+{ return match(keyword_text) && (end_ >= buf_data_end_ || !IsKeywordPart(char_at(end_))); }
 
 
 auto PLYReader::identifier(std::span<char> dest) -> bool
 {
-  m_end = m_pos;
-  if (dest.empty() || m_end >= m_buf_data_end || !IsKeywordStart(char_at(m_end))) { return false; }
-  while (m_end < m_buf_data_end && IsKeywordPart(char_at(m_end))) { ++m_end; }
+  end_ = pos_;
+  if (dest.empty() || end_ >= buf_data_end_ || !IsKeywordStart(char_at(end_))) { return false; }
+  while (end_ < buf_data_end_ && IsKeywordPart(char_at(end_))) { ++end_; }
 
-  size_t const len = m_end - m_pos;
+  size_t const len = end_ - pos_;
   if (len >= dest.size()) { return false; }
-  std::memcpy(dest.data(), std::span{ m_buf }.subspan(m_pos, len).data(), len);
+  std::memcpy(dest.data(), std::span{ buf_ }.subspan(pos_, len).data(), len);
   SpanRef(dest, len) = '\0';
   return true;
 }
@@ -1563,35 +1563,35 @@ auto PLYReader::identifier(std::span<char> dest) -> bool
 
 auto PLYReader::int_literal(int *value) -> bool
 {
-  size_t end_pos = m_pos;
-  bool const success = miniply::IntLiteral(std::span{ m_buf }.subspan(0, m_buf_data_end), m_pos, end_pos, value);
-  if (success) { m_end = end_pos; }
+  size_t end_pos = pos_;
+  bool const success = miniply::IntLiteral(std::span{ buf_ }.subspan(0, buf_data_end_), pos_, end_pos, value);
+  if (success) { end_ = end_pos; }
   return success;
 }
 
 
 auto PLYReader::float_literal(float *value) -> bool
 {
-  size_t end_pos = m_pos;
-  bool const success = miniply::FloatLiteral(std::span{ m_buf }.subspan(0, m_buf_data_end), m_pos, end_pos, value);
-  if (success) { m_end = end_pos; }
+  size_t end_pos = pos_;
+  bool const success = miniply::FloatLiteral(std::span{ buf_ }.subspan(0, buf_data_end_), pos_, end_pos, value);
+  if (success) { end_ = end_pos; }
   return success;
 }
 
 
 auto PLYReader::double_literal(double *value) -> bool
 {
-  size_t end_pos = m_pos;
-  bool const success = miniply::DoubleLiteral(std::span{ m_buf }.subspan(0, m_buf_data_end), m_pos, end_pos, value);
-  if (success) { m_end = end_pos; }
+  size_t end_pos = pos_;
+  bool const success = miniply::DoubleLiteral(std::span{ buf_ }.subspan(0, buf_data_end_), pos_, end_pos, value);
+  if (success) { end_ = end_pos; }
   return success;
 }
 
 
 auto PLYReader::parse_elements() -> bool
 {
-  m_elements.reserve(kElementReserve);
-  while (m_valid && keyword("element")) { parse_element(); }
+  elements_.reserve(kElementReserve);
+  while (valid_ && keyword("element")) { parse_element(); }
   return true;
 }
 
@@ -1599,42 +1599,42 @@ auto PLYReader::parse_elements() -> bool
 auto PLYReader::parse_element() -> bool
 {
   int count = 0;
-  auto tmp_span = std::span{ m_tmp_buf }.subspan(0, static_cast<size_t>(kPLYTempBufferSize));
+  auto tmp_span = std::span{ tmp_buf_ }.subspan(0, static_cast<size_t>(kPLYTempBufferSize));
 
-  m_valid = keyword("element") && advance() && identifier(tmp_span) && advance() && int_literal(&count) && next_line();
-  if (!m_valid || count < 0) { return false; }
+  valid_ = keyword("element") && advance() && identifier(tmp_span) && advance() && int_literal(&count) && next_line();
+  if (!valid_ || count < 0) { return false; }
 
-  m_elements.emplace_back();
-  PLYElement &elem = m_elements.back();
-  elem.name = m_tmp_buf.data();
+  elements_.emplace_back();
+  PLYElement &elem = elements_.back();
+  elem.name = tmp_buf_.data();
   elem.count = static_cast<uint32_t>(count);
   elem.properties.reserve(kPropertyReserve);
 
-  while (m_valid && keyword("property")) { parse_property(elem.properties); }
+  while (valid_ && keyword("property")) { parse_property(elem.properties); }
   return true;
 }
 
 
 auto PLYReader::parse_property(std::vector<PLYProperty> &properties) -> bool
 {
-  PLYPropertyType type = PLYPropertyType::None;
-  PLYPropertyType count_type = PLYPropertyType::None;
+  PLYPropertyType type = PLYPropertyType::kNone;
+  PLYPropertyType count_type = PLYPropertyType::kNone;
 
-  m_valid = keyword("property") && advance();
-  if (!m_valid) { return false; }
+  valid_ = keyword("property") && advance();
+  if (!valid_) { return false; }
 
   if (keyword("list")) {
-    m_valid = advance() && which_property_type(&count_type) && advance();
-    if (!m_valid) { return false; }
+    valid_ = advance() && which_property_type(&count_type) && advance();
+    if (!valid_) { return false; }
   }
 
-  auto tmp_span = std::span{ m_tmp_buf }.subspan(0, static_cast<size_t>(kPLYTempBufferSize));
-  m_valid = which_property_type(&type) && advance() && identifier(tmp_span) && next_line();
-  if (!m_valid) { return false; }
+  auto tmp_span = std::span{ tmp_buf_ }.subspan(0, static_cast<size_t>(kPLYTempBufferSize));
+  valid_ = which_property_type(&type) && advance() && identifier(tmp_span) && next_line();
+  if (!valid_) { return false; }
 
   properties.emplace_back();
   PLYProperty &prop = properties.back();
-  prop.name = m_tmp_buf.data();
+  prop.name = tmp_buf_.data();
   prop.type = type;
   prop.count_type = count_type;
   return true;
@@ -1644,15 +1644,15 @@ auto PLYReader::parse_property(std::vector<PLYProperty> &properties) -> bool
 auto PLYReader::load_fixed_size_element(PLYElement &elem) -> bool
 {
   size_t const num_bytes = static_cast<size_t>(elem.count) * static_cast<size_t>(elem.row_stride);
-  m_element_data.resize(num_bytes);
+  element_data_.resize(num_bytes);
 
-  if (m_file_type == PLYFileType::ASCII) {
+  if (file_type_ == PLYFileType::kAscii) {
     if (!load_fixed_ascii_element(elem)) { return false; }
   } else if (!load_fixed_binary_element(elem, num_bytes)) {
     return false;
   }
 
-  m_element_loaded = true;
+  element_loaded_ = true;
   return true;
 }
 
@@ -1663,7 +1663,7 @@ auto PLYReader::load_fixed_ascii_element(PLYElement &elem) -> bool
   for (uint32_t row = 0; row < elem.count; ++row) {
     for (PLYProperty &prop : elem.properties) {
       if (!load_ascii_scalar_property(prop, back)) {
-        m_valid = false;
+        valid_ = false;
         return false;
       }
     }
@@ -1677,22 +1677,22 @@ auto PLYReader::load_fixed_binary_element(PLYElement const &elem, size_t num_byt
 {
   size_t dst_offset = 0U;
   while (dst_offset < num_bytes) {
-    size_t bytes_available = m_buf_data_end - m_pos;
+    size_t bytes_available = buf_data_end_ - pos_;
     if (dst_offset + bytes_available > num_bytes) { bytes_available = num_bytes - dst_offset; }
-    std::memcpy(std::span{ m_element_data }.subspan(dst_offset, bytes_available).data(),
-      std::span{ m_buf }.subspan(m_pos, bytes_available).data(),
+    std::memcpy(std::span{ element_data_ }.subspan(dst_offset, bytes_available).data(),
+      std::span{ buf_ }.subspan(pos_, bytes_available).data(),
       bytes_available);
-    m_pos += bytes_available;
-    m_end = m_pos;
+    pos_ += bytes_available;
+    end_ = pos_;
     dst_offset += bytes_available;
     if (!refill_buffer()) { break; }
   }
   if (dst_offset < num_bytes) {
-    m_valid = false;
+    valid_ = false;
     return false;
   }
 
-  if (m_file_type == PLYFileType::BinaryBigEndian) { endian_swap_loaded_fixed_element(elem); }
+  if (file_type_ == PLYFileType::kBinaryBigEndian) { endian_swap_loaded_fixed_element(elem); }
   return true;
 }
 
@@ -1703,7 +1703,7 @@ void PLYReader::endian_swap_loaded_fixed_element(PLYElement const &elem)
   for (uint32_t row = 0; row < elem.count; ++row) {
     for (PLYProperty const &prop : elem.properties) {
       size_t const prop_bytes = kPLYPropertySize.at(static_cast<size_t>(prop.type));
-      EndianSwap(std::as_writable_bytes(std::span{ m_element_data }.subspan(data_offset, prop_bytes)), prop.type);
+      EndianSwap(std::as_writable_bytes(std::span{ element_data_ }.subspan(data_offset, prop_bytes)), prop.type);
       data_offset += prop_bytes;
     }
   }
@@ -1712,24 +1712,24 @@ void PLYReader::endian_swap_loaded_fixed_element(PLYElement const &elem)
 
 auto PLYReader::load_variable_size_element(PLYElement &elem) -> bool
 {
-  m_element_data.resize(static_cast<size_t>(elem.count) * static_cast<size_t>(elem.row_stride));
+  element_data_.resize(static_cast<size_t>(elem.count) * static_cast<size_t>(elem.row_stride));
 
   for (PLYProperty &prop : elem.properties) {
-    if (prop.count_type != PLYPropertyType::None) {
+    if (prop.count_type != PLYPropertyType::kNone) {
       prop.list_data.reserve(static_cast<size_t>(elem.count)
                              * static_cast<size_t>(kPLYPropertySize.at(static_cast<size_t>(prop.type))) * 3U);
     }
   }
 
-  if (m_file_type == PLYFileType::Binary) {
+  if (file_type_ == PLYFileType::kBinary) {
     if (!load_variable_binary_element(elem)) { return false; }
-  } else if (m_file_type == PLYFileType::ASCII) {
+  } else if (file_type_ == PLYFileType::kAscii) {
     if (!load_variable_ascii_element(elem)) { return false; }
   } else if (!load_variable_binary_big_endian_element(elem)) {
     return false;
   }
 
-  m_element_loaded = true;
+  element_loaded_ = true;
   return true;
 }
 
@@ -1739,14 +1739,14 @@ auto PLYReader::load_variable_binary_element(PLYElement &elem) -> bool
   size_t back = 0U;
   for (uint32_t row = 0; row < elem.count; ++row) {
     for (PLYProperty &prop : elem.properties) {
-      if (prop.count_type == PLYPropertyType::None) {
-        m_valid = load_binary_scalar_property(prop, back);
+      if (prop.count_type == PLYPropertyType::kNone) {
+        valid_ = load_binary_scalar_property(prop, back);
       } else {
         load_binary_list_property(prop);
       }
     }
   }
-  return m_valid;
+  return valid_;
 }
 
 
@@ -1755,15 +1755,15 @@ auto PLYReader::load_variable_ascii_element(PLYElement &elem) -> bool
   size_t back = 0U;
   for (uint32_t row = 0; row < elem.count; ++row) {
     for (PLYProperty &prop : elem.properties) {
-      if (prop.count_type == PLYPropertyType::None) {
-        m_valid = load_ascii_scalar_property(prop, back);
+      if (prop.count_type == PLYPropertyType::kNone) {
+        valid_ = load_ascii_scalar_property(prop, back);
       } else {
         load_ascii_list_property(prop);
       }
     }
     next_line();
   }
-  return m_valid;
+  return valid_;
 }
 
 
@@ -1772,14 +1772,14 @@ auto PLYReader::load_variable_binary_big_endian_element(PLYElement &elem) -> boo
   size_t back = 0U;
   for (uint32_t row = 0; row < elem.count; ++row) {
     for (PLYProperty &prop : elem.properties) {
-      if (prop.count_type == PLYPropertyType::None) {
-        m_valid = load_binary_scalar_property_big_endian(prop, back);
+      if (prop.count_type == PLYPropertyType::kNone) {
+        valid_ = load_binary_scalar_property_big_endian(prop, back);
       } else {
         load_binary_list_property_big_endian(prop);
       }
     }
   }
-  return m_valid;
+  return valid_;
 }
 
 
@@ -1789,7 +1789,7 @@ auto PLYReader::load_ascii_scalar_property(PLYProperty &prop, size_t &dest_index
   if (!ascii_value(prop.type, value)) { return false; }
 
   size_t const num_bytes = kPLYPropertySize.at(static_cast<size_t>(prop.type));
-  std::memcpy(std::span{ m_element_data }.subspan(dest_index, num_bytes).data(), value.data(), num_bytes);
+  std::memcpy(std::span{ element_data_ }.subspan(dest_index, num_bytes).data(), value.data(), num_bytes);
   dest_index += num_bytes;
   return true;
 }
@@ -1798,8 +1798,8 @@ auto PLYReader::load_ascii_scalar_property(PLYProperty &prop, size_t &dest_index
 auto PLYReader::load_ascii_list_property(PLYProperty &prop) -> bool
 {
   int count = 0;
-  m_valid = (prop.count_type < PLYPropertyType::Float) && int_literal(&count) && advance() && (count >= 0);
-  if (!m_valid) { return false; }
+  valid_ = (prop.count_type < PLYPropertyType::kFloat) && int_literal(&count) && advance() && (count >= 0);
+  if (!valid_) { return false; }
 
   size_t const num_bytes = kPLYPropertySize.at(static_cast<size_t>(prop.type));
   size_t const back = prop.list_data.size();
@@ -1810,7 +1810,7 @@ auto PLYReader::load_ascii_list_property(PLYProperty &prop) -> bool
     if (!ascii_value(prop.type,
           std::span{ prop.list_data }.subspan(
             back + (static_cast<size_t>(item_index) * num_bytes), kScalarValueBytes))) {
-      m_valid = false;
+      valid_ = false;
       return false;
     }
   }
@@ -1822,11 +1822,11 @@ auto PLYReader::load_binary_scalar_property(PLYProperty &prop, size_t &dest_inde
 {
   size_t const num_bytes = kPLYPropertySize.at(static_cast<size_t>(prop.type));
   if (!ensure_bytes_available(num_bytes)) { return false; }
-  std::memcpy(std::span{ m_element_data }.subspan(dest_index, num_bytes).data(),
-    std::span{ m_buf }.subspan(m_pos, num_bytes).data(),
+  std::memcpy(std::span{ element_data_ }.subspan(dest_index, num_bytes).data(),
+    std::span{ buf_ }.subspan(pos_, num_bytes).data(),
     num_bytes);
-  m_pos += num_bytes;
-  m_end = m_pos;
+  pos_ += num_bytes;
+  end_ = pos_;
   dest_index += num_bytes;
   return true;
 }
@@ -1838,14 +1838,14 @@ auto PLYReader::load_binary_list_property(PLYProperty &prop) -> bool
   if (!ensure_bytes_available(count_bytes)) { return false; }
 
   int count = 0;
-  CopyAndConvertTo(&count, std::as_bytes(std::span{ m_buf }.subspan(m_pos, count_bytes)), prop.count_type);
+  CopyAndConvertTo(&count, std::as_bytes(std::span{ buf_ }.subspan(pos_, count_bytes)), prop.count_type);
   if (count < 0) {
-    m_valid = false;
+    valid_ = false;
     return false;
   }
 
-  m_pos += count_bytes;
-  m_end = m_pos;
+  pos_ += count_bytes;
+  end_ = pos_;
 
   size_t const list_bytes = kPLYPropertySize.at(static_cast<size_t>(prop.type)) * static_cast<size_t>(count);
   if (!ensure_bytes_available(list_bytes)) { return false; }
@@ -1854,11 +1854,11 @@ auto PLYReader::load_binary_list_property(PLYProperty &prop) -> bool
   prop.row_count.push_back(static_cast<uint32_t>(count));
   prop.list_data.resize(back + list_bytes);
   std::memcpy(std::span{ prop.list_data }.subspan(back, list_bytes).data(),
-    std::span{ m_buf }.subspan(m_pos, list_bytes).data(),
+    std::span{ buf_ }.subspan(pos_, list_bytes).data(),
     list_bytes);
 
-  m_pos += list_bytes;
-  m_end = m_pos;
+  pos_ += list_bytes;
+  end_ = pos_;
   return true;
 }
 
@@ -1868,7 +1868,7 @@ auto PLYReader::load_binary_scalar_property_big_endian(PLYProperty &prop, size_t
   size_t const start_index = dest_index;
   if (load_binary_scalar_property(prop, dest_index)) {
     EndianSwap(std::as_writable_bytes(
-                 std::span{ m_element_data }.subspan(start_index, kPLYPropertySize.at(static_cast<size_t>(prop.type)))),
+                 std::span{ element_data_ }.subspan(start_index, kPLYPropertySize.at(static_cast<size_t>(prop.type)))),
       prop.type);
     return true;
   }
@@ -1883,16 +1883,16 @@ auto PLYReader::load_binary_list_property_big_endian(PLYProperty &prop) -> bool
 
   int count = 0;
   std::array<std::byte, kScalarValueBytes> tmp{};
-  std::memcpy(tmp.data(), std::span{ m_buf }.subspan(m_pos, count_bytes).data(), count_bytes);
+  std::memcpy(tmp.data(), std::span{ buf_ }.subspan(pos_, count_bytes).data(), count_bytes);
   EndianSwap(std::span{ tmp }.subspan(0, count_bytes), prop.count_type);
   CopyAndConvertTo(&count, std::span<const std::byte>{ tmp }.subspan(0, count_bytes), prop.count_type);
   if (count < 0) {
-    m_valid = false;
+    valid_ = false;
     return false;
   }
 
-  m_pos += count_bytes;
-  m_end = m_pos;
+  pos_ += count_bytes;
+  end_ = pos_;
 
   size_t const type_bytes = kPLYPropertySize.at(static_cast<size_t>(prop.type));
   size_t const list_bytes = type_bytes * static_cast<size_t>(count);
@@ -1903,12 +1903,12 @@ auto PLYReader::load_binary_list_property_big_endian(PLYProperty &prop) -> bool
   prop.list_data.resize(back + list_bytes);
 
   std::memcpy(std::span{ prop.list_data }.subspan(back, list_bytes).data(),
-    std::span{ m_buf }.subspan(m_pos, list_bytes).data(),
+    std::span{ buf_ }.subspan(pos_, list_bytes).data(),
     list_bytes);
   EndianSwapArray(std::as_writable_bytes(std::span{ prop.list_data }.subspan(back, list_bytes)), prop.type, count);
 
-  m_pos += list_bytes;
-  m_end = m_pos;
+  pos_ += list_bytes;
+  end_ = pos_;
   return true;
 }
 
@@ -1919,48 +1919,48 @@ auto PLYReader::ascii_value(PLYPropertyType prop_type, std::span<uint8_t> value)
   int tmp_int = 0;
 
   switch (prop_type) {
-  case PLYPropertyType::Char:
-  case PLYPropertyType::UChar:
-  case PLYPropertyType::Short:
-  case PLYPropertyType::UShort:
-    m_valid = int_literal(&tmp_int);
+  case PLYPropertyType::kChar:
+  case PLYPropertyType::kUChar:
+  case PLYPropertyType::kShort:
+  case PLYPropertyType::kUShort:
+    valid_ = int_literal(&tmp_int);
     break;
-  case PLYPropertyType::Int:
-  case PLYPropertyType::UInt: {
+  case PLYPropertyType::kInt:
+  case PLYPropertyType::kUInt: {
     int parsed = 0;
-    m_valid = int_literal(&parsed);
-    if (m_valid) { WriteValue(value_bytes.subspan(0, kInt32Bytes), static_cast<uint32_t>(parsed)); }
+    valid_ = int_literal(&parsed);
+    if (valid_) { WriteValue(value_bytes.subspan(0, kInt32Bytes), static_cast<uint32_t>(parsed)); }
     break;
   }
-  case PLYPropertyType::Float: {
+  case PLYPropertyType::kFloat: {
     float parsed = 0.0F;
-    m_valid = float_literal(&parsed);
-    if (m_valid) { WriteValue(value_bytes.subspan(0, kFloatBytes), parsed); }
+    valid_ = float_literal(&parsed);
+    if (valid_) { WriteValue(value_bytes.subspan(0, kFloatBytes), parsed); }
     break;
   }
-  case PLYPropertyType::Double:
+  case PLYPropertyType::kDouble:
   default: {
     double parsed = 0.0;
-    m_valid = double_literal(&parsed);
-    if (m_valid) { WriteValue(value_bytes.subspan(0, kDoubleBytes), parsed); }
+    valid_ = double_literal(&parsed);
+    if (valid_) { WriteValue(value_bytes.subspan(0, kDoubleBytes), parsed); }
     break;
   }
   }
 
-  if (!m_valid) { return false; }
+  if (!valid_) { return false; }
   advance();
 
   switch (prop_type) {
-  case PLYPropertyType::Char:
+  case PLYPropertyType::kChar:
     WriteValue(value_bytes.subspan(0, 1), static_cast<int8_t>(tmp_int));
     break;
-  case PLYPropertyType::UChar:
+  case PLYPropertyType::kUChar:
     value_bytes.front() = std::byte{ static_cast<uint8_t>(tmp_int) };
     break;
-  case PLYPropertyType::Short:
+  case PLYPropertyType::kShort:
     WriteValue(value_bytes.subspan(0, 2), static_cast<int16_t>(tmp_int));
     break;
-  case PLYPropertyType::UShort:
+  case PLYPropertyType::kUShort:
     WriteValue(value_bytes.subspan(0, 2), static_cast<uint16_t>(tmp_int));
     break;
   default:
@@ -1970,7 +1970,7 @@ auto PLYReader::ascii_value(PLYPropertyType prop_type, std::span<uint8_t> value)
 }
 
 
-auto triangulate_polygon(PolygonVertexCount vertex_count,
+auto TriangulatePolygon(PolygonVertexCount vertex_count,
   std::span<const float> positions,
   MeshVertexCount mesh_vertex_count,
   PolygonIndices indices,

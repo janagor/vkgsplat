@@ -18,6 +18,6 @@ struct AppConfig
   bool enable_gpu_timers = false;
 };
 
-[[nodiscard]] auto parse_app_config(std::span<char *const> args) -> std::expected<AppConfig, vkgsplat::Error>;
+[[nodiscard]] auto ParseAppConfig(std::span<char *const> args) -> std::expected<AppConfig, vkgsplat::Error>;
 
 }// namespace vkgsplat::app

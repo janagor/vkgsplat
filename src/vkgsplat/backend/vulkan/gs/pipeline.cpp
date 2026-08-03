@@ -18,7 +18,7 @@
 
 namespace vkgsplat::gs {
 
-void record_gs_pipeline(RenderData &data)
+void RecordGsPipeline(RenderData &data)
 {
   data.gs_sequence.emplace<OpProjection>()
     .emplace<compute::OpFillBuffer>(compute::FillBufferParams{
@@ -33,7 +33,7 @@ void record_gs_pipeline(RenderData &data)
     .emplace<OpRasterization>();
 }
 
-void update_gs_frame_state(Init const &init, RenderData &data, GsFrameParams const &frame)
+void UpdateGsFrameState(Init const &init, RenderData &data, GsFrameParams const &frame)
 {
   data.present_image_index = frame.image_index;
 
@@ -43,7 +43,7 @@ void update_gs_frame_state(Init const &init, RenderData &data, GsFrameParams con
     .projection = frame.camera.projection_matrix(frame.aspect_ratio),
     .viewport = { static_cast<float>(init.swapchain->extent().width),
       static_cast<float>(init.swapchain->extent().height) },
-    .sh_degree = k_viewer_sh_degree,
+    .sh_degree = kViewerShDegree,
     .pad0 = 0U,
     .camera_position = glm::vec4{ camera_pos, 0.0F },
   };
@@ -51,7 +51,7 @@ void update_gs_frame_state(Init const &init, RenderData &data, GsFrameParams con
   data.bin_push = {
     .viewport = { init.swapchain->extent().width, init.swapchain->extent().height },
     .max_instances = data.max_bin_instances,
-    .tile_size = k_tile_size,
+    .tile_size = kTileSize,
     .instance_count_address = init.gpu_allocator.get_buffer_device_address(data.instance_count_buffer),
   };
 
@@ -68,16 +68,16 @@ void update_gs_frame_state(Init const &init, RenderData &data, GsFrameParams con
   data.raster_push = {
     .camera_position = glm::vec4{ camera_pos, 0.0F },
     .viewport = { init.swapchain->extent().width, init.swapchain->extent().height },
-    .tile_size = k_tile_size,
-    .tiles_x = (init.swapchain->extent().width + k_tile_size - 1U) / k_tile_size,
-    .sh_degree = k_viewer_sh_degree,
+    .tile_size = kTileSize,
+    .tiles_x = (init.swapchain->extent().width + kTileSize - 1U) / kTileSize,
+    .sh_degree = kViewerShDegree,
     .pad0 = 0U,
     .pad1 = 0U,
     .pad2 = 0U,
   };
 }
 
-void eval_gs_pipeline(Init &init, RenderData &data, VkCommandBuffer command_buffer)
+void EvalGsPipeline(Init &init, RenderData &data, VkCommandBuffer command_buffer)
 {
   size_t const slot = data.current_frame;
   if (data.gpu_pass_timer.enabled()) { data.gpu_pass_timer.begin_frame(init, slot, command_buffer); }
@@ -85,6 +85,6 @@ void eval_gs_pipeline(Init &init, RenderData &data, VkCommandBuffer command_buff
   if (data.gpu_pass_timer.enabled()) { data.gpu_pass_timer.mark_submitted(slot); }
 }
 
-void destroy_gs_pipeline(RenderData &data) { data.gs_sequence.clear(); }
+void DestroyGsPipeline(RenderData &data) { data.gs_sequence.clear(); }
 
 }// namespace vkgsplat::gs

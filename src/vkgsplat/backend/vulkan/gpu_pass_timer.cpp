@@ -17,26 +17,26 @@ namespace vkgsplat {
 
 namespace {
 
-  constexpr u32 kQueriesPerSlot = k_gpu_pass_count * 2U;
-  constexpr u32 kQueryPoolSize = static_cast<u32>(k_max_frames_in_flight) * kQueriesPerSlot;
+  constexpr u32 kQueriesPerSlot = kGpuPassCount * 2U;
+  constexpr u32 kQueryPoolSize = static_cast<u32>(kMaxFramesInFlight) * kQueriesPerSlot;
   constexpr float kNsToMs = 1.0e-6F;
 
 }// namespace
 
-auto gpu_pass_name(GpuPass pass) -> char const *
+auto GpuPassName(GpuPass pass) -> char const *
 {
   switch (pass) {
-  case GpuPass::Projection:
+  case GpuPass::kProjection:
     return "proj";
-  case GpuPass::Binning:
+  case GpuPass::kBinning:
     return "bin";
-  case GpuPass::PrepareSort:
+  case GpuPass::kPrepareSort:
     return "prep";
-  case GpuPass::RadixSort:
+  case GpuPass::kRadixSort:
     return "radix";
-  case GpuPass::Rasterize:
+  case GpuPass::kRasterize:
     return "raster";
-  case GpuPass::Count:
+  case GpuPass::kCount:
     break;
   }
   return "?";
@@ -137,7 +137,7 @@ void GpuPassTimer::resolve(Init const &init, size_t slot)
   pending_.at(slot) = false;
   if (result != VK_SUCCESS) { return; }
 
-  for (u32 pass_index = 0; pass_index < k_gpu_pass_count; ++pass_index) {
+  for (u32 pass_index = 0; pass_index < kGpuPassCount; ++pass_index) {
     size_t const begin_index = static_cast<size_t>(pass_index) * 2U;
     size_t const end_index = begin_index + 1U;
     u64 const begin_ticks = timestamps.at(begin_index);

@@ -15,10 +15,10 @@
 
 namespace vkgsplat::app {
 
-auto run(std::span<char *const> args) noexcept -> int
+auto Run(std::span<char *const> args) noexcept -> int
 {
   try {
-    auto const config = parse_app_config(args);
+    auto const config = ParseAppConfig(args);
     if (!config) {
       if (config.error().code() == std::make_error_code(std::errc::operation_canceled)) { return 0; }
       std::println(
@@ -46,7 +46,7 @@ auto run(std::span<char *const> args) noexcept -> int
       return -1;
     }
 
-    vkgsplat::Camera camera{ vkgsplat::k_default_camera_position };
+    vkgsplat::Camera camera{ vkgsplat::kDefaultCameraPosition };
     vkgsplat::CloseState close{};
     vkgsplat::InputHandler input{ *window };
 

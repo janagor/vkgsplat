@@ -30,7 +30,7 @@ auto Engine::create(EngineConfig const &config, Platform &platform) -> std::expe
   beman::indirect::indirect<Impl> impl;
   impl->platform = &platform;
 
-  auto created_driver = create_vulkan_driver(platform, DriverConfig{ .enable_validation = config.enable_validation });
+  auto created_driver = CreateVulkanDriver(platform, DriverConfig{ .enable_validation = config.enable_validation });
   if (!created_driver) { return std::unexpected(created_driver.error()); }
   impl->driver = std::move(*created_driver);
 

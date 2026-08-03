@@ -56,7 +56,7 @@ layout(push_constant) uniform SortPush {
 	uint sort_size;
 	uint tile_count;
 	uint blocks_per_workgroup;
-	uint _pad;
+	uint pad_;
 } push;
 
 layout(constant_id = 0) const uint SORT_SIZE = 1u;

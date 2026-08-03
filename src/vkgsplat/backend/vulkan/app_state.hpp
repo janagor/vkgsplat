@@ -28,10 +28,10 @@
 
 namespace vkgsplat {
 
-constexpr int k_max_frames_in_flight = 2;
+constexpr int kMaxFramesInFlight = 2;
 
-constexpr u32 k_verts_per_sphere = 6;
-constexpr size_t k_sort_entry_size = sizeof(f32) + sizeof(u32);
+constexpr u32 kVertsPerSphere = 6;
+constexpr size_t kSortEntrySize = sizeof(f32) + sizeof(u32);
 
 struct ImGuiOverlayState;
 

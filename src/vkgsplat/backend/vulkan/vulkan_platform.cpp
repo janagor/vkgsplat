@@ -15,11 +15,11 @@
 
 namespace vkgsplat::vulkan {
 
-auto create_surface_from_native_window(VkInstance instance, NativeWindowHandle native_window)
+auto CreateSurfaceFromNativeWindow(VkInstance instance, NativeWindowHandle native_window)
   -> std::expected<VkSurfaceKHR, Error>
 {
   if (native_window == nullptr) {
-    return std::unexpected{ make_error(std::errc::invalid_argument, "Native window handle is null") };
+    return std::unexpected{ MakeError(std::errc::invalid_argument, "Native window handle is null") };
   }
 
   auto *const glfw_window = static_cast<GLFWwindow *>(native_window);
@@ -33,7 +33,7 @@ auto create_surface_from_native_window(VkInstance instance, NativeWindowHandle n
       message += ": ";
       message += glfw_message;
     }
-    return std::unexpected{ make_error(std::errc::io_error, std::move(message)) };
+    return std::unexpected{ MakeError(std::errc::io_error, std::move(message)) };
   }
   return surface;
 }

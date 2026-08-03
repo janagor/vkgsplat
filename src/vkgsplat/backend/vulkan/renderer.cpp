@@ -52,19 +52,19 @@ namespace {
     VkCommandBuffer command_buffer,
     size_t image_index)
   {
-    bind_descriptor_heap(init, data, command_buffer);
+    BindDescriptorHeap(init, data, command_buffer);
     // Sphere luminance bitonic setup is only needed for the unused graphics draw path;
     // re-uploading those tensors every frame was a multi-MB memcpy in pre_eval.
 
-    gs::update_gs_frame_state(
+    gs::UpdateGsFrameState(
       init, data, { .camera = camera, .image_index = image_index, .aspect_ratio = aspect_ratio });
-    gs::eval_gs_pipeline(init, data, command_buffer);
-    record_imgui_overlay(init, data, command_buffer, image_index);
+    gs::EvalGsPipeline(init, data, command_buffer);
+    RecordImguiOverlay(init, data, command_buffer, image_index);
   }
 
 }// namespace
 
-auto get_queues(Init &init, RenderData &data) -> std::expected<void, Error>
+auto GetQueues(Init &init, RenderData &data) -> std::expected<void, Error>
 {
   return VKBResultToExpected(init.device.get_queue(vkb::QueueType::graphics))
     .and_then([&](VkQueue const &graphics_queue) -> std::expected<VkQueue, Error> {
@@ -77,7 +77,7 @@ auto get_queues(Init &init, RenderData &data) -> std::expected<void, Error>
     });
 }
 
-auto create_command_resources(Init &init, RenderData &data) -> std::expected<void, Error>
+auto CreateCommandResources(Init &init, RenderData &data) -> std::expected<void, Error>
 {
   data.command_buffers.clear();
   data.command_pool.reset();
@@ -94,16 +94,16 @@ auto create_command_resources(Init &init, RenderData &data) -> std::expected<voi
   return {};
 }
 
-auto create_sync_objects(Init &init, RenderData &data) -> std::expected<void, Error>
+auto CreateSyncObjects(Init &init, RenderData &data) -> std::expected<void, Error>
 {
   data.available_semaphores.clear();
   data.finished_semaphore.clear();
   data.in_flight_fences.clear();
   data.image_in_flight.assign(init.swapchain->image_count(), VK_NULL_HANDLE);
 
-  data.available_semaphores.reserve(k_max_frames_in_flight);
+  data.available_semaphores.reserve(kMaxFramesInFlight);
   data.finished_semaphore.reserve(init.swapchain->image_count());
-  data.in_flight_fences.reserve(k_max_frames_in_flight);
+  data.in_flight_fences.reserve(kMaxFramesInFlight);
 
   for (size_t i = 0; i < init.swapchain->image_count(); i++) {
     auto semaphore = Semaphore::create(std::ref(init.disp));
@@ -111,7 +111,7 @@ auto create_sync_objects(Init &init, RenderData &data) -> std::expected<void, Er
     data.finished_semaphore.push_back(std::move(*semaphore));
   }
 
-  for (size_t i = 0; i < k_max_frames_in_flight; i++) {
+  for (size_t i = 0; i < kMaxFramesInFlight; i++) {
     auto available = Semaphore::create(std::ref(init.disp));
     if (!available) { return std::unexpected{ available.error() }; }
     data.available_semaphores.push_back(std::move(*available));
@@ -123,40 +123,40 @@ auto create_sync_objects(Init &init, RenderData &data) -> std::expected<void, Er
   return {};
 }
 
-auto recreate_swapchain(Init &init, RenderData &data) -> std::expected<void, Error>
+auto RecreateSwapchain(Init &init, RenderData &data) -> std::expected<void, Error>
 {
   init.disp.deviceWaitIdle();
 
   data.command_buffers.clear();
   data.command_pool.reset();
 
-  destroy_graphics_pipeline(init, data);
+  DestroyGraphicsPipeline(init, data);
 
-  destroy_depth_buffer(init, data);
+  DestroyDepthBuffer(init, data);
 
   if (init.swapchain == nullptr) {
-    return std::unexpected{ make_error(std::errc::state_not_recoverable, "swapchain is not initialized") };
+    return std::unexpected{ MakeError(std::errc::state_not_recoverable, "swapchain is not initialized") };
   }
   if (auto recreated = init.swapchain->recreate(init.device, init.platform->framebuffer_extent()); !recreated) {
     return std::unexpected{ recreated.error() };
   }
-  if (0 != create_graphics_pipeline(init, data)) {
-    return std::unexpected{ make_error(std::errc::io_error, "failed to recreate graphics pipeline") };
+  if (0 != CreateGraphicsPipeline(init, data)) {
+    return std::unexpected{ MakeError(std::errc::io_error, "failed to recreate graphics pipeline") };
   }
-  if (!create_depth_buffer(init, data)) {
-    return std::unexpected{ make_error(std::errc::io_error, "failed to recreate depth buffer") };
+  if (!CreateDepthBuffer(init, data)) {
+    return std::unexpected{ MakeError(std::errc::io_error, "failed to recreate depth buffer") };
   }
-  if (!gs::recreate_rasterization_color_target(init, data)) {
-    return std::unexpected{ make_error(std::errc::io_error, "failed to recreate rasterize color target") };
+  if (!gs::RecreateRasterizationColorTarget(init, data)) {
+    return std::unexpected{ MakeError(std::errc::io_error, "failed to recreate rasterize color target") };
   }
-  if (auto command_resources = create_command_resources(init, data); !command_resources) {
+  if (auto command_resources = CreateCommandResources(init, data); !command_resources) {
     return std::unexpected{ command_resources.error() };
   }
-  recreate_imgui_overlay_pipeline(init, data);
+  RecreateImguiOverlayPipeline(init, data);
   return {};
 }
 
-auto draw_frame(Init &init, RenderData &data, Camera const &camera) -> std::expected<void, Error>
+auto DrawFrame(Init &init, RenderData &data, Camera const &camera) -> std::expected<void, Error>
 {
   auto const aspect_ratio =
     static_cast<f64>(init.swapchain->extent().width) / static_cast<f64>(init.swapchain->extent().height);
@@ -167,7 +167,7 @@ auto draw_frame(Init &init, RenderData &data, Camera const &camera) -> std::expe
   if (data.gpu_pass_timer.enabled()) {
     data.gpu_pass_timer.resolve(init, data.current_frame);
     if (data.imgui != nullptr) {
-      update_imgui_gpu_timings(data);
+      UpdateImguiGpuTimings(data);
     } else {
       static auto last_print = std::chrono::steady_clock::time_point{};
       auto const now = std::chrono::steady_clock::now();
@@ -176,11 +176,11 @@ auto draw_frame(Init &init, RenderData &data, Camera const &camera) -> std::expe
         auto const &pass_ms = data.gpu_pass_timer.last_ms();
         std::println("GPU: {:.2f} ms (proj {:.2f} bin {:.2f} prep {:.2f} radix {:.2f} raster {:.2f})",
           data.gpu_pass_timer.total_ms(),
-          pass_ms.at(static_cast<size_t>(GpuPass::Projection)),
-          pass_ms.at(static_cast<size_t>(GpuPass::Binning)),
-          pass_ms.at(static_cast<size_t>(GpuPass::PrepareSort)),
-          pass_ms.at(static_cast<size_t>(GpuPass::RadixSort)),
-          pass_ms.at(static_cast<size_t>(GpuPass::Rasterize)));
+          pass_ms.at(static_cast<size_t>(GpuPass::kProjection)),
+          pass_ms.at(static_cast<size_t>(GpuPass::kBinning)),
+          pass_ms.at(static_cast<size_t>(GpuPass::kPrepareSort)),
+          pass_ms.at(static_cast<size_t>(GpuPass::kRadixSort)),
+          pass_ms.at(static_cast<size_t>(GpuPass::kRasterize)));
       }
     }
   }
@@ -191,9 +191,9 @@ auto draw_frame(Init &init, RenderData &data, Camera const &camera) -> std::expe
     init.swapchain->handle(), UINT64_MAX, available_semaphore, VK_NULL_HANDLE, &image_index);
 
   if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-    return recreate_swapchain(init, data);
+    return RecreateSwapchain(init, data);
   } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
-    return std::unexpected{ make_error(
+    return std::unexpected{ MakeError(
       std::errc::io_error, "failed to acquire swapchain image. VkResult=" + std::to_string(result)) };
   }
 
@@ -202,7 +202,7 @@ auto draw_frame(Init &init, RenderData &data, Camera const &camera) -> std::expe
   }
   data.image_in_flight.at(image_index) = in_flight_fence;
 
-  auto recorded = vulkan::with_command(std::ref(init.disp),
+  auto recorded = vulkan::WithCommand(std::ref(init.disp),
     data.command_buffers.at(image_index).handle(),
     [&](vkb::DispatchTable &, VkCommandBuffer cmd) -> void {
       RecordSphereDraw(init, data, camera, aspect_ratio, cmd, image_index);
@@ -221,7 +221,7 @@ auto draw_frame(Init &init, RenderData &data, Camera const &camera) -> std::expe
   init.disp.resetFences(1, &in_flight_fence);
 
   if (init.disp.queueSubmit(data.graphics_queue, 1, &submit_info, in_flight_fence) != VK_SUCCESS) {
-    return std::unexpected{ make_error(std::errc::io_error, "failed to submit draw command buffer") };
+    return std::unexpected{ MakeError(std::errc::io_error, "failed to submit draw command buffer") };
   }
 
   std::array<VkSwapchainKHR, 1> const swap_chains = { init.swapchain->handle() };
@@ -229,16 +229,16 @@ auto draw_frame(Init &init, RenderData &data, Camera const &camera) -> std::expe
 
   result = init.disp.queuePresentKHR(data.present_queue, &present_info);
   if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
-    return recreate_swapchain(init, data);
+    return RecreateSwapchain(init, data);
   } else if (result != VK_SUCCESS) {
-    return std::unexpected{ make_error(std::errc::io_error, "failed to present swapchain image") };
+    return std::unexpected{ MakeError(std::errc::io_error, "failed to present swapchain image") };
   }
 
-  data.current_frame = (data.current_frame + 1) % k_max_frames_in_flight;
+  data.current_frame = (data.current_frame + 1) % kMaxFramesInFlight;
   return {};
 }
 
-void cleanup(Init &init, RenderData &data)
+void Cleanup(Init &init, RenderData &data)
 {
   init.disp.deviceWaitIdle();
 
@@ -249,21 +249,21 @@ void cleanup(Init &init, RenderData &data)
   data.command_buffers.clear();
   data.command_pool.reset();
 
-  shutdown_imgui_overlay(init, data);
+  ShutdownImguiOverlay(init, data);
 
-  destroy_depth_buffer(init, data);
-  gs::destroy_gs_pipeline(data);
-  destroy_sphere_buffers(init, data);
-  gs::destroy_rasterization(init, data);
-  gs::destroy_sorting(init, data);
-  gs::destroy_binning(init, data);
-  gs::destroy_projection(init, data);
-  destroy_sphere_setup(init, data);
-  destroy_descriptor_heap(init, data);
+  DestroyDepthBuffer(init, data);
+  gs::DestroyGsPipeline(data);
+  DestroySphereBuffers(init, data);
+  gs::DestroyRasterization(init, data);
+  gs::DestroySorting(init, data);
+  gs::DestroyBinning(init, data);
+  gs::DestroyProjection(init, data);
+  DestroySphereSetup(init, data);
+  DestroyDescriptorHeap(init, data);
 
   data.gpu_pass_timer.destroy(init);
 
-  destroy_graphics_pipeline(init, data);
+  DestroyGraphicsPipeline(init, data);
 
   // Swapchain, allocator, and device are owned by VulkanDriver / Engine.
 }

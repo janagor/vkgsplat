@@ -45,7 +45,7 @@ layout(push_constant) uniform ProjectCamera {
 	mat4 proj;
 	vec2 viewport;
 	uint sh_degree;
-	uint _pad0;
+	uint pad0_;
 	vec4 camera_position;
 } camera;
 

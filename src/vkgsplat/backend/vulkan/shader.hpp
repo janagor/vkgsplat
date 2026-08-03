@@ -10,8 +10,8 @@
 
 namespace vkgsplat {
 
-[[nodiscard]] auto read_file(const std::string &filename) -> std::vector<char>;
+[[nodiscard]] auto ReadFile(const std::string &filename) -> std::vector<char>;
 
-[[nodiscard]] auto create_shader_module(Init &init, std::vector<char> const &code) -> VkShaderModule;
+[[nodiscard]] auto CreateShaderModule(Init &init, std::vector<char> const &code) -> VkShaderModule;
 
 }// namespace vkgsplat

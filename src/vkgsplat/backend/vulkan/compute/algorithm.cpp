@@ -26,8 +26,8 @@ auto Algorithm::operator=(Algorithm &&other) noexcept -> Algorithm &
 auto Algorithm::init(Init &init, std::string const &shader_path, std::span<const uint32_t> specialization_constants)
   -> bool
 {
-  auto const comp_code = read_file(shader_path);
-  VkShaderModule comp_module = create_shader_module(init, comp_code);
+  auto const comp_code = ReadFile(shader_path);
+  VkShaderModule comp_module = CreateShaderModule(init, comp_code);
   if (comp_module == VK_NULL_HANDLE) {
     std::println("Failed to create compute shader module: {}", shader_path);
     return false;

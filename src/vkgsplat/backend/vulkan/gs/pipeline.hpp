@@ -18,12 +18,12 @@ struct GsFrameParams
   f64 aspect_ratio{};
 };
 
-void record_gs_pipeline(RenderData &data);
+void RecordGsPipeline(RenderData &data);
 
-void update_gs_frame_state(Init const &init, RenderData &data, GsFrameParams const &frame);
+void UpdateGsFrameState(Init const &init, RenderData &data, GsFrameParams const &frame);
 
-void eval_gs_pipeline(Init &init, RenderData &data, VkCommandBuffer command_buffer);
+void EvalGsPipeline(Init &init, RenderData &data, VkCommandBuffer command_buffer);
 
-void destroy_gs_pipeline(RenderData &data);
+void DestroyGsPipeline(RenderData &data);
 
 }// namespace vkgsplat::gs

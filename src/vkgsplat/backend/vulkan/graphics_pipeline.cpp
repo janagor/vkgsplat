@@ -17,7 +17,7 @@
 
 namespace vkgsplat {
 
-void destroy_graphics_pipeline(Init &init, RenderData &data)
+void DestroyGraphicsPipeline(Init &init, RenderData &data)
 {
   if (data.graphics_pipeline != VK_NULL_HANDLE) {
     init.disp.destroyPipeline(data.graphics_pipeline, nullptr);
@@ -25,15 +25,15 @@ void destroy_graphics_pipeline(Init &init, RenderData &data)
   }
 }
 
-auto create_graphics_pipeline(Init &init, RenderData &data) -> int
+auto CreateGraphicsPipeline(Init &init, RenderData &data) -> int
 {
-  destroy_graphics_pipeline(init, data);
+  DestroyGraphicsPipeline(init, data);
 
-  auto const vert_code = read_file(std::string(SHADER_DIRECTORY) + "/sphere.vert.spv");
-  auto const frag_code = read_file(std::string(SHADER_DIRECTORY) + "/sphere.frag.spv");
+  auto const vert_code = ReadFile(std::string(SHADER_DIRECTORY) + "/sphere.vert.spv");
+  auto const frag_code = ReadFile(std::string(SHADER_DIRECTORY) + "/sphere.frag.spv");
 
-  VkShaderModule vert_module = create_shader_module(init, vert_code);
-  VkShaderModule frag_module = create_shader_module(init, frag_code);
+  VkShaderModule vert_module = CreateShaderModule(init, vert_code);
+  VkShaderModule frag_module = CreateShaderModule(init, frag_code);
 
   if (vert_module == VK_NULL_HANDLE || frag_module == VK_NULL_HANDLE) {
     std::cout << "failed to create shader module\n";

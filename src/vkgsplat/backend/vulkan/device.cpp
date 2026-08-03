@@ -15,7 +15,7 @@
 
 namespace vkgsplat {
 
-auto device_initialization(Init &init, bool enable_validation) -> std::expected<void, Error>
+auto DeviceInitialization(Init &init, bool enable_validation) -> std::expected<void, Error>
 {
   if (init.platform == nullptr) {
     return std::unexpected{ Error{ std::make_error_code(std::errc::invalid_argument), "Platform is required" } };
@@ -52,7 +52,7 @@ auto device_initialization(Init &init, bool enable_validation) -> std::expected<
       init.instance = instance;
       init.inst_disp = init.instance.make_table();
 
-      auto surface = vulkan::create_surface_from_native_window(init.instance, init.platform->native_window());
+      auto surface = vulkan::CreateSurfaceFromNativeWindow(init.instance, init.platform->native_window());
       if (!surface) { return std::unexpected{ surface.error() }; }
       init.surface = *surface;
 

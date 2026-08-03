@@ -9,7 +9,7 @@
 
 namespace vkgsplat::vulkan {
 
-[[nodiscard]] auto create_surface_from_native_window(VkInstance instance, NativeWindowHandle native_window)
+[[nodiscard]] auto CreateSurfaceFromNativeWindow(VkInstance instance, NativeWindowHandle native_window)
   -> std::expected<VkSurfaceKHR, Error>;
 
 }// namespace vkgsplat::vulkan

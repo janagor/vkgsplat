@@ -7,10 +7,10 @@
 
 namespace vkgsplat {
 
-[[nodiscard]] auto init_sphere_setup(Init &init, RenderData &data) -> bool;
+[[nodiscard]] auto InitSphereSetup(Init &init, RenderData &data) -> bool;
 
-void dispatch_sphere_setup(Init &init, RenderData const &data, VkCommandBuffer command_buffer);
+void DispatchSphereSetup(Init &init, RenderData const &data, VkCommandBuffer command_buffer);
 
-void destroy_sphere_setup(Init &init, RenderData &data);
+void DestroySphereSetup(Init &init, RenderData &data);
 
 }// namespace vkgsplat

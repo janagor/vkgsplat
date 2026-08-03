@@ -11,7 +11,7 @@
 
 namespace vkgsplat::app {
 
-auto parse_app_config(std::span<char *const> args) -> std::expected<AppConfig, vkgsplat::Error>
+auto ParseAppConfig(std::span<char *const> args) -> std::expected<AppConfig, vkgsplat::Error>
 {
   AppConfig config{};
 
@@ -32,9 +32,9 @@ auto parse_app_config(std::span<char *const> args) -> std::expected<AppConfig, v
   } catch (CLI::ParseError const &parse_error) {
     auto const exit_code = app.exit(parse_error);
     if (exit_code == static_cast<int>(CLI::ExitCodes::Success)) {
-      return std::unexpected{ make_error(std::errc::operation_canceled, "help requested") };
+      return std::unexpected{ MakeError(std::errc::operation_canceled, "help requested") };
     }
-    return std::unexpected{ make_error(std::errc::invalid_argument, parse_error.what()) };
+    return std::unexpected{ MakeError(std::errc::invalid_argument, parse_error.what()) };
   }
 
   config.enable_imgui = !disable_imgui;

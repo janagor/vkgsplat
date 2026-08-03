@@ -7,6 +7,6 @@
 
 namespace vkgsplat {
 
-[[nodiscard]] auto device_initialization(Init &init, bool enable_validation = false) -> std::expected<void, Error>;
+[[nodiscard]] auto DeviceInitialization(Init &init, bool enable_validation = false) -> std::expected<void, Error>;
 
 }// namespace vkgsplat

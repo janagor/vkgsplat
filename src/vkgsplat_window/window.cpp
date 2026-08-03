@@ -31,7 +31,7 @@ namespace {
       message += ": ";
       message += glfw_message;
     }
-    return make_error(std::errc::io_error, std::move(message));
+    return MakeError(std::errc::io_error, std::move(message));
   }
 
 }// namespace

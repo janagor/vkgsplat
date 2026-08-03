@@ -63,7 +63,7 @@ namespace {
     }
 
     data.gaussian_sort_size = data.max_bin_instances;
-    data.tile_count = k_max_tiles;
+    data.tile_count = kMaxTiles;
     data.radix_blocks_per_workgroup = kRadixBlocksPerWorkgroup;
     // Histogram sized for worst-case capacity; live frames dispatch fewer groups.
     data.radix_num_workgroups = RadixWorkgroupCount(data.gaussian_sort_size);
@@ -101,7 +101,7 @@ namespace {
 
 }// namespace
 
-auto init_sorting(Init &init, RenderData &data) -> bool
+auto InitSorting(Init &init, RenderData &data) -> bool
 {
   if (!CreateSortBuffers(init, data)) { return false; }
 
@@ -117,10 +117,10 @@ auto init_sorting(Init &init, RenderData &data) -> bool
     return false;
   }
 
-  return refresh_descriptor_heap(init, data);
+  return RefreshDescriptorHeap(init, data);
 }
 
-void destroy_sorting(Init &init, RenderData &data)
+void DestroySorting(Init &init, RenderData &data)
 {
   data.prepare_sort_algorithm.destroy(init);
   data.radix_histogram_algorithm.destroy(init);

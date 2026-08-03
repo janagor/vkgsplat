@@ -9,16 +9,16 @@
 
 namespace vkgsplat {
 
-[[nodiscard]] auto get_queues(Init &init, RenderData &data) -> std::expected<void, Error>;
+[[nodiscard]] auto GetQueues(Init &init, RenderData &data) -> std::expected<void, Error>;
 
-[[nodiscard]] auto create_command_resources(Init &init, RenderData &data) -> std::expected<void, Error>;
+[[nodiscard]] auto CreateCommandResources(Init &init, RenderData &data) -> std::expected<void, Error>;
 
-[[nodiscard]] auto create_sync_objects(Init &init, RenderData &data) -> std::expected<void, Error>;
+[[nodiscard]] auto CreateSyncObjects(Init &init, RenderData &data) -> std::expected<void, Error>;
 
-[[nodiscard]] auto recreate_swapchain(Init &init, RenderData &data) -> std::expected<void, Error>;
+[[nodiscard]] auto RecreateSwapchain(Init &init, RenderData &data) -> std::expected<void, Error>;
 
-[[nodiscard]] auto draw_frame(Init &init, RenderData &data, Camera const &camera) -> std::expected<void, Error>;
+[[nodiscard]] auto DrawFrame(Init &init, RenderData &data, Camera const &camera) -> std::expected<void, Error>;
 
-void cleanup(Init &init, RenderData &data);
+void Cleanup(Init &init, RenderData &data);
 
 }// namespace vkgsplat

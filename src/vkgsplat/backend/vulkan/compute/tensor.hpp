@@ -46,11 +46,11 @@ private:
 };
 
 template<TriviallyCopyable T>
-[[nodiscard]] auto tensor(Init &init, std::initializer_list<T> values) -> std::expected<Tensor<T>, Error>
+[[nodiscard]] auto MakeTensor(Init &init, std::initializer_list<T> values) -> std::expected<Tensor<T>, Error>
 { return Tensor<T>::create(init, std::vector<T>{ values }); }
 
 template<TriviallyCopyable T>
-[[nodiscard]] auto tensor(Init &init, size_t count, T fill = {}) -> std::expected<Tensor<T>, Error>
+[[nodiscard]] auto MakeTensor(Init &init, size_t count, T fill = {}) -> std::expected<Tensor<T>, Error>
 { return Tensor<T>::create(init, count, fill); }
 
 }// namespace vkgsplat::compute
