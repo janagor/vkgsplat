@@ -15,7 +15,7 @@ namespace vkgsplat {
 
 struct RendererConfig
 {
-  u32 splat_count = 64;
+  u32 splat_count = 64;// NOLINT(readability-magic-numbers)
   std::string ply_path;
   bool enable_validation = false;
   bool enable_imgui = true;

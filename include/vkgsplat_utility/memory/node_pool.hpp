@@ -22,8 +22,8 @@ public:
 
 private:
   using ValueTraits = std::allocator_traits<AllocatorTp>;
-  using NodeTraits = typename ValueTraits::template rebind_traits<Node>;
-  using NodeAllocatorTp = typename ValueTraits::template rebind_alloc<Node>;
+  using NodeTraits = ValueTraits::template rebind_traits<Node>;
+  using NodeAllocatorTp = ValueTraits::template rebind_alloc<Node>;
 
 public:
   using value_type = ValueTp;

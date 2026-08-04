@@ -97,7 +97,8 @@ struct BinningKey
   u32 pad{};// keeps 8-byte stride used by existing KEY_STRIDE=2 shaders
 };
 
-static_assert(sizeof(BinningKey) == 8U);
+auto constexpr kBinningKeySize = 8;
+static_assert(sizeof(BinningKey) == kBinningKeySize);
 static_assert(TriviallyCopyable<BinningKey>);
 static_assert(std::is_standard_layout_v<BinningKey>);
 
@@ -108,7 +109,8 @@ struct TileRange
   u32 end{};// exclusive; empty when start == end
 };
 
-static_assert(sizeof(TileRange) == 8U);
+auto constexpr kTileRangeSize = 8;
+static_assert(sizeof(TileRange) == kTileRangeSize);
 static_assert(TriviallyCopyable<TileRange>);
 static_assert(std::is_standard_layout_v<TileRange>);
 
@@ -116,14 +118,14 @@ static_assert(std::is_standard_layout_v<TileRange>);
 inline constexpr u32 kMaxTileGridDim = 256;
 inline constexpr u32 kMaxTiles = kMaxTileGridDim * kMaxTileGridDim;
 
-[[nodiscard]] inline auto Sigmoid(f32 x) -> f32 { return 1.0F / (1.0F + std::exp(-x)); }
+[[nodiscard]] inline auto Sigmoid(f32 value) -> f32 { return 1.0F / (1.0F + std::exp(-value)); }
 
 [[nodiscard]] inline auto Sh0ToRgb(std::array<f32, 3> const &f_dc) -> std::array<f32, 3>
 {
   return {
-    std::clamp(0.5F + (kShC0 * f_dc[0]), 0.0F, 1.0F),
-    std::clamp(0.5F + (kShC0 * f_dc[1]), 0.0F, 1.0F),
-    std::clamp(0.5F + (kShC0 * f_dc[2]), 0.0F, 1.0F),
+    std::clamp(0.5F + (kShC0 * f_dc[0]), 0.0F, 1.0F),// NOLINT(readability-magic-numbers)
+    std::clamp(0.5F + (kShC0 * f_dc[1]), 0.0F, 1.0F),// NOLINT(readability-magic-numbers)
+    std::clamp(0.5F + (kShC0 * f_dc[2]), 0.0F, 1.0F),// NOLINT(readability-magic-numbers)
   };
 }
 

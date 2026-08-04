@@ -37,7 +37,9 @@ struct CameraPushConstants
   glm::mat4 projection{};
 };
 
-static_assert(sizeof(CameraPushConstants) == 128);
+
+constexpr auto kCameraPushPositionSize = 128;
+static_assert(sizeof(CameraPushConstants) == kCameraPushPositionSize);
 
 class Camera
 {
@@ -68,8 +70,10 @@ public:
 
   [[nodiscard]] auto projection_matrix(f64 aspect_ratio) const noexcept -> glm::mat4
   {
-    auto proj =
-      glm::perspective(glm::radians(static_cast<float>(zoom_)), static_cast<float>(aspect_ratio), 0.1F, 100.0F);
+    auto proj = glm::perspective(glm::radians(static_cast<float>(zoom_)),
+      static_cast<float>(aspect_ratio),
+      0.1F,// NOLINT(readability-magic-numbers)
+      100.0F);
     proj[1][1] *= -1.0F;
     return proj;
   }

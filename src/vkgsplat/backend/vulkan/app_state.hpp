@@ -65,12 +65,12 @@ struct RenderData
   u32 max_bin_instances = 0;
   u32 gaussian_sort_size = 0;
   u32 radix_num_workgroups = 0;
-  u32 radix_blocks_per_workgroup = 32;
+  u32 radix_blocks_per_workgroup = 32;// NOLINT(readability-magic-numbers)
   u32 tile_count = 0;
   u32 color_width = 0;
   u32 color_height = 0;
-  compute::Tensor<u32> sorted_indices{};
-  compute::Tensor<compute::SortEntry> sort_entries{};
+  compute::Tensor<u32> sorted_indices;
+  compute::Tensor<compute::SortEntry> sort_entries;
   vulkan::Buffer descriptor_heap_buffer{};
   VkDeviceSize descriptor_heap_size{};
   VkDeviceSize reserved_range_offset{};
@@ -79,16 +79,16 @@ struct RenderData
   size_t buffer_descriptor_size{};
   size_t image_descriptor_size{};
 
-  compute::Algorithm sphere_setup_algorithm{};
-  compute::Algorithm project_algorithm{};
-  compute::Algorithm bin_algorithm{};
-  compute::Algorithm prepare_sort_algorithm{};
-  compute::Algorithm radix_histogram_algorithm{};
-  compute::Algorithm radix_scatter_algorithm{};
-  compute::Algorithm identify_ranges_algorithm{};
-  compute::Algorithm rasterize_algorithm{};
-  compute::Sequence compute_sequence{};
-  compute::Sequence gs_sequence{};
+  compute::Algorithm sphere_setup_algorithm;
+  compute::Algorithm project_algorithm;
+  compute::Algorithm bin_algorithm;
+  compute::Algorithm prepare_sort_algorithm;
+  compute::Algorithm radix_histogram_algorithm;
+  compute::Algorithm radix_scatter_algorithm;
+  compute::Algorithm identify_ranges_algorithm;
+  compute::Algorithm rasterize_algorithm;
+  compute::Sequence compute_sequence;
+  compute::Sequence gs_sequence;
   gs::ProjectPushConstants project_push{};
   gs::BinPushConstants bin_push{};
   gs::SortPushConstants sort_push{};
@@ -108,7 +108,7 @@ struct RenderData
   std::vector<Fence> in_flight_fences;
   std::vector<VkFence> image_in_flight;
   size_t current_frame = {};
-  GpuPassTimer gpu_pass_timer{};
+  GpuPassTimer gpu_pass_timer;
   std::unique_ptr<ImGuiOverlayState> imgui;
 
   RenderData();

@@ -20,18 +20,20 @@ struct ProjectPushConstants
   glm::vec4 camera_position{};// xyz used for SH view direction
 };
 
-static_assert(sizeof(ProjectPushConstants) == 160);
+constexpr size_t kProjectPushConstantsSize = 160;
+static_assert(sizeof(ProjectPushConstants) == kProjectPushConstantsSize);
 
 // Stage 2 tile binning.
 struct BinPushConstants
 {
   glm::uvec2 viewport{};// width, height in pixels
   u32 max_instances{};
-  u32 tile_size{ 16 };
+  u32 tile_size{ 16 };// NOLINT(readability-magic-numbers)
   u64 instance_count_address{};// BDA for atomic counter (Mesa heap atomics are broken)
 };
 
-static_assert(sizeof(BinPushConstants) == 24);
+constexpr size_t kBinPushConstantsSize = 24;
+static_assert(sizeof(BinPushConstants) == kBinPushConstantsSize);
 
 // Stage 3 prepare / identify passes.
 struct SortPushConstants
@@ -41,11 +43,12 @@ struct SortPushConstants
   u64 draw_indirect_address{};// VkDrawIndirectCommand
   u32 sort_size{};// capacity
   u32 tile_count{};
-  u32 blocks_per_workgroup{ 32 };
+  u32 blocks_per_workgroup{ 32 };// NOLINT(readability-magic-numbers)
   u32 pad{};
 };
 
-static_assert(sizeof(SortPushConstants) == 40);
+constexpr size_t kSortPushConstantsSize = 40;
+static_assert(sizeof(SortPushConstants) == kSortPushConstantsSize);
 
 // Multi-pass radix sort. Keys are packed uint32 (tile<<16)|(depth>>16); 4× 8-bit passes.
 struct RadixPushConstants
@@ -59,7 +62,8 @@ struct RadixPushConstants
   u32 pad1{};
 };
 
-static_assert(sizeof(RadixPushConstants) == 32);
+constexpr size_t kRadixPushConstantsSize = 32;
+static_assert(sizeof(RadixPushConstants) == kRadixPushConstantsSize);
 
 // Stage 4 per-tile front-to-back rasterization.
 // Layout matches GLSL std430 push_constant packing (vec3/vec4 alignment).
@@ -67,7 +71,7 @@ struct RasterPushConstants
 {
   glm::vec4 camera_position{};// xyz used
   glm::uvec2 viewport{};// width, height in pixels
-  u32 tile_size{ 16 };
+  u32 tile_size{ 16 };// NOLINT(readability-magic-numbers)
   u32 tiles_x{};
   glm::vec4 background{ 0.0F, 0.0F, 0.0F, 0.0F };// rgb used
   u32 sh_degree{ 3 };// 0 = SH0 only; 3 = full degree-3
@@ -76,6 +80,7 @@ struct RasterPushConstants
   u32 pad2{};
 };
 
-static_assert(sizeof(RasterPushConstants) == 64);
+constexpr size_t kRasterPushConstantsSize = 64;
+static_assert(sizeof(RasterPushConstants) == kRasterPushConstantsSize);
 
 }// namespace vkgsplat::gs

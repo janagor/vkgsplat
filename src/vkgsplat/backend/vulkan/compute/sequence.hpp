@@ -24,7 +24,7 @@ namespace compute {
     using allocator_type = AllocatorTp;
     using OpPtr = std::unique_ptr<Operation>;
     using Pool = NodePool<OpPtr, AllocatorTp>;
-    using Node = typename Pool::node_type;
+    using Node = Pool::node_type;
 
     constexpr explicit BasicSequence(AllocatorTp const &allocator = {}) : pool_(allocator) {}
 
@@ -50,9 +50,9 @@ namespace compute {
 
     ~BasicSequence() { clear(); }
 
-    auto record(OpPtr op) -> BasicSequence &
+    auto record(OpPtr op_ptr) -> BasicSequence &
     {
-      Node *const node = pool_.get_node(std::move(op));
+      Node *const node = pool_.get_node(std::move(op_ptr));
       node->next = nullptr;
       if (tail_ == nullptr) {
         head_ = node;

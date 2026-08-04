@@ -10,6 +10,7 @@ struct SortEntry
   u32 index{};
 };
 
+constexpr auto kSortEntrySize =  sizeof(f32) + sizeof(u32);
 static_assert(sizeof(SortEntry) == sizeof(f32) + sizeof(u32));
 
 }// namespace vkgsplat::compute

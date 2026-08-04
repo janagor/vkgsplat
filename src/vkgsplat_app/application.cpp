@@ -26,7 +26,15 @@ auto Run(std::span<char *const> args) noexcept -> int
       return -1;
     }
 
-    auto window = vkgsplat::Window::create(vkgsplat::WindowConfig{ .title = "vkgsplat" });
+    constexpr auto kDefaultConfig = WindowConfig{
+      .title = "vkgsplat",
+      .width = 1024,
+      .height = 1024,
+      .resizable = true,
+    };
+
+
+    auto window = vkgsplat::Window::create(kDefaultConfig);
     if (!window) {
       std::println(stderr, "Failed to create window: {}", window.error().message());
       return -1;

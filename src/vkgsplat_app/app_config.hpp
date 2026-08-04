@@ -11,7 +11,7 @@ namespace vkgsplat::app {
 
 struct AppConfig
 {
-  vkgsplat::u32 splat_count = 64;
+  vkgsplat::u32 splat_count = 64;// NOLINT(readability-magic-numbers)
   std::string ply_path;
   bool enable_validation = false;
   bool enable_imgui = true;

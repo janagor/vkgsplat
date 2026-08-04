@@ -1,7 +1,7 @@
 #pragma once
 
 #include <expected>
-#include <string>
+#include <string_view>
 
 #include <beman/indirect/indirect.hpp>
 #include <vkgsplat/platform.hpp>
@@ -12,10 +12,10 @@ namespace vkgsplat {
 
 struct WindowConfig
 {
-  std::string title = "vkgsplat";
-  u32 width = 1024;
-  u32 height = 1024;
-  bool resizable = true;
+  std::string_view title;
+  u32 width;
+  u32 height;
+  bool resizable;
 };
 
 // GLFW-backed Platform. No graphics-API types appear in this public header.

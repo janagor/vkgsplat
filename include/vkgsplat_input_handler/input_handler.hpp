@@ -14,10 +14,10 @@ public:
   explicit InputHandler(Window &window);
   ~InputHandler();
 
-  InputHandler(InputHandler const &) = delete;
-  auto operator=(InputHandler const &) -> InputHandler & = delete;
-  InputHandler(InputHandler &&) noexcept;
-  auto operator=(InputHandler &&) noexcept -> InputHandler &;
+  InputHandler(InputHandler const & /*other*/) = delete;
+  auto operator=(InputHandler const &/*other*/) -> InputHandler & = delete;
+  InputHandler(InputHandler &&/*other*/) noexcept;
+  auto operator=(InputHandler &&/*other*/) noexcept -> InputHandler &;
 
   template<class View, class CloseTarget>
     requires KeyboardControllable<View> && MouseLookControllable<View> && ScrollZoomable<View> && Closeable<CloseTarget>
