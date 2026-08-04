@@ -17,7 +17,7 @@ void InputHandler::update(View &view, CloseTarget &close)
   auto const delta_time = static_cast<f64>(now - last_time_);
   last_time_ = now;
 
-  auto const key_pressed = [this](int key) { return glfwGetKey(window_, key) == GLFW_PRESS; };
+  auto const key_pressed = [this](int key) -> bool { return glfwGetKey(window_, key) == GLFW_PRESS; };
 
   if (key_pressed(GLFW_KEY_W)) { view.process_keyboard(ViewMovement::kForward, delta_time); }
   if (key_pressed(GLFW_KEY_S)) { view.process_keyboard(ViewMovement::kBackward, delta_time); }

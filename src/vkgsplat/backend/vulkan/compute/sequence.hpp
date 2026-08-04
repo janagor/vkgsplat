@@ -73,9 +73,9 @@ namespace compute {
     void eval(Init &init, RenderData const &data, VkCommandBuffer cmd) const
     {
       auto const nodes = as_nodes();
-      std::ranges::for_each(nodes, [&](Node const *node) { node->value->pre_eval(init, data, cmd); });
-      std::ranges::for_each(nodes, [&](Node const *node) { node->value->record(init, data, cmd); });
-      std::ranges::for_each(nodes, [&](Node const *node) { node->value->post_eval(init, data, cmd); });
+      std::ranges::for_each(nodes, [&](Node const *node) -> void { node->value->pre_eval(init, data, cmd); });
+      std::ranges::for_each(nodes, [&](Node const *node) -> void { node->value->record(init, data, cmd); });
+      std::ranges::for_each(nodes, [&](Node const *node) -> void { node->value->post_eval(init, data, cmd); });
     }
 
     void clear() noexcept

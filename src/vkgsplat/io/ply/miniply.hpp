@@ -110,7 +110,7 @@ struct PLYElement
 
   /// Returns the index for the named property in this element, or `kInvalidIndex`
   /// if it can't be found.
-  uint32_t find_property(const char *prop_name) const;
+  auto find_property(const char *prop_name) const -> uint32_t;
 
   /// Return the indices for several properties in one go. Use it like this:
   /// ```
@@ -121,7 +121,7 @@ struct PLYElement
   ///
   /// The return value will be true if all properties were found. If it was
   /// not true, you should not use any values from prop_idxs.
-  bool find_properties(std::span<uint32_t> prop_idxs, std::span<const char *const> prop_names) const;
+  auto find_properties(std::span<uint32_t> prop_idxs, std::span<const char *const> prop_names) const -> bool;
 
   /// Call this on the element at some point before you load its data, when
   /// you know that every row's list will have the same length. It will
@@ -145,9 +145,9 @@ struct PLYElement
   enum class ListPropertyIndex : uint32_t {};
   enum class FixedListSize : uint32_t {};
 
-  bool convert_list_to_fixed_size(ListPropertyIndex list_prop_idx,
+  auto convert_list_to_fixed_size(ListPropertyIndex list_prop_idx,
     FixedListSize list_size,
-    std::span<uint32_t> new_prop_idxs);
+    std::span<uint32_t> new_prop_idxs) -> bool;
 };
 
 
@@ -172,35 +172,35 @@ public:
   ~PLYReader();
 
   PLYReader(PLYReader const &) = delete;
-  PLYReader &operator=(PLYReader const &) = delete;
+  auto operator=(PLYReader const &) -> PLYReader & = delete;
   PLYReader(PLYReader &&) = delete;
-  PLYReader &operator=(PLYReader &&) = delete;
+  auto operator=(PLYReader &&) -> PLYReader & = delete;
 
-  [[nodiscard]] bool valid() const;
-  [[nodiscard]] bool has_element() const;
-  [[nodiscard]] const PLYElement *element() const;
-  bool load_element();
+  [[nodiscard]] auto valid() const -> bool;
+  [[nodiscard]] auto has_element() const -> bool;
+  [[nodiscard]] auto element() const -> const PLYElement *;
+  auto load_element() -> bool;
   void next_element();
 
-  [[nodiscard]] PLYFileType file_type() const;
-  [[nodiscard]] int version_major() const;
-  [[nodiscard]] int version_minor() const;
-  [[nodiscard]] uint32_t num_elements() const;
-  uint32_t find_element(const char *name) const;
-  PLYElement *get_element(uint32_t idx);
+  [[nodiscard]] auto file_type() const -> PLYFileType;
+  [[nodiscard]] auto version_major() const -> int;
+  [[nodiscard]] auto version_minor() const -> int;
+  [[nodiscard]] auto num_elements() const -> uint32_t;
+  auto find_element(const char *name) const -> uint32_t;
+  auto get_element(uint32_t idx) -> PLYElement *;
 
   /// Check whether the current element has the given name.
-  bool element_is(const char *name) const;
+  auto element_is(const char *name) const -> bool;
 
   /// Number of rows in the current element.
-  [[nodiscard]] uint32_t num_rows() const;
+  [[nodiscard]] auto num_rows() const -> uint32_t;
 
   /// Returns the index for the named property in the current element, or
   /// `kInvalidIndex` if it can't be found.
-  uint32_t find_property(const char *name) const;
+  auto find_property(const char *name) const -> uint32_t;
 
   /// Equivalent to calling `find_properties` on the current element.
-  bool find_properties(std::span<uint32_t> prop_idxs, std::span<const char *const> prop_names) const;
+  auto find_properties(std::span<uint32_t> prop_idxs, std::span<const char *const> prop_names) const -> bool;
 
   /// Copy the data for the specified properties into `dest`, which must be
   /// an array with at least enough space to hold all of the extracted column
@@ -211,56 +211,56 @@ public:
   ///
   /// Note that this function does not handle list-valued properties. Use
   /// `extract_list_column()` for those instead.
-  bool extract_properties(std::span<const uint32_t> prop_idxs, PLYPropertyType dest_type, void *dest) const;
+  auto extract_properties(std::span<const uint32_t> prop_idxs, PLYPropertyType dest_type, void *dest) const -> bool;
 
   /// The same as `extract_properties`, but does not require rows in the
   /// destination to be contiguous: `dest_stride` is the number of bytes
   /// between the start of one row and the start of the next row in the
   /// destination memory.
-  bool extract_properties_with_stride(std::span<const uint32_t> prop_idxs,
+  auto extract_properties_with_stride(std::span<const uint32_t> prop_idxs,
     PLYPropertyType dest_type,
     void *dest,
-    uint32_t dest_stride) const;
+    uint32_t dest_stride) const -> bool;
 
   /// Get the array of item counts for a list property. Entry `i` in this
   /// array is the number of items in the `i`th list.
-  [[nodiscard]] const uint32_t *get_list_counts(uint32_t prop_idx) const;
+  [[nodiscard]] auto get_list_counts(uint32_t prop_idx) const -> const uint32_t *;
 
   /// Get the sum of all item counts for a list property.
-  [[nodiscard]] uint32_t sum_of_list_counts(uint32_t prop_idx) const;
+  [[nodiscard]] auto sum_of_list_counts(uint32_t prop_idx) const -> uint32_t;
 
-  [[nodiscard]] const uint8_t *get_list_data(uint32_t prop_idx) const;
-  bool extract_list_property(uint32_t prop_idx, PLYPropertyType dest_type, void *dest) const;
+  [[nodiscard]] auto get_list_data(uint32_t prop_idx) const -> const uint8_t *;
+  auto extract_list_property(uint32_t prop_idx, PLYPropertyType dest_type, void *dest) const -> bool;
 
-  [[nodiscard]] uint32_t num_triangles(uint32_t prop_idx) const;
-  [[nodiscard]] bool requires_triangulation(uint32_t prop_idx) const;
-  bool extract_triangles(uint32_t prop_idx,
+  [[nodiscard]] auto num_triangles(uint32_t prop_idx) const -> uint32_t;
+  [[nodiscard]] auto requires_triangulation(uint32_t prop_idx) const -> bool;
+  auto extract_triangles(uint32_t prop_idx,
     std::span<const float> positions,
     MeshVertexCount mesh_vertex_count,
     PLYPropertyType dest_type,
-    void *dest) const;
+    void *dest) const -> bool;
 
-  bool find_pos(std::span<uint32_t, 3> prop_idxs) const;
-  bool find_normal(std::span<uint32_t, 3> prop_idxs) const;
-  bool find_texcoord(std::span<uint32_t, 2> prop_idxs) const;
-  bool find_color(std::span<uint32_t, 3> prop_idxs) const;
-  bool find_indices(std::span<uint32_t, 1> prop_idxs) const;
+  auto find_pos(std::span<uint32_t, 3> prop_idxs) const -> bool;
+  auto find_normal(std::span<uint32_t, 3> prop_idxs) const -> bool;
+  auto find_texcoord(std::span<uint32_t, 2> prop_idxs) const -> bool;
+  auto find_color(std::span<uint32_t, 3> prop_idxs) const -> bool;
+  auto find_indices(std::span<uint32_t, 1> prop_idxs) const -> bool;
 
 private:
   using FileHandle = std::unique_ptr<FILE, decltype(&fclose)>;
 
-  bool refill_buffer();
-  bool rewind_to_safe_char();
-  bool accept();
-  bool advance();
-  bool next_line();
-  bool match(std::string_view str);
-  bool which(std::span<const std::string_view> values, uint32_t *index);
-  bool which_property_type(PLYPropertyType *type);
-  bool keyword(std::string_view keyword_text);
-  bool identifier(std::span<char> dest);
+  auto refill_buffer() -> bool;
+  auto rewind_to_safe_char() -> bool;
+  auto accept() -> bool;
+  auto advance() -> bool;
+  auto next_line() -> bool;
+  auto match(std::string_view str) -> bool;
+  auto which(std::span<const std::string_view> values, uint32_t *index) -> bool;
+  auto which_property_type(PLYPropertyType *type) -> bool;
+  auto keyword(std::string_view keyword_text) -> bool;
+  auto identifier(std::span<char> dest) -> bool;
 
-  template<class T> bool typed_which(std::span<const std::string_view> values, T *index)
+  template<class T> auto typed_which(std::span<const std::string_view> values, T *index) -> bool
   {
     uint32_t idx = 0;
     if (!which(values, &idx)) { return false; }
@@ -268,53 +268,53 @@ private:
     return true;
   }
 
-  bool int_literal(int *value);
-  bool float_literal(float *value);
-  bool double_literal(double *value);
+  auto int_literal(int *value) -> bool;
+  auto float_literal(float *value) -> bool;
+  auto double_literal(double *value) -> bool;
 
-  bool parse_elements();
-  bool parse_element();
-  bool parse_property(std::vector<PLYProperty> &properties);
+  auto parse_elements() -> bool;
+  auto parse_element() -> bool;
+  auto parse_property(std::vector<PLYProperty> &properties) -> bool;
 
-  bool load_fixed_size_element(PLYElement &elem);
-  bool load_variable_size_element(PLYElement &elem);
+  auto load_fixed_size_element(PLYElement &elem) -> bool;
+  auto load_variable_size_element(PLYElement &elem) -> bool;
 
-  bool load_ascii_scalar_property(PLYProperty &prop, size_t &dest_index);
-  bool load_ascii_list_property(PLYProperty &prop);
-  bool load_binary_scalar_property(PLYProperty &prop, size_t &dest_index);
-  bool load_binary_list_property(PLYProperty &prop);
-  bool load_binary_scalar_property_big_endian(PLYProperty &prop, size_t &dest_index);
-  bool load_binary_list_property_big_endian(PLYProperty &prop);
+  auto load_ascii_scalar_property(PLYProperty &prop, size_t &dest_index) -> bool;
+  auto load_ascii_list_property(PLYProperty &prop) -> bool;
+  auto load_binary_scalar_property(PLYProperty &prop, size_t &dest_index) -> bool;
+  auto load_binary_list_property(PLYProperty &prop) -> bool;
+  auto load_binary_scalar_property_big_endian(PLYProperty &prop, size_t &dest_index) -> bool;
+  auto load_binary_list_property_big_endian(PLYProperty &prop) -> bool;
 
-  bool ascii_value(PLYPropertyType prop_type, std::span<uint8_t> value);
+  auto ascii_value(PLYPropertyType prop_type, std::span<uint8_t> value) -> bool;
 
-  bool load_fixed_ascii_element(PLYElement &elem);
-  bool load_fixed_binary_element(PLYElement const &elem, size_t num_bytes);
+  auto load_fixed_ascii_element(PLYElement &elem) -> bool;
+  auto load_fixed_binary_element(PLYElement const &elem, size_t num_bytes) -> bool;
   void endian_swap_loaded_fixed_element(PLYElement const &elem);
-  bool load_variable_binary_element(PLYElement &elem);
-  bool load_variable_ascii_element(PLYElement &elem);
-  bool load_variable_binary_big_endian_element(PLYElement &elem);
+  auto load_variable_binary_element(PLYElement &elem) -> bool;
+  auto load_variable_ascii_element(PLYElement &elem) -> bool;
+  auto load_variable_binary_big_endian_element(PLYElement &elem) -> bool;
 
-  bool extract_triangles_convert_both(uint32_t prop_idx,
+  auto extract_triangles_convert_both(uint32_t prop_idx,
     std::span<const float> positions,
     MeshVertexCount mesh_vertex_count,
     PLYPropertyType dest_type,
-    void *dest) const;
-  bool extract_triangles_convert_src(uint32_t prop_idx,
+    void *dest) const -> bool;
+  auto extract_triangles_convert_src(uint32_t prop_idx,
     std::span<const float> positions,
     MeshVertexCount mesh_vertex_count,
     PLYPropertyType dest_type,
-    void *dest) const;
-  bool extract_triangles_convert_dst(uint32_t prop_idx,
+    void *dest) const -> bool;
+  auto extract_triangles_convert_dst(uint32_t prop_idx,
     std::span<const float> positions,
     MeshVertexCount mesh_vertex_count,
     PLYPropertyType dest_type,
-    void *dest) const;
-  bool extract_triangles_native(uint32_t prop_idx,
+    void *dest) const -> bool;
+  auto extract_triangles_native(uint32_t prop_idx,
     std::span<const float> positions,
     MeshVertexCount mesh_vertex_count,
     PLYPropertyType dest_type,
-    void *dest) const;
+    void *dest) const -> bool;
 
   void clear_list_property_storage(PLYElement &elem);
   void skip_unloaded_ascii_element(PLYElement const &elem);
@@ -322,8 +322,8 @@ private:
   void skip_unloaded_binary_variable_element(PLYElement const &elem);
   void skip_unloaded_binary_big_endian_variable_element(PLYElement const &elem);
 
-  bool ensure_bytes_available(size_t num_bytes);
-  char char_at(size_t index) const;
+  auto ensure_bytes_available(size_t num_bytes) -> bool;
+  auto char_at(size_t index) const -> char;
 
   FileHandle file_{ nullptr, &fclose };
   std::vector<char> buf_;
@@ -358,11 +358,11 @@ private:
 /// `vertex_count < 3`, nothing gets written to dst.
 ///
 /// The return value is the number of triangles.
-uint32_t TriangulatePolygon(PolygonVertexCount vertex_count,
+auto TriangulatePolygon(PolygonVertexCount vertex_count,
   std::span<const float> positions,
   MeshVertexCount mesh_vertex_count,
   PolygonIndices indices,
-  TriangleDestination destination);
+  TriangleDestination destination) -> uint32_t;
 
 }// namespace miniply
 

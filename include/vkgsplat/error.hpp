@@ -1,10 +1,11 @@
 #pragma once
 
 #include <vkgsplat_utility/error.hpp>
+#include <vkgsplat_utility/types.hpp>
 
 namespace vkgsplat {
 
-enum class ErrorIO {
+enum class ErrorIO: u8 {
   kInvalidSplatCount,
   kFailedOpen,
   kMissingVertexElement,

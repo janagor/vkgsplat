@@ -16,7 +16,7 @@ class OpTensorSyncLocal : public Operation
 public:
   template<TriviallyCopyable T> void add(Tensor<T> &tensor)
   {
-    syncs_.emplace_back([&tensor](Init &init) { return tensor.sync_from_device(init); });
+    syncs_.emplace_back([&tensor](Init &init) -> bool { return tensor.sync_from_device(init); });
   }
 
   void post_eval(Init &init, RenderData const &data, VkCommandBuffer cmd) override;

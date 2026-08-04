@@ -13,6 +13,11 @@ class Platform
 {
 public:
   virtual ~Platform() = default;
+  Platform() = default;
+  Platform(Platform const & /*other*/) = default;
+  Platform(Platform && /*other*/) = default;
+  auto operator=(Platform const & /*other*/) -> Platform & = default;
+  auto operator=(Platform && /*other*/) -> Platform & = default;
 
   [[nodiscard]] virtual auto native_window() const noexcept -> NativeWindowHandle = 0;
   [[nodiscard]] virtual auto framebuffer_extent() const noexcept -> Extent2D = 0;

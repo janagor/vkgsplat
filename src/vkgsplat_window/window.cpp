@@ -55,8 +55,11 @@ auto Window::create(WindowConfig const &config) -> std::expected<Window, Error>
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
   glfwWindowHint(GLFW_RESIZABLE, config.resizable ? GLFW_TRUE : GLFW_FALSE);
 
-  auto *const handle = glfwCreateWindow(
-    static_cast<int>(config.width), static_cast<int>(config.height), config.title.data(), nullptr, nullptr);
+  auto *const handle = glfwCreateWindow(static_cast<int>(config.width),
+    static_cast<int>(config.height),
+    std::string(config.title.data(), config.title.size()).c_str(),
+    nullptr,
+    nullptr);
   if (handle == nullptr) {
     glfwTerminate();
     return std::unexpected{ MakeErrorFromGlfw("Failed to create GLFW window") };
