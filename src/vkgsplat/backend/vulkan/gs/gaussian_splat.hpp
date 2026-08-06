@@ -124,14 +124,14 @@ inline constexpr u32 kMaxTiles = kMaxTileGridDim * kMaxTileGridDim;
 [[nodiscard]] inline auto Sh0ToRgb(std::array<f32, 3> const &f_dc) -> std::array<f32, 3>
 {
   return {
-    std::clamp(0.5F + (kShC0 * f_dc[0]), 0.0F, 1.0F),// NOLINT(readability-magic-numbers)
-    std::clamp(0.5F + (kShC0 * f_dc[1]), 0.0F, 1.0F),// NOLINT(readability-magic-numbers)
-    std::clamp(0.5F + (kShC0 * f_dc[2]), 0.0F, 1.0F),// NOLINT(readability-magic-numbers)
+    std::clamp(0.5F + (kShC0 * f_dc.at(0)), 0.0F, 1.0F),// NOLINT(readability-magic-numbers)
+    std::clamp(0.5F + (kShC0 * f_dc.at(1)), 0.0F, 1.0F),// NOLINT(readability-magic-numbers)
+    std::clamp(0.5F + (kShC0 * f_dc.at(2)), 0.0F, 1.0F),// NOLINT(readability-magic-numbers)
   };
 }
 
 [[nodiscard]] inline auto ScalesFromLog(std::array<f32, 3> const &log_scale) -> std::array<f32, 3>
-{ return { std::exp(log_scale[0]), std::exp(log_scale[1]), std::exp(log_scale[2]) }; }
+{ return { std::exp(log_scale.at(0)), std::exp(log_scale.at(1)), std::exp(log_scale.at(2)) }; }
 
 }// namespace vkgsplat::gs
 

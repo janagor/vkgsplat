@@ -75,7 +75,7 @@ public:
       static_cast<float>(aspect_ratio),
       0.1F,// NOLINT(readability-magic-numbers)
       100.0F);
-    proj[1][1] *= -1.0F;
+    proj[1][1] *= -1.0F;// NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     return proj;
   }
 
