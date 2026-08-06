@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_INPUT_HANDLER_INPUT_HANDLER_IPP
+#define VKGSPLAT_INPUT_HANDLER_INPUT_HANDLER_IPP
 
 #include <vkgsplat_input_handler/input_handler.hpp>// NOLINT(misc-header-include-cycle)
 
@@ -54,3 +55,5 @@ void InputHandler::update(View &view, CloseTarget &close)
 }
 
 }// namespace vkgsplat
+
+#endif// VKGSPLAT_INPUT_HANDLER_INPUT_HANDLER_IPP

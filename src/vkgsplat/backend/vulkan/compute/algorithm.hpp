@@ -1,4 +1,6 @@
-#pragma once
+#ifndef VKGSPLAT_BACKEND_VULKAN_COMPUTE_ALGORITHM_HPP
+#define VKGSPLAT_BACKEND_VULKAN_COMPUTE_ALGORITHM_HPP
+
 #include "vulkan_context.hpp"
 #include <span>
 #include <string>
@@ -36,3 +38,5 @@ namespace compute {
 }// namespace compute
 
 }// namespace vkgsplat
+
+#endif// VKGSPLAT_BACKEND_VULKAN_COMPUTE_ALGORITHM_HPP

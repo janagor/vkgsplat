@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_UTILITY_ERROR_IPP
+#define VKGSPLAT_UTILITY_ERROR_IPP
 
 #include <vkgsplat_utility/error.hpp>// NOLINT(misc-header-include-cycle)
 
@@ -14,3 +15,5 @@ auto MakeError(ErrorCodeEnum code, std::string message, std::source_location sou
 }
 
 }// namespace vkgsplat
+
+#endif// VKGSPLAT_UTILITY_ERROR_IPP

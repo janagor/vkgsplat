@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_BACKEND_VULKAN_SYNC_OBJECTS_BARRIER_HPP
+#define VKGSPLAT_BACKEND_VULKAN_SYNC_OBJECTS_BARRIER_HPP
 
 #include <VkBootstrapDispatch.h>
 #include <vulkan/vulkan_core.h>
@@ -31,3 +32,5 @@ public:
 };
 
 }// namespace vkgsplat
+
+#endif// VKGSPLAT_BACKEND_VULKAN_SYNC_OBJECTS_BARRIER_HPP

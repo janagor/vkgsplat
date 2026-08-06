@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_BACKEND_VULKAN_COMPUTE_TENSOR_IPP
+#define VKGSPLAT_BACKEND_VULKAN_COMPUTE_TENSOR_IPP
 
 #include "compute/tensor.hpp"// NOLINT(misc-header-include-cycle)
 
@@ -68,3 +69,5 @@ auto Tensor<T>::sync_from_device(Init &init) noexcept -> bool
 }
 
 }// namespace vkgsplat::compute
+
+#endif// VKGSPLAT_BACKEND_VULKAN_COMPUTE_TENSOR_IPP

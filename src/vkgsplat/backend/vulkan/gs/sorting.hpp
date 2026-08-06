@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_BACKEND_VULKAN_GS_SORTING_HPP
+#define VKGSPLAT_BACKEND_VULKAN_GS_SORTING_HPP
 
 #include "app_state.hpp"
 
@@ -9,3 +10,5 @@ namespace vkgsplat::gs {
 void DestroySorting(Init &init, RenderData &data);
 
 }// namespace vkgsplat::gs
+
+#endif// VKGSPLAT_BACKEND_VULKAN_GS_SORTING_HPP

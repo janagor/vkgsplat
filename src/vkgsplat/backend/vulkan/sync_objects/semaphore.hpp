@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_BACKEND_VULKAN_SYNC_OBJECTS_SEMAPHORE_HPP
+#define VKGSPLAT_BACKEND_VULKAN_SYNC_OBJECTS_SEMAPHORE_HPP
 
 #include <expected>
 #include <functional>
@@ -35,3 +36,5 @@ private:
 };
 
 }// namespace vkgsplat
+
+#endif// VKGSPLAT_BACKEND_VULKAN_SYNC_OBJECTS_SEMAPHORE_HPP

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_WINDOW_WINDOW_HPP
+#define VKGSPLAT_WINDOW_WINDOW_HPP
 
 #include <expected>
 #include <string_view>
@@ -45,3 +46,5 @@ private:
 };
 
 }// namespace vkgsplat
+
+#endif// VKGSPLAT_WINDOW_WINDOW_HPP

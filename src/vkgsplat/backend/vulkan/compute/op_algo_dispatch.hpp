@@ -1,4 +1,6 @@
-#pragma once
+#ifndef VKGSPLAT_BACKEND_VULKAN_COMPUTE_OP_ALGO_DISPATCH_HPP
+#define VKGSPLAT_BACKEND_VULKAN_COMPUTE_OP_ALGO_DISPATCH_HPP
+
 #include "compute/algorithm.hpp"
 #include "compute/operation.hpp"
 #include <array>
@@ -20,3 +22,5 @@ private:
 };
 
 }// namespace vkgsplat::compute
+
+#endif// VKGSPLAT_BACKEND_VULKAN_COMPUTE_OP_ALGO_DISPATCH_HPP

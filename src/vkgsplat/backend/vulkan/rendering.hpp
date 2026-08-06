@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_BACKEND_VULKAN_RENDERING_HPP
+#define VKGSPLAT_BACKEND_VULKAN_RENDERING_HPP
 
 #include <concepts>
 #include <functional>
@@ -23,3 +24,5 @@ void with_rendering(std::reference_wrapper<vkb::DispatchTable> disp,
 }
 
 }// namespace vkgsplat::vulkan
+
+#endif// VKGSPLAT_BACKEND_VULKAN_RENDERING_HPP

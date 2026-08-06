@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_BACKEND_VULKAN_SHADER_HPP
+#define VKGSPLAT_BACKEND_VULKAN_SHADER_HPP
 
 #include <string>
 #include <vector>
@@ -15,3 +16,5 @@ namespace vkgsplat {
 [[nodiscard]] auto CreateShaderModule(Init &init, std::vector<char> const &code) -> VkShaderModule;
 
 }// namespace vkgsplat
+
+#endif// VKGSPLAT_BACKEND_VULKAN_SHADER_HPP

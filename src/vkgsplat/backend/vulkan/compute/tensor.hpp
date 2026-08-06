@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_BACKEND_VULKAN_COMPUTE_TENSOR_HPP
+#define VKGSPLAT_BACKEND_VULKAN_COMPUTE_TENSOR_HPP
 
 #include "backend/vulkan/gpu_allocator.hpp"
 #include "vulkan_context.hpp"
@@ -56,3 +57,5 @@ template<TriviallyCopyable T>
 }// namespace vkgsplat::compute
 
 #include "compute/tensor.ipp"
+
+#endif// VKGSPLAT_BACKEND_VULKAN_COMPUTE_TENSOR_HPP

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_MESH_HPP
+#define VKGSPLAT_MESH_HPP
 
 #include <array>
 #include <cstddef>
@@ -25,3 +26,5 @@ struct Mesh
 };
 
 }// namespace vkgsplat
+
+#endif// VKGSPLAT_MESH_HPP

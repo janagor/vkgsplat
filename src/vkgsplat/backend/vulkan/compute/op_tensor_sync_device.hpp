@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_BACKEND_VULKAN_COMPUTE_OP_TENSOR_SYNC_DEVICE_HPP
+#define VKGSPLAT_BACKEND_VULKAN_COMPUTE_OP_TENSOR_SYNC_DEVICE_HPP
 
 #include "compute/operation.hpp"
 #include "compute/tensor.hpp"
@@ -30,3 +31,5 @@ private:
 };
 
 }// namespace vkgsplat::compute
+
+#endif// VKGSPLAT_BACKEND_VULKAN_COMPUTE_OP_TENSOR_SYNC_DEVICE_HPP

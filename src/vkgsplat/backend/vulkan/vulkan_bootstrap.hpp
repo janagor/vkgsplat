@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_BACKEND_VULKAN_VULKAN_BOOTSTRAP_HPP
+#define VKGSPLAT_BACKEND_VULKAN_VULKAN_BOOTSTRAP_HPP
 
 #include <expected>
 #include <ranges>
@@ -20,3 +21,5 @@ template<typename Ok> auto VKBResultToExpected(vkb::Result<Ok> &&res) -> std::ex
 }
 
 }// namespace vkgsplat
+
+#endif// VKGSPLAT_BACKEND_VULKAN_VULKAN_BOOTSTRAP_HPP

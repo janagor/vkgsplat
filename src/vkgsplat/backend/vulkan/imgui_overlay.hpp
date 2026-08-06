@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_BACKEND_VULKAN_IMGUI_OVERLAY_HPP
+#define VKGSPLAT_BACKEND_VULKAN_IMGUI_OVERLAY_HPP
 
 #include "app_state.hpp"
 #include "vulkan_context.hpp"
@@ -20,3 +21,5 @@ void RecordImguiOverlay(Init &init, RenderData const &data, VkCommandBuffer comm
 void UpdateImguiGpuTimings(RenderData &data);
 
 }// namespace vkgsplat
+
+#endif// VKGSPLAT_BACKEND_VULKAN_IMGUI_OVERLAY_HPP

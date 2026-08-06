@@ -1,4 +1,6 @@
-#pragma once
+#ifndef VKGSPLAT_BACKEND_VULKAN_COMPUTE_OPERATION_HPP
+#define VKGSPLAT_BACKEND_VULKAN_COMPUTE_OPERATION_HPP
+
 #include <vulkan/vulkan_core.h>
 
 namespace vkgsplat {
@@ -29,3 +31,5 @@ namespace compute {
 }// namespace compute
 
 }// namespace vkgsplat
+
+#endif// VKGSPLAT_BACKEND_VULKAN_COMPUTE_OPERATION_HPP

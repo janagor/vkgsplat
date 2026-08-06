@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_BACKEND_VULKAN_COMPUTE_SEQUENCE_HPP
+#define VKGSPLAT_BACKEND_VULKAN_COMPUTE_SEQUENCE_HPP
 
 #include "compute/operation.hpp"
 
@@ -114,3 +115,5 @@ namespace compute {
 }// namespace compute
 
 }// namespace vkgsplat
+
+#endif// VKGSPLAT_BACKEND_VULKAN_COMPUTE_SEQUENCE_HPP

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_BACKEND_VULKAN_COMMAND_COMMAND_HPP
+#define VKGSPLAT_BACKEND_VULKAN_COMMAND_COMMAND_HPP
 
 #include <concepts>
 #include <expected>
@@ -38,3 +39,5 @@ auto WithCommand(std::reference_wrapper<vkb::DispatchTable> disp,
 }
 
 }// namespace vkgsplat::vulkan
+
+#endif// VKGSPLAT_BACKEND_VULKAN_COMMAND_COMMAND_HPP

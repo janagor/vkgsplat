@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_BACKEND_VULKAN_GS_OPERATIONS_HPP
+#define VKGSPLAT_BACKEND_VULKAN_GS_OPERATIONS_HPP
 
 #include "compute/operation.hpp"
 
@@ -35,3 +36,5 @@ public:
 };
 
 }// namespace vkgsplat::gs
+
+#endif// VKGSPLAT_BACKEND_VULKAN_GS_OPERATIONS_HPP

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_BACKEND_VULKAN_GS_PUSH_CONSTANTS_HPP
+#define VKGSPLAT_BACKEND_VULKAN_GS_PUSH_CONSTANTS_HPP
 
 #include <glm/ext/matrix_float4x4.hpp>
 #include <glm/ext/vector_float2.hpp>
@@ -84,3 +85,5 @@ constexpr size_t kRasterPushConstantsSize = 64;
 static_assert(sizeof(RasterPushConstants) == kRasterPushConstantsSize);
 
 }// namespace vkgsplat::gs
+
+#endif// VKGSPLAT_BACKEND_VULKAN_GS_PUSH_CONSTANTS_HPP

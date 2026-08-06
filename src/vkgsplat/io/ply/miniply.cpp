@@ -45,7 +45,7 @@ SOFTWARE.
 #include <utility>
 #include <vector>
 
-namespace miniply {
+namespace vkgsplat::miniply {
 
 namespace {
 

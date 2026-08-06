@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_BACKEND_VULKAN_GPU_PASS_TIMER_HPP
+#define VKGSPLAT_BACKEND_VULKAN_GPU_PASS_TIMER_HPP
 
 #include <vkgsplat_utility/types.hpp>
 
@@ -62,3 +63,5 @@ private:
 };
 
 }// namespace vkgsplat
+
+#endif// VKGSPLAT_BACKEND_VULKAN_GPU_PASS_TIMER_HPP

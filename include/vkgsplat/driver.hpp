@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_DRIVER_HPP
+#define VKGSPLAT_DRIVER_HPP
 
 #include <expected>
 #include <memory>
@@ -42,3 +43,5 @@ protected:
   -> std::expected<std::unique_ptr<Driver>, Error>;
 
 }// namespace vkgsplat
+
+#endif// VKGSPLAT_DRIVER_HPP

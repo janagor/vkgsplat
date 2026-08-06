@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_APP_APP_CONFIG_HPP
+#define VKGSPLAT_APP_APP_CONFIG_HPP
 
 #include <expected>
 #include <span>
@@ -21,3 +22,5 @@ struct AppConfig
 [[nodiscard]] auto ParseAppConfig(std::span<char *const> args) -> std::expected<AppConfig, vkgsplat::Error>;
 
 }// namespace vkgsplat::app
+
+#endif// VKGSPLAT_APP_APP_CONFIG_HPP

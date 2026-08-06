@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_BACKEND_VULKAN_APP_STATE_HPP
+#define VKGSPLAT_BACKEND_VULKAN_APP_STATE_HPP
 
 #include <expected>
 #include <functional>
@@ -120,3 +121,5 @@ struct RenderData
 };
 
 }// namespace vkgsplat
+
+#endif// VKGSPLAT_BACKEND_VULKAN_APP_STATE_HPP

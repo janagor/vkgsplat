@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_BACKEND_VULKAN_COMMAND_BUFFER_HPP
+#define VKGSPLAT_BACKEND_VULKAN_COMMAND_BUFFER_HPP
 
 #include <utility>
 
@@ -32,3 +33,5 @@ private:
 };
 
 }// namespace vkgsplat::vulkan
+
+#endif// VKGSPLAT_BACKEND_VULKAN_COMMAND_BUFFER_HPP

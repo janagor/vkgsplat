@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_BACKEND_VULKAN_COMMAND_POOL_HPP
+#define VKGSPLAT_BACKEND_VULKAN_COMMAND_POOL_HPP
 
 #include <expected>
 #include <functional>
@@ -44,3 +45,5 @@ private:
 };
 
 }// namespace vkgsplat::vulkan
+
+#endif// VKGSPLAT_BACKEND_VULKAN_COMMAND_POOL_HPP

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_BACKEND_VULKAN_GS_RASTERIZATION_HPP
+#define VKGSPLAT_BACKEND_VULKAN_GS_RASTERIZATION_HPP
 
 #include "app_state.hpp"
 #include "gs/push_constants.hpp"
@@ -21,3 +22,5 @@ void DispatchRasterization(Init const &init,
 void DestroyRasterization(Init &init, RenderData &data);
 
 }// namespace vkgsplat::gs
+
+#endif// VKGSPLAT_BACKEND_VULKAN_GS_RASTERIZATION_HPP

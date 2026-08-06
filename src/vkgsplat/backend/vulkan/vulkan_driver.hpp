@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_BACKEND_VULKAN_VULKAN_DRIVER_HPP
+#define VKGSPLAT_BACKEND_VULKAN_VULKAN_DRIVER_HPP
 
 #include <expected>
 #include <memory>
@@ -39,3 +40,5 @@ private:
 };
 
 }// namespace vkgsplat::vulkan
+
+#endif// VKGSPLAT_BACKEND_VULKAN_VULKAN_DRIVER_HPP

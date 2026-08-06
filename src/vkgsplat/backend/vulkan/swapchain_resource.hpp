@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_BACKEND_VULKAN_SWAPCHAIN_RESOURCE_HPP
+#define VKGSPLAT_BACKEND_VULKAN_SWAPCHAIN_RESOURCE_HPP
 
 #include <expected>
 #include <functional>
@@ -51,3 +52,5 @@ private:
 };
 
 }// namespace vkgsplat::vulkan
+
+#endif// VKGSPLAT_BACKEND_VULKAN_SWAPCHAIN_RESOURCE_HPP

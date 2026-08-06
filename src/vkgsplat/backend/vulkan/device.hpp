@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_BACKEND_VULKAN_DEVICE_HPP
+#define VKGSPLAT_BACKEND_VULKAN_DEVICE_HPP
 
 #include <expected>
 
@@ -10,3 +11,5 @@ namespace vkgsplat {
 [[nodiscard]] auto DeviceInitialization(Init &init, bool enable_validation = false) -> std::expected<void, Error>;
 
 }// namespace vkgsplat
+
+#endif// VKGSPLAT_BACKEND_VULKAN_DEVICE_HPP

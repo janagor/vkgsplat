@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_UTILITY_TYPES_HPP
+#define VKGSPLAT_UTILITY_TYPES_HPP
 
 #include <concepts>
 #include <cstdint>
@@ -66,3 +67,5 @@ struct Extent2D
 };
 
 }// namespace vkgsplat
+
+#endif// VKGSPLAT_UTILITY_TYPES_HPP

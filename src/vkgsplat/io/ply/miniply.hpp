@@ -25,8 +25,8 @@ SOFTWARE.
 // Vendored third-party code from miniply:
 //   https://github.com/vilya/miniply
 
-#ifndef MINIPLY_H
-#define MINIPLY_H
+#ifndef VKGSPLAT_IO_PLY_MINIPLY_HPP
+#define VKGSPLAT_IO_PLY_MINIPLY_HPP
 
 #include <array>
 #include <cstdint>
@@ -37,6 +37,7 @@ SOFTWARE.
 #include <string_view>
 #include <vector>
 
+#include <vkgsplat_utility/types.hpp>
 
 /// miniply - A simple and fast parser for PLY files
 /// ================================================
@@ -45,7 +46,7 @@ SOFTWARE.
 /// * http://paulbourke.net/dataformats/ply/
 /// * https://en.wikipedia.org/wiki/PLY_(file_format)
 
-namespace miniply {
+namespace vkgsplat::miniply {
 
 //
 // Constants
@@ -62,14 +63,14 @@ constexpr std::string_view kPLYFaceElement = "face";
 // PLY Parsing types
 //
 
-enum class PLYFileType {
+enum class PLYFileType : u8 {
   kAscii,
   kBinary,
   kBinaryBigEndian,
 };
 
 
-enum class PLYPropertyType {
+enum class PLYPropertyType : u8 {
   kChar,
   kUChar,
   kShort,
@@ -240,11 +241,11 @@ public:
     PLYPropertyType dest_type,
     void *dest) const -> bool;
 
-  auto find_pos(std::span<uint32_t, 3> prop_idxs) const -> bool;
-  auto find_normal(std::span<uint32_t, 3> prop_idxs) const -> bool;
-  auto find_texcoord(std::span<uint32_t, 2> prop_idxs) const -> bool;
-  auto find_color(std::span<uint32_t, 3> prop_idxs) const -> bool;
-  auto find_indices(std::span<uint32_t, 1> prop_idxs) const -> bool;
+  [[nodiscard]] auto find_pos(std::span<uint32_t, 3> prop_idxs) const -> bool;
+  [[nodiscard]] auto find_normal(std::span<uint32_t, 3> prop_idxs) const -> bool;
+  [[nodiscard]] auto find_texcoord(std::span<uint32_t, 2> prop_idxs) const -> bool;
+  [[nodiscard]] auto find_color(std::span<uint32_t, 3> prop_idxs) const -> bool;
+  [[nodiscard]] auto find_indices(std::span<uint32_t, 1> prop_idxs) const -> bool;
 
 private:
   using FileHandle = std::unique_ptr<FILE, decltype(&fclose)>;
@@ -364,6 +365,6 @@ auto TriangulatePolygon(PolygonVertexCount vertex_count,
   PolygonIndices indices,
   TriangleDestination destination) -> uint32_t;
 
-}// namespace miniply
+}// namespace vkgsplat::miniply
 
-#endif// MINIPLY_H
+#endif// VKGSPLAT_IO_PLY_MINIPLY_HPP

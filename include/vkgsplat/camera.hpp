@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_CAMERA_HPP
+#define VKGSPLAT_CAMERA_HPP
 
 #define GLM_ENABLE_EXPERIMENTAL
 
@@ -148,3 +149,5 @@ static_assert(MouseLookControllable<Camera>);
 static_assert(ScrollZoomable<Camera>);
 
 }// namespace vkgsplat
+
+#endif// VKGSPLAT_CAMERA_HPP

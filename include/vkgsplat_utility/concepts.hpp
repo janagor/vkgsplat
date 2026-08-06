@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_UTILITY_CONCEPTS_HPP
+#define VKGSPLAT_UTILITY_CONCEPTS_HPP
 
 #include <concepts>
 #include <ranges>
@@ -16,3 +17,5 @@ template<typename Tp>
 concept UnsignedIntegral = std::integral<Tp> && std::is_unsigned_v<Tp>;
 
 }// namespace vkgsplat
+
+#endif// VKGSPLAT_UTILITY_CONCEPTS_HPP

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_UTILITY_MEMORY_NODE_POOL_HPP
+#define VKGSPLAT_UTILITY_MEMORY_NODE_POOL_HPP
 
 #include <concepts>
 #include <memory>
@@ -95,3 +96,5 @@ private:
 };
 
 }// namespace vkgsplat
+
+#endif// VKGSPLAT_UTILITY_MEMORY_NODE_POOL_HPP

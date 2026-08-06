@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_UTILITY_INPUT_CONTROL_HPP
+#define VKGSPLAT_UTILITY_INPUT_CONTROL_HPP
 
 #include <concepts>
 
@@ -47,3 +48,5 @@ private:
 static_assert(Closeable<CloseState>);
 
 }// namespace vkgsplat
+
+#endif// VKGSPLAT_UTILITY_INPUT_CONTROL_HPP

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_BACKEND_VULKAN_DESCRIPTOR_DESCRIPTOR_HEAP_HPP
+#define VKGSPLAT_BACKEND_VULKAN_DESCRIPTOR_DESCRIPTOR_HEAP_HPP
 
 #include <cstddef>
 #include <cstdint>
@@ -52,3 +53,5 @@ void BindDescriptorHeap(Init const &init, RenderData const &data, VkCommandBuffe
 [[nodiscard]] auto HeapSlotByteOffset(RenderData const &data, HeapSlot slot) -> uint32_t;
 
 }// namespace vkgsplat
+
+#endif// VKGSPLAT_BACKEND_VULKAN_DESCRIPTOR_DESCRIPTOR_HEAP_HPP

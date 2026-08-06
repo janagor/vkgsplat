@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_IO_PLY_LOAD_SPLATS_HPP
+#define VKGSPLAT_IO_PLY_LOAD_SPLATS_HPP
 
 #include <expected>
 #include <string>
@@ -20,3 +21,5 @@ struct SplatCpuData
 [[nodiscard]] auto LoadSplatsFromPly(std::string_view ply_path, u32 count) -> std::expected<SplatCpuData, Error>;
 
 }// namespace vkgsplat
+
+#endif// VKGSPLAT_IO_PLY_LOAD_SPLATS_HPP

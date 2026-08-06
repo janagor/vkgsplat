@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_BACKEND_VULKAN_COMPUTE_OP_FILL_BUFFER_HPP
+#define VKGSPLAT_BACKEND_VULKAN_COMPUTE_OP_FILL_BUFFER_HPP
 
 #include "compute/operation.hpp"
 
@@ -28,3 +29,5 @@ private:
 };
 
 }// namespace vkgsplat::compute
+
+#endif// VKGSPLAT_BACKEND_VULKAN_COMPUTE_OP_FILL_BUFFER_HPP

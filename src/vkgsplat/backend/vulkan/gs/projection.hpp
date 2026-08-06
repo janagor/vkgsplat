@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_BACKEND_VULKAN_GS_PROJECTION_HPP
+#define VKGSPLAT_BACKEND_VULKAN_GS_PROJECTION_HPP
 
 #include "app_state.hpp"
 #include "gs/push_constants.hpp"
@@ -18,3 +19,5 @@ void DispatchProjection(Init const &init,
 void DestroyProjection(Init &init, RenderData &data);
 
 }// namespace vkgsplat::gs
+
+#endif// VKGSPLAT_BACKEND_VULKAN_GS_PROJECTION_HPP

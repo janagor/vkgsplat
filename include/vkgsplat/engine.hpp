@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_ENGINE_HPP
+#define VKGSPLAT_ENGINE_HPP
 
 #include <expected>
 #include <memory>
@@ -52,3 +53,5 @@ private:
 };
 
 }// namespace vkgsplat
+
+#endif// VKGSPLAT_ENGINE_HPP

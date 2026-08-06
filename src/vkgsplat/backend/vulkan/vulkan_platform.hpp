@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_BACKEND_VULKAN_VULKAN_PLATFORM_HPP
+#define VKGSPLAT_BACKEND_VULKAN_VULKAN_PLATFORM_HPP
 
 #include <expected>
 
@@ -13,3 +14,5 @@ namespace vkgsplat::vulkan {
   -> std::expected<VkSurfaceKHR, Error>;
 
 }// namespace vkgsplat::vulkan
+
+#endif// VKGSPLAT_BACKEND_VULKAN_VULKAN_PLATFORM_HPP

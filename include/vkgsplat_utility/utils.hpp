@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_UTILITY_UTILS_HPP
+#define VKGSPLAT_UTILITY_UTILS_HPP
 
 #include <vkgsplat_utility/concepts.hpp>
 
@@ -32,3 +33,5 @@ template<UnsignedIntegral Tp> [[nodiscard]] constexpr auto NextPowerOf2(Tp value
 }
 
 }// namespace vkgsplat
+
+#endif// VKGSPLAT_UTILITY_UTILS_HPP

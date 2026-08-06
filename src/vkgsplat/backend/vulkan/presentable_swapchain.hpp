@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_BACKEND_VULKAN_PRESENTABLE_SWAPCHAIN_HPP
+#define VKGSPLAT_BACKEND_VULKAN_PRESENTABLE_SWAPCHAIN_HPP
 
 #include <expected>
 #include <functional>
@@ -46,3 +47,5 @@ private:
 };
 
 }// namespace vkgsplat::vulkan
+
+#endif// VKGSPLAT_BACKEND_VULKAN_PRESENTABLE_SWAPCHAIN_HPP

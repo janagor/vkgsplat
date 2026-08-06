@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_ERROR_HPP
+#define VKGSPLAT_ERROR_HPP
 
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
@@ -25,3 +26,5 @@ template<> struct is_error_code_enum<vkgsplat::ErrorIO> : true_type
 {
 };
 }// namespace std
+
+#endif// VKGSPLAT_ERROR_HPP

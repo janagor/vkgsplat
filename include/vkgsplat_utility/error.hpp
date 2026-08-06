@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_UTILITY_ERROR_HPP
+#define VKGSPLAT_UTILITY_ERROR_HPP
 
 #include <source_location>
 #include <string>
@@ -41,3 +42,5 @@ template<class ErrorCodeEnum>
 }// namespace vkgsplat
 
 #include <vkgsplat_utility/error.ipp>// IWYU pragma: export
+
+#endif// VKGSPLAT_UTILITY_ERROR_HPP

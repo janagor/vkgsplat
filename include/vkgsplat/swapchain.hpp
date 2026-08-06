@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_SWAPCHAIN_HPP
+#define VKGSPLAT_SWAPCHAIN_HPP
 
 #include <expected>
 
@@ -28,3 +29,5 @@ protected:
 };
 
 }// namespace vkgsplat
+
+#endif// VKGSPLAT_SWAPCHAIN_HPP

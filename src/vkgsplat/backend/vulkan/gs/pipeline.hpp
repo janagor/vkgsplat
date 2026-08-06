@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_BACKEND_VULKAN_GS_PIPELINE_HPP
+#define VKGSPLAT_BACKEND_VULKAN_GS_PIPELINE_HPP
 
 #include "app_state.hpp"
 #include "vulkan_context.hpp"
@@ -27,3 +28,5 @@ void EvalGsPipeline(Init &init, RenderData &data, VkCommandBuffer command_buffer
 void DestroyGsPipeline(RenderData &data);
 
 }// namespace vkgsplat::gs
+
+#endif// VKGSPLAT_BACKEND_VULKAN_GS_PIPELINE_HPP

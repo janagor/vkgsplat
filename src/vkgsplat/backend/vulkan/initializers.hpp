@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_BACKEND_VULKAN_INITIALIZERS_HPP
+#define VKGSPLAT_BACKEND_VULKAN_INITIALIZERS_HPP
 
 #include <cstddef>
 #include <span>
@@ -527,3 +528,5 @@ inline auto PresentInfoKHR(std::span<VkSemaphore const> wait_semaphores,
 }
 
 }// namespace vkgsplat::initializers
+
+#endif// VKGSPLAT_BACKEND_VULKAN_INITIALIZERS_HPP

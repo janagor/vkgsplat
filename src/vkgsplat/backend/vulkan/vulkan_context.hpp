@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_BACKEND_VULKAN_VULKAN_CONTEXT_HPP
+#define VKGSPLAT_BACKEND_VULKAN_VULKAN_CONTEXT_HPP
 
 #include <memory>
 
@@ -38,3 +39,5 @@ namespace vkgsplat::vulkan {
 using Context = Init;
 
 }// namespace vkgsplat::vulkan
+
+#endif// VKGSPLAT_BACKEND_VULKAN_VULKAN_CONTEXT_HPP

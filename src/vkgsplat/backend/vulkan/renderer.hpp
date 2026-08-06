@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_BACKEND_VULKAN_RENDERER_HPP
+#define VKGSPLAT_BACKEND_VULKAN_RENDERER_HPP
 
 #include <expected>
 
@@ -22,3 +23,5 @@ namespace vkgsplat {
 void Cleanup(Init &init, RenderData &data);
 
 }// namespace vkgsplat
+
+#endif// VKGSPLAT_BACKEND_VULKAN_RENDERER_HPP

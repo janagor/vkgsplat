@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_PLATFORM_HPP
+#define VKGSPLAT_PLATFORM_HPP
 
 #include <vkgsplat_utility/types.hpp>
 
@@ -26,3 +27,5 @@ public:
 };
 
 }// namespace vkgsplat
+
+#endif// VKGSPLAT_PLATFORM_HPP

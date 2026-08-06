@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_RENDERER_HPP
+#define VKGSPLAT_RENDERER_HPP
 
 #include <expected>
 #include <string>
@@ -47,3 +48,5 @@ private:
 };
 
 }// namespace vkgsplat
+
+#endif// VKGSPLAT_RENDERER_HPP

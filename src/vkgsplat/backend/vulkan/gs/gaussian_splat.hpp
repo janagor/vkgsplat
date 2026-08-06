@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_BACKEND_VULKAN_GS_GAUSSIAN_SPLAT_HPP
+#define VKGSPLAT_BACKEND_VULKAN_GS_GAUSSIAN_SPLAT_HPP
 
 #include <algorithm>
 #include <array>
@@ -133,3 +134,5 @@ inline constexpr u32 kMaxTiles = kMaxTileGridDim * kMaxTileGridDim;
 { return { std::exp(log_scale[0]), std::exp(log_scale[1]), std::exp(log_scale[2]) }; }
 
 }// namespace vkgsplat::gs
+
+#endif// VKGSPLAT_BACKEND_VULKAN_GS_GAUSSIAN_SPLAT_HPP

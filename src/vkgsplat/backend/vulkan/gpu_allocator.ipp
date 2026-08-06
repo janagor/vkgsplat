@@ -1,4 +1,6 @@
-#pragma once
+#ifndef VKGSPLAT_BACKEND_VULKAN_GPU_ALLOCATOR_IPP
+#define VKGSPLAT_BACKEND_VULKAN_GPU_ALLOCATOR_IPP
+
 #include <backend/vulkan/gpu_allocator.hpp>// NOLINT(misc-header-include-cycle)
 
 #include <vkgsplat_utility/concepts.hpp>
@@ -57,3 +59,5 @@ auto GPUAllocator::read_buffer(Buffer const &buffer, std::size_t count) noexcept
 }
 
 }// namespace vkgsplat::vulkan
+
+#endif// VKGSPLAT_BACKEND_VULKAN_GPU_ALLOCATOR_IPP

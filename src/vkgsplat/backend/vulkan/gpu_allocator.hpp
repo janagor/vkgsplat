@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VKGSPLAT_BACKEND_VULKAN_GPU_ALLOCATOR_HPP
+#define VKGSPLAT_BACKEND_VULKAN_GPU_ALLOCATOR_HPP
 
 #include <vkgsplat_utility/concepts.hpp>
 #include <vkgsplat_utility/error.hpp>
@@ -66,3 +67,5 @@ private:
 
 }// namespace vkgsplat::vulkan
 #include <backend/vulkan/gpu_allocator.ipp>
+
+#endif// VKGSPLAT_BACKEND_VULKAN_GPU_ALLOCATOR_HPP

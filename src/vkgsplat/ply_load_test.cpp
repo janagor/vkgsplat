@@ -12,34 +12,34 @@
 
 namespace {
 
-auto PropertyTypeName(miniply::PLYPropertyType type) -> std::string_view
+auto PropertyTypeName(vkgsplat::miniply::PLYPropertyType type) -> std::string_view
 {
   switch (type) {
-  case miniply::PLYPropertyType::kChar:
+  case vkgsplat::miniply::PLYPropertyType::kChar:
     return std::string_view{ "char" };
-  case miniply::PLYPropertyType::kUChar:
+  case vkgsplat::miniply::PLYPropertyType::kUChar:
     return std::string_view{ "uchar" };
-  case miniply::PLYPropertyType::kShort:
+  case vkgsplat::miniply::PLYPropertyType::kShort:
     return std::string_view{ "short" };
-  case miniply::PLYPropertyType::kUShort:
+  case vkgsplat::miniply::PLYPropertyType::kUShort:
     return std::string_view{ "ushort" };
-  case miniply::PLYPropertyType::kInt:
+  case vkgsplat::miniply::PLYPropertyType::kInt:
     return std::string_view{ "int" };
-  case miniply::PLYPropertyType::kUInt:
+  case vkgsplat::miniply::PLYPropertyType::kUInt:
     return std::string_view{ "uint" };
-  case miniply::PLYPropertyType::kFloat:
+  case vkgsplat::miniply::PLYPropertyType::kFloat:
     return std::string_view{ "float" };
-  case miniply::PLYPropertyType::kDouble:
+  case vkgsplat::miniply::PLYPropertyType::kDouble:
     return std::string_view{ "double" };
-  case miniply::PLYPropertyType::kNone:
+  case vkgsplat::miniply::PLYPropertyType::kNone:
     return std::string_view{ "none" };
   }
   return std::string_view{ "unknown" };
 }
 
-void PrintProperty(miniply::PLYProperty const &prop)
+void PrintProperty(vkgsplat::miniply::PLYProperty const &prop)
 {
-  if (prop.count_type != miniply::PLYPropertyType::kNone) {
+  if (prop.count_type != vkgsplat::miniply::PLYPropertyType::kNone) {
     std::println(
       "    property '{}' list<{}> {}", prop.name, PropertyTypeName(prop.count_type), PropertyTypeName(prop.type));
     return;
@@ -57,7 +57,7 @@ auto main(int argc, char *argv[]) -> int
     std::string const path = (args.size() > 1) ? std::string{ std::string_view{ args.subspan(1).front() } }
                                                : std::string{ VKGSPLAT_SOURCE_DIR } + "/resources/scene.ply";
 
-    miniply::PLYReader reader(path.c_str());
+    vkgsplat::miniply::PLYReader reader(path.c_str());
     if (!reader.valid()) {
       std::println(stderr, "Failed to open or parse PLY header: {}", path);
       return EXIT_FAILURE;
