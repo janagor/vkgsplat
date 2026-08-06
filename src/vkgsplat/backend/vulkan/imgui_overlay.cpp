@@ -120,6 +120,11 @@ namespace {
   {
     auto *overlay = static_cast<ImGuiOverlayState *>(user_context);
     uint32_t const index = AllocateSlot(overlay->resource_freelist);
+    // ImTextureID 0 is ImTextureID_Invalid; descriptor-heap mode requires non-zero RegisterImage indices.
+    if (index == 0) {
+      std::println(stderr, "[imgui] RegisterImage: no free non-zero heap slots");
+      return 0;
+    }
 
     VkImageDescriptorInfoEXT image_info{};
     image_info.sType = VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT;
@@ -137,6 +142,8 @@ namespace {
     };
     if (overlay->write_resource_descriptors(overlay->device, 1, &resource_info, &host_range) != VK_SUCCESS) {
       std::println(stderr, "[imgui] vkWriteResourceDescriptorsEXT failed for image slot {}", index);
+      FreeSlot(overlay->resource_freelist, index);
+      return 0;
     }
     if (overlay->gpu_allocator != nullptr) { overlay->gpu_allocator->flush_buffer(overlay->resource_heap); }
     return index;
@@ -144,6 +151,7 @@ namespace {
 
   void UnregisterImage(void *user_context, uint32_t index)
   {
+    if (index == 0) { return; }
     auto *overlay = static_cast<ImGuiOverlayState *>(user_context);
     FreeSlot(overlay->resource_freelist, index);
   }
@@ -457,13 +465,13 @@ auto InitImguiOverlay(Init &init, RenderData &data) -> std::expected<void, Error
   overlay->resource_reserved_size = heap_props.minResourceHeapReservedRange;
   overlay->sampler_reserved_offset = sampler_descriptors_size;
   overlay->sampler_reserved_size = heap_props.minSamplerHeapReservedRange;
-  overlay->resource_freelist = (uint64_t{ 1 } << kImguiImageSlots) - uint64_t{ 1 };
+  overlay->resource_freelist = ((uint64_t{ 1 } << kImguiImageSlots) - uint64_t{ 1 }) & ~uint64_t{ 1 };// slot 0 reserved
   overlay->sampler_freelist = (uint64_t{ 1 } << kImguiSamplerSlots) - uint64_t{ 1 };
   overlay->heap_info = {
-    .RegisterSampler = RegisterSampler,
-    .UnRegisterSampler = UnregisterSampler,
     .RegisterImage = RegisterImage,
     .UnRegisterImage = UnregisterImage,
+    .RegisterSampler = RegisterSampler,
+    .UnRegisterSampler = UnregisterSampler,
     .UserContext = overlay.get(),
   };
 
