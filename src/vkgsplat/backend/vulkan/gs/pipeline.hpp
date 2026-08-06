@@ -14,7 +14,7 @@ namespace vkgsplat::gs {
 
 struct GsFrameParams
 {
-  Camera const &camera;
+  Camera const *camera{};
   size_t image_index{};
   f64 aspect_ratio{};
 };

@@ -66,7 +66,7 @@ struct RenderData
   u32 max_bin_instances = 0;
   u32 gaussian_sort_size = 0;
   u32 radix_num_workgroups = 0;
-  u32 radix_blocks_per_workgroup = 32;// NOLINT(readability-magic-numbers)
+  u32 radix_blocks_per_workgroup = gs::kRadixBlocksPerWorkgroup;
   u32 tile_count = 0;
   u32 color_width = 0;
   u32 color_height = 0;

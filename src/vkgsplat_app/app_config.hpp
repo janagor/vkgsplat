@@ -10,9 +10,11 @@
 
 namespace vkgsplat::app {
 
+inline constexpr vkgsplat::u32 kDefaultSplatCount = 64;
+
 struct AppConfig
 {
-  vkgsplat::u32 splat_count = 64;// NOLINT(readability-magic-numbers)
+  vkgsplat::u32 splat_count = kDefaultSplatCount;
   std::string ply_path;
   bool enable_validation = false;
   bool enable_imgui = true;

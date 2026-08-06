@@ -6,6 +6,7 @@
 #include <glm/ext/vector_float4.hpp>
 #include <glm/ext/vector_uint2.hpp>
 
+#include "gs/gaussian_splat.hpp"
 #include <vkgsplat_utility/types.hpp>
 
 namespace vkgsplat::gs {
@@ -29,7 +30,7 @@ struct BinPushConstants
 {
   glm::uvec2 viewport{};// width, height in pixels
   u32 max_instances{};
-  u32 tile_size{ 16 };// NOLINT(readability-magic-numbers)
+  u32 tile_size{ kTileSize };
   u64 instance_count_address{};// BDA for atomic counter (Mesa heap atomics are broken)
 };
 
@@ -44,7 +45,7 @@ struct SortPushConstants
   u64 draw_indirect_address{};// VkDrawIndirectCommand
   u32 sort_size{};// capacity
   u32 tile_count{};
-  u32 blocks_per_workgroup{ 32 };// NOLINT(readability-magic-numbers)
+  u32 blocks_per_workgroup{ kRadixBlocksPerWorkgroup };
   u32 pad{};
 };
 
@@ -72,7 +73,7 @@ struct RasterPushConstants
 {
   glm::vec4 camera_position{};// xyz used
   glm::uvec2 viewport{};// width, height in pixels
-  u32 tile_size{ 16 };// NOLINT(readability-magic-numbers)
+  u32 tile_size{ kTileSize };
   u32 tiles_x{};
   glm::vec4 background{ 0.0F, 0.0F, 0.0F, 0.0F };// rgb used
   u32 sh_degree{ 3 };// 0 = SH0 only; 3 = full degree-3

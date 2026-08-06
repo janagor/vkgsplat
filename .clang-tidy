@@ -16,8 +16,8 @@ Checks: "*,
         -misc-use-internal-linkage
 "
 WarningsAsErrors: '*'
-HeaderFilterRegex: ''
-FormatStyle:     file
+HeaderFilterRegex: '.*vkgsplat.*'
+FormatStyle: file
 
 CheckOptions:
   - { key: readability-identifier-naming.ClassCase,                    value: CamelCase  }
@@ -55,5 +55,5 @@ CheckOptions:
   - { key: readability-identifier-naming.MethodIgnoredRegexp,          value: '^(begin|end|cbegin|cend|rbegin|rend|size|empty|clear|front|back)$' }
   - { key: readability-identifier-naming.FunctionIgnoredRegexp,        value: '^(begin|end|cbegin|cend|rbegin|rend|size|empty|clear)$' }
 
-  - { key: readability-identifier-naming.TypeAliasIgnoredRegexp,       value: '^(iterator_category|value_type|difference_type|pointer|reference|const_pointer|const_reference)$' }
-  - { key: readability-identifier-naming.TypedefIgnoredRegexp,         value: '^(iterator_category|value_type|difference_type|pointer|reference|const_pointer|const_reference)$' }
+  - { key: readability-identifier-naming.TypeAliasIgnoredRegexp,       value: '^(iterator_category|value_type|difference_type|pointer|reference|const_pointer|const_reference|allocator_type|node_type)$' }
+  - { key: readability-identifier-naming.TypedefIgnoredRegexp,         value: '^(iterator_category|value_type|difference_type|pointer|reference|const_pointer|const_reference|allocator_type|node_type)$' }

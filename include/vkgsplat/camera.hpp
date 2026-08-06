@@ -29,6 +29,8 @@ constexpr f64 kCameraSensitivity = 0.1;
 constexpr f64 kCameraDefaultZoom = 45.0;
 constexpr f64 kCameraMinZoom = 1.0;
 constexpr f64 kCameraMaxZoom = 45.0;
+constexpr float kCameraNearPlane = 0.1F;
+constexpr float kCameraFarPlane = 100.0F;
 
 inline constexpr glm::dvec3 kDefaultCameraPosition{ 0.0, 1.5, 10.0 };
 
@@ -73,8 +75,8 @@ public:
   {
     auto proj = glm::perspective(glm::radians(static_cast<float>(zoom_)),
       static_cast<float>(aspect_ratio),
-      0.1F,// NOLINT(readability-magic-numbers)
-      100.0F);
+      kCameraNearPlane,
+      kCameraFarPlane);
     proj[1][1] *= -1.0F;// NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     return proj;
   }

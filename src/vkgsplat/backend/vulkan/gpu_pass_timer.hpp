@@ -12,7 +12,7 @@ namespace vkgsplat {
 
 struct Init;
 
-enum class GpuPass : u32 {
+enum class GpuPass : u8 {
   kProjection = 0,
   kBinning,
   kPrepareSort,

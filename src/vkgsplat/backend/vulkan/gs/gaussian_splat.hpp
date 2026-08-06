@@ -89,6 +89,8 @@ static_assert(std::is_standard_layout_v<GaussianProjected>);
 inline constexpr u32 kTileSize = 16;
 // Conservative upper bound on tiles touched per splat (16x16 tile grid).
 inline constexpr u32 kMaxTilesPerSplat = 64;
+// Radix sort: elements processed per workgroup invocation.
+inline constexpr u32 kRadixBlocksPerWorkgroup = 32;
 
 // 32-bit sort key packed as (tile_id << 16) | (depth_bits >> 16).
 // Fits tile grids up to 65536 and keeps coarse depth order within a tile.
@@ -123,11 +125,13 @@ inline constexpr u32 kMaxTiles = kMaxTileGridDim * kMaxTileGridDim;
 
 [[nodiscard]] inline auto Sh0ToRgb(std::array<f32, 3> const &f_dc) -> std::array<f32, 3>
 {
+  // NOLINTBEGIN(readability-magic-numbers,cppcoreguidelines-avoid-magic-numbers)
   return {
-    std::clamp(0.5F + (kShC0 * f_dc.at(0)), 0.0F, 1.0F),// NOLINT(readability-magic-numbers)
-    std::clamp(0.5F + (kShC0 * f_dc.at(1)), 0.0F, 1.0F),// NOLINT(readability-magic-numbers)
-    std::clamp(0.5F + (kShC0 * f_dc.at(2)), 0.0F, 1.0F),// NOLINT(readability-magic-numbers)
+    std::clamp(0.5F + (kShC0 * f_dc.at(0)), 0.0F, 1.0F),
+    std::clamp(0.5F + (kShC0 * f_dc.at(1)), 0.0F, 1.0F),
+    std::clamp(0.5F + (kShC0 * f_dc.at(2)), 0.0F, 1.0F),
   };
+  // NOLINTEND(readability-magic-numbers,cppcoreguidelines-avoid-magic-numbers)
 }
 
 [[nodiscard]] inline auto ScalesFromLog(std::array<f32, 3> const &log_scale) -> std::array<f32, 3>

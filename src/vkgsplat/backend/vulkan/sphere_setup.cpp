@@ -46,7 +46,7 @@ auto InitSphereSetup(Init &init, RenderData &data) -> bool
     data.sort_size,
   };
 
-  std::string const shader_path = std::string(SHADER_DIRECTORY) + "/init_spheres.comp.spv";
+  std::string const shader_path = std::string(kShaderDirectory) + "/init_spheres.comp.spv";
   if (!data.sphere_setup_algorithm.init(init, shader_path, std::span{ specialization_constants })) { return false; }
 
   // Host mirrors are uploaded once in Tensor::create; do not re-sync every dispatch.

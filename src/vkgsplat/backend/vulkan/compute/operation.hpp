@@ -13,6 +13,11 @@ namespace compute {
   class Operation
   {
   public:
+    Operation() = default;
+    Operation(Operation const &) = delete;
+    auto operator=(Operation const &) -> Operation & = delete;
+    Operation(Operation &&) = delete;
+    auto operator=(Operation &&) -> Operation & = delete;
     virtual ~Operation() = default;
 
     virtual void pre_eval([[maybe_unused]] Init &init,

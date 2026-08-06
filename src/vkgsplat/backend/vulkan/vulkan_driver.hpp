@@ -19,6 +19,11 @@ public:
   [[nodiscard]] static auto create(Platform &platform, DriverConfig const &config)
     -> std::expected<std::unique_ptr<VulkanDriver>, Error>;
 
+  VulkanDriver(VulkanDriver const &) = delete;
+  auto operator=(VulkanDriver const &) -> VulkanDriver & = delete;
+  VulkanDriver(VulkanDriver &&) = delete;
+  auto operator=(VulkanDriver &&) -> VulkanDriver & = delete;
+
   ~VulkanDriver() override;
 
   [[nodiscard]] auto create_swapchain(Platform &platform, Extent2D extent) -> std::expected<void, Error> override;

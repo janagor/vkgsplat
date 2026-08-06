@@ -2060,4 +2060,4 @@ auto TriangulatePolygon(PolygonVertexCount vertex_count,
   return count - 2U;
 }
 
-}// namespace miniply
+}// namespace vkgsplat::miniply

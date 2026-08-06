@@ -8,11 +8,15 @@
 #include <concepts>
 #include <ranges>
 #include <type_traits>
+#include <utility>
 
 namespace vkgsplat {
 
 template<std::ranges::range RangeTp> [[nodiscard]] constexpr auto AsSubrange(RangeTp &&range)
-{ return std::ranges::subrange{ std::ranges::begin(range), std::ranges::end(range) }; }
+{
+  return std::ranges::subrange{ std::ranges::begin(std::forward<RangeTp>(range)),
+    std::ranges::end(std::forward<RangeTp>(range)) };
+}
 
 template<std::integral Tp> [[nodiscard]] constexpr auto IsPowerOf2(Tp value) noexcept -> bool
 { return value > 0 && std::has_single_bit(static_cast<std::make_unsigned_t<Tp>>(value)); }

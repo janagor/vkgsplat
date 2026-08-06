@@ -37,10 +37,10 @@ void UpdateGsFrameState(Init const &init, RenderData &data, GsFrameParams const 
 {
   data.present_image_index = frame.image_index;
 
-  glm::vec3 const camera_pos{ frame.camera.position() };
+  glm::vec3 const camera_pos{ frame.camera->position() };
   data.project_push = {
-    .view = frame.camera.view_matrix(),
-    .projection = frame.camera.projection_matrix(frame.aspect_ratio),
+    .view = frame.camera->view_matrix(),
+    .projection = frame.camera->projection_matrix(frame.aspect_ratio),
     .viewport = { static_cast<float>(init.swapchain->extent().width),
       static_cast<float>(init.swapchain->extent().height) },
     .sh_degree = kViewerShDegree,

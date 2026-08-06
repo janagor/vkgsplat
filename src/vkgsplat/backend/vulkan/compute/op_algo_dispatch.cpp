@@ -7,7 +7,7 @@ namespace vkgsplat::compute {
 
 void OpAlgoDispatch::record(Init const &init, [[maybe_unused]] RenderData const &data, VkCommandBuffer cmd)
 {
-  init.disp.cmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, algorithm_.pipeline());
+  init.disp.cmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, algorithm_->pipeline());
   init.disp.cmdDispatch(cmd, workgroup_size_.at(0), workgroup_size_.at(1), workgroup_size_.at(2));
 
   VkMemoryBarrier const barrier = {

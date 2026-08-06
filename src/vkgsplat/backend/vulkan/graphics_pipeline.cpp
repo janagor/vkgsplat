@@ -29,8 +29,8 @@ auto CreateGraphicsPipeline(Init &init, RenderData &data) -> int
 {
   DestroyGraphicsPipeline(init, data);
 
-  auto const vert_code = ReadFile(std::string(SHADER_DIRECTORY) + "/sphere.vert.spv");
-  auto const frag_code = ReadFile(std::string(SHADER_DIRECTORY) + "/sphere.frag.spv");
+  auto const vert_code = ReadFile(std::string(kShaderDirectory) + "/sphere.vert.spv");
+  auto const frag_code = ReadFile(std::string(kShaderDirectory) + "/sphere.frag.spv");
 
   VkShaderModule vert_module = CreateShaderModule(init, vert_code);
   VkShaderModule frag_module = CreateShaderModule(init, frag_code);

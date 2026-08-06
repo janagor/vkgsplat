@@ -1,4 +1,11 @@
-#pragma once
+#ifndef VKGSPLAT_EXAMPLE_CONFIG_H
+#define VKGSPLAT_EXAMPLE_CONFIG_H
 
-#define EXAMPLE_SOURCE_DIRECTORY "${CMAKE_SOURCE_DIR}"
-#define SHADER_DIRECTORY "${SHADER_DIRECTORY}"
+namespace vkgsplat {
+
+inline constexpr char const *kExampleSourceDirectory = "${CMAKE_SOURCE_DIR}";
+inline constexpr char const *kShaderDirectory = "${SHADER_DIRECTORY}";
+
+}// namespace vkgsplat
+
+#endif// VKGSPLAT_EXAMPLE_CONFIG_H

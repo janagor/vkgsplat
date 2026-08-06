@@ -24,7 +24,6 @@ namespace {
 
   constexpr u32 kRadixWorkgroupSize = 256U;
   constexpr u32 kRadixBins = 256U;
-  constexpr u32 kRadixBlocksPerWorkgroup = 32U;
 
   [[nodiscard]] auto RadixWorkgroupCount(u32 num_elements) -> u32
   {
@@ -106,9 +105,9 @@ auto InitSorting(Init &init, RenderData &data) -> bool
   if (!CreateSortBuffers(init, data)) { return false; }
 
   std::array<uint32_t, 1> const sort_size_spec{ data.gaussian_sort_size };
-  std::string const prepare_path = std::string(SHADER_DIRECTORY) + "/prepare_sorting.comp.spv";
-  std::string const hist_path = std::string(SHADER_DIRECTORY) + "/multi_radixsort_histograms.comp.spv";
-  std::string const scatter_path = std::string(SHADER_DIRECTORY) + "/multi_radixsort.comp.spv";
+  std::string const prepare_path = std::string(kShaderDirectory) + "/prepare_sorting.comp.spv";
+  std::string const hist_path = std::string(kShaderDirectory) + "/multi_radixsort_histograms.comp.spv";
+  std::string const scatter_path = std::string(kShaderDirectory) + "/multi_radixsort.comp.spv";
 
   if (!data.prepare_sort_algorithm.init(init, prepare_path, std::span{ sort_size_spec })
       || !data.radix_histogram_algorithm.init(init, hist_path)

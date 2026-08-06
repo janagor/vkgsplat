@@ -57,7 +57,7 @@ namespace {
     // re-uploading those tensors every frame was a multi-MB memcpy in pre_eval.
 
     gs::UpdateGsFrameState(
-      init, data, { .camera = camera, .image_index = image_index, .aspect_ratio = aspect_ratio });
+      init, data, { .camera = &camera, .image_index = image_index, .aspect_ratio = aspect_ratio });
     gs::EvalGsPipeline(init, data, command_buffer);
     RecordImguiOverlay(init, data, command_buffer, image_index);
   }

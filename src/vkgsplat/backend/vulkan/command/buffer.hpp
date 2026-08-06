@@ -25,6 +25,8 @@ public:
   CommandBuffer(CommandBuffer const &) = delete;
   auto operator=(CommandBuffer const &) -> CommandBuffer & = delete;
 
+  ~CommandBuffer() = default;
+
   [[nodiscard]] auto handle() const noexcept -> VkCommandBuffer { return handle_; }
   [[nodiscard]] explicit operator bool() const noexcept { return handle_ != VK_NULL_HANDLE; }
 

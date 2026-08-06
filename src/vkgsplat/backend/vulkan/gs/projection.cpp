@@ -24,7 +24,7 @@ auto InitProjection(Init &init, RenderData &data) -> bool
   }
 
   std::array<uint32_t, 1> const specialization_constants{ data.splat_count };
-  std::string const shader_path = std::string(SHADER_DIRECTORY) + "/projection.comp.spv";
+  std::string const shader_path = std::string(kShaderDirectory) + "/projection.comp.spv";
   return data.project_algorithm.init(init, shader_path, std::span{ specialization_constants });
 }
 

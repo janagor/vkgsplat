@@ -74,7 +74,7 @@ auto InitBinning(Init &init, RenderData &data) -> bool
   if (!CreateBinBuffers(init, data)) { return false; }
 
   std::array<uint32_t, 1> const specialization_constants{ data.splat_count };
-  std::string const shader_path = std::string(SHADER_DIRECTORY) + "/binning.comp.spv";
+  std::string const shader_path = std::string(kShaderDirectory) + "/binning.comp.spv";
   if (!data.bin_algorithm.init(init, shader_path, std::span{ specialization_constants })) {
     DestroyBinBuffers(init, data);
     return false;
