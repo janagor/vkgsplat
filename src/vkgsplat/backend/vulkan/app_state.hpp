@@ -94,11 +94,6 @@ struct RenderData
   gs::RasterPushConstants raster_push{};
   size_t present_image_index{};
 
-  VkImage depth_image{};
-  VmaAllocation depth_allocation{};
-  VkImageView depth_image_view{};
-  VkFormat depth_format{ VK_FORMAT_D32_SFLOAT };
-
   std::optional<vulkan::CommandPool> command_pool;
   std::vector<vulkan::CommandBuffer> command_buffers;
 

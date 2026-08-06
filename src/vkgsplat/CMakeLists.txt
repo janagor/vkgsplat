@@ -15,7 +15,6 @@ add_library(
   backend/vulkan/shader.cpp
   backend/vulkan/mesh_gpu.cpp
   backend/vulkan/sphere_setup.cpp
-  backend/vulkan/depth_buffer.cpp
   backend/vulkan/graphics_pipeline.cpp
   backend/vulkan/swapchain_resource.cpp
   backend/vulkan/command/pool.cpp

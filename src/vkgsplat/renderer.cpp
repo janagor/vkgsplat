@@ -17,7 +17,6 @@
 #include <vkgsplat_utility/utils.hpp>
 
 #include "backend/vulkan/app_state.hpp"
-#include "backend/vulkan/depth_buffer.hpp"
 #include "backend/vulkan/graphics_pipeline.hpp"
 #include "backend/vulkan/gs/binning.hpp"
 #include "backend/vulkan/gs/pipeline.hpp"
@@ -76,9 +75,6 @@ namespace {
     gs::RecordGsPipeline(render_data);
     if (0 != CreateGraphicsPipeline(init, render_data)) {
       return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to create graphics pipeline"));
-    }
-    if (!CreateDepthBuffer(init, render_data)) {
-      return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to create depth buffer"));
     }
     if (auto command_resources = CreateCommandResources(init, render_data); !command_resources) {
       return std::unexpected(command_resources.error());

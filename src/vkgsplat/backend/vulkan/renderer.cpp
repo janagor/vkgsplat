@@ -15,7 +15,6 @@
 #include "app_state.hpp"
 #include "backend/vulkan/command/command.hpp"
 #include "backend/vulkan/command/pool.hpp"
-#include "backend/vulkan/depth_buffer.hpp"
 #include "backend/vulkan/descriptor/descriptor_heap.hpp"
 #include "backend/vulkan/gpu_pass_timer.hpp"
 #include "backend/vulkan/graphics_pipeline.hpp"
@@ -130,8 +129,6 @@ auto RecreateSwapchain(Init &init, RenderData &data) -> std::expected<void, Erro
 
   DestroyGraphicsPipeline(init, data);
 
-  DestroyDepthBuffer(init, data);
-
   if (init.swapchain == nullptr) {
     return std::unexpected{ MakeError(std::errc::state_not_recoverable, "swapchain is not initialized") };
   }
@@ -140,9 +137,6 @@ auto RecreateSwapchain(Init &init, RenderData &data) -> std::expected<void, Erro
   }
   if (0 != CreateGraphicsPipeline(init, data)) {
     return std::unexpected{ MakeError(std::errc::io_error, "failed to recreate graphics pipeline") };
-  }
-  if (!CreateDepthBuffer(init, data)) {
-    return std::unexpected{ MakeError(std::errc::io_error, "failed to recreate depth buffer") };
   }
   if (!gs::RecreateRasterizationColorTarget(init, data)) {
     return std::unexpected{ MakeError(std::errc::io_error, "failed to recreate rasterize color target") };
@@ -249,7 +243,6 @@ void Cleanup(Init &init, RenderData &data)
 
   ShutdownImguiOverlay(init, data);
 
-  DestroyDepthBuffer(init, data);
   gs::DestroyGsPipeline(data);
   DestroySphereBuffers(init, data);
   gs::DestroyRasterization(init, data);
