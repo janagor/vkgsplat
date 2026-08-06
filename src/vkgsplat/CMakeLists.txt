@@ -31,7 +31,6 @@ add_library(
   backend/vulkan/gs/operations.cpp
   backend/vulkan/gpu_allocator.cpp
   backend/vulkan/compute/algorithm.cpp
-  backend/vulkan/compute/op_algo_dispatch.cpp
   backend/vulkan/compute/op_fill_buffer.cpp
   backend/vulkan/compute/op_tensor_sync_device.cpp
   backend/vulkan/compute/op_tensor_sync_local.cpp
@@ -53,7 +52,6 @@ vkgsplat_compile_shaders(
   SOURCES
   shaders/sphere.vert
   shaders/sphere.frag
-  shaders/init_spheres.comp
   shaders/gs/projection.comp
   shaders/gs/binning.comp
   shaders/gs/prepare_sorting.comp

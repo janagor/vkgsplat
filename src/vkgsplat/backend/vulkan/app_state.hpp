@@ -80,7 +80,6 @@ struct RenderData
   size_t buffer_descriptor_size{};
   size_t image_descriptor_size{};
 
-  compute::Algorithm sphere_setup_algorithm;
   compute::Algorithm project_algorithm;
   compute::Algorithm bin_algorithm;
   compute::Algorithm prepare_sort_algorithm;
@@ -88,7 +87,6 @@ struct RenderData
   compute::Algorithm radix_scatter_algorithm;
   compute::Algorithm identify_ranges_algorithm;
   compute::Algorithm rasterize_algorithm;
-  compute::Sequence compute_sequence;
   compute::Sequence gs_sequence;
   gs::ProjectPushConstants project_push{};
   gs::BinPushConstants bin_push{};

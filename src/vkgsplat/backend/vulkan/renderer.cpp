@@ -53,8 +53,6 @@ namespace {
     size_t image_index)
   {
     BindDescriptorHeap(init, data, command_buffer);
-    // Sphere luminance bitonic setup is only needed for the unused graphics draw path;
-    // re-uploading those tensors every frame was a multi-MB memcpy in pre_eval.
 
     gs::UpdateGsFrameState(
       init, data, { .camera = &camera, .image_index = image_index, .aspect_ratio = aspect_ratio });
