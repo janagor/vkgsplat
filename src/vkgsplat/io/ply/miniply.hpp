@@ -122,7 +122,7 @@ struct PLYElement
   ///
   /// The return value will be true if all properties were found. If it was
   /// not true, you should not use any values from prop_idxs.
-  auto find_properties(std::span<uint32_t> prop_idxs, std::span<const char *const> prop_names) const -> bool;
+  [[nodiscard]] auto find_properties(std::span<uint32_t> prop_idxs, std::span<const char *const> prop_names) const -> bool;
 
   /// Call this on the element at some point before you load its data, when
   /// you know that every row's list will have the same length. It will
@@ -201,7 +201,8 @@ public:
   auto find_property(const char *name) const -> uint32_t;
 
   /// Equivalent to calling `find_properties` on the current element.
-  auto find_properties(std::span<uint32_t> prop_idxs, std::span<const char *const> prop_names) const -> bool;
+  [[nodiscard]] auto find_properties(std::span<uint32_t> prop_idxs, std::span<const char *const> prop_names) const
+    -> bool;
 
   /// Copy the data for the specified properties into `dest`, which must be
   /// an array with at least enough space to hold all of the extracted column
@@ -324,7 +325,7 @@ private:
   void skip_unloaded_binary_big_endian_variable_element(PLYElement const &elem);
 
   auto ensure_bytes_available(size_t num_bytes) -> bool;
-  auto char_at(size_t index) const -> char;
+  [[nodiscard]] auto char_at(size_t index) const -> char;
 
   FileHandle file_{ nullptr, &fclose };
   std::vector<char> buf_;
