@@ -4,6 +4,7 @@
 #include "backend/vulkan/gpu_allocator.hpp"
 #include "backend/vulkan/gpu_pass_timer.hpp"
 #include "backend/vulkan/initializers.hpp"
+#include "frame_context.hpp"
 #include "vulkan_context.hpp"
 #include <vkgsplat/platform.hpp>
 #include <vkgsplat_utility/error.hpp>
@@ -35,11 +36,6 @@
 
 namespace vkgsplat {
 
-namespace {
-  constexpr size_t kFpsLabelCapacity = 64;
-  constexpr size_t kGpuLabelCapacity = 256;
-}// namespace
-
 struct ImGuiOverlayState
 {
   bool initialized = false;
@@ -70,9 +66,10 @@ struct ImGuiOverlayState
   // Rebuild ImGui draw data infrequently; reuse per-frame secondary CBs between updates.
   std::array<VkCommandBuffer, kMaxFramesInFlight> overlay_secondaries{};
   std::array<uint64_t, kMaxFramesInFlight> secondary_generation{};
+  std::array<ImDrawData *, kMaxFramesInFlight> frame_draw_data{};
   uint64_t ui_generation = 1;
-  std::array<char, kFpsLabelCapacity> fps_label{ "FPS: --" };
-  std::array<char, kGpuLabelCapacity> gpu_label{};
+  std::array<char, kImGuiFpsLabelCapacity> fps_label{ "FPS: --" };
+  std::array<char, kImGuiGpuLabelCapacity> gpu_label{};
   std::chrono::steady_clock::time_point last_fps_update;
   std::chrono::steady_clock::time_point last_frame_time;
   float fps_ema = 0.0F;
@@ -252,6 +249,7 @@ namespace {
   {
     ++overlay.ui_generation;
     overlay.secondary_generation.fill(0);
+    overlay.frame_draw_data.fill(nullptr);
   }
 
   [[nodiscard]] auto AllocateOverlaySecondaries(RenderData &data) -> bool
@@ -339,15 +337,13 @@ namespace {
     init.disp.resetCommandBuffer(secondary, 0);
     init.disp.beginCommandBuffer(secondary, &begin_info);
 
-    ImGui_ImplVulkan_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
-    ImGui::NewFrame();
-    DrawFpsWindow(overlay.fps_label.data(), overlay.gpu_label.data());
-    ImGui::Render();
-    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), secondary);
+    ImDrawData *draw_data = overlay.frame_draw_data.at(frame_slot);
+    if (draw_data != nullptr) {
+      ImGui_ImplVulkan_RenderDrawData(draw_data, secondary);
+    }
 
     init.disp.endCommandBuffer(secondary);
-    overlay.secondary_generation.at(frame_slot) = overlay.ui_generation;
+    overlay.secondary_generation.at(frame_slot) = FrameSetupFor(data, frame_slot).imgui.ui_generation;
   }
 
   void DestroyImguiHeaps(Init &init, ImGuiOverlayState &overlay)
@@ -576,7 +572,29 @@ void RecreateImguiOverlayPipeline(Init &init, RenderData &data)
     std::println(stderr, "[imgui] failed to reallocate overlay command buffers after swapchain recreate");
   }
   InvalidateOverlaySecondaries(*data.imgui);
+  data.imgui->frame_draw_data.fill(nullptr);
   data.imgui->last_extent = {};
+}
+
+void BuildImGuiFrameSnapshot(RenderData &data, size_t frame_slot, ImGuiFrameSnapshot &out_snapshot)
+{
+  out_snapshot = {};
+
+  if (data.imgui == nullptr || !data.imgui->initialized) { return; }
+
+  auto &overlay = *data.imgui;
+  SampleFrameTime(overlay);
+
+  out_snapshot.ui_generation = overlay.ui_generation;
+  std::memcpy(out_snapshot.fps_label.data(), overlay.fps_label.data(), overlay.fps_label.size());
+  std::memcpy(out_snapshot.gpu_label.data(), overlay.gpu_label.data(), overlay.gpu_label.size());
+
+  ImGui_ImplVulkan_NewFrame();
+  ImGui_ImplGlfw_NewFrame();
+  ImGui::NewFrame();
+  DrawFpsWindow(out_snapshot.fps_label.data(), out_snapshot.gpu_label.data());
+  ImGui::Render();
+  overlay.frame_draw_data.at(frame_slot) = ImGui::GetDrawData();
 }
 
 void RecordImguiOverlay(Init &init, RenderData const &data, VkCommandBuffer command_buffer, size_t image_index)
@@ -609,7 +627,6 @@ void RecordImguiOverlay(Init &init, RenderData const &data, VkCommandBuffer comm
   }
 
   auto &overlay = *data.imgui;
-  SampleFrameTime(overlay);
 
   VkExtent2D const extent = init.swapchain->vk_extent();
   if (extent.width != overlay.last_extent.width || extent.height != overlay.last_extent.height) {
@@ -635,7 +652,7 @@ void RecordImguiOverlay(Init &init, RenderData const &data, VkCommandBuffer comm
     return;
   }
 
-  if (overlay.secondary_generation.at(frame_slot) != overlay.ui_generation) {
+  if (overlay.secondary_generation.at(frame_slot) != FrameSetupFor(data, frame_slot).imgui.ui_generation) {
     RecordOverlaySecondary(init, data, frame_slot);
   }
 

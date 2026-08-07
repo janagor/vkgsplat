@@ -16,6 +16,7 @@
 #include "backend/vulkan/command/command.hpp"
 #include "backend/vulkan/command/pool.hpp"
 #include "backend/vulkan/descriptor/descriptor_heap.hpp"
+#include "backend/vulkan/frame_context.hpp"
 #include "backend/vulkan/gpu_pass_timer.hpp"
 #include "backend/vulkan/graphics_pipeline.hpp"
 #include "backend/vulkan/imgui_overlay.hpp"
@@ -46,15 +47,11 @@ namespace {
 
   void RecordSphereDraw(Init &init,
     RenderData &data,
-    Camera const &camera,
-    f64 aspect_ratio,
     VkCommandBuffer command_buffer,
     size_t image_index)
   {
     BindDescriptorHeap(init, data, command_buffer);
 
-    gs::UpdateGsFrameState(
-      init, data, { .camera = &camera, .image_index = image_index, .aspect_ratio = aspect_ratio });
     gs::EvalGsPipeline(init, data, command_buffer);
     RecordImguiOverlay(init, data, command_buffer, image_index);
   }
@@ -194,10 +191,21 @@ auto DrawFrame(Init &init, RenderData &data, Camera const &camera) -> std::expec
   }
   data.image_in_flight.at(image_index) = in_flight_fence;
 
+  size_t const frame_slot = data.current_frame;
+  BuildFrameSetup(init,
+    data,
+    frame_slot,
+    BuildFrameParams{
+      .camera = &camera,
+      .aspect_ratio = aspect_ratio,
+      .image_index = image_index,
+    });
+  ApplyFrameSetup(data, frame_slot);
+
   auto recorded = vulkan::WithCommand(std::ref(init.disp),
     data.command_buffers.at(image_index).handle(),
     [&](vkb::DispatchTable &, VkCommandBuffer cmd) -> void {
-      RecordSphereDraw(init, data, camera, aspect_ratio, cmd, image_index);
+      RecordSphereDraw(init, data, cmd, image_index);
     });
   if (!recorded) { return std::unexpected{ recorded.error() }; }
 
