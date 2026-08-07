@@ -25,6 +25,7 @@
 #include "backend/vulkan/gs/sorting.hpp"
 #include "backend/vulkan/imgui_overlay.hpp"
 #include "backend/vulkan/mesh_gpu.hpp"
+#include "backend/vulkan/present_pacer.hpp"
 #include "backend/vulkan/render_thread.hpp"
 #include "backend/vulkan/renderer.hpp"
 #include "backend/vulkan/sphere_setup.hpp"
@@ -93,6 +94,12 @@ namespace {
       if (auto imgui = InitImguiOverlay(init, render_data); !imgui) { return std::unexpected(imgui.error()); }
     }
 
+    render_data.present_pacer = PresentPacer::TryCreate(init, config.frame_rate);
+    if (config.frame_rate.IsPacingRequested() && render_data.present_pacer == nullptr
+        && !init.present_timing_enabled) {
+      // Warning already printed by TryCreate / device init.
+    }
+
     return {};
   }
 
@@ -127,7 +134,10 @@ Renderer::~Renderer() noexcept
 
 auto Renderer::create(RendererConfig const &config, Platform &platform) -> std::expected<Renderer, Error>
 {
-  auto engine = Engine::create(EngineConfig{ .enable_validation = config.enable_validation }, platform);
+  auto engine = Engine::create(
+    EngineConfig{ .enable_validation = config.enable_validation,
+      .request_present_timing = config.frame_rate.IsPacingRequested() },
+    platform);
   if (!engine) { return std::unexpected(engine.error()); }
 
   beman::indirect::indirect<Impl> impl;

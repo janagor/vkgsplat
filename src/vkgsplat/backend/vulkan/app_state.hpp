@@ -14,6 +14,7 @@
 #include "backend/vulkan/sync_objects/fence.hpp"
 #include "backend/vulkan/sync_objects/semaphore.hpp"
 #include "frame_context.hpp"
+#include "present_pacer.hpp"
 #include "compute/algorithm.hpp"
 #include "compute/sequence.hpp"
 #include "compute/sort_entry.hpp"
@@ -107,6 +108,7 @@ struct RenderData
   std::array<FrameContext, kMaxFramesInFlight> frames{};
   GpuPassTimer gpu_pass_timer;
   std::unique_ptr<ImGuiOverlayState> imgui;
+  std::unique_ptr<PresentPacer> present_pacer;
 
   RenderData();
   ~RenderData();

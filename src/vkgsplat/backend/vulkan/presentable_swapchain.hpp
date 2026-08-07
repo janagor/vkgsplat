@@ -24,7 +24,8 @@ class PresentableSwapchain final : public vkgsplat::Swapchain
 public:
   [[nodiscard]] static auto create(vkb::Device const &device,
     Extent2D extent,
-    std::reference_wrapper<vkb::DispatchTable> disp) -> std::expected<std::unique_ptr<PresentableSwapchain>, Error>;
+    std::reference_wrapper<vkb::DispatchTable> disp,
+    SwapchainCreateOptions const &options = {}) -> std::expected<std::unique_ptr<PresentableSwapchain>, Error>;
 
   [[nodiscard]] auto extent() const noexcept -> Extent2D override;
   [[nodiscard]] auto image_count() const noexcept -> u32 override;
@@ -38,6 +39,7 @@ public:
   [[nodiscard]] auto images() const noexcept -> std::vector<VkImage> const & { return swapchain_->images(); }
   [[nodiscard]] auto image_views() const noexcept -> std::vector<VkImageView> const &
   { return swapchain_->image_views(); }
+  [[nodiscard]] auto present_timing_enabled() const noexcept -> bool { return swapchain_->present_timing_enabled(); }
 
 private:
   PresentableSwapchain(std::unique_ptr<SwapchainResource> swapchain, vkb::Device device) noexcept;

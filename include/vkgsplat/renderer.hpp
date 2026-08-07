@@ -7,6 +7,7 @@
 #include <beman/indirect/indirect.hpp>
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat/engine.hpp>
+#include <vkgsplat/frame_rate.hpp>
 #include <vkgsplat/platform.hpp>
 #include <vkgsplat/vkgsplat_export.hpp>
 #include <vkgsplat_utility/error.hpp>
@@ -23,6 +24,7 @@ struct RendererConfig
   bool enable_validation = false;
   bool enable_imgui = true;
   bool enable_gpu_timers = false;
+  FrameRateConfig frame_rate{};
 };
 
 // Per-window rendering context: frame latency, command submission, and presentation.

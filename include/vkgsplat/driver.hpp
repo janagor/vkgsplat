@@ -15,6 +15,7 @@ namespace vkgsplat {
 struct DriverConfig
 {
   bool enable_validation = false;
+  bool request_present_timing = false;
 };
 
 // Low-level graphics API abstraction. Concrete backends (e.g. VulkanDriver) live

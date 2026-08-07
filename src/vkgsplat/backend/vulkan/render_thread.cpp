@@ -296,9 +296,14 @@ auto RenderThread::DrawFrameVulkan(size_t frame_slot) -> std::expected<void, Err
   }
 
   std::array<VkSwapchainKHR, 1> const swap_chains = { init.swapchain->handle() };
-  auto const present_info = initializers::PresentInfoKHR(signal_semaphores, swap_chains, std::span{ &image_index, 1 });
+  auto present_info = initializers::PresentInfoKHR(signal_semaphores, swap_chains, std::span{ &image_index, 1 });
+
+  if (data.present_pacer != nullptr) { data.present_pacer->PreparePresent(init, present_info); }
 
   result = init.disp.queuePresentKHR(data.present_queue, &present_info);
+
+  if (data.present_pacer != nullptr) { data.present_pacer->AfterPresent(init); }
+
   if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
     if (auto recreated = RecreateSwapchain(init, data); !recreated) { return std::unexpected{ recreated.error() }; }
     MarkAllSlotsReady();

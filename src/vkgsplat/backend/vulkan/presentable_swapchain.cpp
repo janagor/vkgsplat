@@ -21,9 +21,10 @@ PresentableSwapchain::PresentableSwapchain(std::unique_ptr<SwapchainResource> sw
 
 auto PresentableSwapchain::create(vkb::Device const &device,
   Extent2D extent,
-  std::reference_wrapper<vkb::DispatchTable> disp) -> std::expected<std::unique_ptr<PresentableSwapchain>, Error>
+  std::reference_wrapper<vkb::DispatchTable> disp,
+  SwapchainCreateOptions const &options) -> std::expected<std::unique_ptr<PresentableSwapchain>, Error>
 {
-  auto resource = SwapchainResource::create(device, extent, disp);
+  auto resource = SwapchainResource::create(device, extent, disp, options);
   if (!resource) { return std::unexpected(resource.error()); }
   return std::unique_ptr<PresentableSwapchain>(
     new PresentableSwapchain(std::make_unique<SwapchainResource>(std::move(*resource)), device));

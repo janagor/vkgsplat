@@ -7,6 +7,7 @@
 #include "vulkan_bootstrap.hpp"
 #include "vulkan_context.hpp"
 #include "vulkan_platform.hpp"
+#include <vkgsplat/driver.hpp>
 #include <vkgsplat_utility/error.hpp>
 
 #include <vulkan/vulkan_core.h>
@@ -14,8 +15,123 @@
 #include <VkBootstrap.h>
 
 namespace vkgsplat {
+namespace {
 
-auto DeviceInitialization(Init &init, bool enable_validation) -> std::expected<void, Error>
+  // Query device + surface present-timing capabilities and enable only what both support.
+  // Device features alone are insufficient: Mesa often advertises absolute/id2 features while
+  // the surface only supports relative (Xwayland) or neither scheduling mode.
+  void TryEnablePresentTiming(Init &init, vkb::PhysicalDevice &physical_device)
+  {
+    // Optional as a device extension (often instance-only); still try so CreateDevice
+    // dependency checks are satisfied when the ICD advertises it.
+    static_cast<void>(
+      physical_device.enable_extension_if_present(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME));
+    if (!physical_device.enable_extension_if_present(VK_KHR_CALIBRATED_TIMESTAMPS_EXTENSION_NAME)
+        && !physical_device.enable_extension_if_present(VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME)) {
+      std::println(stderr, "[present-timing] calibrated timestamps unavailable; --frame-rate ignored");
+      return;
+    }
+
+    bool const present_id2_ext = physical_device.enable_extension_if_present(VK_KHR_PRESENT_ID_2_EXTENSION_NAME);
+    bool const present_timing_ext =
+      physical_device.enable_extension_if_present(VK_EXT_PRESENT_TIMING_EXTENSION_NAME);
+    if (!present_timing_ext) {
+      std::println(stderr, "[present-timing] VK_EXT_present_timing unavailable; --frame-rate ignored");
+      return;
+    }
+
+    VkPhysicalDevicePresentTimingFeaturesEXT supported_timing{};
+    supported_timing.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_TIMING_FEATURES_EXT;
+    VkPhysicalDevicePresentId2FeaturesKHR supported_id2{};
+    supported_id2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_2_FEATURES_KHR;
+    supported_id2.pNext = &supported_timing;
+    VkPhysicalDeviceFeatures2 supported_features2 = {
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+      .pNext = &supported_id2,
+      .features = {},
+    };
+    init.inst_disp.getPhysicalDeviceFeatures2(physical_device.physical_device, &supported_features2);
+
+    VkPresentTimingSurfaceCapabilitiesEXT timing_caps{};
+    timing_caps.sType = VK_STRUCTURE_TYPE_PRESENT_TIMING_SURFACE_CAPABILITIES_EXT;
+    VkSurfaceCapabilitiesPresentId2KHR id2_caps{};
+    id2_caps.sType = VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_PRESENT_ID_2_KHR;
+    id2_caps.pNext = &timing_caps;
+    // NOLINTNEXTLINE(bugprone-invalid-enum-default-initialization)
+    VkSurfaceCapabilities2KHR caps2{};
+    caps2.sType = VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_2_KHR;
+    caps2.pNext = present_id2_ext ? static_cast<void *>(&id2_caps) : static_cast<void *>(&timing_caps);
+    VkPhysicalDeviceSurfaceInfo2KHR const surface_info{
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SURFACE_INFO_2_KHR,
+      .pNext = nullptr,
+      .surface = init.surface,
+    };
+    if (init.inst_disp.getPhysicalDeviceSurfaceCapabilities2KHR(
+          physical_device.physical_device, &surface_info, &caps2)
+        != VK_SUCCESS) {
+      std::println(stderr, "[present-timing] surface capability query failed; --frame-rate ignored");
+      return;
+    }
+
+    bool const abs_ok = supported_timing.presentAtAbsoluteTime == VK_TRUE
+                        && timing_caps.presentAtAbsoluteTimeSupported == VK_TRUE;
+    bool const rel_ok = supported_timing.presentAtRelativeTime == VK_TRUE
+                        && timing_caps.presentAtRelativeTimeSupported == VK_TRUE;
+    bool const timing_surface_ok = timing_caps.presentTimingSupported == VK_TRUE;
+    bool const id2_ok = present_id2_ext && supported_id2.presentId2 == VK_TRUE
+                        && id2_caps.presentId2Supported == VK_TRUE;
+
+    if (supported_timing.presentTiming != VK_TRUE || !timing_surface_ok || (!abs_ok && !rel_ok)) {
+      std::println(stderr,
+        "[present-timing] present-at-time unsupported on this surface "
+        "(timing={}, abs={}, rel={}); --frame-rate ignored",
+        timing_surface_ok,
+        abs_ok,
+        rel_ok);
+      return;
+    }
+
+    // Prefer relative when available: Mesa Xwayland/Wayland often lack absolute support.
+    bool const use_relative = rel_ok;
+    bool const use_absolute = abs_ok && !use_relative;
+
+    VkPhysicalDevicePresentTimingFeaturesEXT enable_timing{};
+    enable_timing.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_TIMING_FEATURES_EXT;
+    enable_timing.presentTiming = VK_TRUE;
+    enable_timing.presentAtAbsoluteTime = use_absolute ? VK_TRUE : VK_FALSE;
+    enable_timing.presentAtRelativeTime = use_relative ? VK_TRUE : VK_FALSE;
+
+    if (!physical_device.enable_extension_features_if_present(enable_timing)) {
+      std::println(stderr, "[present-timing] failed to enable present-timing features; --frame-rate ignored");
+      return;
+    }
+
+    if (id2_ok) {
+      VkPhysicalDevicePresentId2FeaturesKHR enable_id2{};
+      enable_id2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_2_FEATURES_KHR;
+      enable_id2.presentId2 = VK_TRUE;
+      if (!physical_device.enable_extension_features_if_present(enable_id2)) {
+        std::println(stderr, "[present-timing] presentId2 feature enable failed; continuing without present ids");
+      } else {
+        init.present_id2_enabled = true;
+      }
+    }
+
+    init.present_at_absolute_time = use_absolute;
+    init.present_at_relative_time = use_relative;
+    init.present_stage_queries = timing_caps.presentStageQueries;
+    init.present_timing_enabled = true;
+    std::println(
+      "[present-timing] features enabled (absolute={}, relative={}, presentId2={}, stageQueries={:#x})",
+      init.present_at_absolute_time,
+      init.present_at_relative_time,
+      init.present_id2_enabled,
+      static_cast<unsigned>(init.present_stage_queries));
+  }
+
+}// namespace
+
+auto DeviceInitialization(Init &init, DriverConfig const &config) -> std::expected<void, Error>
 {
   if (init.platform == nullptr) {
     return std::unexpected{ Error{ std::make_error_code(std::errc::invalid_argument), "Platform is required" } };
@@ -41,7 +157,11 @@ auto DeviceInitialization(Init &init, bool enable_validation) -> std::expected<v
 
   vkb::InstanceBuilder instance_builder;
   instance_builder.require_api_version(1, 4, 0);
-  if (enable_validation) {
+  if (config.request_present_timing) {
+    // Required to query present-timing / present-id2 surface capabilities.
+    instance_builder.enable_extension(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME);
+  }
+  if (config.enable_validation) {
     std::println("Vulkan validation layers enabled");
     instance_builder.enable_validation_layers().use_default_debug_messenger();
   } else {
@@ -68,9 +188,10 @@ auto DeviceInitialization(Init &init, bool enable_validation) -> std::expected<v
           .set_required_features_13(features_13)
           .select());
     })
-    .and_then([&](vkb::PhysicalDevice const &physical_device) -> std::expected<vkb::Device, Error> {
-      vkb::DeviceBuilder const device_builder{ physical_device };
+    .and_then([&](vkb::PhysicalDevice physical_device) -> std::expected<vkb::Device, Error> {
+      if (config.request_present_timing) { TryEnablePresentTiming(init, physical_device); }
 
+      vkb::DeviceBuilder const device_builder{ physical_device };
       return VKBResultToExpected(device_builder.build());
     })
     .and_then([&](vkb::Device const &device) -> std::expected<void, Error> {
@@ -99,6 +220,15 @@ auto DeviceInitialization(Init &init, bool enable_validation) -> std::expected<v
       init.cmd_bind_sampler_heap =
         reinterpret_cast<PFN_vkCmdBindSamplerHeapEXT>(vkGetDeviceProcAddr(init.device, "vkCmdBindSamplerHeapEXT"));
       init.cmd_push_data = reinterpret_cast<PFN_vkCmdPushDataEXT>(vkGetDeviceProcAddr(init.device, "vkCmdPushDataEXT"));
+
+      init.set_swapchain_present_timing_queue_size = reinterpret_cast<PFN_vkSetSwapchainPresentTimingQueueSizeEXT>(
+        vkGetDeviceProcAddr(init.device, "vkSetSwapchainPresentTimingQueueSizeEXT"));
+      init.get_swapchain_timing_properties = reinterpret_cast<PFN_vkGetSwapchainTimingPropertiesEXT>(
+        vkGetDeviceProcAddr(init.device, "vkGetSwapchainTimingPropertiesEXT"));
+      init.get_swapchain_time_domain_properties = reinterpret_cast<PFN_vkGetSwapchainTimeDomainPropertiesEXT>(
+        vkGetDeviceProcAddr(init.device, "vkGetSwapchainTimeDomainPropertiesEXT"));
+      init.get_past_presentation_timing = reinterpret_cast<PFN_vkGetPastPresentationTimingEXT>(
+        vkGetDeviceProcAddr(init.device, "vkGetPastPresentationTimingEXT"));
       // NOLINTEND(cppcoreguidelines-pro-type-reinterpret-cast)
 
       if (init.write_resource_descriptors == nullptr || init.write_sampler_descriptors == nullptr
@@ -106,6 +236,18 @@ auto DeviceInitialization(Init &init, bool enable_validation) -> std::expected<v
           || init.cmd_push_data == nullptr) {
         return std::unexpected{ Error{ std::make_error_code(std::errc::function_not_supported),
           "VK_EXT_descriptor_heap entry points are unavailable" } };
+      }
+
+      if (init.present_timing_enabled
+          && (init.set_swapchain_present_timing_queue_size == nullptr || init.get_swapchain_timing_properties == nullptr
+              || init.get_swapchain_time_domain_properties == nullptr
+              || init.get_past_presentation_timing == nullptr)) {
+        std::println(stderr, "[present-timing] entry points unavailable; --frame-rate ignored");
+        init.present_timing_enabled = false;
+        init.present_id2_enabled = false;
+        init.present_at_absolute_time = false;
+        init.present_at_relative_time = false;
+        init.present_stage_queries = 0;
       }
 
       return {};

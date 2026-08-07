@@ -21,6 +21,7 @@ add_library(
   backend/vulkan/renderer.cpp
   backend/vulkan/frame_context.cpp
   backend/vulkan/render_thread.cpp
+  backend/vulkan/present_pacer.cpp
   backend/vulkan/sync_objects/barrier.cpp
   backend/vulkan/sync_objects/fence.cpp
   backend/vulkan/sync_objects/semaphore.cpp

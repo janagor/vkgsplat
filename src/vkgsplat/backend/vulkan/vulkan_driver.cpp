@@ -14,6 +14,7 @@
 #include "device.hpp"
 #include "gpu_allocator.hpp"
 #include "presentable_swapchain.hpp"
+#include "swapchain_resource.hpp"
 
 #include <VkBootstrap.h>
 #include <vulkan/vulkan_core.h>
@@ -45,7 +46,7 @@ auto VulkanDriver::create(Platform &platform, DriverConfig const &config)
   -> std::expected<std::unique_ptr<VulkanDriver>, Error>
 {
   auto driver = std::unique_ptr<VulkanDriver>(new VulkanDriver(platform));
-  if (auto initialized = DeviceInitialization(driver->context_, config.enable_validation); !initialized) {
+  if (auto initialized = DeviceInitialization(driver->context_, config); !initialized) {
     return std::unexpected(initialized.error());
   }
 
@@ -64,7 +65,9 @@ auto VulkanDriver::create(Platform &platform, DriverConfig const &config)
 auto VulkanDriver::create_swapchain(Platform &platform, Extent2D extent) -> std::expected<void, Error>
 {
   (void)platform;
-  auto created = PresentableSwapchain::create(context_.device, extent, std::ref(context_.disp));
+  SwapchainCreateOptions const options{ .enable_present_timing = context_.present_timing_enabled,
+    .enable_present_id2 = context_.present_id2_enabled };
+  auto created = PresentableSwapchain::create(context_.device, extent, std::ref(context_.disp), options);
   if (!created) { return std::unexpected(created.error()); }
   context_.swapchain = std::move(*created);
   return {};

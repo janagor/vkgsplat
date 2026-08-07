@@ -20,6 +20,8 @@ struct RendererConfig;
 struct EngineConfig
 {
   bool enable_validation = false;
+  // Request VK_EXT_present_timing when creating the driver (optional; ignored if unsupported).
+  bool request_present_timing = false;
 };
 
 // Main entry point: owns the Driver (hardware context) and tracks user-facing

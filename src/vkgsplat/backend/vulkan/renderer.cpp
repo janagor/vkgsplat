@@ -116,6 +116,7 @@ auto RecreateSwapchain(Init &init, RenderData &data) -> std::expected<void, Erro
     return std::unexpected{ command_resources.error() };
   }
   RecreateImguiOverlayPipeline(init, data);
+  if (data.present_pacer != nullptr) { data.present_pacer->OnSwapchainRecreated(init); }
   return {};
 }
 

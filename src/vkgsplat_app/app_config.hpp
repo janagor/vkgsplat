@@ -5,6 +5,7 @@
 #include <span>
 #include <string>
 
+#include <vkgsplat/frame_rate.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
 
@@ -19,6 +20,7 @@ struct AppConfig
   bool enable_validation = false;
   bool enable_imgui = true;
   bool enable_gpu_timers = false;
+  vkgsplat::FrameRateConfig frame_rate{};
 };
 
 [[nodiscard]] auto ParseAppConfig(std::span<char *const> args) -> std::expected<AppConfig, vkgsplat::Error>;

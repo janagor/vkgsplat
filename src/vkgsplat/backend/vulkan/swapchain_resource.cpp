@@ -17,25 +17,42 @@ namespace vkgsplat::vulkan {
 
 namespace {
 
-  auto BuildSwapchainResource(vkb::Device const &device, Extent2D extent, vkb::Swapchain const &old_swapchain = {})
-    -> std::expected<vkb::Swapchain, Error>
+  auto BuildSwapchainResource(vkb::Device const &device,
+    Extent2D extent,
+    SwapchainCreateOptions const &options,
+    vkb::Swapchain const &old_swapchain = {}) -> std::expected<vkb::Swapchain, Error>
   {
     vkb::SwapchainBuilder swapchain_builder{ device };
-    return VKBResultToExpected(swapchain_builder.set_desired_extent(extent.width, extent.height)
-        .set_image_usage_flags(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT)
-        .set_old_swapchain(old_swapchain)
-        .build());
+    swapchain_builder.set_desired_extent(extent.width, extent.height)
+      .set_image_usage_flags(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT)
+      .set_old_swapchain(old_swapchain);
+
+    if (options.enable_present_timing) {
+      // Scheduled presents require FIFO (or FIFO_RELAXED / FIFO_LATEST_READY).
+      swapchain_builder.set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR);
+      VkFlags create_flags = VK_SWAPCHAIN_CREATE_PRESENT_TIMING_BIT_EXT;
+      if (options.enable_present_id2) { create_flags |= VK_SWAPCHAIN_CREATE_PRESENT_ID_2_BIT_KHR; }
+      // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
+      swapchain_builder.set_create_flags(static_cast<VkSwapchainCreateFlagBitsKHR>(create_flags));
+    }
+
+    return VKBResultToExpected(swapchain_builder.build());
   }
 
 }// namespace
 
-SwapchainResource::SwapchainResource(vkb::Swapchain swapchain, std::reference_wrapper<vkb::DispatchTable> disp) noexcept
-  : swapchain_(swapchain), disp_(disp)
+SwapchainResource::SwapchainResource(vkb::Swapchain swapchain,
+  std::reference_wrapper<vkb::DispatchTable> disp,
+  bool present_timing_enabled,
+  bool present_id2_enabled) noexcept
+  : swapchain_(swapchain), disp_(disp), present_timing_enabled_(present_timing_enabled),
+    present_id2_enabled_(present_id2_enabled)
 {}
 
 SwapchainResource::SwapchainResource(SwapchainResource &&other) noexcept
   : swapchain_(std::exchange(other.swapchain_, {})), images_(std::move(other.images_)),
-    image_views_(std::move(other.image_views_)), disp_(other.disp_)
+    image_views_(std::move(other.image_views_)), disp_(other.disp_),
+    present_timing_enabled_(other.present_timing_enabled_), present_id2_enabled_(other.present_id2_enabled_)
 {}
 
 auto SwapchainResource::operator=(SwapchainResource &&other) noexcept -> SwapchainResource &
@@ -46,6 +63,8 @@ auto SwapchainResource::operator=(SwapchainResource &&other) noexcept -> Swapcha
     images_ = std::move(other.images_);
     image_views_ = std::move(other.image_views_);
     disp_ = other.disp_;
+    present_timing_enabled_ = other.present_timing_enabled_;
+    present_id2_enabled_ = other.present_id2_enabled_;
   }
   return *this;
 }
@@ -78,12 +97,14 @@ auto SwapchainResource::init_images_and_views() -> std::expected<void, Error>
 
 auto SwapchainResource::create(vkb::Device const &device,
   Extent2D extent,
-  std::reference_wrapper<vkb::DispatchTable> disp) -> std::expected<SwapchainResource, Error>
+  std::reference_wrapper<vkb::DispatchTable> disp,
+  SwapchainCreateOptions const &options) -> std::expected<SwapchainResource, Error>
 {
-  auto vkb_swapchain = BuildSwapchainResource(device, extent);
+  auto vkb_swapchain = BuildSwapchainResource(device, extent, options);
   if (!vkb_swapchain) { return std::unexpected(vkb_swapchain.error()); }
 
-  SwapchainResource swapchain(*vkb_swapchain, disp);
+  SwapchainResource swapchain(
+    *vkb_swapchain, disp, options.enable_present_timing, options.enable_present_id2);
   if (auto images_and_views = swapchain.init_images_and_views(); !images_and_views) {
     return std::unexpected(images_and_views.error());
   }
@@ -93,12 +114,17 @@ auto SwapchainResource::create(vkb::Device const &device,
 auto SwapchainResource::recreate(vkb::Device const &device, Extent2D extent) -> std::expected<void, Error>
 {
   vkb::Swapchain const old_swapchain = swapchain_;
-  auto vkb_swapchain = BuildSwapchainResource(device, extent, old_swapchain);
+  SwapchainCreateOptions const options{ .enable_present_timing = present_timing_enabled_,
+    .enable_present_id2 = present_id2_enabled_ };
+  auto vkb_swapchain = BuildSwapchainResource(device, extent, options, old_swapchain);
   if (!vkb_swapchain) { return std::unexpected(vkb_swapchain.error()); }
 
   cleanup();
   swapchain_ = *vkb_swapchain;
-  return init_images_and_views();
+  if (auto images_and_views = init_images_and_views(); !images_and_views) {
+    return std::unexpected(images_and_views.error());
+  }
+  return {};
 }
 
 }// namespace vkgsplat::vulkan

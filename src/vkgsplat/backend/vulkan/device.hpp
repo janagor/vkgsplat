@@ -4,11 +4,12 @@
 #include <expected>
 
 #include "vulkan_context.hpp"
+#include <vkgsplat/driver.hpp>
 #include <vkgsplat_utility/error.hpp>
 
 namespace vkgsplat {
 
-[[nodiscard]] auto DeviceInitialization(Init &init, bool enable_validation = false) -> std::expected<void, Error>;
+[[nodiscard]] auto DeviceInitialization(Init &init, DriverConfig const &config) -> std::expected<void, Error>;
 
 }// namespace vkgsplat
 

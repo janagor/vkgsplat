@@ -30,6 +30,16 @@ struct Init
   PFN_vkCmdBindResourceHeapEXT cmd_bind_resource_heap{};
   PFN_vkCmdBindSamplerHeapEXT cmd_bind_sampler_heap{};
   PFN_vkCmdPushDataEXT cmd_push_data{};
+
+  bool present_timing_enabled = false;
+  bool present_id2_enabled = false;
+  bool present_at_absolute_time = false;
+  bool present_at_relative_time = false;
+  VkPresentStageFlagsEXT present_stage_queries = 0;
+  PFN_vkSetSwapchainPresentTimingQueueSizeEXT set_swapchain_present_timing_queue_size{};
+  PFN_vkGetSwapchainTimingPropertiesEXT get_swapchain_timing_properties{};
+  PFN_vkGetSwapchainTimeDomainPropertiesEXT get_swapchain_time_domain_properties{};
+  PFN_vkGetPastPresentationTimingEXT get_past_presentation_timing{};
 };
 
 }// namespace vkgsplat
