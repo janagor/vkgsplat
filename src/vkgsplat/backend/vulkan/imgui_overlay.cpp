@@ -64,6 +64,8 @@ struct ImGuiOverlayState
   VkFormat color_format{ VK_FORMAT_UNDEFINED };
 
   // Rebuild ImGui draw data infrequently; reuse per-frame secondary CBs between updates.
+  // frame_draw_data owns per-slot clones — ImGui::GetDrawData() is invalidated by the next
+  // NewFrame() and must not be read from the render thread under pipelined SubmitFrame.
   std::array<VkCommandBuffer, kMaxFramesInFlight> overlay_secondaries{};
   std::array<uint64_t, kMaxFramesInFlight> secondary_generation{};
   std::array<ImDrawData *, kMaxFramesInFlight> frame_draw_data{};
@@ -245,11 +247,44 @@ namespace {
     ImGui::End();
   }
 
+  void DestroyClonedDrawData(ImDrawData *draw_data)
+  {
+    if (draw_data == nullptr) { return; }
+    for (ImDrawList *cmd_list : draw_data->CmdLists) { IM_DELETE(cmd_list); }
+    draw_data->CmdLists.clear();
+    IM_DELETE(draw_data);
+  }
+
+  void ClearClonedDrawData(ImGuiOverlayState &overlay)
+  {
+    for (ImDrawData *&draw_data : overlay.frame_draw_data) {
+      DestroyClonedDrawData(draw_data);
+      draw_data = nullptr;
+    }
+  }
+
+  [[nodiscard]] auto CloneImDrawData(ImDrawData const *src) -> ImDrawData *
+  {
+    if (src == nullptr || !src->Valid) { return nullptr; }
+
+    // ImGui heap ownership; freed via DestroyClonedDrawData / IM_DELETE.
+    // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
+    auto *dst = IM_NEW(ImDrawData)();
+    dst->Valid = true;
+    dst->FrameCount = src->FrameCount;
+    dst->DisplayPos = src->DisplayPos;
+    dst->DisplaySize = src->DisplaySize;
+    dst->FramebufferScale = src->FramebufferScale;
+    dst->OwnerViewport = nullptr;
+    dst->Textures = src->Textures;
+    for (ImDrawList const *cmd_list : src->CmdLists) { dst->AddDrawList(cmd_list->CloneOutput()); }
+    return dst;
+  }
+
   void InvalidateOverlaySecondaries(ImGuiOverlayState &overlay)
   {
     ++overlay.ui_generation;
     overlay.secondary_generation.fill(0);
-    overlay.frame_draw_data.fill(nullptr);
   }
 
   [[nodiscard]] auto AllocateOverlaySecondaries(RenderData &data) -> bool
@@ -544,6 +579,8 @@ void ShutdownImguiOverlay(Init &init, RenderData &data)
 {
   if (data.imgui == nullptr) { return; }
 
+  ClearClonedDrawData(*data.imgui);
+
   if (data.imgui->initialized) {
     ImGui_ImplVulkan_Shutdown();
     ImGui_ImplGlfw_Shutdown();
@@ -572,7 +609,7 @@ void RecreateImguiOverlayPipeline(Init &init, RenderData &data)
     std::println(stderr, "[imgui] failed to reallocate overlay command buffers after swapchain recreate");
   }
   InvalidateOverlaySecondaries(*data.imgui);
-  data.imgui->frame_draw_data.fill(nullptr);
+  ClearClonedDrawData(*data.imgui);
   data.imgui->last_extent = {};
 }
 
@@ -594,7 +631,11 @@ void BuildImGuiFrameSnapshot(RenderData &data, size_t frame_slot, ImGuiFrameSnap
   ImGui::NewFrame();
   DrawFpsWindow(out_snapshot.fps_label.data(), out_snapshot.gpu_label.data());
   ImGui::Render();
-  overlay.frame_draw_data.at(frame_slot) = ImGui::GetDrawData();
+
+  DestroyClonedDrawData(overlay.frame_draw_data.at(frame_slot));
+  overlay.frame_draw_data.at(frame_slot) = CloneImDrawData(ImGui::GetDrawData());
+  // Ensure the matching secondary is re-recorded against this slot's clone.
+  overlay.secondary_generation.at(frame_slot) = 0;
 }
 
 void RecordImguiOverlay(Init &init, RenderData const &data, VkCommandBuffer command_buffer, size_t image_index)

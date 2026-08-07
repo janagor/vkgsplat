@@ -52,8 +52,9 @@ public:
 
   void WaitEmpty() const
   {
+    // Pop/TryPop/Clear notify not_full_ when capacity frees; wait on that CV for count == 0.
     std::unique_lock lock{ mutex_ };
-    not_empty_.wait(lock, [this]() -> bool { return count_ == 0U; });
+    not_full_.wait(lock, [this]() -> bool { return count_ == 0U; });
   }
 
   void Push(T value)
