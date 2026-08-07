@@ -40,7 +40,7 @@ public:
   auto operator=(Renderer const &) -> Renderer & = delete;
 
   [[nodiscard]] auto draw(Camera const &camera) -> std::expected<void, Error>;
-  void wait_idle() const noexcept;
+  void wait_idle() noexcept;
 
 private:
   struct Impl;

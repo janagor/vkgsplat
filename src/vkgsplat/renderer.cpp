@@ -3,7 +3,6 @@
 #include <expected>
 #include <memory>
 #include <print>
-#include <string>
 #include <system_error>
 #include <utility>
 
@@ -14,6 +13,7 @@
 #include <vkgsplat/engine.hpp>
 #include <vkgsplat/platform.hpp>
 #include <vkgsplat_utility/error.hpp>
+#include <vkgsplat_utility/types.hpp>
 #include <vkgsplat_utility/utils.hpp>
 
 #include "backend/vulkan/app_state.hpp"
@@ -25,6 +25,7 @@
 #include "backend/vulkan/gs/sorting.hpp"
 #include "backend/vulkan/imgui_overlay.hpp"
 #include "backend/vulkan/mesh_gpu.hpp"
+#include "backend/vulkan/render_thread.hpp"
 #include "backend/vulkan/renderer.hpp"
 #include "backend/vulkan/sphere_setup.hpp"
 #include "backend/vulkan/vulkan_context.hpp"
@@ -109,6 +110,7 @@ struct Renderer::Impl
   std::unique_ptr<Engine> owned_engine;
   Engine *engine{};
   RenderData render_data{};
+  std::unique_ptr<RenderThread> render_thread;
 };
 
 Renderer::Renderer(beman::indirect::indirect<Impl> impl) : impl_(std::move(impl)) {}
@@ -119,6 +121,7 @@ auto Renderer::operator=(Renderer &&) noexcept -> Renderer & = default;
 Renderer::~Renderer() noexcept
 {
   if (impl_.valueless_after_move() || impl_->engine == nullptr) { return; }
+  impl_->render_thread->Stop();
   Cleanup(AsVulkanDriver(impl_->engine->driver()).init(), impl_->render_data);
 }
 
@@ -136,6 +139,9 @@ auto Renderer::create(RendererConfig const &config, Platform &platform) -> std::
     return std::unexpected(built.error());
   }
 
+  impl->render_thread = std::make_unique<RenderThread>();
+  impl->render_thread->Start(&AsVulkanDriver(impl->engine->driver()).init(), &impl->render_data);
+
   return Renderer{ std::move(impl) };
 }
 
@@ -148,18 +154,21 @@ auto Renderer::create(RendererConfig const &config, Engine &engine) -> std::expe
     return std::unexpected(built.error());
   }
 
+  impl->render_thread = std::make_unique<RenderThread>();
+  impl->render_thread->Start(&AsVulkanDriver(engine.driver()).init(), &impl->render_data);
+
   return Renderer{ std::move(impl) };
 }
 
 auto Renderer::draw(Camera const &camera) -> std::expected<void, Error>
 {
-  if (auto drawn = DrawFrame(AsVulkanDriver(impl_->engine->driver()).init(), impl_->render_data, camera); !drawn) {
-    return std::unexpected(drawn.error());
-  }
-  return {};
+  auto &init = AsVulkanDriver(impl_->engine->driver()).init();
+  auto const aspect_ratio =
+    static_cast<f64>(init.swapchain->extent().width) / static_cast<f64>(init.swapchain->extent().height);
+  return impl_->render_thread->SubmitFrame(camera, aspect_ratio);
 }
 
-void Renderer::wait_idle() const noexcept { impl_->engine->wait_idle(); }
+void Renderer::wait_idle() noexcept { impl_->render_thread->WaitIdle(); }
 
 auto Engine::create_renderer(RendererConfig const &config) -> std::expected<Renderer, Error>
 { return Renderer::create(config, *this); }

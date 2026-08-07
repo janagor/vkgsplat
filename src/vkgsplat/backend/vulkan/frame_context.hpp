@@ -61,17 +61,19 @@ struct FrameContext
   FrameSetup setup{};
 };
 
-struct BuildFrameParams
+struct PrepareFrameParams
 {
   Camera const *camera{};
   f64 aspect_ratio{};
-  size_t image_index{};
 };
 
 struct Init;
 
-// Fill setup for frame_slot from live app/camera state (no primary command buffer recording).
-void BuildFrameSetup(Init const &init, RenderData &data, size_t frame_slot, BuildFrameParams const &params);
+// Main thread: camera + ImGui snapshot (requires GLFW thread).
+void BuildFrameSetupCpu(RenderData &data, size_t frame_slot, PrepareFrameParams const &params);
+
+// Render thread: finalize setup after swapchain acquire.
+void BuildFrameSetupGpu(Init const &init, RenderData const &data, FrameSetup &setup, size_t image_index);
 
 // Copy the slot's GS constants into RenderData for the existing pipeline ops.
 void ApplyFrameSetup(RenderData &data, size_t frame_slot);

@@ -75,20 +75,25 @@ auto SnapshotCamera(Camera const &camera, f64 aspect_ratio) -> CameraSnapshot
   };
 }
 
-void BuildFrameSetup(Init const &init, RenderData &data, size_t frame_slot, BuildFrameParams const &params)
+void BuildFrameSetupCpu(RenderData &data, size_t frame_slot, PrepareFrameParams const &params)
 {
   FrameSetup setup{
     .aspect_ratio = params.aspect_ratio,
-    .image_index = params.image_index,
+    .image_index = 0,
     .camera = SnapshotCamera(*params.camera, params.aspect_ratio),
     .gs = {},
     .imgui = {},
   };
-  setup.gs = BuildGsFrameConstants(init, data, setup.camera);
 
   BuildImGuiFrameSnapshot(data, frame_slot, setup.imgui);
 
   data.frames.at(frame_slot).setup = setup;
+}
+
+void BuildFrameSetupGpu(Init const &init, RenderData const &data, FrameSetup &setup, size_t image_index)
+{
+  setup.image_index = image_index;
+  setup.gs = BuildGsFrameConstants(init, data, setup.camera);
 }
 
 void ApplyFrameSetup(RenderData &data, size_t frame_slot)
