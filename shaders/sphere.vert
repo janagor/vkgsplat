@@ -2,10 +2,11 @@
 #extension GL_EXT_descriptor_heap : require
 #extension GL_EXT_nonuniform_qualifier : enable
 
-// Oriented screen-space Gaussian quads (PlayCanvas / SuperSplat style).
+// Oriented screen-space quads; fragment shader evaluates the EWA Gaussian per pixel.
 layout(location = 0) flat out vec3 fragColor;
-layout(location = 1) out vec2 fragCorner;// unit-disk UV in [-1, 1]
-layout(location = 2) flat out float fragOpacity;
+layout(location = 1) flat out vec2 fragMean;
+layout(location = 2) flat out vec3 fragConic;
+layout(location = 3) flat out float fragOpacity;
 
 layout(push_constant) uniform RasterPush {
 	vec4 camera_position;
@@ -24,7 +25,7 @@ const uint HEAP_SORTED_VALUES = 8u;
 
 const uint PROJECTED_STRIDE = 11u;
 const uint PROJ_MEAN = 0u;
-const uint PROJ_COV = 2u;
+const uint PROJ_CONIC = 2u;
 const uint PROJ_RADIUS = 6u;
 const uint PROJ_COLOR = 7u;
 const uint PROJ_OPACITY = 10u;
@@ -50,9 +51,10 @@ void main()
 	vec2 mean = vec2(
 		projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_MEAN],
 		projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_MEAN + 1u]);
-	float cov_xx = projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_COV];
-	float cov_xy = projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_COV + 1u];
-	float cov_yy = projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_COV + 2u];
+	vec3 conic = vec3(
+		projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_CONIC],
+		projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_CONIC + 1u],
+		projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_CONIC + 2u]);
 	float radius = projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_RADIUS];
 	vec3 color = vec3(
 		projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_COLOR],
@@ -63,10 +65,26 @@ void main()
 	if (radius < 1.0) {
 		gl_Position = vec4(2.0, 2.0, 0.0, 1.0);
 		fragColor = vec3(0.0);
-		fragCorner = vec2(0.0);
+		fragMean = vec2(0.0);
+		fragConic = vec3(0.0);
 		fragOpacity = 0.0;
 		return;
 	}
+
+	// Invert Σ⁻¹ back to Σ for oriented quad axes.
+	float det_c = conic.x * conic.z - conic.y * conic.y;
+	if (det_c <= 1e-10) {
+		gl_Position = vec4(2.0, 2.0, 0.0, 1.0);
+		fragColor = vec3(0.0);
+		fragMean = vec2(0.0);
+		fragConic = vec3(0.0);
+		fragOpacity = 0.0;
+		return;
+	}
+	float inv = 1.0 / det_c;
+	float cov_xx = conic.z * inv;
+	float cov_xy = -conic.y * inv;
+	float cov_yy = conic.x * inv;
 
 	float mid = 0.5 * (cov_xx + cov_yy);
 	float radius_eig = length(vec2((cov_xx - cov_yy) * 0.5, cov_xy));
@@ -77,7 +95,6 @@ void main()
 	float l1 = 2.0 * sqrt(lambda1);
 	float l2 = 2.0 * sqrt(lambda2);
 
-	// Axis-aligned Σ has cov_xy=0 and λ1=cov_xx → (0,0); normalize(0,0) is NaN.
 	vec2 diagonal_vector = vec2(cov_xy, lambda1 - cov_xx);
 	float diag_len2 = dot(diagonal_vector, diagonal_vector);
 	diagonal_vector = (diag_len2 > 1e-12) ? (diagonal_vector * inversesqrt(diag_len2)) : vec2(1.0, 0.0);
@@ -95,6 +112,7 @@ void main()
 	gl_Position = vec4(ndc, 0.0, 1.0);
 
 	fragColor = color;
-	fragCorner = local;
+	fragMean = mean;
+	fragConic = conic;
 	fragOpacity = opacity;
 }

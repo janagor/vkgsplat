@@ -271,10 +271,11 @@ void main()
 
 	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_MEAN] = screen.x;
 	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_MEAN + 1u] = screen.y;
-	// Store Σ₂D (xx, xy, yy) for oriented-quad construction in the vertex shader.
-	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_CONIC] = cov_xx;
-	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_CONIC + 1u] = cov_xy;
-	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_CONIC + 2u] = cov_yy;
+	// Store inverse Σ₂D (xx, xy, yy) for per-pixel EWA in the fragment shader.
+	float inv_det = 1.0 / det;
+	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_CONIC] = cov_yy * inv_det;
+	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_CONIC + 1u] = -cov_xy * inv_det;
+	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_CONIC + 2u] = cov_xx * inv_det;
 	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_DEPTH] = -mean_view.z;
 	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_RADIUS] = radius;
 	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_COLOR] = color.r;
