@@ -97,6 +97,9 @@
           wayland-scanner
 
           vulkan-loader
+        ]
+        ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
+          mesa
         ];
 
         ld_library_path = pkgs.lib.makeLibraryPath (
@@ -113,8 +116,15 @@
 
             vulkan-loader
           ]
-          ++ pkgs.lib.optionals pkgs.stdenv.isLinux [ intel-metrics-discovery ]
+          ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
+            mesa
+            intel-metrics-discovery
+          ]
         );
+
+        mesaShellHook = pkgs.lib.optionalString pkgs.stdenv.isLinux ''
+          export VK_DRIVER_FILES="$(echo ${pkgs.mesa}/share/vulkan/icd.d/*.json | tr ' ' ':')"
+        '';
 
         clangShell = pkgs.mkShell.override { stdenv = llvmStdenv; } {
           packages =
@@ -136,6 +146,7 @@
             ++ vtune_packages;
 
           LD_LIBRARY_PATH = ld_library_path;
+          shellHook = mesaShellHook;
         };
 
         gccShell = pkgs.mkShell.override { stdenv = pkgs.gcc16Stdenv; } {
@@ -160,6 +171,7 @@
             ++ vtune_packages;
 
           LD_LIBRARY_PATH = ld_library_path;
+          shellHook = mesaShellHook;
         };
       in
       {
