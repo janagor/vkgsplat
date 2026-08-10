@@ -18,12 +18,12 @@ namespace vkgsplat::vulkan {
 namespace {
 
   auto BuildSwapchainResource(vkb::Device const &device,
-    Extent2D extent,
+    Extent2D ext,
     SwapchainCreateOptions const &options,
     vkb::Swapchain const &old_swapchain = {}) -> std::expected<vkb::Swapchain, Error>
   {
     vkb::SwapchainBuilder swapchain_builder{ device };
-    swapchain_builder.set_desired_extent(extent.width, extent.height)
+    swapchain_builder.set_desired_extent(ext.width, ext.height)
       .set_image_usage_flags(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT)
       .set_old_swapchain(old_swapchain);
 
@@ -96,27 +96,26 @@ auto SwapchainResource::init_images_and_views() -> std::expected<void, Error>
 }
 
 auto SwapchainResource::create(vkb::Device const &device,
-  Extent2D extent,
+  Extent2D ext,
   std::reference_wrapper<vkb::DispatchTable> disp,
   SwapchainCreateOptions const &options) -> std::expected<SwapchainResource, Error>
 {
-  auto vkb_swapchain = BuildSwapchainResource(device, extent, options);
+  auto vkb_swapchain = BuildSwapchainResource(device, ext, options);
   if (!vkb_swapchain) { return std::unexpected(vkb_swapchain.error()); }
 
-  SwapchainResource swapchain(
-    *vkb_swapchain, disp, options.enable_present_timing, options.enable_present_id2);
+  SwapchainResource swapchain(*vkb_swapchain, disp, options.enable_present_timing, options.enable_present_id2);
   if (auto images_and_views = swapchain.init_images_and_views(); !images_and_views) {
     return std::unexpected(images_and_views.error());
   }
   return swapchain;
 }
 
-auto SwapchainResource::recreate(vkb::Device const &device, Extent2D extent) -> std::expected<void, Error>
+auto SwapchainResource::recreate(vkb::Device const &device, Extent2D ext) -> std::expected<void, Error>
 {
   vkb::Swapchain const old_swapchain = swapchain_;
   SwapchainCreateOptions const options{ .enable_present_timing = present_timing_enabled_,
     .enable_present_id2 = present_id2_enabled_ };
-  auto vkb_swapchain = BuildSwapchainResource(device, extent, options, old_swapchain);
+  auto vkb_swapchain = BuildSwapchainResource(device, ext, options, old_swapchain);
   if (!vkb_swapchain) { return std::unexpected(vkb_swapchain.error()); }
 
   cleanup();

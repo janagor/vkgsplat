@@ -17,8 +17,8 @@ public:
 
   InputHandler(InputHandler const & /*other*/) = delete;
   auto operator=(InputHandler const & /*other*/) -> InputHandler & = delete;
-  InputHandler(InputHandler && /*other*/) noexcept;
-  auto operator=(InputHandler && /*other*/) noexcept -> InputHandler &;
+  InputHandler(InputHandler &&other) noexcept;
+  auto operator=(InputHandler &&other) noexcept -> InputHandler &;
 
   template<class View, class CloseTarget>
     requires KeyboardControllable<View> && MouseLookControllable<View> && ScrollZoomable<View> && Closeable<CloseTarget>

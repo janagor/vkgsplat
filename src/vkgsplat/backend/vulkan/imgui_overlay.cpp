@@ -23,7 +23,6 @@
 #include <system_error>
 #include <utility>
 
-#define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
 #include <imgui.h>

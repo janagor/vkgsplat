@@ -14,9 +14,9 @@ namespace vkgsplat {
 struct WindowConfig
 {
   std::string_view title;
-  u32 width;
-  u32 height;
-  bool resizable;
+  u32 width{};
+  u32 height{};
+  bool resizable{};
 };
 
 // GLFW-backed Platform. No graphics-API types appear in this public header.

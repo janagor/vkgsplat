@@ -66,11 +66,20 @@ function(vkgsplat_setup_dependencies)
       GIT_TAG
       "3.4"
       SYSTEM
-      YES)
+      YES
+      OPTIONS
+      "GLFW_BUILD_DOCS OFF"
+      "GLFW_BUILD_TESTS OFF"
+      "GLFW_BUILD_EXAMPLES OFF")
   endif()
 
   if(TARGET glfw AND NOT TARGET glfw::glfw)
     add_library(glfw::glfw ALIAS glfw)
+  endif()
+
+  # Vulkan-only consumers: glfw3.h must not pull in system OpenGL headers.
+  if(TARGET glfw)
+    target_compile_definitions(glfw INTERFACE GLFW_INCLUDE_NONE)
   endif()
 
   if(NOT TARGET glm::glm)

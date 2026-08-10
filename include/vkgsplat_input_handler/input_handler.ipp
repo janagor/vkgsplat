@@ -3,7 +3,6 @@
 
 #include <vkgsplat_input_handler/input_handler.hpp>// NOLINT(misc-header-include-cycle)
 
-#define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
 namespace vkgsplat {

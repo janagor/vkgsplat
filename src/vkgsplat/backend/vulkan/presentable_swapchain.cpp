@@ -20,11 +20,11 @@ PresentableSwapchain::PresentableSwapchain(std::unique_ptr<SwapchainResource> sw
 {}
 
 auto PresentableSwapchain::create(vkb::Device const &device,
-  Extent2D extent,
+  Extent2D ext,
   std::reference_wrapper<vkb::DispatchTable> disp,
   SwapchainCreateOptions const &options) -> std::expected<std::unique_ptr<PresentableSwapchain>, Error>
 {
-  auto resource = SwapchainResource::create(device, extent, disp, options);
+  auto resource = SwapchainResource::create(device, ext, disp, options);
   if (!resource) { return std::unexpected(resource.error()); }
   return std::unique_ptr<PresentableSwapchain>(
     new PresentableSwapchain(std::make_unique<SwapchainResource>(std::move(*resource)), device));
@@ -38,9 +38,9 @@ auto PresentableSwapchain::extent() const noexcept -> Extent2D
 
 auto PresentableSwapchain::image_count() const noexcept -> u32 { return swapchain_->image_count(); }
 
-auto PresentableSwapchain::recreate(Extent2D extent) -> std::expected<void, Error> { return recreate(device_, extent); }
+auto PresentableSwapchain::recreate(Extent2D ext) -> std::expected<void, Error> { return recreate(device_, ext); }
 
-auto PresentableSwapchain::recreate(vkb::Device const &device, Extent2D extent) -> std::expected<void, Error>
-{ return swapchain_->recreate(device, extent); }
+auto PresentableSwapchain::recreate(vkb::Device const &device, Extent2D ext) -> std::expected<void, Error>
+{ return swapchain_->recreate(device, ext); }
 
 }// namespace vkgsplat::vulkan

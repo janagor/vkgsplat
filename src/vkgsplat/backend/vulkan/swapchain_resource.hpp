@@ -33,11 +33,11 @@ public:
   auto operator=(SwapchainResource &&other) noexcept -> SwapchainResource &;
 
   [[nodiscard]] static auto create(vkb::Device const &device,
-    Extent2D extent,
+    Extent2D ext,
     std::reference_wrapper<vkb::DispatchTable> disp,
     SwapchainCreateOptions const &options = {}) -> std::expected<SwapchainResource, Error>;
 
-  [[nodiscard]] auto recreate(vkb::Device const &device, Extent2D extent) -> std::expected<void, Error>;
+  [[nodiscard]] auto recreate(vkb::Device const &device, Extent2D ext) -> std::expected<void, Error>;
 
   [[nodiscard]] auto handle() const noexcept -> VkSwapchainKHR { return swapchain_.swapchain; }
   [[nodiscard]] auto format() const noexcept -> VkFormat { return swapchain_.image_format; }

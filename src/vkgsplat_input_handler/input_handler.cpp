@@ -2,7 +2,6 @@
 #include <vkgsplat_utility/types.hpp>
 #include <vkgsplat_window/window.hpp>
 
-#define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
 #include <utility>

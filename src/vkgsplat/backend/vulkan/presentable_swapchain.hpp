@@ -23,15 +23,15 @@ class PresentableSwapchain final : public vkgsplat::Swapchain
 {
 public:
   [[nodiscard]] static auto create(vkb::Device const &device,
-    Extent2D extent,
+    Extent2D ext,
     std::reference_wrapper<vkb::DispatchTable> disp,
     SwapchainCreateOptions const &options = {}) -> std::expected<std::unique_ptr<PresentableSwapchain>, Error>;
 
   [[nodiscard]] auto extent() const noexcept -> Extent2D override;
   [[nodiscard]] auto image_count() const noexcept -> u32 override;
-  [[nodiscard]] auto recreate(Extent2D extent) -> std::expected<void, Error> override;
+  [[nodiscard]] auto recreate(Extent2D ext) -> std::expected<void, Error> override;
 
-  [[nodiscard]] auto recreate(vkb::Device const &device, Extent2D extent) -> std::expected<void, Error>;
+  [[nodiscard]] auto recreate(vkb::Device const &device, Extent2D ext) -> std::expected<void, Error>;
 
   [[nodiscard]] auto handle() const noexcept -> VkSwapchainKHR { return swapchain_->handle(); }
   [[nodiscard]] auto format() const noexcept -> VkFormat { return swapchain_->format(); }
