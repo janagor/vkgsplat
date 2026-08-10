@@ -57,9 +57,11 @@ public:
   [[nodiscard]] auto mouse_sensitivity() const noexcept -> f64 { return mouse_sensitivity_; }
   [[nodiscard]] auto zoom() const noexcept -> f64 { return zoom_; }
 
-  explicit Camera(glm::dvec3 position = glm::dvec3(0.0, 0.0, 0.0)) : position_(position)
+  explicit Camera(glm::dvec3 position = glm::dvec3(0.0, 0.0, 0.0),
+    glm::dvec3 target = glm::dvec3(0.0, 0.0, 0.0))
+    : position_(position)
   {
-    auto const look_at = glm::lookAt(position, glm::dvec3(0.0, 0.0, 0.0), glm::dvec3(0.0, 1.0, 0.0));
+    auto const look_at = glm::lookAt(position, target, glm::dvec3(0.0, 1.0, 0.0));
     orientation_ = glm::conjugate(glm::quat_cast(look_at));
     update_camera_vectors();
   }

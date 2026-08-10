@@ -60,6 +60,10 @@ auto ParseAppConfig(std::span<char *const> args) -> std::expected<AppConfig, vkg
   app.add_option("--frame-rate",
     frame_rate_text,
     "Cap/stabilize FPS via VK_EXT_present_timing: <N>, 'display', or 'adaptive'");
+  app.add_option("--camera-position", config.camera_position, "Camera starting position as x y z")
+    ->capture_default_str();
+  app.add_option("--camera-target", config.camera_target, "Camera look-at target as x y z")
+    ->capture_default_str();
   // Positional, --ply-path, or config key `ply_path` / `ply-path`.
   app.add_option("ply_path,-p,--ply-path", config.ply_path, "Path to PLY file")->check(CLI::ExistingFile);
 
@@ -76,6 +80,11 @@ auto ParseAppConfig(std::span<char *const> args) -> std::expected<AppConfig, vkg
   if (config.ply_path.empty()) {
     return std::unexpected{ MakeError(std::errc::invalid_argument,
       "missing PLY path (pass ply_path, --ply-path, or set ply_path / ply-path in --config)") };
+  }
+
+  if (config.camera_position == config.camera_target) {
+    return std::unexpected{ MakeError(std::errc::invalid_argument,
+      "camera-position and camera-target must differ") };
   }
 
   if (!frame_rate_text.empty()) {
