@@ -2,6 +2,7 @@
 
 #include "app_state.hpp"
 #include "backend/vulkan/frame_context.hpp"
+#include "backend/vulkan/gpu_pass_timer.hpp"
 #include "backend/vulkan/sync_objects/barrier.hpp"
 #include "compute/op_fill_buffer.hpp"
 #include "gs/gaussian_splat.hpp"
@@ -74,6 +75,33 @@ namespace {
     data.raster_push.tile_offset = { tile.origin_x, tile.origin_y };
   }
 
+  class ScopedGpuPass
+  {
+  public:
+    ScopedGpuPass(vulkan::Context const &context, RenderData const &data, VkCommandBuffer command_buffer, GpuPass pass)
+      : context_(context), data_(data), command_buffer_(command_buffer), pass_(pass), active_(data.gpu_pass_timer.enabled())
+    {
+      if (active_) { data_.gpu_pass_timer.write(context_, data_.current_frame, pass_, false, command_buffer_); }
+    }
+
+    ScopedGpuPass(ScopedGpuPass const &) = delete;
+    auto operator=(ScopedGpuPass const &) -> ScopedGpuPass & = delete;
+    ScopedGpuPass(ScopedGpuPass &&) = delete;
+    auto operator=(ScopedGpuPass &&) -> ScopedGpuPass & = delete;
+
+    ~ScopedGpuPass()
+    {
+      if (active_) { data_.gpu_pass_timer.write(context_, data_.current_frame, pass_, true, command_buffer_); }
+    }
+
+  private:
+    vulkan::Context const &context_;
+    RenderData const &data_;
+    VkCommandBuffer command_buffer_;
+    GpuPass pass_;
+    bool active_;
+  };
+
 }// namespace
 
 void RecordGsPipeline(RenderData &data)
@@ -93,6 +121,9 @@ void EvalGsPipeline(vulkan::Context &context, RenderData &data, VkCommandBuffer 
   if (IsMonoQuilt(data)) {
     OpRasterization{}.record(context, data, command_buffer);
   } else {
+    // One begin/end pair for all quilt cells: re-project + draw + blit (raster bucket).
+    ScopedGpuPass const raster_timer{ context, data, command_buffer, GpuPass::kRasterize };
+
     FrameSetup const &setup = FrameSetupFor(data, slot);
     u32 const cols = std::max(1U, data.lfd_grid.at(0));
     u32 const rows = std::max(1U, data.lfd_grid.at(1));
@@ -104,7 +135,6 @@ void EvalGsPipeline(vulkan::Context &context, RenderData &data, VkCommandBuffer 
 
     PrepareQuiltPresent(context, data, command_buffer, data.present_image_index);
 
-    OpProjection project_op{};
     bool first_tile = true;
     for (u32 row = 0U; row < rows; ++row) {
       for (u32 col = 0U; col < cols; ++col) {
@@ -129,7 +159,8 @@ void EvalGsPipeline(vulkan::Context &context, RenderData &data, VkCommandBuffer 
         };
         ApplyQuiltTilePush(data, view, tile_rect);
 
-        project_op.record(context, data, command_buffer);
+        // Untimed: Phase A already filled GpuPass::kProjection queries.
+        RecordProjection(context, data, command_buffer, false);
         VkRect2D const draw_tile = {
           .offset = { .x = static_cast<int32_t>(origin_x), .y = static_cast<int32_t>(origin_y) },
           .extent = { .width = tile_w, .height = tile_h },

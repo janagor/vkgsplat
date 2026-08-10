@@ -100,9 +100,15 @@ namespace {
 
 }// namespace
 
-void OpProjection::record(vulkan::Context const &context, RenderData const &data, VkCommandBuffer command_buffer)
+void RecordProjection(vulkan::Context const &context,
+  RenderData const &data,
+  VkCommandBuffer command_buffer,
+  bool time_pass)
 {
-  ScopedGpuPass const timer{ context, data, command_buffer, GpuPass::kProjection };
+  // Optional: quilt Phase B re-projects many times and must not rewrite the same timestamp queries.
+  if (time_pass) {
+    data.gpu_pass_timer.write(context, data.current_frame, GpuPass::kProjection, false, command_buffer);
+  }
 
   context.disp.cmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, data.project_algorithm.pipeline());
   PushConstants(context, &data.project_push, sizeof(ProjectPushConstants), command_buffer);
@@ -110,7 +116,14 @@ void OpProjection::record(vulkan::Context const &context, RenderData const &data
   u32 const workgroup_count = (data.splat_count + kComputeLocalSizeX - 1U) / kComputeLocalSizeX;
   DispatchCompute1d(context, command_buffer, workgroup_count);
   Barrier::compute_read(context.disp, command_buffer);
+
+  if (time_pass) {
+    data.gpu_pass_timer.write(context, data.current_frame, GpuPass::kProjection, true, command_buffer);
+  }
 }
+
+void OpProjection::record(vulkan::Context const &context, RenderData const &data, VkCommandBuffer command_buffer)
+{ RecordProjection(context, data, command_buffer, true); }
 
 void OpBinning::record(vulkan::Context const &context, RenderData const &data, VkCommandBuffer command_buffer)
 {
