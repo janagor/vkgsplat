@@ -33,6 +33,8 @@ public:
   auto operator=(Window const &) -> Window & = delete;
 
   void poll_events() const noexcept override;
+  // Blocks until a window/input event is queued (CPU idle when not redrawing).
+  void wait_events() const noexcept;
   [[nodiscard]] auto should_close() const noexcept -> bool override;
   [[nodiscard]] auto framebuffer_extent() const noexcept -> Extent2D override;
   [[nodiscard]] auto native_window() const noexcept -> NativeWindowHandle override;

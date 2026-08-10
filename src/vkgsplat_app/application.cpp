@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <exception>
+#include <expected>
 #include <format>
 #include <print>
 #include <span>
@@ -11,7 +12,9 @@
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat/renderer.hpp>
 #include <vkgsplat_input_handler/input_handler.hpp>
+#include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/input_control.hpp>
+#include <vkgsplat_utility/types.hpp>
 #include <vkgsplat_window/window.hpp>
 
 #include "app_config.hpp"
@@ -24,6 +27,54 @@ namespace {
   {
     auto const now = std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now());
     return std::format("screenshot_{:%Y%m%d_%H%M%S}.png", now);
+  }
+
+  void MaybeSaveScreenshot(Renderer &renderer, InputHandler &input)
+  {
+    if (!input.consume_screenshot_request()) { return; }
+    auto const path = MakeScreenshotPath();
+    if (auto saved = renderer.save_frame_png(path); !saved) {
+      std::println(stderr, "failed to save screenshot: {}", saved.error().message());
+    } else {
+      std::println("saved screenshot: {}", path);
+    }
+  }
+
+  [[nodiscard]] auto RunMainLoop(Window &window, Renderer &renderer, CameraConfig const &camera_config)
+    -> std::expected<void, Error>
+  {
+    Camera camera{ camera_config };
+    CloseState close{};
+    InputHandler input{ window };
+
+    bool redraw_needed = true;
+    Extent2D last_extent = window.framebuffer_extent();
+
+    while (!window.should_close() && !close.close_requested()) {
+      // Poll first so held keys are visible; only block when nothing needs a frame.
+      window.poll_events();
+
+      if (input.update(camera, close)) { redraw_needed = true; }
+
+      auto const extent = window.framebuffer_extent();
+      if (extent.width != last_extent.width || extent.height != last_extent.height) {
+        last_extent = extent;
+        redraw_needed = true;
+      }
+
+      if (redraw_needed) {
+        if (auto draw_result = renderer.draw(camera); !draw_result) { return std::unexpected{ draw_result.error() }; }
+        redraw_needed = false;
+      } else if (!input.screenshot_requested()) {
+        // CPU sleep until the next window/input event; next iteration polls + may draw.
+        window.wait_events();
+      }
+
+      MaybeSaveScreenshot(renderer, input);
+    }
+
+    renderer.wait_idle();
+    return {};
   }
 
 }// namespace
@@ -46,14 +97,13 @@ auto Run(std::span<char *const> args) noexcept -> int
       .resizable = true,
     };
 
-
-    auto window = vkgsplat::Window::create(kDefaultConfig);
+    auto window = Window::create(kDefaultConfig);
     if (!window) {
       std::println(stderr, "Failed to create window: {}", window.error().message());
       return -1;
     }
 
-    vkgsplat::RendererConfig const renderer_config{
+    RendererConfig const renderer_config{
       .ply_path = config->ply_path,
       .enable_validation = config->enable_validation,
       .enable_imgui = config->enable_imgui,
@@ -61,36 +111,16 @@ auto Run(std::span<char *const> args) noexcept -> int
       .frame_rate = config->frame_rate,
     };
 
-    auto renderer = vkgsplat::Renderer::create(renderer_config, *window);
+    auto renderer = Renderer::create(renderer_config, *window);
     if (!renderer) {
       std::println(stderr, "Failed to create renderer: {}", renderer.error().message());
       return -1;
     }
 
-    vkgsplat::Camera camera{ config->camera };
-    vkgsplat::CloseState close{};
-    vkgsplat::InputHandler input{ *window };
-
-    while (!window->should_close() && !close.close_requested()) {
-      window->poll_events();
-      input.update(camera, close);
-      auto const draw_result = renderer->draw(camera);
-      if (!draw_result) {
-        std::println(stderr, "failed to draw frame: {}", draw_result.error().message());
-        return -1;
-      }
-
-      if (input.consume_screenshot_request()) {
-        auto const path = MakeScreenshotPath();
-        if (auto saved = renderer->save_frame_png(path); !saved) {
-          std::println(stderr, "failed to save screenshot: {}", saved.error().message());
-        } else {
-          std::println("saved screenshot: {}", path);
-        }
-      }
+    if (auto loop = RunMainLoop(*window, *renderer, config->camera); !loop) {
+      std::println(stderr, "failed to draw frame: {}", loop.error().message());
+      return -1;
     }
-
-    renderer->wait_idle();
   } catch (std::exception const &) {
     return -1;
   } catch (...) {

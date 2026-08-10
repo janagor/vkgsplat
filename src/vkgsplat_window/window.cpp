@@ -75,6 +75,12 @@ void Window::poll_events() const noexcept
   glfwPollEvents();
 }
 
+void Window::wait_events() const noexcept
+{
+  (void)impl_;
+  glfwWaitEvents();
+}
+
 auto Window::should_close() const noexcept -> bool { return glfwWindowShouldClose(impl_->handle) != 0; }
 
 auto Window::framebuffer_extent() const noexcept -> Extent2D

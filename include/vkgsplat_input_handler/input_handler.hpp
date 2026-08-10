@@ -22,10 +22,12 @@ public:
 
   template<class View, class CloseTarget>
     requires KeyboardControllable<View> && MouseLookControllable<View> && ScrollZoomable<View> && Closeable<CloseTarget>
-  void update(View &view, CloseTarget &close);
+  // Returns true when the view was modified (needs a redraw).
+  [[nodiscard]] auto update(View &view, CloseTarget &close) -> bool;
 
   // Edge-triggered: true once per F2 press until consumed.
   [[nodiscard]] auto consume_screenshot_request() noexcept -> bool;
+  [[nodiscard]] auto screenshot_requested() const noexcept -> bool { return screenshot_requested_; }
 
 private:
   static void scroll_callback(GLFWwindow *window, f64 /*x_offset*/, f64 y_offset);

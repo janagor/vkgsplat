@@ -74,6 +74,8 @@ struct ImGuiOverlayState
   std::chrono::steady_clock::time_point last_fps_update;
   std::chrono::steady_clock::time_point last_frame_time;
   float fps_ema = 0.0F;
+  // After an idle gap, skip the next interval(s) while submit cadence restabilizes.
+  u32 fps_ignore_samples = 0;
   VkExtent2D last_extent{};
 };
 
@@ -87,6 +89,10 @@ namespace {
   constexpr double kMsPerSecond = 1000.0;
   constexpr auto kFpsUpdateInterval = std::chrono::milliseconds{ 100 };
   constexpr float kFpsEmaAlpha = 0.1F;
+  // Accept only plausible inter-submit periods (reject idle gaps and near-instant refill submits).
+  constexpr float kMinFrameDeltaForFps = 1.0F / 240.0F;
+  constexpr float kMaxFrameDeltaForFps = 1.0F / 15.0F;
+  constexpr u32 kFpsIgnoreSamplesAfterHitch = 2;
 
   [[nodiscard]] auto AlignBufferSize(VkDeviceSize size, VkDeviceSize alignment) -> VkDeviceSize
   {
@@ -306,10 +312,16 @@ namespace {
     auto const now = std::chrono::steady_clock::now();
     if (overlay.last_frame_time.time_since_epoch().count() != 0) {
       float const frame_delta = std::chrono::duration<float>(now - overlay.last_frame_time).count();
-      if (frame_delta > 0.0F) {
+
+      if (overlay.fps_ignore_samples > 0U) {
+        --overlay.fps_ignore_samples;
+      } else if (frame_delta >= kMinFrameDeltaForFps && frame_delta <= kMaxFrameDeltaForFps) {
         float const fps = 1.0F / frame_delta;
         overlay.fps_ema =
           overlay.fps_ema > 0.0F ? ((1.0F - kFpsEmaAlpha) * overlay.fps_ema) + (kFpsEmaAlpha * fps) : fps;
+      } else if (frame_delta > kMaxFrameDeltaForFps) {
+        // Idle wait or hitch: don't poison EMA, and ignore the next refill intervals.
+        overlay.fps_ignore_samples = kFpsIgnoreSamplesAfterHitch;
       }
     }
     overlay.last_frame_time = now;
