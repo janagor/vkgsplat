@@ -3,6 +3,7 @@
 
 #include <expected>
 #include <string>
+#include <string_view>
 
 #include <beman/indirect/indirect.hpp>
 #include <vkgsplat/camera.hpp>
@@ -39,6 +40,8 @@ public:
   auto operator=(Renderer const &) -> Renderer & = delete;
 
   [[nodiscard]] auto draw(Camera const &camera) -> std::expected<void, Error>;
+  // Reads the latest raster color target to PNG (scene only; no ImGui overlay).
+  [[nodiscard]] auto save_frame_png(std::string_view path) -> std::expected<void, Error>;
   void wait_idle() noexcept;
 
 private:

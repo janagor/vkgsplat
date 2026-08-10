@@ -7,6 +7,8 @@ add_library(
   renderer.cpp
   io/ply/miniply.cpp
   io/ply/load_splats.cpp
+  io/image/write_png.cpp
+  io/image/stb_image_write_impl.cpp
   backend/vulkan/vma_usage.cpp
   backend/vulkan/vulkan_platform.cpp
   backend/vulkan/vulkan_driver.cpp
@@ -32,6 +34,7 @@ add_library(
   backend/vulkan/gs/pipeline.cpp
   backend/vulkan/gs/operations.cpp
   backend/vulkan/gpu_allocator.cpp
+  backend/vulkan/screenshot.cpp
   backend/vulkan/compute/algorithm.cpp
   backend/vulkan/compute/op_fill_buffer.cpp
   backend/vulkan/compute/op_tensor_sync_device.cpp
@@ -73,10 +76,14 @@ target_link_libraries(
           magic_enum::magic_enum
           imgui::imgui
           glfw::glfw
+          stb::stb
   PUBLIC vkgsplat::vkgsplat_utility
          vkgsplat::vkgsplat_window
          glm::glm
          beman::indirect)
+
+# stb_image_write's implementation trips clang-analyzer false positives; keep it out of tidy/cppcheck.
+set_source_files_properties(io/image/stb_image_write_impl.cpp PROPERTIES SKIP_LINTING ON)
 
 vkgsplat_configure_linker(vkgsplat)
 

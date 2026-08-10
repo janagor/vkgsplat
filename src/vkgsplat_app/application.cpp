@@ -1,8 +1,11 @@
 #include "application.hpp"
 
+#include <chrono>
 #include <exception>
+#include <format>
 #include <print>
 #include <span>
+#include <string>
 #include <system_error>
 
 #include <vkgsplat/camera.hpp>
@@ -14,6 +17,16 @@
 #include "app_config.hpp"
 
 namespace vkgsplat::app {
+
+namespace {
+
+  [[nodiscard]] auto MakeScreenshotPath() -> std::string
+  {
+    auto const now = std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now());
+    return std::format("screenshot_{:%Y%m%d_%H%M%S}.png", now);
+  }
+
+}// namespace
 
 auto Run(std::span<char *const> args) noexcept -> int
 {
@@ -68,6 +81,15 @@ auto Run(std::span<char *const> args) noexcept -> int
       if (!draw_result) {
         std::println(stderr, "failed to draw frame: {}", draw_result.error().message());
         return -1;
+      }
+
+      if (input.consume_screenshot_request()) {
+        auto const path = MakeScreenshotPath();
+        if (auto saved = renderer->save_frame_png(path); !saved) {
+          std::println(stderr, "failed to save screenshot: {}", saved.error().message());
+        } else {
+          std::println("saved screenshot: {}", path);
+        }
       }
     }
 

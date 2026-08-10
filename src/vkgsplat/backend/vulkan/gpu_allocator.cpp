@@ -120,6 +120,27 @@ auto GPUAllocator::create_device_storage_buffer(VkDeviceSize size) noexcept -> s
   return buffer;
 }
 
+auto GPUAllocator::create_staging_buffer(VkDeviceSize size) noexcept -> std::expected<Buffer, Error>
+{
+  auto const buffer_info = initializers::BufferCreateInfo(size, VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+
+  VmaAllocationCreateInfo alloc_info = {};
+  alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
+  // NOLINTBEGIN(hicpp-signed-bitwise)
+  alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+  // NOLINTEND(hicpp-signed-bitwise)
+  alloc_info.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+  alloc_info.preferredFlags = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+  Buffer buffer{ .size = size };
+  if (vmaCreateBuffer(allocator_, &buffer_info, &alloc_info, &buffer.handle, &buffer.allocation, nullptr)
+      != VK_SUCCESS) {
+    return std::unexpected(MakeAllocatorError("Failed to create staging buffer"));
+  }
+
+  return buffer;
+}
+
 auto GPUAllocator::create_heap_buffer(VkDeviceSize size) noexcept -> std::expected<Buffer, Error>
 {
   auto const buffer_info = initializers::BufferCreateInfo(

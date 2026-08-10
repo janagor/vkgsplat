@@ -24,6 +24,9 @@ public:
     requires KeyboardControllable<View> && MouseLookControllable<View> && ScrollZoomable<View> && Closeable<CloseTarget>
   void update(View &view, CloseTarget &close);
 
+  // Edge-triggered: true once per F2 press until consumed.
+  [[nodiscard]] auto consume_screenshot_request() noexcept -> bool;
+
 private:
   static void scroll_callback(GLFWwindow *window, f64 /*x_offset*/, f64 y_offset);
 
@@ -33,6 +36,8 @@ private:
   f64 last_cursor_y_ = 0.0;
   f64 scroll_y_ = 0.0;
   bool first_mouse_ = true;
+  bool f2_was_pressed_ = false;
+  bool screenshot_requested_ = false;
   void *previous_user_pointer_ = nullptr;
 };
 

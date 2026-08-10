@@ -51,6 +51,10 @@ void InputHandler::update(View &view, CloseTarget &close)
   }
 
   if (glfwGetKey(window_, GLFW_KEY_ESCAPE) == GLFW_PRESS) { close.request_close(); }
+
+  auto const f2_pressed = key_pressed(GLFW_KEY_F2);
+  if (f2_pressed && !f2_was_pressed_) { screenshot_requested_ = true; }
+  f2_was_pressed_ = f2_pressed;
 }
 
 }// namespace vkgsplat

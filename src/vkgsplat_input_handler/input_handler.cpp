@@ -40,6 +40,7 @@ InputHandler::~InputHandler()
 InputHandler::InputHandler(InputHandler &&other) noexcept
   : window_(std::exchange(other.window_, nullptr)), last_time_(other.last_time_), last_cursor_x_(other.last_cursor_x_),
     last_cursor_y_(other.last_cursor_y_), scroll_y_(other.scroll_y_), first_mouse_(other.first_mouse_),
+    f2_was_pressed_(other.f2_was_pressed_), screenshot_requested_(other.screenshot_requested_),
     previous_user_pointer_(other.previous_user_pointer_)
 {
   if (window_ != nullptr) { glfwSetWindowUserPointer(window_, this); }
@@ -61,11 +62,20 @@ auto InputHandler::operator=(InputHandler &&other) noexcept -> InputHandler &
   last_cursor_y_ = other.last_cursor_y_;
   scroll_y_ = other.scroll_y_;
   first_mouse_ = other.first_mouse_;
+  f2_was_pressed_ = other.f2_was_pressed_;
+  screenshot_requested_ = other.screenshot_requested_;
   previous_user_pointer_ = other.previous_user_pointer_;
 
   if (window_ != nullptr) { glfwSetWindowUserPointer(window_, this); }
 
   return *this;
+}
+
+auto InputHandler::consume_screenshot_request() noexcept -> bool
+{
+  auto const requested = screenshot_requested_;
+  screenshot_requested_ = false;
+  return requested;
 }
 
 }// namespace vkgsplat

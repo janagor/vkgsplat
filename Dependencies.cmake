@@ -178,6 +178,24 @@ function(vkgsplat_setup_dependencies)
       "main")
   endif()
 
+  if(NOT TARGET stb::stb)
+    cpmaddpackage(
+      NAME
+      stb
+      GITHUB_REPOSITORY
+      "nothings/stb"
+      GIT_TAG
+      "2c980bb59875b0d32144a71867fbdebb2f77cd20"
+      DOWNLOAD_ONLY
+      YES
+      SYSTEM
+      YES)
+
+    add_library(stb INTERFACE)
+    add_library(stb::stb ALIAS stb)
+    target_include_directories(stb SYSTEM INTERFACE ${stb_SOURCE_DIR})
+  endif()
+
   # Dear ImGui (janagor fork with VK_EXT_descriptor_heap).
   # Upstream ImGui has no CMakeLists.txt, so fetch sources and build a target.
   if(NOT TARGET imgui::imgui)

@@ -3,6 +3,7 @@
 #include <expected>
 #include <memory>
 #include <print>
+#include <string_view>
 #include <system_error>
 #include <utility>
 
@@ -28,6 +29,7 @@
 #include "backend/vulkan/present_pacer.hpp"
 #include "backend/vulkan/render_thread.hpp"
 #include "backend/vulkan/renderer.hpp"
+#include "backend/vulkan/screenshot.hpp"
 #include "backend/vulkan/sphere_setup.hpp"
 #include "backend/vulkan/vulkan_context.hpp"
 #include "backend/vulkan/vulkan_driver.hpp"
@@ -176,6 +178,13 @@ auto Renderer::draw(Camera const &camera) -> std::expected<void, Error>
   auto const aspect_ratio =
     static_cast<f64>(context.swapchain->extent().width) / static_cast<f64>(context.swapchain->extent().height);
   return impl_->render_thread->SubmitFrame(camera, aspect_ratio);
+}
+
+auto Renderer::save_frame_png(std::string_view path) -> std::expected<void, Error>
+{
+  wait_idle();
+  auto &context = AsVulkanDriver(impl_->engine->driver()).context();
+  return vulkan::SaveColorTargetPng(context, impl_->render_data, path);
 }
 
 void Renderer::wait_idle() noexcept { impl_->render_thread->WaitIdle(); }

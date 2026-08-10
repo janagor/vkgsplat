@@ -39,6 +39,8 @@ public:
   [[nodiscard]] auto create_storage_buffer(VkDeviceSize size) noexcept -> std::expected<Buffer, Error>;
   // Device-local storage suitable for GPU write + transfer (e.g. color targets).
   [[nodiscard]] auto create_device_storage_buffer(VkDeviceSize size) noexcept -> std::expected<Buffer, Error>;
+  // Host-visible staging buffer for GPU→CPU readback (TRANSFER_DST).
+  [[nodiscard]] auto create_staging_buffer(VkDeviceSize size) noexcept -> std::expected<Buffer, Error>;
   [[nodiscard]] auto create_heap_buffer(VkDeviceSize size) noexcept -> std::expected<Buffer, Error>;
   [[nodiscard]] auto vma_allocator() const noexcept -> VmaAllocator { return allocator_; }
   [[nodiscard]] auto get_buffer_device_address(Buffer const &buffer) const noexcept -> VkDeviceAddress;
