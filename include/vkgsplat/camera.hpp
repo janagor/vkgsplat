@@ -26,20 +26,47 @@ using CameraMovement = ViewMovement;
 
 constexpr f64 kCameraSpeed = 2.5;
 constexpr f64 kCameraSensitivity = 0.1;
-constexpr f64 kCameraDefaultZoom = 45.0;
-constexpr f64 kCameraMinZoom = 1.0;
-constexpr f64 kCameraMaxZoom = 45.0;
-constexpr float kCameraNearPlane = 0.1F;
-constexpr float kCameraFarPlane = 100.0F;
+constexpr f64 kCameraDefaultFovDegrees = 45.0;
+constexpr f64 kCameraMinFovDegrees = 1.0;
+constexpr f64 kCameraMaxFovDegrees = 120.0;
+constexpr f64 kCameraDefaultNearPlane = 0.1;
+constexpr f64 kCameraDefaultFarPlane = 100.0;
+constexpr f64 kCameraDefaultAspectRatio = 1.0;
 
 inline constexpr glm::dvec3 kDefaultCameraPosition{ 0.0, 1.5, 10.0 };
+inline constexpr glm::dvec3 kDefaultCameraTarget{ 0.0, 0.0, 0.0 };
+inline constexpr glm::dvec3 kDefaultCameraUp{ 0.0, 1.0, 0.0 };
+
+// Deprecated aliases (prefer kCamera*Fov*).
+constexpr f64 kCameraDefaultZoom = kCameraDefaultFovDegrees;
+constexpr f64 kCameraMinZoom = kCameraMinFovDegrees;
+constexpr f64 kCameraMaxZoom = kCameraMaxFovDegrees;
+constexpr float kCameraNearPlane = static_cast<float>(kCameraDefaultNearPlane);
+constexpr float kCameraFarPlane = static_cast<float>(kCameraDefaultFarPlane);
+
+struct CameraConfig
+{
+  // Extrinsics (orientation from look-at: position → target, with `up`).
+  glm::dvec3 position{ kDefaultCameraPosition };
+  glm::dvec3 target{ kDefaultCameraTarget };
+  glm::dvec3 up{ kDefaultCameraUp };
+
+  // Intrinsics. Live windowed rendering overrides aspect from the swapchain.
+  f64 fov_degrees{ kCameraDefaultFovDegrees };
+  f64 aspect_ratio{ kCameraDefaultAspectRatio };
+  f64 near_plane{ kCameraDefaultNearPlane };
+  f64 far_plane{ kCameraDefaultFarPlane };
+
+  // Interaction
+  f64 movement_speed{ kCameraSpeed };
+  f64 mouse_sensitivity{ kCameraSensitivity };
+};
 
 struct CameraPushConstants
 {
   glm::mat4 view{};
   glm::mat4 projection{};
 };
-
 
 constexpr auto kCameraPushPositionSize = 128;
 static_assert(sizeof(CameraPushConstants) == kCameraPushPositionSize);
@@ -55,16 +82,27 @@ public:
 
   [[nodiscard]] auto movement_speed() const noexcept -> f64 { return movement_speed_; }
   [[nodiscard]] auto mouse_sensitivity() const noexcept -> f64 { return mouse_sensitivity_; }
-  [[nodiscard]] auto zoom() const noexcept -> f64 { return zoom_; }
+  [[nodiscard]] auto zoom() const noexcept -> f64 { return fov_degrees_; }
+  [[nodiscard]] auto fov_degrees() const noexcept -> f64 { return fov_degrees_; }
+  [[nodiscard]] auto near_plane() const noexcept -> f64 { return near_plane_; }
+  [[nodiscard]] auto far_plane() const noexcept -> f64 { return far_plane_; }
+  [[nodiscard]] auto aspect_ratio() const noexcept -> f64 { return aspect_ratio_; }
 
-  explicit Camera(glm::dvec3 position = glm::dvec3(0.0, 0.0, 0.0),
-    glm::dvec3 target = glm::dvec3(0.0, 0.0, 0.0))
-    : position_(position)
+  explicit Camera(CameraConfig const &config = {})
+    : position_(config.position), movement_speed_(config.movement_speed),
+      mouse_sensitivity_(config.mouse_sensitivity), fov_degrees_(config.fov_degrees),
+      near_plane_(config.near_plane), far_plane_(config.far_plane), aspect_ratio_(config.aspect_ratio)
   {
-    auto const look_at = glm::lookAt(position, target, glm::dvec3(0.0, 1.0, 0.0));
+    auto const world_up =
+      glm::length(config.up) > 0.0 ? glm::normalize(config.up) : kDefaultCameraUp;
+    auto const look_at = glm::lookAt(config.position, config.target, world_up);
     orientation_ = glm::conjugate(glm::quat_cast(look_at));
     update_camera_vectors();
   }
+
+  explicit Camera(glm::dvec3 position, glm::dvec3 target)
+    : Camera(CameraConfig{ .position = position, .target = target })
+  {}
 
   [[nodiscard]] auto view_matrix() const noexcept -> glm::mat4
   {
@@ -73,15 +111,19 @@ public:
     return rotate * translate;
   }
 
-  [[nodiscard]] auto projection_matrix(f64 aspect_ratio) const noexcept -> glm::mat4
+  // `aspect` overrides the configured aspect (typical for swapchain frames).
+  [[nodiscard]] auto projection_matrix(f64 aspect) const noexcept -> glm::mat4
   {
-    auto proj = glm::perspective(glm::radians(static_cast<float>(zoom_)),
-      static_cast<float>(aspect_ratio),
-      kCameraNearPlane,
-      kCameraFarPlane);
+    auto const used_aspect = aspect > 0.0 ? aspect : aspect_ratio_;
+    auto proj = glm::perspective(glm::radians(static_cast<float>(fov_degrees_)),
+      static_cast<float>(used_aspect),
+      static_cast<float>(near_plane_),
+      static_cast<float>(far_plane_));
     proj[1][1] *= -1.0F;// NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     return proj;
   }
+
+  [[nodiscard]] auto projection_matrix() const noexcept -> glm::mat4 { return projection_matrix(aspect_ratio_); }
 
   void process_keyboard(ViewMovement direction, f64 delta_time)
   {
@@ -124,8 +166,8 @@ public:
 
   void process_mouse_scroll(f64 yoffset)
   {
-    zoom_ -= yoffset;
-    zoom_ = std::clamp(zoom_, kCameraMinZoom, kCameraMaxZoom);
+    fov_degrees_ -= yoffset;
+    fov_degrees_ = std::clamp(fov_degrees_, kCameraMinFovDegrees, kCameraMaxFovDegrees);
   }
 
 private:
@@ -145,7 +187,10 @@ private:
 
   f64 movement_speed_{ kCameraSpeed };
   f64 mouse_sensitivity_{ kCameraSensitivity };
-  f64 zoom_{ kCameraDefaultZoom };
+  f64 fov_degrees_{ kCameraDefaultFovDegrees };
+  f64 near_plane_{ kCameraDefaultNearPlane };
+  f64 far_plane_{ kCameraDefaultFarPlane };
+  f64 aspect_ratio_{ kCameraDefaultAspectRatio };
 };
 
 static_assert(KeyboardControllable<Camera>);

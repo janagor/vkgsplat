@@ -67,10 +67,7 @@ auto Run(std::span<char *const> args) noexcept -> int
       return -1;
     }
 
-    vkgsplat::Camera camera{
-      glm::dvec3{ config->camera_position.at(0), config->camera_position.at(1), config->camera_position.at(2) },
-      glm::dvec3{ config->camera_target.at(0), config->camera_target.at(1), config->camera_target.at(2) },
-    };
+    vkgsplat::Camera camera{ config->camera };
     vkgsplat::CloseState close{};
     vkgsplat::InputHandler input{ *window };
 

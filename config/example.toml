@@ -8,6 +8,16 @@ imgui = true
 gpu-timers = false
 frame-rate = "display"   # or "adaptive", or a positive integer like 60
 
-# Starting camera pose: position looks toward target (world up = +Y).
+# Camera extrinsics: orientation from look-at (position → target) with world-up.
 camera-position = [0.0, 1.5, 10.0]
-camera-target = [0.0, 0.0, 0.0]
+camera-target = [0.0, 1.0, 0.0]
+camera-up = [0.0, -1.0, 0.0]
+
+# Camera intrinsics / controls.
+camera-fov = 45.0
+camera-near = 0.1
+camera-far = 100.0
+# Preferred aspect; windowed mode still uses the swapchain aspect each frame.
+camera-aspect = 1.0
+camera-speed = 12.5
+camera-sensitivity = 0.1
