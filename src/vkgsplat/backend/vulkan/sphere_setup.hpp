@@ -6,9 +6,9 @@
 
 namespace vkgsplat {
 
-[[nodiscard]] auto InitSphereSetup(Init &init, RenderData &data) -> bool;
+[[nodiscard]] auto InitSphereSetup(vulkan::Context &context, RenderData &data) -> bool;
 
-void DestroySphereSetup(Init &init, RenderData &data);
+void DestroySphereSetup(vulkan::Context &context, RenderData &data);
 
 }// namespace vkgsplat
 

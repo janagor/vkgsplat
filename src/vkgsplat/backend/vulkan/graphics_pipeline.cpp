@@ -17,23 +17,23 @@
 
 namespace vkgsplat {
 
-void DestroyGraphicsPipeline(Init &init, RenderData &data)
+void DestroyGraphicsPipeline(vulkan::Context &context, RenderData &data)
 {
   if (data.graphics_pipeline != VK_NULL_HANDLE) {
-    init.disp.destroyPipeline(data.graphics_pipeline, nullptr);
+    context.disp.destroyPipeline(data.graphics_pipeline, nullptr);
     data.graphics_pipeline = VK_NULL_HANDLE;
   }
 }
 
-auto CreateGraphicsPipeline(Init &init, RenderData &data) -> int
+auto CreateGraphicsPipeline(vulkan::Context &context, RenderData &data) -> int
 {
-  DestroyGraphicsPipeline(init, data);
+  DestroyGraphicsPipeline(context, data);
 
   auto const vert_code = ReadFile(std::string(kShaderDirectory) + "/sphere.vert.spv");
   auto const frag_code = ReadFile(std::string(kShaderDirectory) + "/sphere.frag.spv");
 
-  VkShaderModule vert_module = CreateShaderModule(init, vert_code);
-  VkShaderModule frag_module = CreateShaderModule(init, frag_code);
+  VkShaderModule vert_module = CreateShaderModule(context, vert_code);
+  VkShaderModule frag_module = CreateShaderModule(context, frag_code);
 
   if (vert_module == VK_NULL_HANDLE || frag_module == VK_NULL_HANDLE) {
     std::cout << "failed to create shader module\n";
@@ -56,14 +56,14 @@ auto CreateGraphicsPipeline(Init &init, RenderData &data) -> int
   VkViewport viewport = {};
   viewport.x = 0.0F;
   viewport.y = 0.0F;
-  viewport.width = static_cast<float>(init.swapchain->extent().width);
-  viewport.height = static_cast<float>(init.swapchain->extent().height);
+  viewport.width = static_cast<float>(context.swapchain->extent().width);
+  viewport.height = static_cast<float>(context.swapchain->extent().height);
   viewport.minDepth = 0.0F;
   viewport.maxDepth = 1.0F;
 
   VkRect2D scissor = {};
   scissor.offset = { .x = 0, .y = 0 };
-  scissor.extent = init.swapchain->vk_extent();
+  scissor.extent = context.swapchain->vk_extent();
 
   auto const viewport_state =
     initializers::PipelineViewportStateCreateInfo(std::span{ &viewport, 1 }, std::span{ &scissor, 1 });
@@ -131,14 +131,14 @@ auto CreateGraphicsPipeline(Init &init, RenderData &data) -> int
   pipeline_info.subpass = 0;
   pipeline_info.basePipelineHandle = VK_NULL_HANDLE;
 
-  if (init.disp.createGraphicsPipelines(VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &data.graphics_pipeline)
+  if (context.disp.createGraphicsPipelines(VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &data.graphics_pipeline)
       != VK_SUCCESS) {
     std::cout << "failed to create pipline\n";
     return -1;
   }
 
-  init.disp.destroyShaderModule(frag_module, nullptr);
-  init.disp.destroyShaderModule(vert_module, nullptr);
+  context.disp.destroyShaderModule(frag_module, nullptr);
+  context.disp.destroyShaderModule(vert_module, nullptr);
   return 0;
 }
 

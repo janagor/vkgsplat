@@ -26,10 +26,10 @@ public:
   Tensor(Tensor &&) noexcept = default;
   auto operator=(Tensor &&) noexcept -> Tensor & = default;
 
-  [[nodiscard]] static auto create(Init &init, std::vector<T> data) -> std::expected<Tensor, Error>;
-  [[nodiscard]] static auto create(Init &init, size_t count, T fill = {}) -> std::expected<Tensor, Error>;
+  [[nodiscard]] static auto create(vulkan::Context &context, std::vector<T> data) -> std::expected<Tensor, Error>;
+  [[nodiscard]] static auto create(vulkan::Context &context, size_t count, T fill = {}) -> std::expected<Tensor, Error>;
 
-  void destroy(Init &init) noexcept;
+  void destroy(vulkan::Context &context) noexcept;
 
   [[nodiscard]] auto buffer() const noexcept -> vulkan::Buffer const & { return buffer_; }
   [[nodiscard]] auto host_data() const noexcept -> std::vector<T> const & { return host_data_; }
@@ -38,8 +38,8 @@ public:
   [[nodiscard]] auto byte_size() const noexcept -> VkDeviceSize
   { return static_cast<VkDeviceSize>(host_data_.size() * sizeof(T)); }
 
-  [[nodiscard]] auto sync_to_device(Init &init) const noexcept -> bool;
-  [[nodiscard]] auto sync_from_device(Init &init) noexcept -> bool;
+  [[nodiscard]] auto sync_to_device(vulkan::Context &context) const noexcept -> bool;
+  [[nodiscard]] auto sync_from_device(vulkan::Context &context) noexcept -> bool;
 
 private:
   std::vector<T> host_data_;
@@ -47,12 +47,12 @@ private:
 };
 
 template<TriviallyCopyable T>
-[[nodiscard]] auto MakeTensor(Init &init, std::initializer_list<T> values) -> std::expected<Tensor<T>, Error>
-{ return Tensor<T>::create(init, std::vector<T>{ values }); }
+[[nodiscard]] auto MakeTensor(vulkan::Context &context, std::initializer_list<T> values) -> std::expected<Tensor<T>, Error>
+{ return Tensor<T>::create(context, std::vector<T>{ values }); }
 
 template<TriviallyCopyable T>
-[[nodiscard]] auto MakeTensor(Init &init, size_t count, T fill = {}) -> std::expected<Tensor<T>, Error>
-{ return Tensor<T>::create(init, count, fill); }
+[[nodiscard]] auto MakeTensor(vulkan::Context &context, size_t count, T fill = {}) -> std::expected<Tensor<T>, Error>
+{ return Tensor<T>::create(context, count, fill); }
 
 }// namespace vkgsplat::compute
 

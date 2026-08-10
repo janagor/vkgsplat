@@ -14,7 +14,7 @@
 
 namespace vkgsplat {
 
-struct Init;
+namespace vulkan { struct Context; }
 struct RenderData;
 
 namespace compute {
@@ -71,12 +71,12 @@ namespace compute {
     auto emplace(Args &&...args) -> BasicSequence &
     { return record(std::make_unique<OpTp>(std::forward<Args>(args)...)); }
 
-    void eval(Init &init, RenderData const &data, VkCommandBuffer cmd) const
+    void eval(vulkan::Context &context, RenderData const &data, VkCommandBuffer cmd) const
     {
       auto const nodes = as_nodes();
-      std::ranges::for_each(nodes, [&](Node const *node) -> void { node->value->pre_eval(init, data, cmd); });
-      std::ranges::for_each(nodes, [&](Node const *node) -> void { node->value->record(init, data, cmd); });
-      std::ranges::for_each(nodes, [&](Node const *node) -> void { node->value->post_eval(init, data, cmd); });
+      std::ranges::for_each(nodes, [&](Node const *node) -> void { node->value->pre_eval(context, data, cmd); });
+      std::ranges::for_each(nodes, [&](Node const *node) -> void { node->value->record(context, data, cmd); });
+      std::ranges::for_each(nodes, [&](Node const *node) -> void { node->value->post_eval(context, data, cmd); });
     }
 
     void clear() noexcept

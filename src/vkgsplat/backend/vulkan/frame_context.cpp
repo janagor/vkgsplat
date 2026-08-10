@@ -17,7 +17,7 @@ namespace vkgsplat {
 
 namespace {
 
-  [[nodiscard]] auto BuildGsFrameConstants(Init const &init, RenderData const &data,
+  [[nodiscard]] auto BuildGsFrameConstants(vulkan::Context const &context, RenderData const &data,
     CameraSnapshot const &camera) -> GsFrameConstants
   {
     glm::vec3 const camera_pos{ camera.position };
@@ -26,24 +26,24 @@ namespace {
     frame_gs.project = {
       .view = camera.view,
       .projection = camera.projection,
-      .viewport = { static_cast<float>(init.swapchain->extent().width),
-        static_cast<float>(init.swapchain->extent().height) },
+      .viewport = { static_cast<float>(context.swapchain->extent().width),
+        static_cast<float>(context.swapchain->extent().height) },
       .sh_degree = gs::kViewerShDegree,
       .pad0 = 0U,
       .camera_position = glm::vec4{ camera_pos, 0.0F },
     };
 
     frame_gs.bin = {
-      .viewport = { init.swapchain->extent().width, init.swapchain->extent().height },
+      .viewport = { context.swapchain->extent().width, context.swapchain->extent().height },
       .max_instances = data.max_bin_instances,
       .tile_size = gs::kTileSize,
-      .instance_count_address = init.gpu_allocator.get_buffer_device_address(data.instance_count_buffer),
+      .instance_count_address = context.gpu_allocator.get_buffer_device_address(data.instance_count_buffer),
     };
 
     frame_gs.sort = {
-      .instance_count_address = init.gpu_allocator.get_buffer_device_address(data.instance_count_buffer),
-      .radix_dispatch_address = init.gpu_allocator.get_buffer_device_address(data.radix_dispatch_buffer),
-      .draw_indirect_address = init.gpu_allocator.get_buffer_device_address(data.draw_indirect_buffer),
+      .instance_count_address = context.gpu_allocator.get_buffer_device_address(data.instance_count_buffer),
+      .radix_dispatch_address = context.gpu_allocator.get_buffer_device_address(data.radix_dispatch_buffer),
+      .draw_indirect_address = context.gpu_allocator.get_buffer_device_address(data.draw_indirect_buffer),
       .sort_size = data.gaussian_sort_size,
       .tile_count = data.tile_count,
       .blocks_per_workgroup = data.radix_blocks_per_workgroup,
@@ -52,9 +52,9 @@ namespace {
 
     frame_gs.raster = {
       .camera_position = glm::vec4{ camera_pos, 0.0F },
-      .viewport = { init.swapchain->extent().width, init.swapchain->extent().height },
+      .viewport = { context.swapchain->extent().width, context.swapchain->extent().height },
       .tile_size = gs::kTileSize,
-      .tiles_x = (init.swapchain->extent().width + gs::kTileSize - 1U) / gs::kTileSize,
+      .tiles_x = (context.swapchain->extent().width + gs::kTileSize - 1U) / gs::kTileSize,
       .sh_degree = gs::kViewerShDegree,
       .pad0 = 0U,
       .pad1 = 0U,
@@ -90,10 +90,10 @@ void BuildFrameSetupCpu(RenderData &data, size_t frame_slot, PrepareFrameParams 
   data.frames.at(frame_slot).setup = setup;
 }
 
-void BuildFrameSetupGpu(Init const &init, RenderData const &data, FrameSetup &setup, size_t image_index)
+void BuildFrameSetupGpu(vulkan::Context const &context, RenderData const &data, FrameSetup &setup, size_t image_index)
 {
   setup.image_index = image_index;
-  setup.gs = BuildGsFrameConstants(init, data, setup.camera);
+  setup.gs = BuildGsFrameConstants(context, data, setup.camera);
 }
 
 void ApplyFrameSetup(RenderData &data, size_t frame_slot)

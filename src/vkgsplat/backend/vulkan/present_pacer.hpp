@@ -13,13 +13,13 @@
 
 namespace vkgsplat {
 
-struct Init;
+namespace vulkan { struct Context; }
 
 // Schedules vkQueuePresentKHR via VK_EXT_present_timing when available.
 class PresentPacer
 {
 public:
-  [[nodiscard]] static auto TryCreate(Init &init, FrameRateConfig const &config) -> std::unique_ptr<PresentPacer>;
+  [[nodiscard]] static auto TryCreate(vulkan::Context &context, FrameRateConfig const &config) -> std::unique_ptr<PresentPacer>;
 
   PresentPacer(PresentPacer const &) = delete;
   auto operator=(PresentPacer const &) -> PresentPacer & = delete;
@@ -27,28 +27,28 @@ public:
   auto operator=(PresentPacer &&) -> PresentPacer & = delete;
   ~PresentPacer() = default;
 
-  void OnSwapchainRecreated(Init &init);
+  void OnSwapchainRecreated(vulkan::Context &context);
 
   // Chains present-timing (+ present-id2) onto present_info.pNext. Storage is owned by this object
   // until the next PreparePresent / AfterPresent call.
-  void PreparePresent(Init const &init, VkPresentInfoKHR &present_info);
+  void PreparePresent(vulkan::Context const &context, VkPresentInfoKHR &present_info);
 
-  void AfterPresent(Init &init);
+  void AfterPresent(vulkan::Context &context);
 
   [[nodiscard]] auto Active() const noexcept -> bool { return active_; }
   [[nodiscard]] auto TargetPeriodNs() const noexcept -> u64 { return target_period_ns_; }
 
 private:
-  PresentPacer(Init &init, FrameRateConfig config);
+  PresentPacer(vulkan::Context &context, FrameRateConfig config);
 
-  void RefreshTimingProperties(Init &init);
-  void RefreshTimeDomain(Init &init);
-  static void EnsureTimingQueue(Init &init);
+  void RefreshTimingProperties(vulkan::Context &context);
+  void RefreshTimeDomain(vulkan::Context &context);
+  static void EnsureTimingQueue(vulkan::Context &context);
   void UpdateDisplayTargetPeriod();
   void UpdateAdaptiveTargetPeriod();
   void UpdateTargetPeriodFromFeedback();
   [[nodiscard]] auto ComputeTargetTime() const -> u64;
-  void DrainPastTimings(Init &init);
+  void DrainPastTimings(vulkan::Context &context);
 
   FrameRateConfig config_{};
   bool active_ = false;

@@ -20,14 +20,14 @@ namespace vkgsplat::gs {
 
 namespace {
 
-  void DestroyColorTarget(Init const &init, RenderData &data)
+  void DestroyColorTarget(vulkan::Context const &context, RenderData &data)
   {
     if (data.color_image_view != VK_NULL_HANDLE) {
-      init.disp.destroyImageView(data.color_image_view, nullptr);
+      context.disp.destroyImageView(data.color_image_view, nullptr);
       data.color_image_view = VK_NULL_HANDLE;
     }
     if (data.color_image != VK_NULL_HANDLE || data.color_allocation != VK_NULL_HANDLE) {
-      vmaDestroyImage(init.gpu_allocator.vma_allocator(), data.color_image, data.color_allocation);
+      vmaDestroyImage(context.gpu_allocator.vma_allocator(), data.color_image, data.color_allocation);
       data.color_image = VK_NULL_HANDLE;
       data.color_allocation = VK_NULL_HANDLE;
     }
@@ -35,12 +35,12 @@ namespace {
     data.color_height = 0;
   }
 
-  [[nodiscard]] auto CreateColorTarget(Init &init, RenderData &data) -> bool
+  [[nodiscard]] auto CreateColorTarget(vulkan::Context &context, RenderData &data) -> bool
   {
-    DestroyColorTarget(init, data);
+    DestroyColorTarget(context, data);
 
-    data.color_width = init.swapchain->extent().width;
-    data.color_height = init.swapchain->extent().height;
+    data.color_width = context.swapchain->extent().width;
+    data.color_height = context.swapchain->extent().height;
     if (data.color_width == 0 || data.color_height == 0) {
       std::println("Rasterize requires a non-zero swapchain extent!");
       return false;
@@ -60,7 +60,7 @@ namespace {
 
     VmaAllocationCreateInfo alloc_info = {};
     alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-    if (vmaCreateImage(init.gpu_allocator.vma_allocator(),
+    if (vmaCreateImage(context.gpu_allocator.vma_allocator(),
           &image_info,
           &alloc_info,
           &data.color_image,
@@ -68,7 +68,7 @@ namespace {
           nullptr)
         != VK_SUCCESS) {
       std::println("Failed to create raster color target!");
-      DestroyColorTarget(init, data);
+      DestroyColorTarget(context, data);
       return false;
     }
 
@@ -81,16 +81,16 @@ namespace {
     };
     auto const view_info =
       initializers::ImageViewCreateInfo(data.color_image, VK_IMAGE_VIEW_TYPE_2D, data.color_format, subresource_range);
-    if (init.disp.createImageView(&view_info, nullptr, &data.color_image_view) != VK_SUCCESS) {
+    if (context.disp.createImageView(&view_info, nullptr, &data.color_image_view) != VK_SUCCESS) {
       std::println("Failed to create raster color target view!");
-      DestroyColorTarget(init, data);
+      DestroyColorTarget(context, data);
       return false;
     }
 
     return true;
   }
 
-  void PushRasterConstants(Init const &init, RasterPushConstants const &push_constants, VkCommandBuffer command_buffer)
+  void PushRasterConstants(vulkan::Context const &context, RasterPushConstants const &push_constants, VkCommandBuffer command_buffer)
   {
     VkPushDataInfoEXT const push_info = {
       .sType = VK_STRUCTURE_TYPE_PUSH_DATA_INFO_EXT,
@@ -98,22 +98,22 @@ namespace {
       .offset = 0,
       .data = { .address = &push_constants, .size = sizeof(RasterPushConstants) },
     };
-    init.cmd_push_data(command_buffer, &push_info);
+    context.cmd_push_data(command_buffer, &push_info);
   }
 
 }// namespace
 
-auto InitRasterization(Init &init, RenderData &data) -> bool { return CreateColorTarget(init, data); }
+auto InitRasterization(vulkan::Context &context, RenderData &data) -> bool { return CreateColorTarget(context, data); }
 
-auto RecreateRasterizationColorTarget(Init &init, RenderData &data) -> bool { return CreateColorTarget(init, data); }
+auto RecreateRasterizationColorTarget(vulkan::Context &context, RenderData &data) -> bool { return CreateColorTarget(context, data); }
 
-void DispatchRasterization(Init const &init,
+void DispatchRasterization(vulkan::Context const &context,
   RenderData const &data,
   RasterPushConstants const &push_constants,
   VkCommandBuffer command_buffer,
   size_t image_index)
 {
-  Barrier::compute_to_graphics(init.disp, command_buffer);
+  Barrier::compute_to_graphics(context.disp, command_buffer);
 
   VkExtent2D const extent = { .width = data.color_width, .height = data.color_height };
 
@@ -131,12 +131,12 @@ void DispatchRasterization(Init const &init,
 
   auto swap_to_dst = initializers::ImageMemoryBarrier(VK_IMAGE_LAYOUT_UNDEFINED,
     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-    init.swapchain->images().at(image_index),
+    context.swapchain->images().at(image_index),
     color_range);
   swap_to_dst.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 
   std::array<VkImageMemoryBarrier, 2> prep_barriers = { target_to_color, swap_to_dst };
-  init.disp.cmdPipelineBarrier(command_buffer,
+  context.disp.cmdPipelineBarrier(command_buffer,
     VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
     VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
     0,
@@ -178,7 +178,7 @@ void DispatchRasterization(Init const &init,
     .pStencilAttachment = nullptr,
   };
 
-  init.disp.cmdBeginRendering(command_buffer, &rendering_info);
+  context.disp.cmdBeginRendering(command_buffer, &rendering_info);
 
   VkViewport const viewport = {
     .x = 0.0F,
@@ -192,20 +192,20 @@ void DispatchRasterization(Init const &init,
     .offset = { .x = 0, .y = 0 },
     .extent = extent,
   };
-  init.disp.cmdSetViewport(command_buffer, 0, 1, &viewport);
-  init.disp.cmdSetScissor(command_buffer, 0, 1, &scissor);
+  context.disp.cmdSetViewport(command_buffer, 0, 1, &viewport);
+  context.disp.cmdSetScissor(command_buffer, 0, 1, &scissor);
 
-  init.disp.cmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, data.graphics_pipeline);
-  PushRasterConstants(init, push_constants, command_buffer);
-  init.disp.cmdDrawIndirect(command_buffer, data.draw_indirect_buffer.handle, 0, 1, sizeof(VkDrawIndirectCommand));
+  context.disp.cmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, data.graphics_pipeline);
+  PushRasterConstants(context, push_constants, command_buffer);
+  context.disp.cmdDrawIndirect(command_buffer, data.draw_indirect_buffer.handle, 0, 1, sizeof(VkDrawIndirectCommand));
 
-  init.disp.cmdEndRendering(command_buffer);
+  context.disp.cmdEndRendering(command_buffer);
 
   auto target_to_src = initializers::ImageMemoryBarrier(
     VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, data.color_image, color_range);
   target_to_src.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
   target_to_src.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-  init.disp.cmdPipelineBarrier(command_buffer,
+  context.disp.cmdPipelineBarrier(command_buffer,
     VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
     VK_PIPELINE_STAGE_TRANSFER_BIT,
     0,
@@ -239,15 +239,15 @@ void DispatchRasterization(Init const &init,
     .dstOffsets =
       {
         { .x = 0, .y = 0, .z = 0 },
-        { .x = static_cast<int32_t>(init.swapchain->extent().width),
-          .y = static_cast<int32_t>(init.swapchain->extent().height),
+        { .x = static_cast<int32_t>(context.swapchain->extent().width),
+          .y = static_cast<int32_t>(context.swapchain->extent().height),
           .z = 1 },
       },
   };
-  init.disp.cmdBlitImage(command_buffer,
+  context.disp.cmdBlitImage(command_buffer,
     data.color_image,
     VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-    init.swapchain->images().at(image_index),
+    context.swapchain->images().at(image_index),
     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
     1,
     &blit,
@@ -256,10 +256,10 @@ void DispatchRasterization(Init const &init,
   // Leave swapchain in TRANSFER_DST_OPTIMAL for ImGui / present.
 }
 
-void DestroyRasterization(Init &init, RenderData &data)
+void DestroyRasterization(vulkan::Context &context, RenderData &data)
 {
-  data.rasterize_algorithm.destroy(init);
-  DestroyColorTarget(init, data);
+  data.rasterize_algorithm.destroy(context);
+  DestroyColorTarget(context, data);
 }
 
 }// namespace vkgsplat::gs

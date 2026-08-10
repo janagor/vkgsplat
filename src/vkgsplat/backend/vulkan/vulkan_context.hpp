@@ -12,10 +12,10 @@
 #include "presentable_swapchain.hpp"
 #include <vkgsplat/platform.hpp>
 
-namespace vkgsplat {
+namespace vkgsplat::vulkan {
 
 // Hardware context for the Vulkan backend (Filament Driver equivalent state).
-struct Init
+struct Context
 {
   Platform *platform{};
   vkb::Instance instance{};
@@ -23,8 +23,8 @@ struct Init
   VkSurfaceKHR surface{};
   vkb::Device device{};
   vkb::DispatchTable disp;
-  std::unique_ptr<vulkan::PresentableSwapchain> swapchain;
-  vulkan::GPUAllocator gpu_allocator;
+  std::unique_ptr<PresentableSwapchain> swapchain;
+  GPUAllocator gpu_allocator;
   PFN_vkWriteResourceDescriptorsEXT write_resource_descriptors{};
   PFN_vkWriteSamplerDescriptorsEXT write_sampler_descriptors{};
   PFN_vkCmdBindResourceHeapEXT cmd_bind_resource_heap{};
@@ -41,12 +41,6 @@ struct Init
   PFN_vkGetSwapchainTimeDomainPropertiesEXT get_swapchain_time_domain_properties{};
   PFN_vkGetPastPresentationTimingEXT get_past_presentation_timing{};
 };
-
-}// namespace vkgsplat
-
-namespace vkgsplat::vulkan {
-
-using Context = Init;
 
 }// namespace vkgsplat::vulkan
 

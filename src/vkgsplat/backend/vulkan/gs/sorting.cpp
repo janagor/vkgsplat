@@ -33,14 +33,14 @@ namespace {
     return wgs == 0U ? 1U : wgs;
   }
 
-  void DestroySortBuffers(Init &init, RenderData &data)
+  void DestroySortBuffers(vulkan::Context &context, RenderData &data)
   {
-    init.gpu_allocator.destroy_buffer(data.sorted_keys_buffer);
-    init.gpu_allocator.destroy_buffer(data.sorted_values_buffer);
-    init.gpu_allocator.destroy_buffer(data.sort_histogram_buffer);
-    init.gpu_allocator.destroy_buffer(data.radix_dispatch_buffer);
-    init.gpu_allocator.destroy_buffer(data.draw_indirect_buffer);
-    init.gpu_allocator.destroy_buffer(data.tile_ranges_buffer);
+    context.gpu_allocator.destroy_buffer(data.sorted_keys_buffer);
+    context.gpu_allocator.destroy_buffer(data.sorted_values_buffer);
+    context.gpu_allocator.destroy_buffer(data.sort_histogram_buffer);
+    context.gpu_allocator.destroy_buffer(data.radix_dispatch_buffer);
+    context.gpu_allocator.destroy_buffer(data.draw_indirect_buffer);
+    context.gpu_allocator.destroy_buffer(data.tile_ranges_buffer);
     data.sorted_keys_buffer = {};
     data.sorted_values_buffer = {};
     data.sort_histogram_buffer = {};
@@ -52,9 +52,9 @@ namespace {
     data.tile_count = 0;
   }
 
-  [[nodiscard]] auto CreateSortBuffers(Init &init, RenderData &data) -> bool
+  [[nodiscard]] auto CreateSortBuffers(vulkan::Context &context, RenderData &data) -> bool
   {
-    DestroySortBuffers(init, data);
+    DestroySortBuffers(context, data);
 
     if (data.max_bin_instances == 0) {
       std::println("Sort gaussians requires binning buffers first!");
@@ -75,15 +75,15 @@ namespace {
     auto const dispatch_size = static_cast<VkDeviceSize>(sizeof(VkDispatchIndirectCommand));
     auto const draw_indirect_size = static_cast<VkDeviceSize>(sizeof(VkDrawIndirectCommand));
 
-    auto keys = init.gpu_allocator.create_device_storage_buffer(keys_size);
-    auto values = init.gpu_allocator.create_device_storage_buffer(values_size);
-    auto histogram = init.gpu_allocator.create_device_storage_buffer(histogram_size);
-    auto dispatch = init.gpu_allocator.create_device_storage_buffer(dispatch_size);
-    auto draw_indirect = init.gpu_allocator.create_device_storage_buffer(draw_indirect_size);
-    auto ranges = init.gpu_allocator.create_device_storage_buffer(ranges_size);
+    auto keys = context.gpu_allocator.create_device_storage_buffer(keys_size);
+    auto values = context.gpu_allocator.create_device_storage_buffer(values_size);
+    auto histogram = context.gpu_allocator.create_device_storage_buffer(histogram_size);
+    auto dispatch = context.gpu_allocator.create_device_storage_buffer(dispatch_size);
+    auto draw_indirect = context.gpu_allocator.create_device_storage_buffer(draw_indirect_size);
+    auto ranges = context.gpu_allocator.create_device_storage_buffer(ranges_size);
     if (!keys || !values || !histogram || !dispatch || !draw_indirect || !ranges) {
       std::println("Failed to create sort buffers!");
-      DestroySortBuffers(init, data);
+      DestroySortBuffers(context, data);
       return false;
     }
 
@@ -100,31 +100,31 @@ namespace {
 
 }// namespace
 
-auto InitSorting(Init &init, RenderData &data) -> bool
+auto InitSorting(vulkan::Context &context, RenderData &data) -> bool
 {
-  if (!CreateSortBuffers(init, data)) { return false; }
+  if (!CreateSortBuffers(context, data)) { return false; }
 
   std::array<uint32_t, 1> const sort_size_spec{ data.gaussian_sort_size };
   std::string const prepare_path = std::string(kShaderDirectory) + "/prepare_sorting.comp.spv";
   std::string const hist_path = std::string(kShaderDirectory) + "/multi_radixsort_histograms.comp.spv";
   std::string const scatter_path = std::string(kShaderDirectory) + "/multi_radixsort.comp.spv";
 
-  if (!data.prepare_sort_algorithm.init(init, prepare_path, std::span{ sort_size_spec })
-      || !data.radix_histogram_algorithm.init(init, hist_path)
-      || !data.radix_scatter_algorithm.init(init, scatter_path)) {
-    DestroySortBuffers(init, data);
+  if (!data.prepare_sort_algorithm.init(context, prepare_path, std::span{ sort_size_spec })
+      || !data.radix_histogram_algorithm.init(context, hist_path)
+      || !data.radix_scatter_algorithm.init(context, scatter_path)) {
+    DestroySortBuffers(context, data);
     return false;
   }
 
-  return RefreshDescriptorHeap(init, data);
+  return RefreshDescriptorHeap(context, data);
 }
 
-void DestroySorting(Init &init, RenderData &data)
+void DestroySorting(vulkan::Context &context, RenderData &data)
 {
-  data.prepare_sort_algorithm.destroy(init);
-  data.radix_histogram_algorithm.destroy(init);
-  data.radix_scatter_algorithm.destroy(init);
-  DestroySortBuffers(init, data);
+  data.prepare_sort_algorithm.destroy(context);
+  data.radix_histogram_algorithm.destroy(context);
+  data.radix_scatter_algorithm.destroy(context);
+  DestroySortBuffers(context, data);
 }
 
 }// namespace vkgsplat::gs

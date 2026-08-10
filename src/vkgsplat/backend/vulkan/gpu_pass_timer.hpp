@@ -10,7 +10,7 @@
 
 namespace vkgsplat {
 
-struct Init;
+namespace vulkan { struct Context; }
 
 enum class GpuPass : u8 {
   kProjection = 0,
@@ -37,16 +37,16 @@ public:
   GpuPassTimer(GpuPassTimer const &) = delete;
   auto operator=(GpuPassTimer const &) -> GpuPassTimer & = delete;
 
-  [[nodiscard]] auto create(Init &init) -> bool;
-  void destroy(Init &init);
+  [[nodiscard]] auto create(vulkan::Context &context) -> bool;
+  void destroy(vulkan::Context &context);
 
   void set_enabled(bool enabled) noexcept { enabled_ = enabled; }
   [[nodiscard]] auto enabled() const noexcept -> bool { return enabled_ && pool_ != VK_NULL_HANDLE; }
 
-  void begin_frame(Init const &init, size_t slot, VkCommandBuffer command_buffer) const;
-  void write(Init const &init, size_t slot, GpuPass pass, bool is_end, VkCommandBuffer command_buffer) const;
+  void begin_frame(vulkan::Context const &context, size_t slot, VkCommandBuffer command_buffer) const;
+  void write(vulkan::Context const &context, size_t slot, GpuPass pass, bool is_end, VkCommandBuffer command_buffer) const;
   void mark_submitted(size_t slot);
-  void resolve(Init const &init, size_t slot);
+  void resolve(vulkan::Context const &context, size_t slot);
 
   [[nodiscard]] auto last_ms() const noexcept -> std::array<float, kGpuPassCount> const & { return last_ms_; }
   [[nodiscard]] auto total_ms() const noexcept -> float;

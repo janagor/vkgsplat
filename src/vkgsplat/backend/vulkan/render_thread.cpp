@@ -34,22 +34,22 @@ namespace vkgsplat {
 
 namespace {
 
-  void RecordSphereDraw(Init &init, RenderData &data, VkCommandBuffer command_buffer, size_t image_index)
+  void RecordSphereDraw(vulkan::Context &context, RenderData &data, VkCommandBuffer command_buffer, size_t image_index)
   {
-    BindDescriptorHeap(init, data, command_buffer);
-    gs::EvalGsPipeline(init, data, command_buffer);
-    RecordImguiOverlay(init, data, command_buffer, image_index);
+    BindDescriptorHeap(context, data, command_buffer);
+    gs::EvalGsPipeline(context, data, command_buffer);
+    RecordImguiOverlay(context, data, command_buffer, image_index);
   }
 
 }// namespace
 
 RenderThread::~RenderThread() { Stop(); }
 
-void RenderThread::Start(Init *init, RenderData *data)
+void RenderThread::Start(vulkan::Context *context, RenderData *data)
 {
   Stop();
 
-  init_ = init;
+  context_ = context;
   data_ = data;
 
   pending_queue_.Clear();
@@ -70,7 +70,7 @@ void RenderThread::Start(Init *init, RenderData *data)
 void RenderThread::Stop()
 {
   if (!thread_.joinable()) {
-    init_ = nullptr;
+    context_ = nullptr;
     data_ = nullptr;
     thread_running_ = false;
     return;
@@ -87,7 +87,7 @@ void RenderThread::Stop()
   control_cv_.wait(lock, [this]() -> bool { return idle_done_; });
   thread_.join();
 
-  init_ = nullptr;
+  context_ = nullptr;
   data_ = nullptr;
   thread_running_ = false;
 }
@@ -199,7 +199,7 @@ void RenderThread::ThreadMain()
 
       if (command_ == Command::kWaitIdle) {
         lock.unlock();
-        init_->disp.deviceWaitIdle();
+        context_->disp.deviceWaitIdle();
         MarkAllSlotsReady();
         lock.lock();
         idle_done_ = true;
@@ -221,15 +221,15 @@ void RenderThread::ThreadMain()
 
 auto RenderThread::DrawFrameVulkan(size_t frame_slot) -> std::expected<void, Error>
 {
-  Init &init = *init_;
+  vulkan::Context &context = *context_;
   RenderData &data = *data_;
   data.current_frame = frame_slot;
 
   auto *in_flight_fence = data.in_flight_fences.at(frame_slot).handle();
-  init.disp.waitForFences(1, &in_flight_fence, VK_TRUE, UINT64_MAX);
+  context.disp.waitForFences(1, &in_flight_fence, VK_TRUE, UINT64_MAX);
 
   if (data.gpu_pass_timer.enabled()) {
-    data.gpu_pass_timer.resolve(init, frame_slot);
+    data.gpu_pass_timer.resolve(context, frame_slot);
     if (data.imgui != nullptr) {
       UpdateImguiGpuTimings(data);
     } else {
@@ -251,11 +251,11 @@ auto RenderThread::DrawFrameVulkan(size_t frame_slot) -> std::expected<void, Err
 
   uint32_t image_index = 0;
   auto *available_semaphore = data.available_semaphores.at(frame_slot).handle();
-  VkResult result = init.disp.acquireNextImageKHR(
-    init.swapchain->handle(), UINT64_MAX, available_semaphore, VK_NULL_HANDLE, &image_index);
+  VkResult result = context.disp.acquireNextImageKHR(
+    context.swapchain->handle(), UINT64_MAX, available_semaphore, VK_NULL_HANDLE, &image_index);
 
   if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-    if (auto recreated = RecreateSwapchain(init, data); !recreated) { return std::unexpected{ recreated.error() }; }
+    if (auto recreated = RecreateSwapchain(context, data); !recreated) { return std::unexpected{ recreated.error() }; }
     MarkAllSlotsReady();
     return {};
   }
@@ -265,18 +265,18 @@ auto RenderThread::DrawFrameVulkan(size_t frame_slot) -> std::expected<void, Err
   }
 
   if (data.image_in_flight.at(image_index) != VK_NULL_HANDLE) {
-    init.disp.waitForFences(1, &data.image_in_flight.at(image_index), VK_TRUE, UINT64_MAX);
+    context.disp.waitForFences(1, &data.image_in_flight.at(image_index), VK_TRUE, UINT64_MAX);
   }
   data.image_in_flight.at(image_index) = in_flight_fence;
 
   FrameSetup &setup = data.frames.at(frame_slot).setup;
-  BuildFrameSetupGpu(init, data, setup, image_index);
+  BuildFrameSetupGpu(context, data, setup, image_index);
   ApplyFrameSetup(data, frame_slot);
 
-  auto recorded = vulkan::WithCommand(std::ref(init.disp),
+  auto recorded = vulkan::WithCommand(std::ref(context.disp),
     data.command_buffers.at(image_index).handle(),
     [&](vkb::DispatchTable &, VkCommandBuffer cmd) -> void {
-      RecordSphereDraw(init, data, cmd, image_index);
+      RecordSphereDraw(context, data, cmd, image_index);
     });
   if (!recorded) { return std::unexpected{ recorded.error() }; }
 
@@ -289,23 +289,23 @@ auto RenderThread::DrawFrameVulkan(size_t frame_slot) -> std::expected<void, Err
   auto const submit_info =
     initializers::SubmitInfo(wait_semaphores, wait_stages, std::span{ &command_buffer, 1 }, signal_semaphores);
 
-  init.disp.resetFences(1, &in_flight_fence);
+  context.disp.resetFences(1, &in_flight_fence);
 
-  if (init.disp.queueSubmit(data.graphics_queue, 1, &submit_info, in_flight_fence) != VK_SUCCESS) {
+  if (context.disp.queueSubmit(data.graphics_queue, 1, &submit_info, in_flight_fence) != VK_SUCCESS) {
     return std::unexpected{ MakeError(std::errc::io_error, "failed to submit draw command buffer") };
   }
 
-  std::array<VkSwapchainKHR, 1> const swap_chains = { init.swapchain->handle() };
+  std::array<VkSwapchainKHR, 1> const swap_chains = { context.swapchain->handle() };
   auto present_info = initializers::PresentInfoKHR(signal_semaphores, swap_chains, std::span{ &image_index, 1 });
 
-  if (data.present_pacer != nullptr) { data.present_pacer->PreparePresent(init, present_info); }
+  if (data.present_pacer != nullptr) { data.present_pacer->PreparePresent(context, present_info); }
 
-  result = init.disp.queuePresentKHR(data.present_queue, &present_info);
+  result = context.disp.queuePresentKHR(data.present_queue, &present_info);
 
-  if (data.present_pacer != nullptr) { data.present_pacer->AfterPresent(init); }
+  if (data.present_pacer != nullptr) { data.present_pacer->AfterPresent(context); }
 
   if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
-    if (auto recreated = RecreateSwapchain(init, data); !recreated) { return std::unexpected{ recreated.error() }; }
+    if (auto recreated = RecreateSwapchain(context, data); !recreated) { return std::unexpected{ recreated.error() }; }
     MarkAllSlotsReady();
     return {};
   }

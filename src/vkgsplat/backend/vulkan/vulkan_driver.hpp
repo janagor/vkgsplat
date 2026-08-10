@@ -32,16 +32,13 @@ public:
 
   void wait_idle() const noexcept override;
 
-  [[nodiscard]] auto context() noexcept -> Init & { return context_; }
-  [[nodiscard]] auto context() const noexcept -> Init const & { return context_; }
-
-  [[nodiscard]] auto init() noexcept -> Init & { return context_; }
-  [[nodiscard]] auto init() const noexcept -> Init const & { return context_; }
+  [[nodiscard]] auto context() noexcept -> Context & { return context_; }
+  [[nodiscard]] auto context() const noexcept -> Context const & { return context_; }
 
 private:
   explicit VulkanDriver(Platform &platform) noexcept;
 
-  Init context_{};
+  Context context_{};
 };
 
 }// namespace vkgsplat::vulkan

@@ -13,7 +13,7 @@ namespace vkgsplat {
 
 [[nodiscard]] auto ReadFile(const std::string &filename) -> std::vector<char>;
 
-[[nodiscard]] auto CreateShaderModule(Init &init, std::vector<char> const &code) -> VkShaderModule;
+[[nodiscard]] auto CreateShaderModule(vulkan::Context &context, std::vector<char> const &code) -> VkShaderModule;
 
 }// namespace vkgsplat
 

@@ -8,10 +8,10 @@
 
 namespace vkgsplat::compute {
 
-void OpTensorSyncDevice::pre_eval(Init &init, RenderData const &data, VkCommandBuffer cmd)
+void OpTensorSyncDevice::pre_eval(vulkan::Context &context, RenderData const &data, VkCommandBuffer cmd)
 {
   for (auto const &sync : syncs_) {
-    if (!sync(init)) { std::println("OpTensorSyncDevice: failed to sync tensor to device"); }
+    if (!sync(context)) { std::println("OpTensorSyncDevice: failed to sync tensor to device"); }
   }
 
   (void)data;

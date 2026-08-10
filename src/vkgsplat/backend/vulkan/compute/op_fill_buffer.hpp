@@ -22,7 +22,7 @@ class OpFillBuffer : public Operation
 public:
   explicit OpFillBuffer(FillBufferParams params);
 
-  void record(Init const &init, RenderData const &data, VkCommandBuffer command_buffer) override;
+  void record(vulkan::Context const &context, RenderData const &data, VkCommandBuffer command_buffer) override;
 
 private:
   FillBufferParams params_;

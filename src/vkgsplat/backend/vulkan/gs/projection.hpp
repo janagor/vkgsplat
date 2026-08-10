@@ -9,14 +9,14 @@
 
 namespace vkgsplat::gs {
 
-[[nodiscard]] auto InitProjection(Init &init, RenderData &data) -> bool;
+[[nodiscard]] auto InitProjection(vulkan::Context &context, RenderData &data) -> bool;
 
-void DispatchProjection(Init const &init,
+void DispatchProjection(vulkan::Context const &context,
   RenderData const &data,
   ProjectPushConstants const &push_constants,
   VkCommandBuffer command_buffer);
 
-void DestroyProjection(Init &init, RenderData &data);
+void DestroyProjection(vulkan::Context &context, RenderData &data);
 
 }// namespace vkgsplat::gs
 

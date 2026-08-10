@@ -12,15 +12,15 @@
 
 namespace vkgsplat {
 
-auto InitSphereSetup(Init &init, RenderData &data) -> bool
+auto InitSphereSetup(vulkan::Context &context, RenderData &data) -> bool
 {
   if (data.splat_count == 0 || data.sort_size == 0) {
     std::println("Sphere setup requires non-zero splat_count and sort_size!");
     return false;
   }
 
-  auto sort_entries = compute::MakeTensor<compute::SortEntry>(init, data.sort_size);
-  auto sorted_indices = compute::MakeTensor<u32>(init, data.splat_count, 0U);
+  auto sort_entries = compute::MakeTensor<compute::SortEntry>(context, data.sort_size);
+  auto sorted_indices = compute::MakeTensor<u32>(context, data.splat_count, 0U);
 
   if (!sort_entries || !sorted_indices) {
     std::println("Failed to create sphere sort tensors!");
@@ -30,13 +30,13 @@ auto InitSphereSetup(Init &init, RenderData &data) -> bool
   data.sort_entries = std::move(*sort_entries);
   data.sorted_indices = std::move(*sorted_indices);
 
-  return QueryDescriptorHeapLayout(init, data);
+  return QueryDescriptorHeapLayout(context, data);
 }
 
-void DestroySphereSetup(Init &init, RenderData &data)
+void DestroySphereSetup(vulkan::Context &context, RenderData &data)
 {
-  data.sort_entries.destroy(init);
-  data.sorted_indices.destroy(init);
+  data.sort_entries.destroy(context);
+  data.sorted_indices.destroy(context);
 }
 
 }// namespace vkgsplat

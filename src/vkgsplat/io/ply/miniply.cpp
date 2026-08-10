@@ -97,7 +97,7 @@ namespace {
   struct PLYTypeAlias
   {
     std::string_view name;
-    PLYPropertyType type;
+    PLYPropertyType type = PLYPropertyType::kNone;
   };
 
   constexpr std::array<PLYTypeAlias, 17> kTypeAliases = { {

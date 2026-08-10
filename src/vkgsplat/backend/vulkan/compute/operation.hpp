@@ -5,7 +5,7 @@
 
 namespace vkgsplat {
 
-struct Init;
+namespace vulkan { struct Context; }
 struct RenderData;
 
 namespace compute {
@@ -20,14 +20,14 @@ namespace compute {
     auto operator=(Operation &&) -> Operation & = delete;
     virtual ~Operation() = default;
 
-    virtual void pre_eval([[maybe_unused]] Init &init,
+    virtual void pre_eval([[maybe_unused]] vulkan::Context &context,
       [[maybe_unused]] RenderData const &data,
       [[maybe_unused]] VkCommandBuffer cmd)
     {}
-    virtual void record([[maybe_unused]] Init const &init,
+    virtual void record([[maybe_unused]] vulkan::Context const &context,
       [[maybe_unused]] RenderData const &data,
       [[maybe_unused]] VkCommandBuffer cmd) = 0;
-    virtual void post_eval([[maybe_unused]] Init &init,
+    virtual void post_eval([[maybe_unused]] vulkan::Context &context,
       [[maybe_unused]] RenderData const &data,
       [[maybe_unused]] VkCommandBuffer cmd)
     {}

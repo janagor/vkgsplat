@@ -5,9 +5,9 @@
 
 namespace vkgsplat::gs {
 
-[[nodiscard]] auto InitBinning(Init &init, RenderData &data) -> bool;
+[[nodiscard]] auto InitBinning(vulkan::Context &context, RenderData &data) -> bool;
 
-void DestroyBinning(Init &init, RenderData &data);
+void DestroyBinning(vulkan::Context &context, RenderData &data);
 
 }// namespace vkgsplat::gs
 

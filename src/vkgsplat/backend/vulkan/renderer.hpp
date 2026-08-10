@@ -9,15 +9,15 @@
 
 namespace vkgsplat {
 
-[[nodiscard]] auto GetQueues(Init &init, RenderData &data) -> std::expected<void, Error>;
+[[nodiscard]] auto GetQueues(vulkan::Context &context, RenderData &data) -> std::expected<void, Error>;
 
-[[nodiscard]] auto CreateCommandResources(Init &init, RenderData &data) -> std::expected<void, Error>;
+[[nodiscard]] auto CreateCommandResources(vulkan::Context &context, RenderData &data) -> std::expected<void, Error>;
 
-[[nodiscard]] auto CreateSyncObjects(Init &init, RenderData &data) -> std::expected<void, Error>;
+[[nodiscard]] auto CreateSyncObjects(vulkan::Context &context, RenderData &data) -> std::expected<void, Error>;
 
-[[nodiscard]] auto RecreateSwapchain(Init &init, RenderData &data) -> std::expected<void, Error>;
+[[nodiscard]] auto RecreateSwapchain(vulkan::Context &context, RenderData &data) -> std::expected<void, Error>;
 
-void Cleanup(Init &init, RenderData &data);
+void Cleanup(vulkan::Context &context, RenderData &data);
 
 }// namespace vkgsplat
 

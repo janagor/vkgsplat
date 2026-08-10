@@ -9,7 +9,7 @@
 
 namespace vkgsplat {
 
-[[nodiscard]] auto DeviceInitialization(Init &init, DriverConfig const &config) -> std::expected<void, Error>;
+[[nodiscard]] auto DeviceInitialization(vulkan::Context &context, DriverConfig const &config) -> std::expected<void, Error>;
 
 }// namespace vkgsplat
 

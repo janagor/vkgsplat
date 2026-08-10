@@ -49,25 +49,25 @@ namespace {
 
 }// namespace
 
-auto PresentPacer::TryCreate(Init &init, FrameRateConfig const &config) -> std::unique_ptr<PresentPacer>
+auto PresentPacer::TryCreate(vulkan::Context &context, FrameRateConfig const &config) -> std::unique_ptr<PresentPacer>
 {
   if (!config.IsPacingRequested()) { return nullptr; }
 
-  if (!init.present_timing_enabled || init.swapchain == nullptr || !init.swapchain->present_timing_enabled()) {
+  if (!context.present_timing_enabled || context.swapchain == nullptr || !context.swapchain->present_timing_enabled()) {
     std::println(stderr, "[present-timing] pacing requested but not available; running uncapped");
     return nullptr;
   }
 
-  auto pacer = std::unique_ptr<PresentPacer>(new PresentPacer(init, config));
+  auto pacer = std::unique_ptr<PresentPacer>(new PresentPacer(context, config));
   if (!pacer->Active()) { return nullptr; }
   return pacer;
 }
 
-PresentPacer::PresentPacer(Init &init, FrameRateConfig config)
-  : config_(config), use_absolute_time_(init.present_at_absolute_time),
-    use_present_id2_(init.present_id2_enabled), present_stage_queries_(init.present_stage_queries)
+PresentPacer::PresentPacer(vulkan::Context &context, FrameRateConfig config)
+  : config_(config), use_absolute_time_(context.present_at_absolute_time),
+    use_present_id2_(context.present_id2_enabled), present_stage_queries_(context.present_stage_queries)
 {
-  if (!use_absolute_time_ && !init.present_at_relative_time) {
+  if (!use_absolute_time_ && !context.present_at_relative_time) {
     std::println(stderr, "[present-timing] neither absolute nor relative present-at-time supported");
     active_ = false;
     return;
@@ -80,7 +80,7 @@ PresentPacer::PresentPacer(Init &init, FrameRateConfig config)
     past_timings_.at(i).pPresentStages = &stage_times_.at(stage_offset);
   }
 
-  OnSwapchainRecreated(init);
+  OnSwapchainRecreated(context);
 
   if (config_.mode == FrameRateMode::kFixed) {
     target_period_ns_ = PeriodFromFps(config_.fixed_fps);
@@ -108,11 +108,11 @@ PresentPacer::PresentPacer(Init &init, FrameRateConfig config)
   }
 }
 
-void PresentPacer::OnSwapchainRecreated(Init &init)
+void PresentPacer::OnSwapchainRecreated(vulkan::Context &context)
 {
-  EnsureTimingQueue(init);
-  RefreshTimingProperties(init);
-  RefreshTimeDomain(init);
+  EnsureTimingQueue(context);
+  RefreshTimingProperties(context);
+  RefreshTimeDomain(context);
 
   if (config_.mode == FrameRateMode::kFixed) {
     target_period_ns_ = PeriodFromFps(config_.fixed_fps);
@@ -127,17 +127,17 @@ void PresentPacer::OnSwapchainRecreated(Init &init)
   adaptive_frames_until_recompute_ = 0;
 }
 
-void PresentPacer::EnsureTimingQueue(Init &init)
+void PresentPacer::EnsureTimingQueue(vulkan::Context &context)
 {
-  if (init.set_swapchain_present_timing_queue_size == nullptr || init.swapchain == nullptr) { return; }
-  u32 const queue_size = std::max(kMinTimingQueueSize, init.swapchain->image_count() * 2U);
+  if (context.set_swapchain_present_timing_queue_size == nullptr || context.swapchain == nullptr) { return; }
+  u32 const queue_size = std::max(kMinTimingQueueSize, context.swapchain->image_count() * 2U);
   static_cast<void>(
-    init.set_swapchain_present_timing_queue_size(init.device, init.swapchain->handle(), queue_size));
+    context.set_swapchain_present_timing_queue_size(context.device, context.swapchain->handle(), queue_size));
 }
 
-void PresentPacer::RefreshTimingProperties(Init &init)
+void PresentPacer::RefreshTimingProperties(vulkan::Context &context)
 {
-  if (init.get_swapchain_timing_properties == nullptr || init.swapchain == nullptr) { return; }
+  if (context.get_swapchain_timing_properties == nullptr || context.swapchain == nullptr) { return; }
 
   VkSwapchainTimingPropertiesEXT props{
     .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_TIMING_PROPERTIES_EXT,
@@ -146,7 +146,7 @@ void PresentPacer::RefreshTimingProperties(Init &init)
     .refreshInterval = 0,
   };
   u64 counter = 0;
-  if (init.get_swapchain_timing_properties(init.device, init.swapchain->handle(), &props, &counter) != VK_SUCCESS) {
+  if (context.get_swapchain_timing_properties(context.device, context.swapchain->handle(), &props, &counter) != VK_SUCCESS) {
     return;
   }
 
@@ -155,11 +155,11 @@ void PresentPacer::RefreshTimingProperties(Init &init)
   timing_properties_counter_ = counter;
 }
 
-void PresentPacer::RefreshTimeDomain(Init &init)
+void PresentPacer::RefreshTimeDomain(vulkan::Context &context)
 {
   has_time_domain_ = false;
   time_domain_id_ = 0;
-  if (init.get_swapchain_time_domain_properties == nullptr || init.swapchain == nullptr) { return; }
+  if (context.get_swapchain_time_domain_properties == nullptr || context.swapchain == nullptr) { return; }
 
   VkSwapchainTimeDomainPropertiesEXT props{
     .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_TIME_DOMAIN_PROPERTIES_EXT,
@@ -170,7 +170,7 @@ void PresentPacer::RefreshTimeDomain(Init &init)
   };
 
   VkResult count_result =
-    init.get_swapchain_time_domain_properties(init.device, init.swapchain->handle(), &props, nullptr);
+    context.get_swapchain_time_domain_properties(context.device, context.swapchain->handle(), &props, nullptr);
   if (count_result != VK_SUCCESS && count_result != VK_INCOMPLETE) {
     std::println(stderr, "[present-timing] GetSwapchainTimeDomainPropertiesEXT count failed ({})",
       static_cast<int>(count_result));
@@ -188,7 +188,7 @@ void PresentPacer::RefreshTimeDomain(Init &init)
 
   u64 counter = 0;
   VkResult const fill_result =
-    init.get_swapchain_time_domain_properties(init.device, init.swapchain->handle(), &props, &counter);
+    context.get_swapchain_time_domain_properties(context.device, context.swapchain->handle(), &props, &counter);
   if (fill_result != VK_SUCCESS && fill_result != VK_INCOMPLETE) {
     std::println(stderr, "[present-timing] GetSwapchainTimeDomainPropertiesEXT fill failed ({})",
       static_cast<int>(fill_result));
@@ -278,9 +278,9 @@ auto PresentPacer::ComputeTargetTime() const -> u64
   return last_result_present_time_ + (delta_ids * target_period_ns_);
 }
 
-void PresentPacer::PreparePresent(Init const &init, VkPresentInfoKHR &present_info)
+void PresentPacer::PreparePresent(vulkan::Context const &context, VkPresentInfoKHR &present_info)
 {
-  if (!active_ || init.swapchain == nullptr) { return; }
+  if (!active_ || context.swapchain == nullptr) { return; }
 
   void const *chain_tail = nullptr;
   if (use_present_id2_) {
@@ -329,15 +329,15 @@ void PresentPacer::PreparePresent(Init const &init, VkPresentInfoKHR &present_in
   ++next_present_id_;
 }
 
-void PresentPacer::DrainPastTimings(Init &init)
+void PresentPacer::DrainPastTimings(vulkan::Context &context)
 {
-  if (init.get_past_presentation_timing == nullptr || init.swapchain == nullptr) { return; }
+  if (context.get_past_presentation_timing == nullptr || context.swapchain == nullptr) { return; }
 
   VkPastPresentationTimingInfoEXT const past_info{
     .sType = VK_STRUCTURE_TYPE_PAST_PRESENTATION_TIMING_INFO_EXT,
     .pNext = nullptr,
     .flags = VK_PAST_PRESENTATION_TIMING_ALLOW_PARTIAL_RESULTS_BIT_EXT,
-    .swapchain = init.swapchain->handle(),
+    .swapchain = context.swapchain->handle(),
   };
 
   VkPastPresentationTimingPropertiesEXT past_props{
@@ -349,10 +349,10 @@ void PresentPacer::DrainPastTimings(Init &init)
     .pPresentationTimings = past_timings_.data(),
   };
 
-  if (init.get_past_presentation_timing(init.device, &past_info, &past_props) != VK_SUCCESS) { return; }
+  if (context.get_past_presentation_timing(context.device, &past_info, &past_props) != VK_SUCCESS) { return; }
 
-  if (past_props.timingPropertiesCounter != timing_properties_counter_) { RefreshTimingProperties(init); }
-  if (past_props.timeDomainsCounter != time_domains_counter_) { RefreshTimeDomain(init); }
+  if (past_props.timingPropertiesCounter != timing_properties_counter_) { RefreshTimingProperties(context); }
+  if (past_props.timeDomainsCounter != time_domains_counter_) { RefreshTimeDomain(context); }
 
   std::optional<u64> previous_visible{};
   for (u32 i = 0; i < past_props.presentationTimingCount; ++i) {
@@ -378,10 +378,10 @@ void PresentPacer::DrainPastTimings(Init &init)
   UpdateTargetPeriodFromFeedback();
 }
 
-void PresentPacer::AfterPresent(Init &init)
+void PresentPacer::AfterPresent(vulkan::Context &context)
 {
   if (!active_) { return; }
-  DrainPastTimings(init);
+  DrainPastTimings(context);
 }
 
 }// namespace vkgsplat

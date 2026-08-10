@@ -23,11 +23,11 @@ auto Algorithm::operator=(Algorithm &&other) noexcept -> Algorithm &
   return *this;
 }
 
-auto Algorithm::init(Init &init, std::string const &shader_path, std::span<const uint32_t> specialization_constants)
+auto Algorithm::init(vulkan::Context &context, std::string const &shader_path, std::span<const uint32_t> specialization_constants)
   -> bool
 {
   auto const comp_code = ReadFile(shader_path);
-  VkShaderModule comp_module = CreateShaderModule(init, comp_code);
+  VkShaderModule comp_module = CreateShaderModule(context, comp_code);
   if (comp_module == VK_NULL_HANDLE) {
     std::println("Failed to create compute shader module: {}", shader_path);
     return false;
@@ -71,19 +71,19 @@ auto Algorithm::init(Init &init, std::string const &shader_path, std::span<const
     .basePipelineIndex = -1,
   };
 
-  if (init.disp.createComputePipelines(VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &pipeline_) != VK_SUCCESS) {
+  if (context.disp.createComputePipelines(VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &pipeline_) != VK_SUCCESS) {
     std::println("Failed to create algorithm compute pipeline!");
-    init.disp.destroyShaderModule(comp_module, nullptr);
+    context.disp.destroyShaderModule(comp_module, nullptr);
     return false;
   }
 
-  init.disp.destroyShaderModule(comp_module, nullptr);
+  context.disp.destroyShaderModule(comp_module, nullptr);
   return true;
 }
 
-void Algorithm::destroy(Init &init) noexcept
+void Algorithm::destroy(vulkan::Context &context) noexcept
 {
-  if (pipeline_ != VK_NULL_HANDLE) { init.disp.destroyPipeline(std::exchange(pipeline_, VK_NULL_HANDLE), nullptr); }
+  if (pipeline_ != VK_NULL_HANDLE) { context.disp.destroyPipeline(std::exchange(pipeline_, VK_NULL_HANDLE), nullptr); }
 }
 
 }// namespace vkgsplat::compute

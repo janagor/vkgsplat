@@ -20,20 +20,20 @@ namespace vkgsplat::gs {
 
 namespace {
 
-  void DestroyBinBuffers(Init &init, RenderData &data)
+  void DestroyBinBuffers(vulkan::Context &context, RenderData &data)
   {
-    init.gpu_allocator.destroy_buffer(data.unsorted_keys_buffer);
-    init.gpu_allocator.destroy_buffer(data.unsorted_values_buffer);
-    init.gpu_allocator.destroy_buffer(data.instance_count_buffer);
+    context.gpu_allocator.destroy_buffer(data.unsorted_keys_buffer);
+    context.gpu_allocator.destroy_buffer(data.unsorted_values_buffer);
+    context.gpu_allocator.destroy_buffer(data.instance_count_buffer);
     data.unsorted_keys_buffer = {};
     data.unsorted_values_buffer = {};
     data.instance_count_buffer = {};
     data.max_bin_instances = 0;
   }
 
-  [[nodiscard]] auto CreateBinBuffers(Init &init, RenderData &data) -> bool
+  [[nodiscard]] auto CreateBinBuffers(vulkan::Context &context, RenderData &data) -> bool
   {
-    DestroyBinBuffers(init, data);
+    DestroyBinBuffers(context, data);
 
     data.max_bin_instances = data.splat_count;
     if (data.max_bin_instances == 0) {
@@ -45,12 +45,12 @@ namespace {
     auto const values_size = static_cast<VkDeviceSize>(data.max_bin_instances * sizeof(u32));
     auto const count_size = static_cast<VkDeviceSize>(sizeof(u32));
 
-    auto keys = init.gpu_allocator.create_device_storage_buffer(keys_size);
-    auto values = init.gpu_allocator.create_device_storage_buffer(values_size);
-    auto count = init.gpu_allocator.create_device_storage_buffer(count_size);
+    auto keys = context.gpu_allocator.create_device_storage_buffer(keys_size);
+    auto values = context.gpu_allocator.create_device_storage_buffer(values_size);
+    auto count = context.gpu_allocator.create_device_storage_buffer(count_size);
     if (!keys || !values || !count) {
       std::println("Failed to create binning buffers!");
-      DestroyBinBuffers(init, data);
+      DestroyBinBuffers(context, data);
       return false;
     }
 
@@ -64,29 +64,29 @@ namespace {
 
 }// namespace
 
-auto InitBinning(Init &init, RenderData &data) -> bool
+auto InitBinning(vulkan::Context &context, RenderData &data) -> bool
 {
   if (data.splat_count == 0) {
     std::println("Bin gaussians requires non-zero splat_count!");
     return false;
   }
 
-  if (!CreateBinBuffers(init, data)) { return false; }
+  if (!CreateBinBuffers(context, data)) { return false; }
 
   std::array<uint32_t, 1> const specialization_constants{ data.splat_count };
   std::string const shader_path = std::string(kShaderDirectory) + "/binning.comp.spv";
-  if (!data.bin_algorithm.init(init, shader_path, std::span{ specialization_constants })) {
-    DestroyBinBuffers(init, data);
+  if (!data.bin_algorithm.init(context, shader_path, std::span{ specialization_constants })) {
+    DestroyBinBuffers(context, data);
     return false;
   }
 
   return true;
 }
 
-void DestroyBinning(Init &init, RenderData &data)
+void DestroyBinning(vulkan::Context &context, RenderData &data)
 {
-  data.bin_algorithm.destroy(init);
-  DestroyBinBuffers(init, data);
+  data.bin_algorithm.destroy(context);
+  DestroyBinBuffers(context, data);
 }
 
 }// namespace vkgsplat::gs

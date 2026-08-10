@@ -5,9 +5,9 @@
 
 namespace vkgsplat::gs {
 
-[[nodiscard]] auto InitSorting(Init &init, RenderData &data) -> bool;
+[[nodiscard]] auto InitSorting(vulkan::Context &context, RenderData &data) -> bool;
 
-void DestroySorting(Init &init, RenderData &data);
+void DestroySorting(vulkan::Context &context, RenderData &data);
 
 }// namespace vkgsplat::gs
 

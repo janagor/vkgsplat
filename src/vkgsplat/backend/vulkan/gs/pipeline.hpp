@@ -10,7 +10,7 @@ namespace vkgsplat::gs {
 
 void RecordGsPipeline(RenderData &data);
 
-void EvalGsPipeline(Init &init, RenderData &data, VkCommandBuffer command_buffer);
+void EvalGsPipeline(vulkan::Context &context, RenderData &data, VkCommandBuffer command_buffer);
 
 void DestroyGsPipeline(RenderData &data);
 

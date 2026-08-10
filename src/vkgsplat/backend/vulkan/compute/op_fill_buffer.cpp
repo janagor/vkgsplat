@@ -10,10 +10,10 @@ namespace vkgsplat::compute {
 
 OpFillBuffer::OpFillBuffer(FillBufferParams params) : params_(params) {}
 
-void OpFillBuffer::record(Init const &init, [[maybe_unused]] RenderData const &data, VkCommandBuffer command_buffer)
+void OpFillBuffer::record(vulkan::Context const &context, [[maybe_unused]] RenderData const &data, VkCommandBuffer command_buffer)
 {
-  init.disp.cmdFillBuffer(command_buffer, params_.buffer, params_.offset, params_.size, params_.value);
-  Barrier::transfer_to_compute(init.disp, command_buffer);
+  context.disp.cmdFillBuffer(command_buffer, params_.buffer, params_.offset, params_.size, params_.value);
+  Barrier::transfer_to_compute(context.disp, command_buffer);
 }
 
 }// namespace vkgsplat::compute

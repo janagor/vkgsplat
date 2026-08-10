@@ -7,9 +7,9 @@
 
 namespace vkgsplat {
 
-void DestroySphereBuffers(Init &init, RenderData &data);
+void DestroySphereBuffers(vulkan::Context &context, RenderData &data);
 
-[[nodiscard]] auto CreateSphereBuffers(Init &init, RenderData &data, SplatCpuData const &cpu_data) -> bool;
+[[nodiscard]] auto CreateSphereBuffers(vulkan::Context &context, RenderData &data, SplatCpuData const &cpu_data) -> bool;
 
 }// namespace vkgsplat
 

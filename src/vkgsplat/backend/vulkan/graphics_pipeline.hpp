@@ -6,9 +6,9 @@
 
 namespace vkgsplat {
 
-[[nodiscard]] auto CreateGraphicsPipeline(Init &init, RenderData &data) -> int;
+[[nodiscard]] auto CreateGraphicsPipeline(vulkan::Context &context, RenderData &data) -> int;
 
-void DestroyGraphicsPipeline(Init &init, RenderData &data);
+void DestroyGraphicsPipeline(vulkan::Context &context, RenderData &data);
 
 }// namespace vkgsplat
 

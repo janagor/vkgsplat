@@ -37,7 +37,7 @@ namespace vkgsplat {
 
 namespace {
 
-  [[nodiscard]] auto BuildRendererResources(Init &init, RenderData &render_data, RendererConfig const &config)
+  [[nodiscard]] auto BuildRendererResources(vulkan::Context &context, RenderData &render_data, RendererConfig const &config)
     -> std::expected<void, Error>
   {
     auto loaded = LoadSplatsFromPly(config.ply_path, config.splat_count);
@@ -52,52 +52,52 @@ namespace {
         first_appearance.f_dc.at(2));
     }
 
-    if (auto queues = GetQueues(init, render_data); !queues) { return std::unexpected(queues.error()); }
+    if (auto queues = GetQueues(context, render_data); !queues) { return std::unexpected(queues.error()); }
 
-    if (!CreateSphereBuffers(init, render_data, splats)) {
+    if (!CreateSphereBuffers(context, render_data, splats)) {
       return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to create PLY sphere buffers"));
     }
 
     render_data.sort_size = NextPowerOf2(render_data.splat_count);
-    if (!InitSphereSetup(init, render_data)) {
+    if (!InitSphereSetup(context, render_data)) {
       return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to initialize sphere setup"));
     }
-    if (!gs::InitBinning(init, render_data)) {
+    if (!gs::InitBinning(context, render_data)) {
       return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to initialize gaussian binning"));
     }
-    if (!gs::InitProjection(init, render_data)) {
+    if (!gs::InitProjection(context, render_data)) {
       return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to initialize gaussian projection"));
     }
-    if (!gs::InitSorting(init, render_data)) {
+    if (!gs::InitSorting(context, render_data)) {
       return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to initialize gaussian sorting"));
     }
-    if (!gs::InitRasterization(init, render_data)) {
+    if (!gs::InitRasterization(context, render_data)) {
       return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to initialize gaussian rasterization"));
     }
     gs::RecordGsPipeline(render_data);
-    if (0 != CreateGraphicsPipeline(init, render_data)) {
+    if (0 != CreateGraphicsPipeline(context, render_data)) {
       return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to create graphics pipeline"));
     }
-    if (auto command_resources = CreateCommandResources(init, render_data); !command_resources) {
+    if (auto command_resources = CreateCommandResources(context, render_data); !command_resources) {
       return std::unexpected(command_resources.error());
     }
-    if (auto sync_objects = CreateSyncObjects(init, render_data); !sync_objects) {
+    if (auto sync_objects = CreateSyncObjects(context, render_data); !sync_objects) {
       return std::unexpected(sync_objects.error());
     }
     if (config.enable_gpu_timers) {
-      if (!render_data.gpu_pass_timer.create(init)) {
+      if (!render_data.gpu_pass_timer.create(context)) {
         return std::unexpected(
           MakeError(std::errc::invalid_argument, "Failed to create GPU pass timestamp query pool"));
       }
     }
     if (config.enable_imgui) {
-      if (auto imgui = InitImguiOverlay(init, render_data); !imgui) { return std::unexpected(imgui.error()); }
+      if (auto imgui = InitImguiOverlay(context, render_data); !imgui) { return std::unexpected(imgui.error()); }
     }
 
-    render_data.present_pacer = PresentPacer::TryCreate(init, config.frame_rate);
+    render_data.present_pacer = PresentPacer::TryCreate(context, config.frame_rate);
     if (config.frame_rate.IsPacingRequested() && render_data.present_pacer == nullptr
-        && !init.present_timing_enabled) {
-      // Warning already printed by TryCreate / device init.
+        && !context.present_timing_enabled) {
+      // Warning already printed by TryCreate / device context.
     }
 
     return {};
@@ -129,7 +129,7 @@ Renderer::~Renderer() noexcept
 {
   if (impl_.valueless_after_move() || impl_->engine == nullptr) { return; }
   impl_->render_thread->Stop();
-  Cleanup(AsVulkanDriver(impl_->engine->driver()).init(), impl_->render_data);
+  Cleanup(AsVulkanDriver(impl_->engine->driver()).context(), impl_->render_data);
 }
 
 auto Renderer::create(RendererConfig const &config, Platform &platform) -> std::expected<Renderer, Error>
@@ -144,13 +144,13 @@ auto Renderer::create(RendererConfig const &config, Platform &platform) -> std::
   impl->owned_engine = std::make_unique<Engine>(std::move(*engine));
   impl->engine = impl->owned_engine.get();
 
-  if (auto built = BuildRendererResources(AsVulkanDriver(impl->engine->driver()).init(), impl->render_data, config);
+  if (auto built = BuildRendererResources(AsVulkanDriver(impl->engine->driver()).context(), impl->render_data, config);
     !built) {
     return std::unexpected(built.error());
   }
 
   impl->render_thread = std::make_unique<RenderThread>();
-  impl->render_thread->Start(&AsVulkanDriver(impl->engine->driver()).init(), &impl->render_data);
+  impl->render_thread->Start(&AsVulkanDriver(impl->engine->driver()).context(), &impl->render_data);
 
   return Renderer{ std::move(impl) };
 }
@@ -160,21 +160,21 @@ auto Renderer::create(RendererConfig const &config, Engine &engine) -> std::expe
   beman::indirect::indirect<Impl> impl;
   impl->engine = &engine;
 
-  if (auto built = BuildRendererResources(AsVulkanDriver(engine.driver()).init(), impl->render_data, config); !built) {
+  if (auto built = BuildRendererResources(AsVulkanDriver(engine.driver()).context(), impl->render_data, config); !built) {
     return std::unexpected(built.error());
   }
 
   impl->render_thread = std::make_unique<RenderThread>();
-  impl->render_thread->Start(&AsVulkanDriver(engine.driver()).init(), &impl->render_data);
+  impl->render_thread->Start(&AsVulkanDriver(engine.driver()).context(), &impl->render_data);
 
   return Renderer{ std::move(impl) };
 }
 
 auto Renderer::draw(Camera const &camera) -> std::expected<void, Error>
 {
-  auto &init = AsVulkanDriver(impl_->engine->driver()).init();
+  auto const &context = AsVulkanDriver(impl_->engine->driver()).context();
   auto const aspect_ratio =
-    static_cast<f64>(init.swapchain->extent().width) / static_cast<f64>(init.swapchain->extent().height);
+    static_cast<f64>(context.swapchain->extent().width) / static_cast<f64>(context.swapchain->extent().height);
   return impl_->render_thread->SubmitFrame(camera, aspect_ratio);
 }
 

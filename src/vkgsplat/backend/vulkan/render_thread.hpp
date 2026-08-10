@@ -18,7 +18,7 @@
 
 namespace vkgsplat {
 
-struct Init;
+namespace vulkan { struct Context; }
 struct RenderData;
 
 // Dedicated thread for all Vulkan queue / swapchain / command-buffer recording work.
@@ -35,7 +35,7 @@ public:
   RenderThread(RenderThread &&) = delete;
   auto operator=(RenderThread &&) -> RenderThread & = delete;
 
-  void Start(Init *init, RenderData *data);
+  void Start(vulkan::Context *context, RenderData *data);
   void Stop();
 
   [[nodiscard]] auto SubmitFrame(Camera const &camera, f64 aspect_ratio) -> std::expected<void, Error>;
@@ -66,7 +66,7 @@ private:
   void MarkAllSlotsReady();
   void EnqueueCompletion(FrameCompletion const &completion);
 
-  Init *init_{ nullptr };
+  vulkan::Context *context_{ nullptr };
   RenderData *data_{ nullptr };
   std::jthread thread_;
 

@@ -32,23 +32,23 @@ inline constexpr size_t kHeapDescriptorCount = 12;
 [[nodiscard]] constexpr auto AlignUp(VkDeviceSize value, VkDeviceSize alignment) noexcept -> VkDeviceSize
 { return (value + alignment - 1) / alignment * alignment; }
 
-[[nodiscard]] auto WriteStorageBufferDescriptor(Init &init,
+[[nodiscard]] auto WriteStorageBufferDescriptor(vulkan::Context &context,
   VkDeviceAddress buffer_address,
   VkDeviceSize buffer_size,
   std::span<std::byte> destination) -> bool;
 
-[[nodiscard]] auto WriteStorageImageDescriptor(Init &init,
+[[nodiscard]] auto WriteStorageImageDescriptor(vulkan::Context &context,
   VkImageViewCreateInfo const &view_info,
   VkImageLayout layout,
   std::span<std::byte> destination) -> bool;
 
-[[nodiscard]] auto QueryDescriptorHeapLayout(Init const &init, RenderData &data) -> bool;
+[[nodiscard]] auto QueryDescriptorHeapLayout(vulkan::Context const &context, RenderData &data) -> bool;
 
-void DestroyDescriptorHeap(Init &init, RenderData &data);
+void DestroyDescriptorHeap(vulkan::Context &context, RenderData &data);
 
-[[nodiscard]] auto RefreshDescriptorHeap(Init &init, RenderData &data) -> bool;
+[[nodiscard]] auto RefreshDescriptorHeap(vulkan::Context &context, RenderData &data) -> bool;
 
-void BindDescriptorHeap(Init const &init, RenderData const &data, VkCommandBuffer command_buffer);
+void BindDescriptorHeap(vulkan::Context const &context, RenderData const &data, VkCommandBuffer command_buffer);
 
 [[nodiscard]] auto HeapSlotByteOffset(RenderData const &data, HeapSlot slot) -> uint32_t;
 

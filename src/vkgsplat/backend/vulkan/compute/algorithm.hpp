@@ -8,7 +8,7 @@
 
 namespace vkgsplat {
 
-struct Init;
+namespace vulkan { struct Context; }
 struct RenderData;
 
 namespace compute {
@@ -25,9 +25,9 @@ namespace compute {
     auto operator=(Algorithm &&other) noexcept -> Algorithm &;
 
     [[nodiscard]] auto
-      init(Init &init, std::string const &shader_path, std::span<const uint32_t> specialization_constants = {}) -> bool;
+      init(vulkan::Context &context, std::string const &shader_path, std::span<const uint32_t> specialization_constants = {}) -> bool;
 
-    void destroy(Init &init) noexcept;
+    void destroy(vulkan::Context &context) noexcept;
 
     [[nodiscard]] auto pipeline() const noexcept -> VkPipeline { return pipeline_; }
 

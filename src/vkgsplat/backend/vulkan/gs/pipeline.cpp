@@ -28,11 +28,11 @@ void RecordGsPipeline(RenderData &data)
     .emplace<OpRasterization>();
 }
 
-void EvalGsPipeline(Init &init, RenderData &data, VkCommandBuffer command_buffer)
+void EvalGsPipeline(vulkan::Context &context, RenderData &data, VkCommandBuffer command_buffer)
 {
   size_t const slot = data.current_frame;
-  if (data.gpu_pass_timer.enabled()) { data.gpu_pass_timer.begin_frame(init, slot, command_buffer); }
-  data.gs_sequence.eval(init, data, command_buffer);
+  if (data.gpu_pass_timer.enabled()) { data.gpu_pass_timer.begin_frame(context, slot, command_buffer); }
+  data.gs_sequence.eval(context, data, command_buffer);
   if (data.gpu_pass_timer.enabled()) { data.gpu_pass_timer.mark_submitted(slot); }
 }
 

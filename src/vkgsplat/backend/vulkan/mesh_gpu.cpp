@@ -13,19 +13,19 @@
 
 namespace vkgsplat {
 
-void DestroySphereBuffers(Init &init, RenderData &data)
+void DestroySphereBuffers(vulkan::Context &context, RenderData &data)
 {
-  init.gpu_allocator.destroy_buffer(data.geometry_buffer);
-  init.gpu_allocator.destroy_buffer(data.appearance_buffer);
-  init.gpu_allocator.destroy_buffer(data.projected_buffer);
+  context.gpu_allocator.destroy_buffer(data.geometry_buffer);
+  context.gpu_allocator.destroy_buffer(data.appearance_buffer);
+  context.gpu_allocator.destroy_buffer(data.projected_buffer);
   data.geometry_buffer = {};
   data.appearance_buffer = {};
   data.projected_buffer = {};
 }
 
-auto CreateSphereBuffers(Init &init, RenderData &data, SplatCpuData const &cpu_data) -> bool
+auto CreateSphereBuffers(vulkan::Context &context, RenderData &data, SplatCpuData const &cpu_data) -> bool
 {
-  DestroySphereBuffers(init, data);
+  DestroySphereBuffers(context, data);
 
   if (cpu_data.geometries.size() != cpu_data.appearances.size() || cpu_data.geometries.empty()) {
     std::println("Invalid splat CPU data!");
@@ -37,9 +37,9 @@ auto CreateSphereBuffers(Init &init, RenderData &data, SplatCpuData const &cpu_d
   auto const appearance_buffer_size = static_cast<VkDeviceSize>(data.splat_count * sizeof(gs::GaussianAppearance));
   auto const projected_buffer_size = static_cast<VkDeviceSize>(data.splat_count * sizeof(gs::GaussianProjected));
 
-  auto geometry_buffer = init.gpu_allocator.create_storage_buffer(geometry_buffer_size);
-  auto appearance_buffer = init.gpu_allocator.create_storage_buffer(appearance_buffer_size);
-  auto projected_buffer = init.gpu_allocator.create_device_storage_buffer(projected_buffer_size);
+  auto geometry_buffer = context.gpu_allocator.create_storage_buffer(geometry_buffer_size);
+  auto appearance_buffer = context.gpu_allocator.create_storage_buffer(appearance_buffer_size);
+  auto projected_buffer = context.gpu_allocator.create_device_storage_buffer(projected_buffer_size);
   if (!geometry_buffer || !appearance_buffer || !projected_buffer) {
     std::println("Failed to create gaussian buffers!");
     return false;
@@ -49,12 +49,12 @@ auto CreateSphereBuffers(Init &init, RenderData &data, SplatCpuData const &cpu_d
   data.appearance_buffer = *appearance_buffer;
   data.projected_buffer = *projected_buffer;
 
-  if (!init.gpu_allocator.write_buffer(*geometry_buffer, std::span{ cpu_data.geometries })) {
+  if (!context.gpu_allocator.write_buffer(*geometry_buffer, std::span{ cpu_data.geometries })) {
     std::println("Failed to upload splat geometry!");
     return false;
   }
 
-  if (!init.gpu_allocator.write_buffer(*appearance_buffer, std::span{ cpu_data.appearances })) {
+  if (!context.gpu_allocator.write_buffer(*appearance_buffer, std::span{ cpu_data.appearances })) {
     std::println("Failed to upload splat appearance!");
     return false;
   }

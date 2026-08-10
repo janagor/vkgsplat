@@ -35,14 +35,14 @@ auto ReadFile(const std::string &filename) -> std::vector<char>
   return buffer;
 }
 
-auto CreateShaderModule(Init &init, std::vector<char> const &code) -> VkShaderModule
+auto CreateShaderModule(vulkan::Context &context, std::vector<char> const &code) -> VkShaderModule
 {
   // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
   auto const code_span = std::span{ reinterpret_cast<u32 const *>(code.data()), code.size() / sizeof(u32) };
   auto const create_info = initializers::ShaderModuleCreateInfo(code_span);
 
   VkShaderModule shader_module = nullptr;
-  if (init.disp.createShaderModule(&create_info, nullptr, &shader_module) != VK_SUCCESS) { return VK_NULL_HANDLE; }
+  if (context.disp.createShaderModule(&create_info, nullptr, &shader_module) != VK_SUCCESS) { return VK_NULL_HANDLE; }
 
   return shader_module;
 }

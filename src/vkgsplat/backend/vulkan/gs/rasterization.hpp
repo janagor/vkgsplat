@@ -9,17 +9,17 @@
 
 namespace vkgsplat::gs {
 
-[[nodiscard]] auto InitRasterization(Init &init, RenderData &data) -> bool;
+[[nodiscard]] auto InitRasterization(vulkan::Context &context, RenderData &data) -> bool;
 
-[[nodiscard]] auto RecreateRasterizationColorTarget(Init &init, RenderData &data) -> bool;
+[[nodiscard]] auto RecreateRasterizationColorTarget(vulkan::Context &context, RenderData &data) -> bool;
 
-void DispatchRasterization(Init const &init,
+void DispatchRasterization(vulkan::Context const &context,
   RenderData const &data,
   RasterPushConstants const &push_constants,
   VkCommandBuffer command_buffer,
   size_t image_index);
 
-void DestroyRasterization(Init &init, RenderData &data);
+void DestroyRasterization(vulkan::Context &context, RenderData &data);
 
 }// namespace vkgsplat::gs
 

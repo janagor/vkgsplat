@@ -32,12 +32,12 @@
 
 namespace vkgsplat {
 
-auto GetQueues(Init &init, RenderData &data) -> std::expected<void, Error>
+auto GetQueues(vulkan::Context &context, RenderData &data) -> std::expected<void, Error>
 {
-  return VKBResultToExpected(init.device.get_queue(vkb::QueueType::graphics))
+  return VKBResultToExpected(context.device.get_queue(vkb::QueueType::graphics))
     .and_then([&](VkQueue const &graphics_queue) -> std::expected<VkQueue, Error> {
       data.graphics_queue = graphics_queue;
-      return VKBResultToExpected(init.device.get_queue(vkb::QueueType::present));
+      return VKBResultToExpected(context.device.get_queue(vkb::QueueType::present));
     })
     .and_then([&](VkQueue const &present_queue) -> std::expected<void, Error> {
       data.present_queue = present_queue;
@@ -45,84 +45,84 @@ auto GetQueues(Init &init, RenderData &data) -> std::expected<void, Error>
     });
 }
 
-auto CreateCommandResources(Init &init, RenderData &data) -> std::expected<void, Error>
+auto CreateCommandResources(vulkan::Context &context, RenderData &data) -> std::expected<void, Error>
 {
   data.command_buffers.clear();
   data.command_pool.reset();
 
-  auto pool = vulkan::CommandPool::create(std::ref(init.disp),
-    static_cast<u32>(init.device.get_queue_index(vkb::QueueType::graphics).value()),
+  auto pool = vulkan::CommandPool::create(std::ref(context.disp),
+    static_cast<u32>(context.device.get_queue_index(vkb::QueueType::graphics).value()),
     VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
   if (!pool) { return std::unexpected{ pool.error() }; }
   data.command_pool = std::move(*pool);
 
-  auto buffers = data.command_pool->allocate_buffers(static_cast<u32>(init.swapchain->image_views().size()));
+  auto buffers = data.command_pool->allocate_buffers(static_cast<u32>(context.swapchain->image_views().size()));
   if (!buffers) { return std::unexpected{ buffers.error() }; }
   data.command_buffers = std::move(*buffers);
   return {};
 }
 
-auto CreateSyncObjects(Init &init, RenderData &data) -> std::expected<void, Error>
+auto CreateSyncObjects(vulkan::Context &context, RenderData &data) -> std::expected<void, Error>
 {
   data.available_semaphores.clear();
   data.finished_semaphore.clear();
   data.in_flight_fences.clear();
-  data.image_in_flight.assign(init.swapchain->image_count(), VK_NULL_HANDLE);
+  data.image_in_flight.assign(context.swapchain->image_count(), VK_NULL_HANDLE);
 
   data.available_semaphores.reserve(kMaxFramesInFlight);
-  data.finished_semaphore.reserve(init.swapchain->image_count());
+  data.finished_semaphore.reserve(context.swapchain->image_count());
   data.in_flight_fences.reserve(kMaxFramesInFlight);
 
-  for (size_t i = 0; i < init.swapchain->image_count(); i++) {
-    auto semaphore = Semaphore::create(std::ref(init.disp));
+  for (size_t i = 0; i < context.swapchain->image_count(); i++) {
+    auto semaphore = Semaphore::create(std::ref(context.disp));
     if (!semaphore) { return std::unexpected{ semaphore.error() }; }
     data.finished_semaphore.push_back(std::move(*semaphore));
   }
 
   for (size_t i = 0; i < kMaxFramesInFlight; i++) {
-    auto available = Semaphore::create(std::ref(init.disp));
+    auto available = Semaphore::create(std::ref(context.disp));
     if (!available) { return std::unexpected{ available.error() }; }
     data.available_semaphores.push_back(std::move(*available));
 
-    auto fence = Fence::create(std::ref(init.disp), VK_FENCE_CREATE_SIGNALED_BIT);
+    auto fence = Fence::create(std::ref(context.disp), VK_FENCE_CREATE_SIGNALED_BIT);
     if (!fence) { return std::unexpected{ fence.error() }; }
     data.in_flight_fences.push_back(std::move(*fence));
   }
   return {};
 }
 
-auto RecreateSwapchain(Init &init, RenderData &data) -> std::expected<void, Error>
+auto RecreateSwapchain(vulkan::Context &context, RenderData &data) -> std::expected<void, Error>
 {
-  init.disp.deviceWaitIdle();
+  context.disp.deviceWaitIdle();
 
   data.command_buffers.clear();
   data.command_pool.reset();
 
-  DestroyGraphicsPipeline(init, data);
+  DestroyGraphicsPipeline(context, data);
 
-  if (init.swapchain == nullptr) {
+  if (context.swapchain == nullptr) {
     return std::unexpected{ MakeError(std::errc::state_not_recoverable, "swapchain is not initialized") };
   }
-  if (auto recreated = init.swapchain->recreate(init.device, init.platform->framebuffer_extent()); !recreated) {
+  if (auto recreated = context.swapchain->recreate(context.device, context.platform->framebuffer_extent()); !recreated) {
     return std::unexpected{ recreated.error() };
   }
-  if (0 != CreateGraphicsPipeline(init, data)) {
+  if (0 != CreateGraphicsPipeline(context, data)) {
     return std::unexpected{ MakeError(std::errc::io_error, "failed to recreate graphics pipeline") };
   }
-  if (!gs::RecreateRasterizationColorTarget(init, data)) {
+  if (!gs::RecreateRasterizationColorTarget(context, data)) {
     return std::unexpected{ MakeError(std::errc::io_error, "failed to recreate rasterize color target") };
   }
-  if (auto command_resources = CreateCommandResources(init, data); !command_resources) {
+  if (auto command_resources = CreateCommandResources(context, data); !command_resources) {
     return std::unexpected{ command_resources.error() };
   }
-  RecreateImguiOverlayPipeline(init, data);
-  if (data.present_pacer != nullptr) { data.present_pacer->OnSwapchainRecreated(init); }
+  RecreateImguiOverlayPipeline(context, data);
+  if (data.present_pacer != nullptr) { data.present_pacer->OnSwapchainRecreated(context); }
   return {};
 }
 
-void Cleanup(Init &init, RenderData &data)
+void Cleanup(vulkan::Context &context, RenderData &data)
 {
-  init.disp.deviceWaitIdle();
+  context.disp.deviceWaitIdle();
 
   data.available_semaphores.clear();
   data.finished_semaphore.clear();
@@ -131,20 +131,20 @@ void Cleanup(Init &init, RenderData &data)
   data.command_buffers.clear();
   data.command_pool.reset();
 
-  ShutdownImguiOverlay(init, data);
+  ShutdownImguiOverlay(context, data);
 
   gs::DestroyGsPipeline(data);
-  DestroySphereBuffers(init, data);
-  gs::DestroyRasterization(init, data);
-  gs::DestroySorting(init, data);
-  gs::DestroyBinning(init, data);
-  gs::DestroyProjection(init, data);
-  DestroySphereSetup(init, data);
-  DestroyDescriptorHeap(init, data);
+  DestroySphereBuffers(context, data);
+  gs::DestroyRasterization(context, data);
+  gs::DestroySorting(context, data);
+  gs::DestroyBinning(context, data);
+  gs::DestroyProjection(context, data);
+  DestroySphereSetup(context, data);
+  DestroyDescriptorHeap(context, data);
 
-  data.gpu_pass_timer.destroy(init);
+  data.gpu_pass_timer.destroy(context);
 
-  DestroyGraphicsPipeline(init, data);
+  DestroyGraphicsPipeline(context, data);
 
   // Swapchain, allocator, and device are owned by VulkanDriver / Engine.
 }

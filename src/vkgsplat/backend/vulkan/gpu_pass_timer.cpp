@@ -62,11 +62,11 @@ auto GpuPassTimer::operator=(GpuPassTimer &&other) noexcept -> GpuPassTimer &
 auto GpuPassTimer::query_index(size_t slot, GpuPass pass, bool is_end) noexcept -> u32
 { return (static_cast<u32>(slot) * kQueriesPerSlot) + (static_cast<u32>(pass) * 2U) + (is_end ? 1U : 0U); }
 
-auto GpuPassTimer::create(Init &init) -> bool
+auto GpuPassTimer::create(vulkan::Context &context) -> bool
 {
-  destroy(init);
+  destroy(context);
 
-  timestamp_period_ns_ = init.device.physical_device.properties.limits.timestampPeriod;
+  timestamp_period_ns_ = context.device.physical_device.properties.limits.timestampPeriod;
   if (timestamp_period_ns_ <= 0.0F) { return false; }
 
   VkQueryPoolCreateInfo const create_info{
@@ -78,7 +78,7 @@ auto GpuPassTimer::create(Init &init) -> bool
     .pipelineStatistics = 0,
   };
 
-  if (init.disp.createQueryPool(&create_info, nullptr, &pool_) != VK_SUCCESS) {
+  if (context.disp.createQueryPool(&create_info, nullptr, &pool_) != VK_SUCCESS) {
     pool_ = VK_NULL_HANDLE;
     return false;
   }
@@ -89,10 +89,10 @@ auto GpuPassTimer::create(Init &init) -> bool
   return true;
 }
 
-void GpuPassTimer::destroy(Init &init)
+void GpuPassTimer::destroy(vulkan::Context &context)
 {
   if (pool_ != VK_NULL_HANDLE) {
-    init.disp.destroyQueryPool(pool_, nullptr);
+    context.disp.destroyQueryPool(pool_, nullptr);
     pool_ = VK_NULL_HANDLE;
   }
   enabled_ = false;
@@ -100,17 +100,17 @@ void GpuPassTimer::destroy(Init &init)
   last_ms_.fill(0.0F);
 }
 
-void GpuPassTimer::begin_frame(Init const &init, size_t slot, VkCommandBuffer command_buffer) const
+void GpuPassTimer::begin_frame(vulkan::Context const &context, size_t slot, VkCommandBuffer command_buffer) const
 {
   if (!enabled()) { return; }
   u32 const first = static_cast<u32>(slot) * kQueriesPerSlot;
-  init.disp.cmdResetQueryPool(command_buffer, pool_, first, kQueriesPerSlot);
+  context.disp.cmdResetQueryPool(command_buffer, pool_, first, kQueriesPerSlot);
 }
 
-void GpuPassTimer::write(Init const &init, size_t slot, GpuPass pass, bool is_end, VkCommandBuffer command_buffer) const
+void GpuPassTimer::write(vulkan::Context const &context, size_t slot, GpuPass pass, bool is_end, VkCommandBuffer command_buffer) const
 {
   if (!enabled()) { return; }
-  init.disp.cmdWriteTimestamp(
+  context.disp.cmdWriteTimestamp(
     command_buffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, pool_, query_index(slot, pass, is_end));
 }
 
@@ -120,13 +120,13 @@ void GpuPassTimer::mark_submitted(size_t slot)
   if (slot < pending_.size()) { pending_.at(slot) = true; }
 }
 
-void GpuPassTimer::resolve(Init const &init, size_t slot)
+void GpuPassTimer::resolve(vulkan::Context const &context, size_t slot)
 {
   if (!enabled() || slot >= pending_.size() || !pending_.at(slot)) { return; }
 
   std::array<u64, kQueriesPerSlot> timestamps{};
   u32 const first = static_cast<u32>(slot) * kQueriesPerSlot;
-  VkResult const result = init.disp.getQueryPoolResults(pool_,
+  VkResult const result = context.disp.getQueryPoolResults(pool_,
     first,
     kQueriesPerSlot,
     timestamps.size() * sizeof(u64),
