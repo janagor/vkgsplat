@@ -91,9 +91,12 @@ void main()
 	float lambda1 = mid + radius_eig;
 	float lambda2 = max(mid - radius_eig, 0.1);
 
-	// PlayCanvas gsplatCorner: extent = 2 * sqrt(λ) on each eigenaxis.
-	float l1 = 2.0 * sqrt(lambda1);
-	float l2 = 2.0 * sqrt(lambda2);
+	float width = max(float(push.viewport.x), 1.0);
+	float height = max(float(push.viewport.y), 1.0);
+	// PlayCanvas gsplatCorner: extent = 2 * sqrt(2λ), capped vs viewport.
+	float vmin = min(1024.0, min(width, height));
+	float l1 = 2.0 * min(sqrt(2.0 * lambda1), vmin);
+	float l2 = 2.0 * min(sqrt(2.0 * lambda2), vmin);
 
 	vec2 diagonal_vector = vec2(cov_xy, lambda1 - cov_xx);
 	float diag_len2 = dot(diagonal_vector, diagonal_vector);
@@ -105,9 +108,6 @@ void main()
 	vec2 local = QUAD_VERTS[gl_VertexIndex];
 	vec2 offset = local.x * v1 + local.y * v2;
 	vec2 pixel = mean + offset;
-
-	float width = max(float(push.viewport.x), 1.0);
-	float height = max(float(push.viewport.y), 1.0);
 	vec2 ndc = vec2(pixel.x / width, pixel.y / height) * 2.0 - 1.0;
 	gl_Position = vec4(ndc, 0.0, 1.0);
 

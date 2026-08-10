@@ -12,8 +12,8 @@ const float ALPHA_MIN = 1.0 / 255.0;
 
 void main()
 {
-	vec2 pix = gl_FragCoord.xy + vec2(0.5);
-	vec2 delta = fragMean - pix;
+	// gl_FragCoord is already the pixel center in Vulkan.
+	vec2 delta = fragMean - gl_FragCoord.xy;
 
 	// conic = inverse Σ₂D (xx, xy, yy)
 	float power = -0.5 * (fragConic.x * delta.x * delta.x + fragConic.z * delta.y * delta.y)

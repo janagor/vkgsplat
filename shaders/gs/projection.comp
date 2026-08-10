@@ -53,7 +53,6 @@ layout(constant_id = 0) const uint SPLAT_COUNT = 1u;
 
 const float NEAR_PLANE = 0.2;
 const float COV_FILTER = 0.3;
-const float RADIUS_SCALE = 3.0;
 
 const float SH_C0 = 0.28209479177387814;
 const float SH_C1 = 0.4886025119029199;
@@ -249,12 +248,13 @@ void main()
 		return;
 	}
 
-	// Eigenvalues of Σ₂D (PlayCanvas gsplatCorner).
+	// Eigenvalues of Σ₂D (PlayCanvas gsplatCorner: extent = 2 * sqrt(2λ)).
 	float mid = 0.5 * (cov_xx + cov_yy);
 	float radius_eig = length(vec2((cov_xx - cov_yy) * 0.5, cov_xy));
 	float lambda1 = mid + radius_eig;
 	float lambda2 = max(mid - radius_eig, 0.1);
-	float extent = 2.0 * sqrt(max(lambda1, lambda2));
+	float vmin = min(1024.0, min(width, height));
+	float extent = 2.0 * min(sqrt(2.0 * max(lambda1, lambda2)), vmin);
 	float radius = ceil(extent);
 	if (radius < 1.0) {
 		write_culled(proj_base);
