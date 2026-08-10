@@ -50,8 +50,7 @@ layout(push_constant) uniform RasterPush {
 	vec4 background;
 	uint sh_degree;
 	uint pad0_;
-	uint pad1_;
-	uint pad2_;
+	uvec2 tile_offset;
 } push;
 
 // Collaborative tile cache: one slot per workgroup thread.

@@ -9,10 +9,13 @@
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat/engine.hpp>
 #include <vkgsplat/frame_rate.hpp>
+#include <vkgsplat/lfd_config.hpp>
 #include <vkgsplat/platform.hpp>
 #include <vkgsplat/vkgsplat_export.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
+
+#include <array>
 
 namespace vkgsplat {
 
@@ -23,6 +26,9 @@ struct RendererConfig
   bool enable_imgui = true;
   bool enable_gpu_timers = false;
   FrameRateConfig frame_rate{};
+  // LFD quilt; {1,1} keeps the mono path. [columns, rows]
+  std::array<u32, 2> lfd_grid{ 1U, 1U };
+  f64 view_cone_deg{ kDefaultViewConeDegrees };
 };
 
 // Per-window rendering context: frame latency, command submission, and presentation.

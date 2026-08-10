@@ -1,38 +1,147 @@
 #include "gs/pipeline.hpp"
 
 #include "app_state.hpp"
+#include "backend/vulkan/frame_context.hpp"
+#include "backend/vulkan/sync_objects/barrier.hpp"
 #include "compute/op_fill_buffer.hpp"
+#include "gs/gaussian_splat.hpp"
 #include "gs/operations.hpp"
+#include "gs/rasterization.hpp"
 #include "vulkan_context.hpp"
 
 #include <vkgsplat_utility/types.hpp>
 
+#include <algorithm>
+#include <cmath>
 #include <cstddef>
+#include <cstdint>
+
+#include <glm/ext/vector_float4.hpp>
+#include <glm/trigonometric.hpp>
 
 #include <vulkan/vulkan_core.h>
 
 namespace vkgsplat::gs {
 
+namespace {
+
+  [[nodiscard]] auto IsMonoQuilt(RenderData const &data) -> bool
+  { return data.lfd_grid.at(0) <= 1U && data.lfd_grid.at(1) <= 1U; }
+
+  [[nodiscard]] auto PhaseACullMargin(RenderData const &data) -> f32
+  {
+    if (IsMonoQuilt(data)) { return kDefaultProjectionCullMargin; }
+    // Keep fringe Gaussians visible to extreme off-axis tiles when sorting once.
+    constexpr f32 kCullMarginSlope = 1.5F;
+    constexpr f32 kHalfConeFactor = 0.5F;
+    f32 const half_cone = static_cast<f32>(glm::radians(data.view_cone_deg * static_cast<f64>(kHalfConeFactor)));
+    return std::max(kDefaultProjectionCullMargin, 1.0F + (kCullMarginSlope * std::tan(half_cone)));
+  }
+
+  void RecordPhaseA(RenderData &data)
+  {
+    data.gs_sequence.emplace<OpProjection>()
+      .emplace<compute::OpFillBuffer>(compute::FillBufferParams{
+        .buffer = data.instance_count_buffer.handle,
+        .offset = 0,
+        .size = sizeof(u32),
+        .value = 0U,
+      })
+      .emplace<OpBinning>()
+      .emplace<OpPrepareSort>()
+      .emplace<OpRadixSort>();
+  }
+
+  struct QuiltTileRect
+  {
+    u32 origin_x{};
+    u32 origin_y{};
+    u32 width{};
+    u32 height{};
+  };
+
+  void ApplyQuiltTilePush(RenderData &data, QuiltView const &view, QuiltTileRect const &tile)
+  {
+    data.project_push.view = view.view;
+    data.project_push.projection = view.projection;
+    data.project_push.viewport = { static_cast<f32>(tile.width), static_cast<f32>(tile.height) };
+    data.project_push.cull_margin = kDefaultProjectionCullMargin;
+    data.project_push.camera_position = glm::vec4{ view.position, 0.0F };
+
+    data.raster_push.camera_position = glm::vec4{ view.position, 0.0F };
+    data.raster_push.viewport = { tile.width, tile.height };
+    data.raster_push.tiles_x = (tile.width + kTileSize - 1U) / kTileSize;
+    data.raster_push.tile_offset = { tile.origin_x, tile.origin_y };
+  }
+
+}// namespace
+
 void RecordGsPipeline(RenderData &data)
 {
-  data.gs_sequence.emplace<OpProjection>()
-    .emplace<compute::OpFillBuffer>(compute::FillBufferParams{
-      .buffer = data.instance_count_buffer.handle,
-      .offset = 0,
-      .size = sizeof(u32),
-      .value = 0U,
-    })
-    .emplace<OpBinning>()
-    .emplace<OpPrepareSort>()
-    .emplace<OpRadixSort>()
-    .emplace<OpRasterization>();
+  // Phase A only. Rasterization is recorded in EvalGsPipeline (mono or quilt Phase B).
+  RecordPhaseA(data);
 }
 
 void EvalGsPipeline(vulkan::Context &context, RenderData &data, VkCommandBuffer command_buffer)
 {
   size_t const slot = data.current_frame;
   if (data.gpu_pass_timer.enabled()) { data.gpu_pass_timer.begin_frame(context, slot, command_buffer); }
+
+  data.project_push.cull_margin = PhaseACullMargin(data);
   data.gs_sequence.eval(context, data, command_buffer);
+
+  if (IsMonoQuilt(data)) {
+    OpRasterization{}.record(context, data, command_buffer);
+  } else {
+    FrameSetup const &setup = FrameSetupFor(data, slot);
+    u32 const cols = std::max(1U, data.lfd_grid.at(0));
+    u32 const rows = std::max(1U, data.lfd_grid.at(1));
+    u32 const tile_w =
+      data.quilt_tile_extent.width != 0U ? data.quilt_tile_extent.width : context.swapchain->vk_extent().width;
+    u32 const tile_h =
+      data.quilt_tile_extent.height != 0U ? data.quilt_tile_extent.height : context.swapchain->vk_extent().height;
+    f64 const tile_aspect = static_cast<f64>(tile_w) / static_cast<f64>(std::max(1U, tile_h));
+
+    PrepareQuiltPresent(context, data, command_buffer, data.present_image_index);
+
+    OpProjection project_op{};
+    bool first_tile = true;
+    for (u32 row = 0U; row < rows; ++row) {
+      for (u32 col = 0U; col < cols; ++col) {
+        if (!first_tile) { Barrier::graphics_to_compute(context.disp, command_buffer); }
+
+        QuiltView const view = MakeQuiltView(QuiltViewRequest{
+          .center = &setup.camera,
+          .grid = data.lfd_grid,
+          .col = col,
+          .row = row,
+          .view_cone_deg = data.view_cone_deg,
+          .focal_distance = data.lfd_focal_distance,
+          .tile_aspect = tile_aspect,
+        });
+        u32 const origin_x = col * tile_w;
+        u32 const origin_y = row * tile_h;
+        QuiltTileRect const tile_rect{
+          .origin_x = origin_x,
+          .origin_y = origin_y,
+          .width = tile_w,
+          .height = tile_h,
+        };
+        ApplyQuiltTilePush(data, view, tile_rect);
+
+        project_op.record(context, data, command_buffer);
+        VkRect2D const draw_tile = {
+          .offset = { .x = static_cast<int32_t>(origin_x), .y = static_cast<int32_t>(origin_y) },
+          .extent = { .width = tile_w, .height = tile_h },
+        };
+        DrawQuiltTile(context, data, data.raster_push, command_buffer, draw_tile, first_tile);
+        first_tile = false;
+      }
+    }
+
+    BlitQuiltToSwapchain(context, data, command_buffer, data.present_image_index);
+  }
+
   if (data.gpu_pass_timer.enabled()) { data.gpu_pass_timer.mark_submitted(slot); }
 }
 

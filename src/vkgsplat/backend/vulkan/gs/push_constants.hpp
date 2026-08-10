@@ -18,7 +18,8 @@ struct ProjectPushConstants
   glm::mat4 projection{};
   glm::vec2 viewport{};// width, height
   u32 sh_degree{ 3 };// 0 = SH0 only (fast viewer); 3 = full view-dependent SH
-  u32 pad0{};
+  // NDC xy cull half-extent (1.0 = frustum; >1 keeps fringe for LFD sort-once).
+  f32 cull_margin{ kDefaultProjectionCullMargin };
   glm::vec4 camera_position{};// xyz used for SH view direction
 };
 
@@ -78,8 +79,8 @@ struct RasterPushConstants
   glm::vec4 background{ 0.0F, 0.0F, 0.0F, 0.0F };// rgb used
   u32 sh_degree{ 3 };// 0 = SH0 only; 3 = full degree-3
   u32 pad0{};
-  u32 pad1{};
-  u32 pad2{};
+  // Quilt tile origin in the atlas (framebuffer pixels); mono uses (0,0).
+  glm::uvec2 tile_offset{};
 };
 
 constexpr size_t kRasterPushConstantsSize = 64;

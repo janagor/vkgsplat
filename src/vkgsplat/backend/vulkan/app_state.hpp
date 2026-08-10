@@ -29,6 +29,8 @@
 #include <VkBootstrap.h>
 #include <VkBootstrapDispatch.h>
 
+#include <vkgsplat/lfd_config.hpp>
+
 
 namespace vkgsplat {
 
@@ -73,6 +75,12 @@ struct RenderData
   u32 tile_count = 0;
   u32 color_width = 0;
   u32 color_height = 0;
+  // LFD quilt: mono is {1,1}. Color RT is an atlas of quilt_tile_extent cells.
+  std::array<u32, 2> lfd_grid{ 1U, 1U };
+  f64 view_cone_deg{ kDefaultViewConeDegrees };
+  // Focal-plane distance (world units) for parallel-array view offsets.
+  f64 lfd_focal_distance{ kDefaultLfdFocalDistance };
+  VkExtent2D quilt_tile_extent{};
   compute::Tensor<u32> sorted_indices;
   compute::Tensor<compute::SortEntry> sort_entries;
   vulkan::Buffer descriptor_heap_buffer{};

@@ -68,6 +68,7 @@ auto ParseAppConfig(std::span<char *const> args) -> std::expected<AppConfig, vkg
   auto position = ToArray(config.camera.position);
   auto target = ToArray(config.camera.target);
   auto world_up = ToArray(config.camera.up);
+  std::array<u32, 2> lfd_grid{ config.lfd_grid };
 
   CLI::App app{ "vkgsplat" };
 
@@ -97,6 +98,12 @@ auto ParseAppConfig(std::span<char *const> args) -> std::expected<AppConfig, vkg
   app.add_option("--camera-speed", config.camera.movement_speed, "Camera movement speed")->capture_default_str();
   app.add_option("--camera-sensitivity", config.camera.mouse_sensitivity, "Mouse look sensitivity")
     ->capture_default_str();
+  app.add_option("--lfd-grid", lfd_grid, "LFD quilt columns and rows (default 1 1 = mono)")
+    ->capture_default_str();
+  app.add_option("--view-cone",
+    config.view_cone_deg,
+    "Horizontal LFD view cone in degrees across quilt columns")
+    ->capture_default_str();
   // Positional, --ply-path, or config key `ply_path` / `ply-path`.
   app.add_option("ply_path,-p,--ply-path", config.ply_path, "Path to PLY file")->check(CLI::ExistingFile);
 
@@ -113,6 +120,7 @@ auto ParseAppConfig(std::span<char *const> args) -> std::expected<AppConfig, vkg
   config.camera.position = FromArray(position);
   config.camera.target = FromArray(target);
   config.camera.up = FromArray(world_up);
+  config.lfd_grid = lfd_grid;
 
   if (config.ply_path.empty()) {
     return std::unexpected{ MakeError(std::errc::invalid_argument,
@@ -133,6 +141,12 @@ auto ParseAppConfig(std::span<char *const> args) -> std::expected<AppConfig, vkg
   }
   if (!(config.camera.aspect_ratio > 0.0) || !std::isfinite(config.camera.aspect_ratio)) {
     return std::unexpected{ MakeError(std::errc::invalid_argument, "camera-aspect must be a positive finite value") };
+  }
+  if (config.lfd_grid.at(0) == 0U || config.lfd_grid.at(1) == 0U) {
+    return std::unexpected{ MakeError(std::errc::invalid_argument, "lfd-grid columns and rows must be >= 1") };
+  }
+  if (!(config.view_cone_deg > 0.0) || !(config.view_cone_deg < kMaxFovDegreesExclusive) || !std::isfinite(config.view_cone_deg)) {
+    return std::unexpected{ MakeError(std::errc::invalid_argument, "view-cone must be in (0, 180) degrees") };
   }
 
   if (!frame_rate_text.empty()) {

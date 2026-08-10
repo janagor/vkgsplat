@@ -11,6 +11,7 @@
 
 #include <glm/ext/matrix_float4x4.hpp>
 #include <glm/ext/vector_double3.hpp>
+#include <glm/ext/vector_float3.hpp>
 
 namespace vkgsplat {
 
@@ -23,11 +24,38 @@ constexpr size_t kImGuiGpuLabelCapacity = 256;
 struct CameraSnapshot
 {
   glm::dvec3 position{};
+  glm::dvec3 front{};
+  glm::dvec3 right{};
+  glm::dvec3 up{};
+  f64 fov_degrees{ kCameraDefaultFovDegrees };
+  f64 near_plane{ kCameraDefaultNearPlane };
+  f64 far_plane{ kCameraDefaultFarPlane };
   glm::mat4 view{};
   glm::mat4 projection{};
 };
 
 [[nodiscard]] auto SnapshotCamera(Camera const &camera, f64 aspect_ratio) -> CameraSnapshot;
+
+// Parallel-array off-axis view for one LFD quilt cell (same orientation as center).
+struct QuiltView
+{
+  glm::mat4 view{};
+  glm::mat4 projection{};
+  glm::vec3 position{};
+};
+
+struct QuiltViewRequest
+{
+  CameraSnapshot const *center{};
+  std::array<u32, 2> grid{ 1U, 1U };
+  u32 col{};
+  u32 row{};
+  f64 view_cone_deg{};
+  f64 focal_distance{};
+  f64 tile_aspect{};
+};
+
+[[nodiscard]] auto MakeQuiltView(QuiltViewRequest const &request) -> QuiltView;
 
 // GS push constants for one frame slot.
 struct GsFrameConstants

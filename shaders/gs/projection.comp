@@ -45,7 +45,7 @@ layout(push_constant) uniform ProjectCamera {
 	mat4 proj;
 	vec2 viewport;
 	uint sh_degree;
-	uint pad0_;
+	float cull_margin;
 	vec4 camera_position;
 } camera;
 
@@ -199,7 +199,7 @@ void main()
 	vec3 mean_ndc = mean_clip.xyz * inv_w;
 
 	// Projection flips Y for Vulkan; NDC z stays OpenGL [-1, 1].
-	if (mean_ndc.z < -1.0 || mean_ndc.z > 1.0 || abs(mean_ndc.x) > 1.3 || abs(mean_ndc.y) > 1.3) {
+	if (mean_ndc.z < -1.0 || mean_ndc.z > 1.0 || abs(mean_ndc.x) > camera.cull_margin || abs(mean_ndc.y) > camera.cull_margin) {
 		write_culled(proj_base);
 		return;
 	}

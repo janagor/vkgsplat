@@ -28,6 +28,9 @@ public:
   // After compute writes buffers consumed by DrawIndirect + vertex/fragment shaders.
   static void compute_to_graphics(vkb::DispatchTable const &disp, VkCommandBuffer command_buffer);
 
+  // After graphics reads projected attrs before the next compute projection rewrite.
+  static void graphics_to_compute(vkb::DispatchTable const &disp, VkCommandBuffer command_buffer);
+
   static void compute_read(vkb::DispatchTable const &disp, VkCommandBuffer command_buffer);
 };
 

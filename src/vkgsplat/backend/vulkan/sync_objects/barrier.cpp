@@ -58,6 +58,20 @@ void Barrier::compute_to_graphics(vkb::DispatchTable const &disp, VkCommandBuffe
   // NOLINTEND(hicpp-signed-bitwise)
 }
 
+void Barrier::graphics_to_compute(vkb::DispatchTable const &disp, VkCommandBuffer command_buffer)
+{
+  // NOLINTBEGIN(hicpp-signed-bitwise)
+  memory(disp,
+    command_buffer,
+    {
+      .src_stage = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+      .dst_stage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+      .src_access = VK_ACCESS_SHADER_READ_BIT,
+      .dst_access = VK_ACCESS_SHADER_WRITE_BIT,
+    });
+  // NOLINTEND(hicpp-signed-bitwise)
+}
+
 void Barrier::compute_read(vkb::DispatchTable const &disp, VkCommandBuffer command_buffer)
 {
   memory(disp,

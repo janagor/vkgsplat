@@ -5,8 +5,8 @@
 ply_path = "resources/scene.ply"
 validation = true
 imgui = true
-gpu-timers = false
-frame-rate = "display"   # or "adaptive", or a positive integer like 60
+gpu-timers = true
+# frame-rate = "display"   # or "adaptive", or a positive integer like 60
 
 # Camera extrinsics: orientation from look-at (position → target) with world-up.
 camera-position = [0.0, 1.5, 10.0]
@@ -21,3 +21,8 @@ camera-far = 100.0
 camera-aspect = 1.0
 camera-speed = 12.5
 camera-sensitivity = 0.1
+
+# LFD quilt: columns rows. {1,1} is standard mono rendering.
+lfd-grid = [2, 2]
+# Horizontal view cone (degrees) across quilt columns when grid > 1x1.
+view-cone = 40.0

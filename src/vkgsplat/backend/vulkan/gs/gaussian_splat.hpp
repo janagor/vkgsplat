@@ -87,6 +87,8 @@ static_assert(std::is_standard_layout_v<GaussianProjected>);
 
 // Stage 2 tile binning.
 inline constexpr u32 kTileSize = 16;
+// Default NDC xy cull half-extent for projection (matches classic 3DGS fringe).
+inline constexpr f32 kDefaultProjectionCullMargin = 1.3F;
 // Conservative upper bound on tiles touched per splat (16x16 tile grid).
 inline constexpr u32 kMaxTilesPerSplat = 64;
 // Radix sort: elements processed per workgroup invocation.

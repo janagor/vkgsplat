@@ -16,8 +16,7 @@ layout(push_constant) uniform RasterPush {
 	vec4 background;
 	uint sh_degree;
 	uint pad0_;
-	uint pad1_;
-	uint pad2_;
+	uvec2 tile_offset;
 } push;
 
 const uint HEAP_PROJECTED = 4u;
@@ -112,7 +111,7 @@ void main()
 	gl_Position = vec4(ndc, 0.0, 1.0);
 
 	fragColor = color;
-	fragMean = mean;
+	fragMean = mean + vec2(push.tile_offset);
 	fragConic = conic;
 	fragOpacity = opacity;
 }

@@ -8,33 +8,54 @@
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat_utility/types.hpp>
 
+#include <algorithm>
+#include <cmath>
 #include <cstddef>
 
+#include <glm/ext/matrix_clip_space.hpp>
+#include <glm/ext/matrix_float4x4.hpp>
+#include <glm/ext/matrix_transform.hpp>
+#include <glm/ext/vector_double3.hpp>
 #include <glm/ext/vector_float3.hpp>
 #include <glm/ext/vector_float4.hpp>
+#include <glm/trigonometric.hpp>
+
+#include <vulkan/vulkan_core.h>
 
 namespace vkgsplat {
 
 namespace {
 
+  constexpr f64 kQuiltNormalizedCenter = 0.5;
+
+  [[nodiscard]] auto TileExtent(vulkan::Context const &context, RenderData const &data) -> VkExtent2D
+  {
+    if (data.quilt_tile_extent.width != 0U && data.quilt_tile_extent.height != 0U) {
+      return data.quilt_tile_extent;
+    }
+    return context.swapchain->vk_extent();
+  }
+
   [[nodiscard]] auto BuildGsFrameConstants(vulkan::Context const &context, RenderData const &data,
     CameraSnapshot const &camera) -> GsFrameConstants
   {
     glm::vec3 const camera_pos{ camera.position };
+    VkExtent2D const tile = TileExtent(context, data);
+    f32 const tile_w = static_cast<f32>(tile.width);
+    f32 const tile_h = static_cast<f32>(tile.height);
 
     GsFrameConstants frame_gs{};
     frame_gs.project = {
       .view = camera.view,
       .projection = camera.projection,
-      .viewport = { static_cast<float>(context.swapchain->extent().width),
-        static_cast<float>(context.swapchain->extent().height) },
+      .viewport = { tile_w, tile_h },
       .sh_degree = gs::kViewerShDegree,
-      .pad0 = 0U,
+      .cull_margin = gs::kDefaultProjectionCullMargin,
       .camera_position = glm::vec4{ camera_pos, 0.0F },
     };
 
     frame_gs.bin = {
-      .viewport = { context.swapchain->extent().width, context.swapchain->extent().height },
+      .viewport = { tile.width, tile.height },
       .max_instances = data.max_bin_instances,
       .tile_size = gs::kTileSize,
       .instance_count_address = context.gpu_allocator.get_buffer_device_address(data.instance_count_buffer),
@@ -52,13 +73,12 @@ namespace {
 
     frame_gs.raster = {
       .camera_position = glm::vec4{ camera_pos, 0.0F },
-      .viewport = { context.swapchain->extent().width, context.swapchain->extent().height },
+      .viewport = { tile.width, tile.height },
       .tile_size = gs::kTileSize,
-      .tiles_x = (context.swapchain->extent().width + gs::kTileSize - 1U) / gs::kTileSize,
+      .tiles_x = (tile.width + gs::kTileSize - 1U) / gs::kTileSize,
       .sh_degree = gs::kViewerShDegree,
       .pad0 = 0U,
-      .pad1 = 0U,
-      .pad2 = 0U,
+      .tile_offset = { 0U, 0U },
     };
 
     return frame_gs;
@@ -70,8 +90,53 @@ auto SnapshotCamera(Camera const &camera, f64 aspect_ratio) -> CameraSnapshot
 {
   return {
     .position = camera.position(),
+    .front = camera.front(),
+    .right = camera.right(),
+    .up = camera.up(),
+    .fov_degrees = camera.fov_degrees(),
+    .near_plane = camera.near_plane(),
+    .far_plane = camera.far_plane(),
     .view = camera.view_matrix(),
     .projection = camera.projection_matrix(aspect_ratio),
+  };
+}
+
+auto MakeQuiltView(QuiltViewRequest const &request) -> QuiltView
+{
+  CameraSnapshot const &center = *request.center;
+
+  f64 normalized_col = 0.0;
+  f64 normalized_row = 0.0;
+  if (request.grid.at(0) > 1U) {
+    normalized_col =
+      (static_cast<f64>(request.col) / static_cast<f64>(request.grid.at(0) - 1U)) - kQuiltNormalizedCenter;
+  }
+  if (request.grid.at(1) > 1U) {
+    normalized_row =
+      (static_cast<f64>(request.row) / static_cast<f64>(request.grid.at(1) - 1U)) - kQuiltNormalizedCenter;
+  }
+
+  f64 const cone_h = request.view_cone_deg;
+  f64 const cone_v = request.view_cone_deg / std::max(request.tile_aspect, 1e-6);
+  f64 const focal = std::max(request.focal_distance, 1e-3);
+
+  glm::dvec3 const offset = center.right * (std::tan(glm::radians(normalized_col * cone_h)) * focal)
+                            + center.up * (std::tan(glm::radians(normalized_row * cone_v)) * focal);
+  glm::dvec3 const eye = center.position + offset;
+  glm::dvec3 const target = eye + center.front;
+
+  glm::mat4 const view = glm::lookAt(glm::vec3{ eye }, glm::vec3{ target }, glm::vec3{ center.up });
+
+  auto proj = glm::perspective(glm::radians(static_cast<float>(center.fov_degrees)),
+    static_cast<float>(request.tile_aspect),
+    static_cast<float>(center.near_plane),
+    static_cast<float>(center.far_plane));
+  proj[1][1] *= -1.0F;// NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+
+  return {
+    .view = view,
+    .projection = proj,
+    .position = glm::vec3{ eye },
   };
 }
 

@@ -60,6 +60,12 @@ namespace {
       return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to create PLY sphere buffers"));
     }
 
+    render_data.lfd_grid = config.lfd_grid;
+    render_data.view_cone_deg = config.view_cone_deg;
+    if (render_data.lfd_grid.at(0) == 0U || render_data.lfd_grid.at(1) == 0U) {
+      return std::unexpected(MakeError(std::errc::invalid_argument, "lfd_grid columns and rows must be >= 1"));
+    }
+
     render_data.sort_size = NextPowerOf2(render_data.splat_count);
     if (!InitSphereSetup(context, render_data)) {
       return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to initialize sphere setup"));
