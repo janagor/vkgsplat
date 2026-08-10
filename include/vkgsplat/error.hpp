@@ -7,7 +7,6 @@
 namespace vkgsplat {
 
 enum class ErrorIO: u8 {
-  kInvalidSplatCount,
   kFailedOpen,
   kMissingVertexElement,
   kEmptyVertexElement,

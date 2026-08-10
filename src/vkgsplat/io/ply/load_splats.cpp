@@ -107,14 +107,12 @@ namespace {
     // NOLINTEND(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   }
 
-  [[nodiscard]] auto LoadVertexSplats(miniply::PLYReader &reader, u32 count) -> std::expected<SplatCpuData, Error>
+  [[nodiscard]] auto LoadVertexSplats(miniply::PLYReader &reader) -> std::expected<SplatCpuData, Error>
   {
-    u32 const available = reader.num_rows();
-    if (available == 0) {
+    u32 const splat_count = reader.num_rows();
+    if (splat_count == 0) {
       return std::unexpected{ MakeError(ErrorIO::kEmptyVertexElement, "PLY vertex element is empty") };
     }
-
-    u32 const splat_count = std::min(count, available);
 
     std::array<uint32_t, 3> position_idx{};
     std::array<uint32_t, 3> scale_idx{};
@@ -151,12 +149,12 @@ namespace {
     }
 
     ExtractedSplatAttributes attrs{
-      .positions = std::vector<f32>(static_cast<size_t>(available) * 3U),
-      .scales = std::vector<f32>(static_cast<size_t>(available) * 3U),
-      .rotations = std::vector<f32>(static_cast<size_t>(available) * 4U),
-      .opacities = std::vector<f32>(static_cast<size_t>(available)),
-      .f_dc = std::vector<f32>(static_cast<size_t>(available) * kShDcCoeffs),
-      .f_rest = std::vector<f32>(static_cast<size_t>(available) * kShRestCoeffs),
+      .positions = std::vector<f32>(static_cast<size_t>(splat_count) * 3U),
+      .scales = std::vector<f32>(static_cast<size_t>(splat_count) * 3U),
+      .rotations = std::vector<f32>(static_cast<size_t>(splat_count) * 4U),
+      .opacities = std::vector<f32>(static_cast<size_t>(splat_count)),
+      .f_dc = std::vector<f32>(static_cast<size_t>(splat_count) * kShDcCoeffs),
+      .f_rest = std::vector<f32>(static_cast<size_t>(splat_count) * kShRestCoeffs),
     };
 
     if (auto result = ExtractFloats(reader, position_idx, attrs.positions, "failed to extract positions"); !result) {
@@ -193,12 +191,8 @@ namespace {
 
 }// namespace
 
-auto LoadSplatsFromPly(std::string_view ply_path, u32 count) -> std::expected<SplatCpuData, Error>
+auto LoadSplatsFromPly(std::string_view ply_path) -> std::expected<SplatCpuData, Error>
 {
-  if (count == 0) {
-    return std::unexpected{ MakeError(ErrorIO::kInvalidSplatCount, "splat count must be greater than zero") };
-  }
-
   std::string const path{ ply_path };
   miniply::PLYReader reader(path.c_str());
   if (!reader.valid()) {
@@ -214,7 +208,7 @@ auto LoadSplatsFromPly(std::string_view ply_path, u32 count) -> std::expected<Sp
     if (!reader.load_element()) {
       return std::unexpected{ MakeError(ErrorIO::kLoadElementFailed, "failed to load vertex element from PLY") };
     }
-    return LoadVertexSplats(reader, count);
+    return LoadVertexSplats(reader);
   }
 
   return std::unexpected{ MakeError(ErrorIO::kMissingVertexElement, "PLY file does not contain a vertex element") };

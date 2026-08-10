@@ -1,0 +1,9 @@
+# Example vkgsplat config (INI/TOML accepted by CLI11).
+# Usage: vkgsplat --config config/example.toml
+# CLI arguments override values from this file.
+
+ply_path = "resources/scene.ply"
+validation = false
+imgui = true
+gpu-timers = false
+# frame-rate = "display"   # or "adaptive", or a positive integer like 60

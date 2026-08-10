@@ -7,15 +7,11 @@
 
 #include <vkgsplat/frame_rate.hpp>
 #include <vkgsplat_utility/error.hpp>
-#include <vkgsplat_utility/types.hpp>
 
 namespace vkgsplat::app {
 
-inline constexpr vkgsplat::u32 kDefaultSplatCount = 64;
-
 struct AppConfig
 {
-  vkgsplat::u32 splat_count = kDefaultSplatCount;
   std::string ply_path;
   bool enable_validation = false;
   bool enable_imgui = true;

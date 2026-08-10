@@ -44,22 +44,24 @@ namespace {
 auto ParseAppConfig(std::span<char *const> args) -> std::expected<AppConfig, vkgsplat::Error>
 {
   AppConfig config{};
-
-  bool disable_imgui = false;
   std::string frame_rate_text{};
 
   CLI::App app{ "vkgsplat" };
 
+  // Optional INI/TOML config. CLI arguments override file values.
+  app.set_config("--config", "", "Read an INI/TOML config file (CLI overrides file)")
+    ->check(CLI::ExistingFile);
+
   app.add_flag("--validation", config.enable_validation, "Enable Vulkan validation layers");
-  app.add_flag("--no-imgui", disable_imgui, "Disable ImGui overlay (useful when profiling)");
+  app.add_flag("--imgui,!--no-imgui",
+    config.enable_imgui,
+    "Enable ImGui overlay (default on; use --no-imgui or imgui=false in config to disable)");
   app.add_flag("--gpu-timers", config.enable_gpu_timers, "Enable in-app Vulkan GPU pass timestamps");
   app.add_option("--frame-rate",
     frame_rate_text,
     "Cap/stabilize FPS via VK_EXT_present_timing: <N>, 'display', or 'adaptive'");
-  app.add_option("-c,--count", config.splat_count, "Number of splats to load")
-    ->check(CLI::PositiveNumber)
-    ->capture_default_str();
-  app.add_option("ply_path", config.ply_path, "Path to PLY file")->required()->check(CLI::ExistingFile);
+  // Positional, --ply-path, or config key `ply_path` / `ply-path`.
+  app.add_option("ply_path,-p,--ply-path", config.ply_path, "Path to PLY file")->check(CLI::ExistingFile);
 
   try {
     app.parse(static_cast<int>(args.size()), args.data());
@@ -71,7 +73,10 @@ auto ParseAppConfig(std::span<char *const> args) -> std::expected<AppConfig, vkg
     return std::unexpected{ MakeError(std::errc::invalid_argument, parse_error.what()) };
   }
 
-  config.enable_imgui = !disable_imgui;
+  if (config.ply_path.empty()) {
+    return std::unexpected{ MakeError(std::errc::invalid_argument,
+      "missing PLY path (pass ply_path, --ply-path, or set ply_path / ply-path in --config)") };
+  }
 
   if (!frame_rate_text.empty()) {
     auto parsed = ParseFrameRateOption(frame_rate_text);

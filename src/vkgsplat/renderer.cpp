@@ -40,7 +40,7 @@ namespace {
   [[nodiscard]] auto BuildRendererResources(vulkan::Context &context, RenderData &render_data, RendererConfig const &config)
     -> std::expected<void, Error>
   {
-    auto loaded = LoadSplatsFromPly(config.ply_path, config.splat_count);
+    auto loaded = LoadSplatsFromPly(config.ply_path);
     if (!loaded) { return std::unexpected(loaded.error()); }
     SplatCpuData const splats = std::move(*loaded);
     std::println("Loaded {} splats from {}", splats.geometries.size(), config.ply_path);
