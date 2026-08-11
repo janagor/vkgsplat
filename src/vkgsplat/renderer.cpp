@@ -14,6 +14,7 @@
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat/driver.hpp>
 #include <vkgsplat/engine.hpp>
+#include <vkgsplat/lfd_config.hpp>
 #include <vkgsplat/platform.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
@@ -64,8 +65,15 @@ namespace {
 
     render_data.lfd_grid = config.lfd_grid;
     render_data.view_cone_deg = config.view_cone_deg;
+    render_data.lfd_view_order = config.lfd_view_order;
     if (render_data.lfd_grid.at(0) == 0U || render_data.lfd_grid.at(1) == 0U) {
       return std::unexpected(MakeError(std::errc::invalid_argument, "lfd_grid columns and rows must be >= 1"));
+    }
+    if (render_data.lfd_view_order.empty()) {
+      render_data.lfd_view_order = BuildLfdViewOrder(LfdViewLayout::kNormal, render_data.lfd_grid);
+    }
+    if (auto const validated = ValidateLfdViewOrder(render_data.lfd_view_order, render_data.lfd_grid); !validated) {
+      return std::unexpected(validated.error());
     }
 
     render_data.sort_size = NextPowerOf2(render_data.splat_count);

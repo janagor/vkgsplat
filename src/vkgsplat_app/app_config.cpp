@@ -2,6 +2,7 @@
 
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat/frame_rate.hpp>
+#include <vkgsplat/lfd_config.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
 
@@ -14,6 +15,7 @@
 #include <span>
 #include <string>
 #include <system_error>
+#include <vector>
 
 #include <CLI/CLI.hpp>
 #include <glm/ext/vector_double3.hpp>
@@ -69,6 +71,8 @@ auto ParseAppConfig(std::span<char *const> args) -> std::expected<AppConfig, vkg
   auto target = ToArray(config.camera.target);
   auto world_up = ToArray(config.camera.up);
   std::array<u32, 2> lfd_grid{ config.lfd_grid };
+  std::vector<u32> lfd_view_order_input{};
+  std::string lfd_view_layout_text{ "normal" };
 
   CLI::App app{ "vkgsplat" };
 
@@ -100,6 +104,12 @@ auto ParseAppConfig(std::span<char *const> args) -> std::expected<AppConfig, vkg
     ->capture_default_str();
   app.add_option("--lfd-grid", lfd_grid, "LFD quilt columns and rows (default 1 1 = mono)")
     ->capture_default_str();
+  app.add_option("--lfd-view-layout",
+    lfd_view_layout_text,
+    "LFD view placement preset: normal or flip-rows (ignored when --lfd-view-order is set)");
+  app.add_option("--lfd-view-order",
+    lfd_view_order_input,
+    "Explicit LFD view index per quilt cell in row-major order (overrides --lfd-view-layout)");
   app.add_option("--view-cone",
     config.view_cone_deg,
     "Horizontal LFD view cone in degrees across quilt columns")
@@ -148,6 +158,13 @@ auto ParseAppConfig(std::span<char *const> args) -> std::expected<AppConfig, vkg
   if (!(config.view_cone_deg > 0.0) || !(config.view_cone_deg < kMaxFovDegreesExclusive) || !std::isfinite(config.view_cone_deg)) {
     return std::unexpected{ MakeError(std::errc::invalid_argument, "view-cone must be in (0, 180) degrees") };
   }
+
+  auto const layout = ParseLfdViewLayout(lfd_view_layout_text);
+  if (!layout) { return std::unexpected{ layout.error() }; }
+
+  auto const resolved_order = ResolveLfdViewOrder(lfd_view_order_input, *layout, config.lfd_grid);
+  if (!resolved_order) { return std::unexpected{ resolved_order.error() }; }
+  config.lfd_view_order = *resolved_order;
 
   if (!frame_rate_text.empty()) {
     auto parsed = ParseFrameRateOption(frame_rate_text);

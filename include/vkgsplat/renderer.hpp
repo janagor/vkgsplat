@@ -16,6 +16,7 @@
 #include <vkgsplat_utility/types.hpp>
 
 #include <array>
+#include <vector>
 
 namespace vkgsplat {
 
@@ -29,6 +30,7 @@ struct RendererConfig
   // LFD quilt; {1,1} keeps the mono path. [columns, rows]
   std::array<u32, 2> lfd_grid{ 1U, 1U };
   f64 view_cone_deg{ kDefaultViewConeDegrees };
+  std::vector<u32> lfd_view_order;
 };
 
 // Per-window rendering context: frame latency, command submission, and presentation.

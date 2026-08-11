@@ -148,6 +148,7 @@ auto Run(std::span<char *const> args) noexcept -> int
       .frame_rate = config->frame_rate,
       .lfd_grid = config->lfd_grid,
       .view_cone_deg = config->view_cone_deg,
+      .lfd_view_order = config->lfd_view_order,
     };
 
     auto renderer = Renderer::create(renderer_config, *window);
