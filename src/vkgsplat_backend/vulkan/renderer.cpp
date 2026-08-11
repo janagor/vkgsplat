@@ -15,7 +15,6 @@
 #include "vulkan/gs/sorting.hpp"
 #include "vulkan/imgui_overlay.hpp"
 #include "vulkan/sphere_setup.hpp"
-#include "vulkan/sync_objects/fence.hpp"
 #include "vulkan/sync_objects/semaphore.hpp"
 #include "vulkan/vulkan_bootstrap.hpp"
 #include "gs/pipeline.hpp"
@@ -66,12 +65,13 @@ auto CreateSyncObjects(vulkan::Context &context, RenderData &data) -> std::expec
 {
   data.available_semaphores.clear();
   data.finished_semaphore.clear();
-  data.slot_gpu_fences.clear();
-  data.image_slot_fence.assign(context.swapchain->image_count(), VK_NULL_HANDLE);
+  data.frame_timeline.reset();
+  data.next_timeline_value = 0;
+  data.slot_timeline_value.fill(0);
+  data.image_timeline_value.assign(context.swapchain->image_count(), 0);
 
   data.available_semaphores.reserve(kFrameSlotCount);
   data.finished_semaphore.reserve(context.swapchain->image_count());
-  data.slot_gpu_fences.reserve(kFrameSlotCount);
 
   for (size_t i = 0; i < context.swapchain->image_count(); i++) {
     auto semaphore = Semaphore::create(std::ref(context.disp));
@@ -83,11 +83,12 @@ auto CreateSyncObjects(vulkan::Context &context, RenderData &data) -> std::expec
     auto available = Semaphore::create(std::ref(context.disp));
     if (!available) { return std::unexpected{ available.error() }; }
     data.available_semaphores.push_back(std::move(*available));
-
-    auto fence = Fence::create(std::ref(context.disp), VK_FENCE_CREATE_SIGNALED_BIT);
-    if (!fence) { return std::unexpected{ fence.error() }; }
-    data.slot_gpu_fences.push_back(std::move(*fence));
   }
+
+  auto timeline = Semaphore::create_timeline(std::ref(context.disp));
+  if (!timeline) { return std::unexpected{ timeline.error() }; }
+  data.frame_timeline = std::move(*timeline);
+
   return {};
 }
 
@@ -106,6 +107,16 @@ auto RecreateSwapchain(vulkan::Context &context, RenderData &data) -> std::expec
   if (auto recreated = context.swapchain->recreate(context.device, context.platform->framebuffer_extent()); !recreated) {
     return std::unexpected{ recreated.error() };
   }
+
+  // Present wait semaphores are per swapchain image; recreate after idle resize.
+  data.finished_semaphore.clear();
+  data.finished_semaphore.reserve(context.swapchain->image_count());
+  for (size_t i = 0; i < context.swapchain->image_count(); ++i) {
+    auto semaphore = Semaphore::create(std::ref(context.disp));
+    if (!semaphore) { return std::unexpected{ semaphore.error() }; }
+    data.finished_semaphore.push_back(std::move(*semaphore));
+  }
+  data.image_timeline_value.assign(context.swapchain->image_count(), 0);
   if (0 != CreateGraphicsPipeline(context, data)) {
     return std::unexpected{ MakeError(std::errc::io_error, "failed to recreate graphics pipeline") };
   }
@@ -126,8 +137,10 @@ void Cleanup(vulkan::Context &context, RenderData &data)
 
   data.available_semaphores.clear();
   data.finished_semaphore.clear();
-  data.slot_gpu_fences.clear();
-  data.image_slot_fence.clear();
+  data.frame_timeline.reset();
+  data.next_timeline_value = 0;
+  data.slot_timeline_value.fill(0);
+  data.image_timeline_value.clear();
 
   data.command_buffers.clear();
   data.command_pool.reset();

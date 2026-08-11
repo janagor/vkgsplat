@@ -479,12 +479,48 @@ inline auto CommandBufferAllocateInfo(VkCommandPool command_pool, VkCommandBuffe
   };
 }
 
-inline auto SemaphoreCreateInfo() -> VkSemaphoreCreateInfo
+inline auto SemaphoreCreateInfo(void const *p_next = nullptr) -> VkSemaphoreCreateInfo
 {
   return VkSemaphoreCreateInfo{
     .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+    .pNext = p_next,
+    .flags = 0,
+  };
+}
+
+inline auto SemaphoreTypeCreateInfo(VkSemaphoreType type, u64 initial_value) -> VkSemaphoreTypeCreateInfo
+{
+  return VkSemaphoreTypeCreateInfo{
+    .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
+    .pNext = nullptr,
+    .semaphoreType = type,
+    .initialValue = initial_value,
+  };
+}
+
+inline auto TimelineSemaphoreSubmitInfo(std::span<u64 const> wait_values, std::span<u64 const> signal_values)
+  -> VkTimelineSemaphoreSubmitInfo
+{
+  return VkTimelineSemaphoreSubmitInfo{
+    .sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
+    .pNext = nullptr,
+    .waitSemaphoreValueCount = static_cast<u32>(wait_values.size()),
+    .pWaitSemaphoreValues = wait_values.data(),
+    .signalSemaphoreValueCount = static_cast<u32>(signal_values.size()),
+    .pSignalSemaphoreValues = signal_values.data(),
+  };
+}
+
+inline auto SemaphoreWaitInfo(std::span<VkSemaphore const> semaphores, std::span<u64 const> values)
+  -> VkSemaphoreWaitInfo
+{
+  return VkSemaphoreWaitInfo{
+    .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
     .pNext = nullptr,
     .flags = 0,
+    .semaphoreCount = static_cast<u32>(semaphores.size()),
+    .pSemaphores = semaphores.data(),
+    .pValues = values.data(),
   };
 }
 inline auto FenceCreateInfo(VkFenceCreateFlags flags = 0) -> VkFenceCreateInfo

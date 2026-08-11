@@ -225,8 +225,13 @@ auto RenderThread::DrawFrameVulkan(size_t frame_slot) -> std::expected<void, Err
   RenderData &data = *data_;
   data.current_slot = frame_slot;
 
-  auto *slot_fence = data.slot_gpu_fences.at(frame_slot).handle();
-  context.disp.waitForFences(1, &slot_fence, VK_TRUE, UINT64_MAX);
+  if (!data.frame_timeline.has_value()) {
+    return std::unexpected{ MakeError(std::errc::state_not_recoverable, "frame timeline semaphore is not initialized") };
+  }
+
+  if (auto waited = data.frame_timeline->wait_value(data.slot_timeline_value.at(frame_slot)); !waited) {
+    return std::unexpected{ waited.error() };
+  }
 
   if (data.gpu_pass_timer.enabled()) {
     data.gpu_pass_timer.resolve(context, frame_slot);
@@ -264,10 +269,9 @@ auto RenderThread::DrawFrameVulkan(size_t frame_slot) -> std::expected<void, Err
       std::errc::io_error, "failed to acquire swapchain image. VkResult=" + std::to_string(result)) };
   }
 
-  if (data.image_slot_fence.at(image_index) != VK_NULL_HANDLE) {
-    context.disp.waitForFences(1, &data.image_slot_fence.at(image_index), VK_TRUE, UINT64_MAX);
+  if (auto waited = data.frame_timeline->wait_value(data.image_timeline_value.at(image_index)); !waited) {
+    return std::unexpected{ waited.error() };
   }
-  data.image_slot_fence.at(image_index) = slot_fence;
 
   FrameSetup &setup = data.frames.at(frame_slot).setup;
   BuildFrameSetupGpu(context, data, setup, image_index);
@@ -280,23 +284,32 @@ auto RenderThread::DrawFrameVulkan(size_t frame_slot) -> std::expected<void, Err
     });
   if (!recorded) { return std::unexpected{ recorded.error() }; }
 
+  auto const signal_value = data.next_timeline_value + 1U;
+  data.next_timeline_value = signal_value;
+
   std::array<VkSemaphore, 1> wait_semaphores = { available_semaphore };
   std::array<VkPipelineStageFlags, 1> wait_stages = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
   auto *finished_semaphore = data.finished_semaphore.at(image_index).handle();
-  std::array<VkSemaphore, 1> signal_semaphores = { finished_semaphore };
+  std::array<VkSemaphore, 2> signal_semaphores = { finished_semaphore, data.frame_timeline->handle() };
+  std::array<u64, 1> const wait_values{ 0 };
+  std::array<u64, 2> const signal_values{ 0, signal_value };
+  auto timeline_submit = initializers::TimelineSemaphoreSubmitInfo(wait_values, signal_values);
 
   auto *command_buffer = data.command_buffers.at(image_index).handle();
-  auto const submit_info =
+  auto submit_info =
     initializers::SubmitInfo(wait_semaphores, wait_stages, std::span{ &command_buffer, 1 }, signal_semaphores);
+  submit_info.pNext = &timeline_submit;
 
-  context.disp.resetFences(1, &slot_fence);
-
-  if (context.disp.queueSubmit(data.graphics_queue, 1, &submit_info, slot_fence) != VK_SUCCESS) {
+  if (context.disp.queueSubmit(data.graphics_queue, 1, &submit_info, VK_NULL_HANDLE) != VK_SUCCESS) {
     return std::unexpected{ MakeError(std::errc::io_error, "failed to submit draw command buffer") };
   }
 
+  data.slot_timeline_value.at(frame_slot) = signal_value;
+  data.image_timeline_value.at(image_index) = signal_value;
+
   std::array<VkSwapchainKHR, 1> const swap_chains = { context.swapchain->handle() };
-  auto present_info = initializers::PresentInfoKHR(signal_semaphores, swap_chains, std::span{ &image_index, 1 });
+  std::array<VkSemaphore, 1> present_wait = { finished_semaphore };
+  auto present_info = initializers::PresentInfoKHR(present_wait, swap_chains, std::span{ &image_index, 1 });
 
   if (data.present_pacer != nullptr) { data.present_pacer->PreparePresent(context, present_info); }
 

@@ -6,6 +6,7 @@
 #include <vkgsplat_io/write_png.hpp>
 #include "vulkan_context.hpp"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
@@ -46,7 +47,13 @@ auto SaveColorTargetPng(Context &context, RenderData &data, std::string_view pat
     return std::unexpected{ MakeError(std::errc::state_not_recoverable, "command pool missing for screenshot") };
   }
 
-  context.disp.deviceWaitIdle();
+  if (data.frame_timeline.has_value()) {
+    if (auto waited = data.frame_timeline->wait_value(data.next_timeline_value); !waited) {
+      return std::unexpected{ waited.error() };
+    }
+  } else {
+    context.disp.deviceWaitIdle();
+  }
 
   constexpr u32 kChannels = 4;
   auto const byte_size = static_cast<VkDeviceSize>(data.color_width) * data.color_height * kChannels;
@@ -121,21 +128,46 @@ auto SaveColorTargetPng(Context &context, RenderData &data, std::string_view pat
     return fail(MakeError(std::errc::io_error, "failed to end screenshot command buffer"));
   }
 
-  VkSubmitInfo const submit_info{
-    .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-    .pNext = nullptr,
-    .waitSemaphoreCount = 0,
-    .pWaitSemaphores = nullptr,
-    .pWaitDstStageMask = nullptr,
-    .commandBufferCount = 1,
-    .pCommandBuffers = &cmd,
-    .signalSemaphoreCount = 0,
-    .pSignalSemaphores = nullptr,
-  };
-  if (context.disp.queueSubmit(data.graphics_queue, 1, &submit_info, VK_NULL_HANDLE) != VK_SUCCESS) {
-    return fail(MakeError(std::errc::io_error, "failed to submit screenshot readback"));
+  if (data.frame_timeline.has_value()) {
+    auto const signal_value = data.next_timeline_value + 1U;
+    data.next_timeline_value = signal_value;
+    std::array<VkSemaphore, 1> signal_semaphores{ data.frame_timeline->handle() };
+    std::array<u64, 1> const signal_values{ signal_value };
+    auto timeline_submit = initializers::TimelineSemaphoreSubmitInfo({}, signal_values);
+    VkSubmitInfo const submit_info{
+      .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+      .pNext = &timeline_submit,
+      .waitSemaphoreCount = 0,
+      .pWaitSemaphores = nullptr,
+      .pWaitDstStageMask = nullptr,
+      .commandBufferCount = 1,
+      .pCommandBuffers = &cmd,
+      .signalSemaphoreCount = 1,
+      .pSignalSemaphores = signal_semaphores.data(),
+    };
+    if (context.disp.queueSubmit(data.graphics_queue, 1, &submit_info, VK_NULL_HANDLE) != VK_SUCCESS) {
+      return fail(MakeError(std::errc::io_error, "failed to submit screenshot readback"));
+    }
+    if (auto waited = data.frame_timeline->wait_value(signal_value); !waited) {
+      return fail(waited.error());
+    }
+  } else {
+    VkSubmitInfo const submit_info{
+      .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+      .pNext = nullptr,
+      .waitSemaphoreCount = 0,
+      .pWaitSemaphores = nullptr,
+      .pWaitDstStageMask = nullptr,
+      .commandBufferCount = 1,
+      .pCommandBuffers = &cmd,
+      .signalSemaphoreCount = 0,
+      .pSignalSemaphores = nullptr,
+    };
+    if (context.disp.queueSubmit(data.graphics_queue, 1, &submit_info, VK_NULL_HANDLE) != VK_SUCCESS) {
+      return fail(MakeError(std::errc::io_error, "failed to submit screenshot readback"));
+    }
+    context.disp.deviceWaitIdle();
   }
-  context.disp.deviceWaitIdle();
   FreeCmd(context, data, cmd);
   cmd = VK_NULL_HANDLE;
 

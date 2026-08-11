@@ -18,7 +18,6 @@ add_library(
   vulkan/render_thread.cpp
   vulkan/present_pacer.cpp
   vulkan/sync_objects/barrier.cpp
-  vulkan/sync_objects/fence.cpp
   vulkan/sync_objects/semaphore.cpp
   vulkan/gs/projection.cpp
   vulkan/gs/binning.cpp
