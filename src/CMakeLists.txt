@@ -1,5 +1,6 @@
 add_subdirectory(vkgsplat_utility)
 add_subdirectory(vkgsplat_window)
 add_subdirectory(vkgsplat_input_handler)
+add_subdirectory(vkgsplat_io)
 add_subdirectory(vkgsplat)
 add_subdirectory(vkgsplat_app)

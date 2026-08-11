@@ -1,5 +1,5 @@
-#ifndef VKGSPLAT_IO_IMAGE_WRITE_PNG_HPP
-#define VKGSPLAT_IO_IMAGE_WRITE_PNG_HPP
+#ifndef VKGSPLAT_IO_WRITE_PNG_HPP
+#define VKGSPLAT_IO_WRITE_PNG_HPP
 
 #include <cstdint>
 #include <expected>
@@ -20,4 +20,4 @@ namespace vkgsplat {
 
 }// namespace vkgsplat
 
-#endif// VKGSPLAT_IO_IMAGE_WRITE_PNG_HPP
+#endif// VKGSPLAT_IO_WRITE_PNG_HPP

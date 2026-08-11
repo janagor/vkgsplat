@@ -1,4 +1,4 @@
-#include "io/ply/miniply.hpp"
+#include "ply/miniply.hpp"
 
 #include <cstdlib>
 #include <print>

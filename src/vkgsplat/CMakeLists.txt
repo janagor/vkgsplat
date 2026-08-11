@@ -6,10 +6,6 @@ add_library(
   engine.cpp
   renderer.cpp
   lfd_view_order.cpp
-  io/ply/miniply.cpp
-  io/ply/load_splats.cpp
-  io/image/write_png.cpp
-  io/image/stb_image_write_impl.cpp
   backend/vulkan/vma_usage.cpp
   backend/vulkan/vulkan_platform.cpp
   backend/vulkan/vulkan_driver.cpp
@@ -77,14 +73,11 @@ target_link_libraries(
           magic_enum::magic_enum
           imgui::imgui
           glfw::glfw
-          stb::stb
   PUBLIC vkgsplat::vkgsplat_utility
          vkgsplat::vkgsplat_window
+         vkgsplat::vkgsplat_io
          glm::glm
          beman::indirect)
-
-# stb_image_write's implementation trips clang-analyzer false positives; keep it out of tidy/cppcheck.
-set_source_files_properties(io/image/stb_image_write_impl.cpp PROPERTIES SKIP_LINTING ON)
 
 vkgsplat_configure_linker(vkgsplat)
 
@@ -111,9 +104,3 @@ target_include_directories(
   vkgsplat ${WARNING_GUARD}
   PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include> $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>
   PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/backend/vulkan)
-
-add_executable(ply_load_test ply_load_test.cpp io/ply/miniply.cpp)
-target_include_directories(ply_load_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(ply_load_test PRIVATE vkgsplat::vkgsplat_options vkgsplat::vkgsplat_warnings vkgsplat::vkgsplat_utility)
-target_compile_definitions(ply_load_test PRIVATE VKGSPLAT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-vkgsplat_configure_linker(ply_load_test)

@@ -5,7 +5,7 @@
 
 #include "app_state.hpp"
 #include "gs/gaussian_splat.hpp"
-#include "io/ply/load_splats.hpp"
+#include <vkgsplat_io/splat_cpu.hpp>
 #include "vulkan_context.hpp"
 #include <vkgsplat_utility/types.hpp>
 
