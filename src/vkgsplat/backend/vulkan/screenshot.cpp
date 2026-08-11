@@ -3,7 +3,7 @@
 #include "app_state.hpp"
 #include "backend/vulkan/gpu_allocator.hpp"
 #include "backend/vulkan/initializers.hpp"
-#include "io/image/write_png.hpp"
+#include <vkgsplat_io/write_png.hpp>
 #include "vulkan_context.hpp"
 
 #include <cstddef>

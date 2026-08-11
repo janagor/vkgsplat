@@ -6,6 +6,7 @@
 #include "vulkan_context.hpp"
 
 #include <vkgsplat/camera.hpp>
+#include <vkgsplat_io/splat_cpu.hpp>
 #include <vkgsplat_utility/types.hpp>
 
 #include <algorithm>

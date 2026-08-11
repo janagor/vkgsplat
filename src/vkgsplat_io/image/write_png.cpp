@@ -1,4 +1,4 @@
-#include "io/image/write_png.hpp"
+#include <vkgsplat_io/write_png.hpp>
 
 #include <cstdint>
 #include <cstddef>

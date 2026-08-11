@@ -36,7 +36,8 @@
 #include "backend/vulkan/sphere_setup.hpp"
 #include "backend/vulkan/vulkan_context.hpp"
 #include "backend/vulkan/vulkan_driver.hpp"
-#include "io/ply/load_splats.hpp"
+#include <vkgsplat_io/load_splats.hpp>
+#include <vkgsplat_io/splat_cpu.hpp>
 
 namespace vkgsplat {
 

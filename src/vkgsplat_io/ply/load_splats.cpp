@@ -1,8 +1,8 @@
-#include "io/ply/load_splats.hpp"
+#include <vkgsplat_io/load_splats.hpp>
 
-#include "gs/gaussian_splat.hpp"
-#include "io/ply/miniply.hpp"
+#include "ply/miniply.hpp"
 #include <vkgsplat/error.hpp>
+#include <vkgsplat_io/splat_cpu.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
 

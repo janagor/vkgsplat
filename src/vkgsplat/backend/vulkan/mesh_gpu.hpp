@@ -2,7 +2,7 @@
 #define VKGSPLAT_BACKEND_VULKAN_MESH_GPU_HPP
 
 #include "app_state.hpp"
-#include "io/ply/load_splats.hpp"
+#include <vkgsplat_io/splat_cpu.hpp>
 #include "vulkan_context.hpp"
 
 namespace vkgsplat {

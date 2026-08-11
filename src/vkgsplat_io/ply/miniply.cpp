@@ -25,7 +25,7 @@ SOFTWARE.
 // Vendored third-party code from miniply:
 //   https://github.com/vilya/miniply
 
-#include "io/ply/miniply.hpp"
+#include "ply/miniply.hpp"
 
 #include <algorithm>
 #include <array>
