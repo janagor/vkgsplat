@@ -23,7 +23,11 @@ namespace {
     vkb::Swapchain const &old_swapchain = {}) -> std::expected<vkb::Swapchain, Error>
   {
     vkb::SwapchainBuilder swapchain_builder{ device };
+    // 3DGS SH colors are trained in gamma / sRGB space and blended in a UNORM color target.
+    // The blit is a raw copy — an _SRGB swapchain would apply gamma again (double-gamma).
     swapchain_builder.set_desired_extent(ext.width, ext.height)
+      .set_desired_format({ .format = VK_FORMAT_B8G8R8A8_UNORM, .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR })
+      .add_fallback_format({ .format = VK_FORMAT_R8G8B8A8_UNORM, .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR })
       .set_image_usage_flags(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT)
       .set_old_swapchain(old_swapchain);
 
