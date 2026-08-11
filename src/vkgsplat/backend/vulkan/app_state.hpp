@@ -81,6 +81,8 @@ struct RenderData
   // Focal-plane distance (world units) for parallel-array view offsets.
   f64 lfd_focal_distance{ kDefaultLfdFocalDistance };
   VkExtent2D quilt_tile_extent{};
+  bool lfd_emulate_active{ false };
+  std::array<u32, 2> lfd_emulate_cell{ 0U, 0U };
   compute::Tensor<u32> sorted_indices;
   compute::Tensor<compute::SortEntry> sort_entries;
   vulkan::Buffer descriptor_heap_buffer{};

@@ -29,6 +29,13 @@ public:
   [[nodiscard]] auto consume_screenshot_request() noexcept -> bool;
   [[nodiscard]] auto screenshot_requested() const noexcept -> bool { return screenshot_requested_; }
 
+  // Edge-triggered: true once per M press until consumed.
+  [[nodiscard]] auto consume_emulate_toggle() noexcept -> bool;
+
+  enum class ArrowDir : u8 { kNone, kLeft, kRight, kUp, kDown };
+  // Returns the pending arrow direction (if any) and clears it.
+  [[nodiscard]] auto consume_arrow() noexcept -> ArrowDir;
+
 private:
   static void scroll_callback(GLFWwindow *window, f64 /*x_offset*/, f64 y_offset);
 
@@ -40,6 +47,13 @@ private:
   bool first_mouse_ = true;
   bool f2_was_pressed_ = false;
   bool screenshot_requested_ = false;
+  bool m_was_pressed_ = false;
+  bool emulate_toggle_requested_ = false;
+  bool left_was_pressed_ = false;
+  bool right_was_pressed_ = false;
+  bool up_was_pressed_ = false;
+  bool down_was_pressed_ = false;
+  ArrowDir pending_arrow_{ ArrowDir::kNone };
   void *previous_user_pointer_ = nullptr;
 };
 

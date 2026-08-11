@@ -80,6 +80,20 @@ auto InputHandler::update(View &view, CloseTarget &close) -> bool
   if (f2_pressed && !f2_was_pressed_) { screenshot_requested_ = true; }
   f2_was_pressed_ = f2_pressed;
 
+  auto const m_pressed = key_pressed(GLFW_KEY_M);
+  if (m_pressed && !m_was_pressed_) { emulate_toggle_requested_ = true; }
+  m_was_pressed_ = m_pressed;
+
+  auto const edge_arrow = [&](int key, bool &was, ArrowDir dir) -> void {
+    auto const pressed = key_pressed(key);
+    if (pressed && !was) { pending_arrow_ = dir; }
+    was = pressed;
+  };
+  edge_arrow(GLFW_KEY_LEFT, left_was_pressed_, ArrowDir::kLeft);
+  edge_arrow(GLFW_KEY_RIGHT, right_was_pressed_, ArrowDir::kRight);
+  edge_arrow(GLFW_KEY_UP, up_was_pressed_, ArrowDir::kUp);
+  edge_arrow(GLFW_KEY_DOWN, down_was_pressed_, ArrowDir::kDown);
+
   return view_changed;
 }
 

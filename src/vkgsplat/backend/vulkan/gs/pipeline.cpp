@@ -120,6 +120,39 @@ void EvalGsPipeline(vulkan::Context &context, RenderData &data, VkCommandBuffer 
 
   if (IsMonoQuilt(data)) {
     OpRasterization{}.record(context, data, command_buffer);
+  } else if (data.lfd_emulate_active) {
+    FrameSetup const &setup = FrameSetupFor(data, slot);
+
+    // Emulate mode renders a single full-screen view (no atlas offsets).
+    u32 const tile_w = context.swapchain->vk_extent().width;
+    u32 const tile_h = context.swapchain->vk_extent().height;
+    f64 const tile_aspect = static_cast<f64>(tile_w) / static_cast<f64>(std::max(1U, tile_h));
+
+    QuiltView const view = MakeQuiltView(QuiltViewRequest{
+      .center = &setup.camera,
+      .grid = data.lfd_grid,
+      .col = data.lfd_emulate_cell.at(0),
+      .row = data.lfd_emulate_cell.at(1),
+      .view_cone_deg = data.view_cone_deg,
+      .focal_distance = data.lfd_focal_distance,
+      .tile_aspect = tile_aspect,
+    });
+
+    QuiltTileRect const tile_rect{
+      .origin_x = 0U,
+      .origin_y = 0U,
+      .width = tile_w,
+      .height = tile_h,
+    };
+
+    // Match the quilt per-cell push constants so viewport / tiles_x / tile_offset are consistent.
+    ApplyQuiltTilePush(data, view, tile_rect);
+
+    // Phase A (projection+projection timestamps) already ran once for the center view.
+    // Re-run projection for the emulated off-axis camera so rasterization sees updated projected data.
+    RecordProjection(context, data, command_buffer, false);
+
+    OpRasterization{}.record(context, data, command_buffer);
   } else {
     // One begin/end pair for all quilt cells: re-project + draw + blit (raster bucket).
     ScopedGpuPass const raster_timer{ context, data, command_buffer, GpuPass::kRasterize };

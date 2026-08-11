@@ -50,8 +50,8 @@ namespace {
       return false;
     }
 
-    u32 const cols = std::max(1U, data.lfd_grid.at(0));
-    u32 const rows = std::max(1U, data.lfd_grid.at(1));
+    u32 const cols = data.lfd_emulate_active ? 1U : std::max(1U, data.lfd_grid.at(0));
+    u32 const rows = data.lfd_emulate_active ? 1U : std::max(1U, data.lfd_grid.at(1));
     u64 const atlas_w = static_cast<u64>(tile_w) * static_cast<u64>(cols);
     u64 const atlas_h = static_cast<u64>(tile_h) * static_cast<u64>(rows);
     u32 const max_dim = context.device.physical_device.properties.limits.maxImageDimension2D;

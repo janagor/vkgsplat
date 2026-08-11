@@ -29,6 +29,41 @@ namespace {
     return std::format("screenshot_{:%Y%m%d_%H%M%S}.png", now);
   }
 
+  auto HandleLfdEmulateInput(Renderer &renderer, InputHandler &input) -> bool
+  {
+    bool changed = false;
+
+    if (input.consume_emulate_toggle()) {
+      renderer.set_lfd_emulate(!renderer.lfd_emulate_active());
+      changed = true;
+    }
+
+    if (auto const arrow = input.consume_arrow();
+        arrow != InputHandler::ArrowDir::kNone && renderer.lfd_emulate_active()) {
+      auto cell = renderer.lfd_emulate_cell();
+      auto const grid = renderer.lfd_grid();
+      switch (arrow) {
+      case InputHandler::ArrowDir::kLeft:
+        if (cell.at(0) > 0U) { --cell.at(0); }
+        break;
+      case InputHandler::ArrowDir::kRight:
+        if (cell.at(0) + 1U < grid.at(0)) { ++cell.at(0); }
+        break;
+      case InputHandler::ArrowDir::kUp:
+        if (cell.at(1) > 0U) { --cell.at(1); }
+        break;
+      case InputHandler::ArrowDir::kDown:
+        if (cell.at(1) + 1U < grid.at(1)) { ++cell.at(1); }
+        break;
+      case InputHandler::ArrowDir::kNone: break;
+      }
+      renderer.set_lfd_emulate_cell(cell.at(0), cell.at(1));
+      changed = true;
+    }
+
+    return changed;
+  }
+
   void MaybeSaveScreenshot(Renderer &renderer, InputHandler &input)
   {
     if (!input.consume_screenshot_request()) { return; }
@@ -71,6 +106,8 @@ namespace {
       }
 
       MaybeSaveScreenshot(renderer, input);
+
+      if (HandleLfdEmulateInput(renderer, input)) { redraw_needed = true; }
     }
 
     renderer.wait_idle();

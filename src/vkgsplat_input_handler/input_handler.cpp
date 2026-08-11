@@ -78,4 +78,18 @@ auto InputHandler::consume_screenshot_request() noexcept -> bool
   return requested;
 }
 
+auto InputHandler::consume_emulate_toggle() noexcept -> bool
+{
+  auto const requested = emulate_toggle_requested_;
+  emulate_toggle_requested_ = false;
+  return requested;
+}
+
+auto InputHandler::consume_arrow() noexcept -> ArrowDir
+{
+  auto const dir = pending_arrow_;
+  pending_arrow_ = ArrowDir::kNone;
+  return dir;
+}
+
 }// namespace vkgsplat

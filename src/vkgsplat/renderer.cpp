@@ -1,5 +1,7 @@
 #include <vkgsplat/renderer.hpp>
 
+#include <algorithm>
+#include <array>
 #include <expected>
 #include <memory>
 #include <print>
@@ -194,6 +196,29 @@ auto Renderer::save_frame_png(std::string_view path) -> std::expected<void, Erro
 }
 
 void Renderer::wait_idle() noexcept { impl_->render_thread->WaitIdle(); }
+
+void Renderer::set_lfd_emulate(bool active)
+{
+  wait_idle();
+  impl_->render_data.lfd_emulate_active = active;
+  if (active) { impl_->render_data.lfd_emulate_cell = { 0U, 0U }; }
+
+  auto &context = AsVulkanDriver(impl_->engine->driver()).context();
+  static_cast<void>(gs::RecreateRasterizationColorTarget(context, impl_->render_data));
+}
+
+auto Renderer::lfd_emulate_active() const noexcept -> bool { return impl_->render_data.lfd_emulate_active; }
+
+void Renderer::set_lfd_emulate_cell(u32 col, u32 row)
+{
+  auto const cols = std::max(1U, impl_->render_data.lfd_grid.at(0));
+  auto const rows = std::max(1U, impl_->render_data.lfd_grid.at(1));
+  impl_->render_data.lfd_emulate_cell = { std::min(col, cols - 1U), std::min(row, rows - 1U) };
+}
+
+auto Renderer::lfd_emulate_cell() const noexcept -> std::array<u32, 2> { return impl_->render_data.lfd_emulate_cell; }
+
+auto Renderer::lfd_grid() const noexcept -> std::array<u32, 2> { return impl_->render_data.lfd_grid; }
 
 auto Engine::create_renderer(RendererConfig const &config) -> std::expected<Renderer, Error>
 { return Renderer::create(config, *this); }

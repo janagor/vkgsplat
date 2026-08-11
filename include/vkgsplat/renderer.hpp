@@ -50,6 +50,13 @@ public:
   [[nodiscard]] auto save_frame_png(std::string_view path) -> std::expected<void, Error>;
   void wait_idle() noexcept;
 
+  // LFD emulate: render a single quilt view full-screen instead of the full atlas.
+  void set_lfd_emulate(bool active);
+  [[nodiscard]] auto lfd_emulate_active() const noexcept -> bool;
+  void set_lfd_emulate_cell(u32 col, u32 row);
+  [[nodiscard]] auto lfd_emulate_cell() const noexcept -> std::array<u32, 2>;
+  [[nodiscard]] auto lfd_grid() const noexcept -> std::array<u32, 2>;
+
 private:
   struct Impl;
   explicit Renderer(beman::indirect::indirect<Impl> impl);
