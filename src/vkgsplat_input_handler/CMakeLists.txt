@@ -1,6 +1,6 @@
 include(GenerateExportHeader)
 
-add_library(vkgsplat_input_handler input_handler.cpp)
+add_library(vkgsplat_input_handler input_handler.cpp key_bindings.cpp)
 
 add_library(vkgsplat::vkgsplat_input_handler ALIAS vkgsplat_input_handler)
 

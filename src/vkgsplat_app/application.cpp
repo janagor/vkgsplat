@@ -12,6 +12,7 @@
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat/renderer.hpp>
 #include <vkgsplat_input_handler/input_handler.hpp>
+#include <vkgsplat_input_handler/key_bindings.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/input_control.hpp>
 #include <vkgsplat_utility/types.hpp>
@@ -75,12 +76,14 @@ namespace {
     }
   }
 
-  [[nodiscard]] auto RunMainLoop(Window &window, Renderer &renderer, CameraConfig const &camera_config)
-    -> std::expected<void, Error>
+  [[nodiscard]] auto RunMainLoop(Window &window,
+    Renderer &renderer,
+    CameraConfig const &camera_config,
+    KeyBindings const &key_bindings) -> std::expected<void, Error>
   {
     Camera camera{ camera_config };
     CloseState close{};
-    InputHandler input{ window };
+    InputHandler input{ window, key_bindings };
 
     bool redraw_needed = true;
     Extent2D last_extent = window.framebuffer_extent();
@@ -157,7 +160,7 @@ auto Run(std::span<char *const> args) noexcept -> int
       return -1;
     }
 
-    if (auto loop = RunMainLoop(*window, *renderer, config->camera); !loop) {
+    if (auto loop = RunMainLoop(*window, *renderer, config->camera, config->key_bindings); !loop) {
       std::println(stderr, "failed to draw frame: {}", loop.error().message());
       return -1;
     }

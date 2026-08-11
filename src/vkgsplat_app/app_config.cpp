@@ -3,6 +3,7 @@
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat/frame_rate.hpp>
 #include <vkgsplat/lfd_config.hpp>
+#include <vkgsplat_input_handler/key_bindings.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
 
@@ -73,6 +74,7 @@ auto ParseAppConfig(std::span<char *const> args) -> std::expected<AppConfig, vkg
   std::array<u32, 2> lfd_grid{ config.lfd_grid };
   std::vector<u32> lfd_view_order_input{};
   std::string lfd_view_layout_text{ "normal" };
+  KeyBindingNames key_names{};
 
   CLI::App app{ "vkgsplat" };
 
@@ -114,6 +116,23 @@ auto ParseAppConfig(std::span<char *const> args) -> std::expected<AppConfig, vkg
     config.view_cone_deg,
     "Horizontal LFD view cone in degrees across quilt columns")
     ->capture_default_str();
+  app.add_option("--key-forward", key_names.forward, "Key: move forward")->capture_default_str();
+  app.add_option("--key-backward", key_names.backward, "Key: move backward")->capture_default_str();
+  app.add_option("--key-left", key_names.left, "Key: move left")->capture_default_str();
+  app.add_option("--key-right", key_names.right, "Key: move right")->capture_default_str();
+  app.add_option("--key-up", key_names.up, "Key: move up")->capture_default_str();
+  app.add_option("--key-down", key_names.down, "Key: move down")->capture_default_str();
+  app.add_option("--key-roll-left", key_names.roll_left, "Key: roll left")->capture_default_str();
+  app.add_option("--key-roll-right", key_names.roll_right, "Key: roll right")->capture_default_str();
+  app.add_option("--key-close", key_names.close, "Key: close window")->capture_default_str();
+  app.add_option("--key-screenshot", key_names.screenshot, "Key: save screenshot")->capture_default_str();
+  app.add_option("--key-emulate", key_names.emulate_toggle, "Key: toggle LFD emulate mode")
+    ->capture_default_str();
+  app.add_option("--key-cell-left", key_names.cell_left, "Key: LFD emulate cell left")->capture_default_str();
+  app.add_option("--key-cell-right", key_names.cell_right, "Key: LFD emulate cell right")
+    ->capture_default_str();
+  app.add_option("--key-cell-up", key_names.cell_up, "Key: LFD emulate cell up")->capture_default_str();
+  app.add_option("--key-cell-down", key_names.cell_down, "Key: LFD emulate cell down")->capture_default_str();
   // Positional, --ply-path, or config key `ply_path` / `ply-path`.
   app.add_option("ply_path,-p,--ply-path", config.ply_path, "Path to PLY file")->check(CLI::ExistingFile);
 
@@ -171,6 +190,10 @@ auto ParseAppConfig(std::span<char *const> args) -> std::expected<AppConfig, vkg
     if (!parsed) { return std::unexpected{ parsed.error() }; }
     config.frame_rate = *parsed;
   }
+
+  auto resolved_keys = ResolveKeyBindings(key_names);
+  if (!resolved_keys) { return std::unexpected{ resolved_keys.error() }; }
+  config.key_bindings = *resolved_keys;
 
   return config;
 }

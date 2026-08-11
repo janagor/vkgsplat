@@ -38,14 +38,14 @@ auto InputHandler::update(View &view, CloseTarget &close) -> bool
     view_changed = true;
   };
 
-  apply_move(GLFW_KEY_W, ViewMovement::kForward);
-  apply_move(GLFW_KEY_S, ViewMovement::kBackward);
-  apply_move(GLFW_KEY_A, ViewMovement::kLeft);
-  apply_move(GLFW_KEY_D, ViewMovement::kRight);
-  apply_move(GLFW_KEY_SPACE, ViewMovement::kUp);
-  apply_move(GLFW_KEY_LEFT_CONTROL, ViewMovement::kDown);
-  apply_move(GLFW_KEY_Q, ViewMovement::kRollLeft);
-  apply_move(GLFW_KEY_E, ViewMovement::kRollRight);
+  apply_move(bindings_.forward, ViewMovement::kForward);
+  apply_move(bindings_.backward, ViewMovement::kBackward);
+  apply_move(bindings_.left, ViewMovement::kLeft);
+  apply_move(bindings_.right, ViewMovement::kRight);
+  apply_move(bindings_.up, ViewMovement::kUp);
+  apply_move(bindings_.down, ViewMovement::kDown);
+  apply_move(bindings_.roll_left, ViewMovement::kRollLeft);
+  apply_move(bindings_.roll_right, ViewMovement::kRollRight);
 
   f64 cursor_x = 0.0;
   f64 cursor_y = 0.0;
@@ -74,25 +74,25 @@ auto InputHandler::update(View &view, CloseTarget &close) -> bool
     view_changed = true;
   }
 
-  if (glfwGetKey(window_, GLFW_KEY_ESCAPE) == GLFW_PRESS) { close.request_close(); }
+  if (key_pressed(bindings_.close)) { close.request_close(); }
 
-  auto const f2_pressed = key_pressed(GLFW_KEY_F2);
-  if (f2_pressed && !f2_was_pressed_) { screenshot_requested_ = true; }
-  f2_was_pressed_ = f2_pressed;
+  auto const screenshot_pressed = key_pressed(bindings_.screenshot);
+  if (screenshot_pressed && !screenshot_was_pressed_) { screenshot_requested_ = true; }
+  screenshot_was_pressed_ = screenshot_pressed;
 
-  auto const m_pressed = key_pressed(GLFW_KEY_M);
-  if (m_pressed && !m_was_pressed_) { emulate_toggle_requested_ = true; }
-  m_was_pressed_ = m_pressed;
+  auto const emulate_pressed = key_pressed(bindings_.emulate_toggle);
+  if (emulate_pressed && !emulate_was_pressed_) { emulate_toggle_requested_ = true; }
+  emulate_was_pressed_ = emulate_pressed;
 
   auto const edge_arrow = [&](int key, bool &was, ArrowDir dir) -> void {
     auto const pressed = key_pressed(key);
     if (pressed && !was) { pending_arrow_ = dir; }
     was = pressed;
   };
-  edge_arrow(GLFW_KEY_LEFT, left_was_pressed_, ArrowDir::kLeft);
-  edge_arrow(GLFW_KEY_RIGHT, right_was_pressed_, ArrowDir::kRight);
-  edge_arrow(GLFW_KEY_UP, up_was_pressed_, ArrowDir::kUp);
-  edge_arrow(GLFW_KEY_DOWN, down_was_pressed_, ArrowDir::kDown);
+  edge_arrow(bindings_.cell_left, left_was_pressed_, ArrowDir::kLeft);
+  edge_arrow(bindings_.cell_right, right_was_pressed_, ArrowDir::kRight);
+  edge_arrow(bindings_.cell_up, up_was_pressed_, ArrowDir::kUp);
+  edge_arrow(bindings_.cell_down, down_was_pressed_, ArrowDir::kDown);
 
   return view_changed;
 }
