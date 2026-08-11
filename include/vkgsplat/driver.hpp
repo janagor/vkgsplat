@@ -19,7 +19,7 @@ struct DriverConfig
 };
 
 // Low-level graphics API abstraction. Concrete backends (e.g. VulkanDriver) live
-// under src/vkgsplat/backend/<api>/.
+// under src/vkgsplat_backend/<api>/.
 class VKGSPLAT_EXPORT Driver
 {
 public:
