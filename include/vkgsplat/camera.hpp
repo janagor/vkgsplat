@@ -156,7 +156,8 @@ public:
     auto const pitch_amount = yoffset * mouse_sensitivity_;
 
     auto const q_yaw = glm::angleAxis(glm::radians(-yaw_amount), up_);
-    auto const q_pitch = glm::angleAxis(glm::radians(-pitch_amount), right_);
+    // Input already uses screen-up as +y (last_y - cursor_y); positive pitch looks up.
+    auto const q_pitch = glm::angleAxis(glm::radians(pitch_amount), right_);
 
     orientation_ = q_yaw * q_pitch * orientation_;
     orientation_ = glm::normalize(orientation_);

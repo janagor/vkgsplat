@@ -121,7 +121,9 @@ auto MakeQuiltView(QuiltViewRequest const &request) -> QuiltView
   f64 const focal = std::max(request.focal_distance, 1e-3);
 
   glm::dvec3 const offset = center.right * (std::tan(glm::radians(normalized_col * cone_h)) * focal)
-                            + center.up * (std::tan(glm::radians(normalized_row * cone_v)) * focal);
+                            // Row 0 is the top quilt tile (smaller framebuffer y); positive row index moves down
+                            // the atlas, so the camera should shift opposite to world up for lower rows.
+                            + center.up * (std::tan(glm::radians(-normalized_row * cone_v)) * focal);
   glm::dvec3 const eye = center.position + offset;
   glm::dvec3 const target = eye + center.front;
 
