@@ -32,3 +32,21 @@ lfd-view-layout = "normal"
 # lfd-view-order = [6, 7, 8, 3, 4, 5, 0, 1, 2]
 # Horizontal view cone (degrees) across quilt columns when grid > 1x1.
 view-cone = 4.0
+
+# Keybinds (GLFW key names: A-Z, 0-9, F1-F12, SPACE, ESCAPE, LEFT/RIGHT/UP/DOWN,
+# LEFT_CONTROL / LCTRL, LEFT_SHIFT, ...). Mouse look + scroll zoom are always on.
+key-forward = "W"
+key-backward = "S"
+key-left = "A"
+key-right = "D"
+key-up = "SPACE"
+key-down = "LEFT_CONTROL"
+key-roll-left = "Q"
+key-roll-right = "E"
+key-close = "ESCAPE"
+key-screenshot = "F2"
+key-emulate = "M"
+key-cell-left = "LEFT"
+key-cell-right = "RIGHT"
+key-cell-up = "UP"
+key-cell-down = "DOWN"

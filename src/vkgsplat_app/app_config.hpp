@@ -10,6 +10,7 @@
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat/frame_rate.hpp>
 #include <vkgsplat/lfd_config.hpp>
+#include <vkgsplat_input_handler/key_bindings.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
 
@@ -29,6 +30,7 @@ struct AppConfig
   vkgsplat::f64 view_cone_deg{ vkgsplat::kDefaultViewConeDegrees };
   // Row-major view index per quilt cell (resolved from layout preset or explicit order).
   std::vector<vkgsplat::u32> lfd_view_order;
+  vkgsplat::KeyBindings key_bindings{};
 };
 
 [[nodiscard]] auto ParseAppConfig(std::span<char *const> args) -> std::expected<AppConfig, vkgsplat::Error>;
