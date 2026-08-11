@@ -66,12 +66,12 @@ auto CreateSyncObjects(vulkan::Context &context, RenderData &data) -> std::expec
 {
   data.available_semaphores.clear();
   data.finished_semaphore.clear();
-  data.in_flight_fences.clear();
-  data.image_in_flight.assign(context.swapchain->image_count(), VK_NULL_HANDLE);
+  data.slot_gpu_fences.clear();
+  data.image_slot_fence.assign(context.swapchain->image_count(), VK_NULL_HANDLE);
 
-  data.available_semaphores.reserve(kMaxFramesInFlight);
+  data.available_semaphores.reserve(kFrameSlotCount);
   data.finished_semaphore.reserve(context.swapchain->image_count());
-  data.in_flight_fences.reserve(kMaxFramesInFlight);
+  data.slot_gpu_fences.reserve(kFrameSlotCount);
 
   for (size_t i = 0; i < context.swapchain->image_count(); i++) {
     auto semaphore = Semaphore::create(std::ref(context.disp));
@@ -79,14 +79,14 @@ auto CreateSyncObjects(vulkan::Context &context, RenderData &data) -> std::expec
     data.finished_semaphore.push_back(std::move(*semaphore));
   }
 
-  for (size_t i = 0; i < kMaxFramesInFlight; i++) {
+  for (size_t i = 0; i < kFrameSlotCount; i++) {
     auto available = Semaphore::create(std::ref(context.disp));
     if (!available) { return std::unexpected{ available.error() }; }
     data.available_semaphores.push_back(std::move(*available));
 
     auto fence = Fence::create(std::ref(context.disp), VK_FENCE_CREATE_SIGNALED_BIT);
     if (!fence) { return std::unexpected{ fence.error() }; }
-    data.in_flight_fences.push_back(std::move(*fence));
+    data.slot_gpu_fences.push_back(std::move(*fence));
   }
   return {};
 }
@@ -126,7 +126,8 @@ void Cleanup(vulkan::Context &context, RenderData &data)
 
   data.available_semaphores.clear();
   data.finished_semaphore.clear();
-  data.in_flight_fences.clear();
+  data.slot_gpu_fences.clear();
+  data.image_slot_fence.clear();
 
   data.command_buffers.clear();
   data.command_pool.reset();

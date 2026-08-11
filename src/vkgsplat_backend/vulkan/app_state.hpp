@@ -34,7 +34,10 @@
 
 namespace vkgsplat {
 
-constexpr int kMaxFramesInFlight = 2;
+// CPU/GPU pipelining depth: ring of frame slots (not a separate "in-flight" pacing system).
+// CPU ring (BoundedQueue + slot_ready) gates FrameSetup reuse after record/submit;
+// slot_gpu_fences gates GPU resource reuse until the prior submit on that slot finishes.
+constexpr size_t kFrameSlotCount = 2;
 
 constexpr u32 kVertsPerSphere = 6;
 constexpr size_t kSortEntrySize = sizeof(f32) + sizeof(u32);
@@ -111,12 +114,15 @@ struct RenderData
   std::optional<vulkan::CommandPool> command_pool;
   std::vector<vulkan::CommandBuffer> command_buffers;
 
+  // Binary WSI sync: acquire signals available[slot]; present waits finished[image].
   std::vector<Semaphore> available_semaphores;
   std::vector<Semaphore> finished_semaphore;
-  std::vector<Fence> in_flight_fences;
-  std::vector<VkFence> image_in_flight;
-  size_t current_frame = {};
-  std::array<FrameContext, kMaxFramesInFlight> frames{};
+  // Per-slot GPU completion (wait before reusing this slot's GPU-side resources).
+  std::vector<Fence> slot_gpu_fences;
+  // Per-swapchain-image: fence of the slot that last submitted this image (or null).
+  std::vector<VkFence> image_slot_fence;
+  size_t current_slot = {};
+  std::array<FrameContext, kFrameSlotCount> frames{};
   GpuPassTimer gpu_pass_timer;
   std::unique_ptr<ImGuiOverlayState> imgui;
   std::unique_ptr<PresentPacer> present_pacer;

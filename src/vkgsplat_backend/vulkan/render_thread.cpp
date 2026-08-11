@@ -223,10 +223,10 @@ auto RenderThread::DrawFrameVulkan(size_t frame_slot) -> std::expected<void, Err
 {
   vulkan::Context &context = *context_;
   RenderData &data = *data_;
-  data.current_frame = frame_slot;
+  data.current_slot = frame_slot;
 
-  auto *in_flight_fence = data.in_flight_fences.at(frame_slot).handle();
-  context.disp.waitForFences(1, &in_flight_fence, VK_TRUE, UINT64_MAX);
+  auto *slot_fence = data.slot_gpu_fences.at(frame_slot).handle();
+  context.disp.waitForFences(1, &slot_fence, VK_TRUE, UINT64_MAX);
 
   if (data.gpu_pass_timer.enabled()) {
     data.gpu_pass_timer.resolve(context, frame_slot);
@@ -264,10 +264,10 @@ auto RenderThread::DrawFrameVulkan(size_t frame_slot) -> std::expected<void, Err
       std::errc::io_error, "failed to acquire swapchain image. VkResult=" + std::to_string(result)) };
   }
 
-  if (data.image_in_flight.at(image_index) != VK_NULL_HANDLE) {
-    context.disp.waitForFences(1, &data.image_in_flight.at(image_index), VK_TRUE, UINT64_MAX);
+  if (data.image_slot_fence.at(image_index) != VK_NULL_HANDLE) {
+    context.disp.waitForFences(1, &data.image_slot_fence.at(image_index), VK_TRUE, UINT64_MAX);
   }
-  data.image_in_flight.at(image_index) = in_flight_fence;
+  data.image_slot_fence.at(image_index) = slot_fence;
 
   FrameSetup &setup = data.frames.at(frame_slot).setup;
   BuildFrameSetupGpu(context, data, setup, image_index);
@@ -289,9 +289,9 @@ auto RenderThread::DrawFrameVulkan(size_t frame_slot) -> std::expected<void, Err
   auto const submit_info =
     initializers::SubmitInfo(wait_semaphores, wait_stages, std::span{ &command_buffer, 1 }, signal_semaphores);
 
-  context.disp.resetFences(1, &in_flight_fence);
+  context.disp.resetFences(1, &slot_fence);
 
-  if (context.disp.queueSubmit(data.graphics_queue, 1, &submit_info, in_flight_fence) != VK_SUCCESS) {
+  if (context.disp.queueSubmit(data.graphics_queue, 1, &submit_info, slot_fence) != VK_SUCCESS) {
     return std::unexpected{ MakeError(std::errc::io_error, "failed to submit draw command buffer") };
   }
 

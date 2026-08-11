@@ -65,9 +65,9 @@ struct ImGuiOverlayState
   // Rebuild ImGui draw data infrequently; reuse per-frame secondary CBs between updates.
   // frame_draw_data owns per-slot clones — ImGui::GetDrawData() is invalidated by the next
   // NewFrame() and must not be read from the render thread under pipelined SubmitFrame.
-  std::array<VkCommandBuffer, kMaxFramesInFlight> overlay_secondaries{};
-  std::array<uint64_t, kMaxFramesInFlight> secondary_generation{};
-  std::array<ImDrawData *, kMaxFramesInFlight> frame_draw_data{};
+  std::array<VkCommandBuffer, kFrameSlotCount> overlay_secondaries{};
+  std::array<uint64_t, kFrameSlotCount> secondary_generation{};
+  std::array<ImDrawData *, kFrameSlotCount> frame_draw_data{};
   uint64_t ui_generation = 1;
   std::array<char, kImGuiFpsLabelCapacity> fps_label{ "FPS: --" };
   std::array<char, kImGuiGpuLabelCapacity> gpu_label{};
@@ -297,10 +297,10 @@ namespace {
     if (data.imgui == nullptr || !data.command_pool) { return false; }
 
     auto buffers =
-      data.command_pool->allocate_buffers(static_cast<u32>(kMaxFramesInFlight), VK_COMMAND_BUFFER_LEVEL_SECONDARY);
+      data.command_pool->allocate_buffers(static_cast<u32>(kFrameSlotCount), VK_COMMAND_BUFFER_LEVEL_SECONDARY);
     if (!buffers) { return false; }
 
-    for (size_t i = 0; i < kMaxFramesInFlight; ++i) {
+    for (size_t i = 0; i < kFrameSlotCount; ++i) {
       data.imgui->overlay_secondaries.at(i) = buffers->at(i).handle();
       data.imgui->secondary_generation.at(i) = 0;
     }
@@ -687,7 +687,7 @@ void RecordImguiOverlay(vulkan::Context &context, RenderData const &data, VkComm
     InvalidateOverlaySecondaries(overlay);
   }
 
-  size_t const frame_slot = data.current_frame;
+  size_t const frame_slot = data.current_slot;
   if (overlay.overlay_secondaries.at(frame_slot) == VK_NULL_HANDLE) {
     auto to_present = initializers::ImageMemoryBarrier(
       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, swapchain_image, color_range);

@@ -18,7 +18,7 @@ namespace vkgsplat {
 namespace {
 
   constexpr u32 kQueriesPerSlot = kGpuPassCount * 2U;
-  constexpr u32 kQueryPoolSize = static_cast<u32>(kMaxFramesInFlight) * kQueriesPerSlot;
+  constexpr u32 kQueryPoolSize = static_cast<u32>(kFrameSlotCount) * kQueriesPerSlot;
   constexpr float kNsToMs = 1.0e-6F;
 
 }// namespace
