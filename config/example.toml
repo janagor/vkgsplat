@@ -2,8 +2,8 @@
 # Usage: vkgsplat --config config/example.toml
 # CLI arguments override values from this file.
 
-ply_path = "resources/scene.ply"
-validation = true
+ply_path = "resources/x/PLY/point_cloud/iteration_100/point_cloud_1.ply"
+validation = false
 imgui = true
 gpu-timers = true
 # frame-rate = "display"   # or "adaptive", or a positive integer like 60
@@ -23,6 +23,12 @@ camera-speed = 12.5
 camera-sensitivity = 0.1
 
 # LFD quilt: columns rows. {1,1} is standard mono rendering.
-lfd-grid = [2, 2]
+lfd-grid = [3, 3]
+# View placement in the quilt atlas (row-major cell order):
+#   normal    -> 0,1 / 2,3
+#   flip-rows -> 2,3 / 0,1  (for 2x2; generalizes to 3x3 as 6,7,8 / 3,4,5 / 0,1,2)
+lfd-view-layout = "normal"
+# Optional explicit permutation (overrides lfd-view-layout), e.g. for 3x3:
+# lfd-view-order = [6, 7, 8, 3, 4, 5, 0, 1, 2]
 # Horizontal view cone (degrees) across quilt columns when grid > 1x1.
-view-cone = 40.0
+view-cone = 4.0

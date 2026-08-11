@@ -10,6 +10,7 @@
 #include "gs/rasterization.hpp"
 #include "vulkan_context.hpp"
 
+#include <vkgsplat/lfd_config.hpp>
 #include <vkgsplat_utility/types.hpp>
 
 #include <algorithm>
@@ -128,11 +129,16 @@ void EvalGsPipeline(vulkan::Context &context, RenderData &data, VkCommandBuffer 
     u32 const tile_h = context.swapchain->vk_extent().height;
     f64 const tile_aspect = static_cast<f64>(tile_w) / static_cast<f64>(std::max(1U, tile_h));
 
+    LfdGridCell const logical = LfdLogicalCellForGridPosition(data.lfd_view_order,
+      data.lfd_grid,
+      data.lfd_emulate_cell.at(0),
+      data.lfd_emulate_cell.at(1));
+
     QuiltView const view = MakeQuiltView(QuiltViewRequest{
       .center = &setup.camera,
       .grid = data.lfd_grid,
-      .col = data.lfd_emulate_cell.at(0),
-      .row = data.lfd_emulate_cell.at(1),
+      .col = logical.col,
+      .row = logical.row,
       .view_cone_deg = data.view_cone_deg,
       .focal_distance = data.lfd_focal_distance,
       .tile_aspect = tile_aspect,
@@ -173,11 +179,13 @@ void EvalGsPipeline(vulkan::Context &context, RenderData &data, VkCommandBuffer 
       for (u32 col = 0U; col < cols; ++col) {
         if (!first_tile) { Barrier::graphics_to_compute(context.disp, command_buffer); }
 
+        LfdGridCell const logical = LfdLogicalCellForGridPosition(data.lfd_view_order, data.lfd_grid, col, row);
+
         QuiltView const view = MakeQuiltView(QuiltViewRequest{
           .center = &setup.camera,
           .grid = data.lfd_grid,
-          .col = col,
-          .row = row,
+          .col = logical.col,
+          .row = logical.row,
           .view_cone_deg = data.view_cone_deg,
           .focal_distance = data.lfd_focal_distance,
           .tile_aspect = tile_aspect,

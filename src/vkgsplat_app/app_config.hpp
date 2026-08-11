@@ -5,6 +5,7 @@
 #include <expected>
 #include <span>
 #include <string>
+#include <vector>
 
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat/frame_rate.hpp>
@@ -26,6 +27,8 @@ struct AppConfig
   std::array<u32, 2> lfd_grid{ 1U, 1U };
   // Horizontal view cone (degrees) across quilt columns; rows use aspect-scaled cone.
   vkgsplat::f64 view_cone_deg{ vkgsplat::kDefaultViewConeDegrees };
+  // Row-major view index per quilt cell (resolved from layout preset or explicit order).
+  std::vector<vkgsplat::u32> lfd_view_order;
 };
 
 [[nodiscard]] auto ParseAppConfig(std::span<char *const> args) -> std::expected<AppConfig, vkgsplat::Error>;

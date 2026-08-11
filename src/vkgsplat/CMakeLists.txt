@@ -5,6 +5,7 @@ add_library(
   error.cpp
   engine.cpp
   renderer.cpp
+  lfd_view_order.cpp
   io/ply/miniply.cpp
   io/ply/load_splats.cpp
   io/image/write_png.cpp

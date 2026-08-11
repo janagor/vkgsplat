@@ -77,6 +77,7 @@ struct RenderData
   u32 color_height = 0;
   // LFD quilt: mono is {1,1}. Color RT is an atlas of quilt_tile_extent cells.
   std::array<u32, 2> lfd_grid{ 1U, 1U };
+  std::vector<u32> lfd_view_order;
   f64 view_cone_deg{ kDefaultViewConeDegrees };
   // Focal-plane distance (world units) for parallel-array view offsets.
   f64 lfd_focal_distance{ kDefaultLfdFocalDistance };
