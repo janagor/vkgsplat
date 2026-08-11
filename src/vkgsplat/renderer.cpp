@@ -20,22 +20,22 @@
 #include <vkgsplat_utility/types.hpp>
 #include <vkgsplat_utility/utils.hpp>
 
-#include "backend/vulkan/app_state.hpp"
-#include "backend/vulkan/graphics_pipeline.hpp"
-#include "backend/vulkan/gs/binning.hpp"
-#include "backend/vulkan/gs/pipeline.hpp"
-#include "backend/vulkan/gs/projection.hpp"
-#include "backend/vulkan/gs/rasterization.hpp"
-#include "backend/vulkan/gs/sorting.hpp"
-#include "backend/vulkan/imgui_overlay.hpp"
-#include "backend/vulkan/mesh_gpu.hpp"
-#include "backend/vulkan/present_pacer.hpp"
-#include "backend/vulkan/render_thread.hpp"
-#include "backend/vulkan/renderer.hpp"
-#include "backend/vulkan/screenshot.hpp"
-#include "backend/vulkan/sphere_setup.hpp"
-#include "backend/vulkan/vulkan_context.hpp"
-#include "backend/vulkan/vulkan_driver.hpp"
+#include "vulkan/app_state.hpp"
+#include "vulkan/graphics_pipeline.hpp"
+#include "vulkan/gs/binning.hpp"
+#include "vulkan/gs/pipeline.hpp"
+#include "vulkan/gs/projection.hpp"
+#include "vulkan/gs/rasterization.hpp"
+#include "vulkan/gs/sorting.hpp"
+#include "vulkan/imgui_overlay.hpp"
+#include "vulkan/mesh_gpu.hpp"
+#include "vulkan/present_pacer.hpp"
+#include "vulkan/render_thread.hpp"
+#include "vulkan/renderer.hpp"
+#include "vulkan/screenshot.hpp"
+#include "vulkan/sphere_setup.hpp"
+#include "vulkan/vulkan_context.hpp"
+#include "vulkan/vulkan_driver.hpp"
 #include <vkgsplat_io/load_splats.hpp>
 #include <vkgsplat_io/splat_cpu.hpp>
 
@@ -146,9 +146,11 @@ auto Renderer::operator=(Renderer &&) noexcept -> Renderer & = default;
 
 Renderer::~Renderer() noexcept
 {
-  if (impl_.valueless_after_move() || impl_->engine == nullptr) { return; }
-  impl_->render_thread->Stop();
-  Cleanup(AsVulkanDriver(impl_->engine->driver()).context(), impl_->render_data);
+  if (impl_.valueless_after_move()) { return; }
+  if (impl_->render_thread != nullptr) { impl_->render_thread->Stop(); }
+  if (impl_->engine != nullptr) {
+    Cleanup(AsVulkanDriver(impl_->engine->driver()).context(), impl_->render_data);
+  }
 }
 
 auto Renderer::create(RendererConfig const &config, Platform &platform) -> std::expected<Renderer, Error>
@@ -163,13 +165,14 @@ auto Renderer::create(RendererConfig const &config, Platform &platform) -> std::
   impl->owned_engine = std::make_unique<Engine>(std::move(*engine));
   impl->engine = impl->owned_engine.get();
 
-  if (auto built = BuildRendererResources(AsVulkanDriver(impl->engine->driver()).context(), impl->render_data, config);
-    !built) {
+  auto &context = AsVulkanDriver(impl->engine->driver()).context();
+  if (auto built = BuildRendererResources(context, impl->render_data, config); !built) {
+    Cleanup(context, impl->render_data);
     return std::unexpected(built.error());
   }
 
   impl->render_thread = std::make_unique<RenderThread>();
-  impl->render_thread->Start(&AsVulkanDriver(impl->engine->driver()).context(), &impl->render_data);
+  impl->render_thread->Start(&context, &impl->render_data);
 
   return Renderer{ std::move(impl) };
 }
@@ -179,12 +182,14 @@ auto Renderer::create(RendererConfig const &config, Engine &engine) -> std::expe
   beman::indirect::indirect<Impl> impl;
   impl->engine = &engine;
 
-  if (auto built = BuildRendererResources(AsVulkanDriver(engine.driver()).context(), impl->render_data, config); !built) {
+  auto &context = AsVulkanDriver(engine.driver()).context();
+  if (auto built = BuildRendererResources(context, impl->render_data, config); !built) {
+    Cleanup(context, impl->render_data);
     return std::unexpected(built.error());
   }
 
   impl->render_thread = std::make_unique<RenderThread>();
-  impl->render_thread->Start(&AsVulkanDriver(engine.driver()).context(), &impl->render_data);
+  impl->render_thread->Start(&context, &impl->render_data);
 
   return Renderer{ std::move(impl) };
 }
