@@ -82,7 +82,7 @@ namespace {
     ScopedGpuPass(vulkan::Context const &context, RenderData const &data, VkCommandBuffer command_buffer, GpuPass pass)
       : context_(context), data_(data), command_buffer_(command_buffer), pass_(pass), active_(data.gpu_pass_timer.enabled())
     {
-      if (active_) { data_.gpu_pass_timer.write(context_, data_.current_frame, pass_, false, command_buffer_); }
+      if (active_) { data_.gpu_pass_timer.write(context_, data_.current_slot, pass_, false, command_buffer_); }
     }
 
     ScopedGpuPass(ScopedGpuPass const &) = delete;
@@ -92,7 +92,7 @@ namespace {
 
     ~ScopedGpuPass()
     {
-      if (active_) { data_.gpu_pass_timer.write(context_, data_.current_frame, pass_, true, command_buffer_); }
+      if (active_) { data_.gpu_pass_timer.write(context_, data_.current_slot, pass_, true, command_buffer_); }
     }
 
   private:
@@ -113,7 +113,7 @@ void RecordGsPipeline(RenderData &data)
 
 void EvalGsPipeline(vulkan::Context &context, RenderData &data, VkCommandBuffer command_buffer)
 {
-  size_t const slot = data.current_frame;
+  size_t const slot = data.current_slot;
   if (data.gpu_pass_timer.enabled()) { data.gpu_pass_timer.begin_frame(context, slot, command_buffer); }
 
   data.project_push.cull_margin = PhaseACullMargin(data);

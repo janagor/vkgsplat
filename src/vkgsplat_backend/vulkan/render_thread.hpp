@@ -22,8 +22,9 @@ namespace vulkan { struct Context; }
 struct RenderData;
 
 // Dedicated thread for all Vulkan queue / swapchain / command-buffer recording work.
-// Main thread enqueues CPU-ready frame slots; the render thread drains the queue while
-// main prepares the next slot in parallel (bounded depth = kMaxFramesInFlight).
+// Main enqueues CPU-ready frame slots (ring depth = kFrameSlotCount); the render thread
+// drains them while main prepares the next slot. GPU completion for a slot is separate
+// (slot_gpu_fences) and only waited when that slot is reused for another submit.
 class RenderThread
 {
 public:
@@ -54,7 +55,7 @@ private:
     std::optional<Error> error;
   };
 
-  using PendingQueue = adt::BoundedQueue<size_t, static_cast<size_t>(kMaxFramesInFlight)>;
+  using PendingQueue = adt::BoundedQueue<size_t, kFrameSlotCount>;
   using CompletionQueue = adt::BoundedQueue<FrameCompletion, PendingQueue::kCapacity>;
 
   void ThreadMain();
@@ -73,8 +74,7 @@ private:
   PendingQueue pending_queue_;
   CompletionQueue completion_queue_;
 
-  // Slot is ready for main to rebuild FrameSetup after the render thread finishes
-  // recording/submitting that slot (not tied to GPU fence polling while idle).
+  // CPU ownership of FrameSetup: ready after record+submit for that slot (not GPU done).
   mutable std::mutex slot_mutex_;
   mutable std::condition_variable slot_ready_cv_;
   std::array<bool, PendingQueue::kCapacity> slot_ready_{};

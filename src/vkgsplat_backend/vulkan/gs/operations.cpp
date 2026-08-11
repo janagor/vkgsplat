@@ -32,7 +32,7 @@ namespace {
     ScopedGpuPass(vulkan::Context const &context, RenderData const &data, VkCommandBuffer command_buffer, GpuPass pass)
       : context_(context), data_(data), command_buffer_(command_buffer), pass_(pass), active_(data.gpu_pass_timer.enabled())
     {
-      if (active_) { data_.gpu_pass_timer.write(context_, data_.current_frame, pass_, false, command_buffer_); }
+      if (active_) { data_.gpu_pass_timer.write(context_, data_.current_slot, pass_, false, command_buffer_); }
     }
 
     ScopedGpuPass(ScopedGpuPass const &) = delete;
@@ -42,7 +42,7 @@ namespace {
 
     ~ScopedGpuPass()
     {
-      if (active_) { data_.gpu_pass_timer.write(context_, data_.current_frame, pass_, true, command_buffer_); }
+      if (active_) { data_.gpu_pass_timer.write(context_, data_.current_slot, pass_, true, command_buffer_); }
     }
 
   private:
@@ -107,7 +107,7 @@ void RecordProjection(vulkan::Context const &context,
 {
   // Optional: quilt Phase B re-projects many times and must not rewrite the same timestamp queries.
   if (time_pass) {
-    data.gpu_pass_timer.write(context, data.current_frame, GpuPass::kProjection, false, command_buffer);
+    data.gpu_pass_timer.write(context, data.current_slot, GpuPass::kProjection, false, command_buffer);
   }
 
   context.disp.cmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, data.project_algorithm.pipeline());
@@ -118,7 +118,7 @@ void RecordProjection(vulkan::Context const &context,
   Barrier::compute_read(context.disp, command_buffer);
 
   if (time_pass) {
-    data.gpu_pass_timer.write(context, data.current_frame, GpuPass::kProjection, true, command_buffer);
+    data.gpu_pass_timer.write(context, data.current_slot, GpuPass::kProjection, true, command_buffer);
   }
 }
 
