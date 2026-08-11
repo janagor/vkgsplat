@@ -148,6 +148,7 @@ auto DeviceInitialization(vulkan::Context &context, DriverConfig const &config) 
   VkPhysicalDeviceVulkan12Features features_12{};
   features_12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
   features_12.bufferDeviceAddress = VK_TRUE;
+  features_12.timelineSemaphore = VK_TRUE;
 
   VkPhysicalDeviceVulkan13Features features_13{};
   features_13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;

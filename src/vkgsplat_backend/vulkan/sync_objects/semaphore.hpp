@@ -5,6 +5,7 @@
 #include <functional>
 
 #include <vkgsplat_utility/error.hpp>
+#include <vkgsplat_utility/types.hpp>
 
 #include <VkBootstrapDispatch.h>
 #include <vulkan/vulkan_core.h>
@@ -24,6 +25,12 @@ public:
   auto operator=(Semaphore &&other) noexcept -> Semaphore &;
 
   [[nodiscard]] static auto create(std::reference_wrapper<vkb::DispatchTable> disp) -> std::expected<Semaphore, Error>;
+
+  [[nodiscard]] static auto create_timeline(std::reference_wrapper<vkb::DispatchTable> disp, u64 initial_value = 0)
+    -> std::expected<Semaphore, Error>;
+
+  // Host wait until this timeline semaphore reaches at least `value` (no-op when value == 0).
+  [[nodiscard]] auto wait_value(u64 value) const -> std::expected<void, Error>;
 
   [[nodiscard]] auto handle() const noexcept -> VkSemaphore { return semaphore_; }
 
