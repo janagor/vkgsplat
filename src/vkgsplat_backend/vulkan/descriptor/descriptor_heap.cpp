@@ -1,9 +1,9 @@
 #include "vulkan/descriptor/descriptor_heap.hpp"
 
-#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <print>
 #include <span>
 #include <utility>
@@ -15,24 +15,38 @@
 #include <vkgsplat_io/splat_cpu.hpp>
 #include <vkgsplat_utility/types.hpp>
 
+#include <vkexec/context.hpp>
+#include <vkexec/descriptor_heap.hpp>
 #include <vulkan/vulkan_core.h>
 
 namespace vkgsplat {
+namespace {
 
-auto WriteStorageBufferDescriptor(vulkan::Context &context,
+  [[nodiscard]] auto RequireVkexec(vulkan::Context const &context) -> vkexec::context *
+  {
+    if (context.vkexec_context == nullptr) {
+      std::println("vkexec context missing for descriptor heap path");
+      return nullptr;
+    }
+    return context.vkexec_context.get();
+  }
+
+}// namespace
+
+auto WriteStorageBufferDescriptor(vulkan::Context const &context,
   VkDeviceAddress buffer_address,
   VkDeviceSize buffer_size,
   std::span<std::byte> destination) -> bool
 {
-  VkDeviceAddressRangeEXT const address_range = { .address = buffer_address, .size = buffer_size };
-  VkResourceDescriptorInfoEXT resource_info{};
-  resource_info.sType = VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT;
-  resource_info.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-  resource_info.data.pAddressRange = &address_range;
-
-  VkHostAddressRangeEXT const host_range = { .address = destination.data(), .size = destination.size() };
-
-  return context.write_resource_descriptors(context.device, 1, &resource_info, &host_range) == VK_SUCCESS;
+  auto *vkexec = RequireVkexec(context);
+  if (vkexec == nullptr) { return false; }
+  try {
+    vkexec::write_storage_buffer_descriptor(*vkexec, buffer_address, buffer_size, destination);
+    return true;
+  } catch (std::exception const &ex) {
+    std::println("write_storage_buffer_descriptor failed: {}", ex.what());
+    return false;
+  }
 }
 
 auto WriteStorageImageDescriptor(vulkan::Context &context,
@@ -40,6 +54,7 @@ auto WriteStorageImageDescriptor(vulkan::Context &context,
   VkImageLayout layout,
   std::span<std::byte> destination) -> bool
 {
+  // Image descriptors remain local until vkexec grows a matching helper.
   VkImageDescriptorInfoEXT image_info{};
   image_info.sType = VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT;
   image_info.pView = &view_info;
@@ -57,32 +72,24 @@ auto WriteStorageImageDescriptor(vulkan::Context &context,
 
 auto QueryDescriptorHeapLayout(vulkan::Context const &context, RenderData &data) -> bool
 {
-  VkPhysicalDeviceDescriptorHeapPropertiesEXT heap_props{};
-  heap_props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_PROPERTIES_EXT;
+  auto *vkexec = RequireVkexec(context);
+  if (vkexec == nullptr) { return false; }
 
-  VkPhysicalDeviceProperties2 props2 = {
-    .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
-    .pNext = &heap_props,
-    .properties = context.device.physical_device.properties,
-  };
-  context.inst_disp.getPhysicalDeviceProperties2(context.device.physical_device, &props2);
-
-  // Mix storage buffers and a storage image in one heap; stride must fit both.
-  auto const descriptor_size =
-    static_cast<size_t>(std::max(heap_props.bufferDescriptorSize, heap_props.imageDescriptorSize));
-  auto const descriptor_alignment = std::max(heap_props.bufferDescriptorAlignment, heap_props.imageDescriptorAlignment);
-  if (descriptor_size == 0 || (descriptor_alignment != 0 && descriptor_size % descriptor_alignment != 0)) {
+  try {
+    auto const layout = vkexec::query_descriptor_heap_layout(*vkexec);
+    data.buffer_descriptor_size = layout.buffer_descriptor_size;
+    data.image_descriptor_size = layout.image_descriptor_size;
+    data.descriptor_stride = layout.descriptor_stride;
+    data.descriptor_heap_size = vkexec::descriptor_heap_byte_size(layout, kHeapDescriptorCount);
+    auto const descriptor_region =
+      static_cast<VkDeviceSize>(data.descriptor_stride) * static_cast<VkDeviceSize>(kHeapDescriptorCount);
+    data.reserved_range_offset = AlignUp(descriptor_region, layout.resource_heap_alignment);
+    data.reserved_range_size = layout.min_resource_heap_reserved_range;
+    return data.descriptor_stride > 0;
+  } catch (std::exception const &ex) {
+    std::println("query_descriptor_heap_layout failed: {}", ex.what());
     return false;
   }
-  data.buffer_descriptor_size = static_cast<size_t>(heap_props.bufferDescriptorSize);
-  data.image_descriptor_size = static_cast<size_t>(heap_props.imageDescriptorSize);
-  data.descriptor_stride = descriptor_size;
-  auto const descriptor_region_size = data.descriptor_stride * kHeapDescriptorCount;
-  data.reserved_range_offset = AlignUp(descriptor_region_size, heap_props.resourceHeapAlignment);
-  data.reserved_range_size = heap_props.minResourceHeapReservedRange;
-  data.descriptor_heap_size = data.reserved_range_offset + data.reserved_range_size;
-
-  return descriptor_size > 0;
 }
 
 void DestroyDescriptorHeap(vulkan::Context &context, RenderData &data)
@@ -202,15 +209,20 @@ auto RefreshDescriptorHeap(vulkan::Context &context, RenderData &data) -> bool
 
 void BindDescriptorHeap(vulkan::Context const &context, RenderData const &data, VkCommandBuffer command_buffer)
 {
+  auto *vkexec = RequireVkexec(context);
+  if (vkexec == nullptr) { return; }
+
   VkDeviceAddress const heap_address = context.gpu_allocator.get_buffer_device_address(data.descriptor_heap_buffer);
-  VkBindHeapInfoEXT const bind_heap_info = {
-    .sType = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
-    .pNext = nullptr,
-    .heapRange = { .address = heap_address, .size = data.descriptor_heap_size },
-    .reservedRangeOffset = data.reserved_range_offset,
-    .reservedRangeSize = data.reserved_range_size,
-  };
-  context.cmd_bind_resource_heap(command_buffer, &bind_heap_info);
+  try {
+    vkexec::cmd_bind_resource_heap(*vkexec,
+      command_buffer,
+      heap_address,
+      data.descriptor_heap_size,
+      data.reserved_range_offset,
+      data.reserved_range_size);
+  } catch (std::exception const &ex) {
+    std::println("cmd_bind_resource_heap failed: {}", ex.what());
+  }
 }
 
 auto HeapSlotByteOffset(RenderData const &data, HeapSlot slot) -> uint32_t

@@ -32,7 +32,7 @@ inline constexpr size_t kHeapDescriptorCount = 12;
 [[nodiscard]] constexpr auto AlignUp(VkDeviceSize value, VkDeviceSize alignment) noexcept -> VkDeviceSize
 { return (value + alignment - 1) / alignment * alignment; }
 
-[[nodiscard]] auto WriteStorageBufferDescriptor(vulkan::Context &context,
+[[nodiscard]] auto WriteStorageBufferDescriptor(vulkan::Context const &context,
   VkDeviceAddress buffer_address,
   VkDeviceSize buffer_size,
   std::span<std::byte> destination) -> bool;
