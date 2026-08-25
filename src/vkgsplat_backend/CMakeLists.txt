@@ -33,7 +33,8 @@ add_library(
   vulkan/compute/op_tensor_sync_local.cpp
   vulkan/descriptor/descriptor_heap.cpp
   vulkan/gpu_pass_timer.cpp
-  vulkan/imgui_overlay.cpp)
+  vulkan/imgui_overlay.cpp
+  vulkan/vkexec_requirements.cpp)
 
 add_library(vkgsplat::vkgsplat_backend ALIAS vkgsplat_backend)
 
@@ -66,6 +67,7 @@ target_link_libraries(
   PUBLIC Vulkan::Headers
          vk-bootstrap::vk-bootstrap
          GPUOpen::VulkanMemoryAllocator
+         vkexec::vkexec
          glfw::glfw
          imgui::imgui
          vkgsplat::vkgsplat_utility
