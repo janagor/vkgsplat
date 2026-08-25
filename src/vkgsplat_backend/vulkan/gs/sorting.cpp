@@ -13,6 +13,7 @@
 #include <print>
 #include <span>
 #include <string>
+#include <utility>
 
 #include <vulkan/vulkan_core.h>
 
@@ -87,12 +88,12 @@ namespace {
       return false;
     }
 
-    data.sorted_keys_buffer = *keys;
-    data.sorted_values_buffer = *values;
-    data.sort_histogram_buffer = *histogram;
-    data.radix_dispatch_buffer = *dispatch;
-    data.draw_indirect_buffer = *draw_indirect;
-    data.tile_ranges_buffer = *ranges;
+    data.sorted_keys_buffer = std::move(*keys);
+    data.sorted_values_buffer = std::move(*values);
+    data.sort_histogram_buffer = std::move(*histogram);
+    data.radix_dispatch_buffer = std::move(*dispatch);
+    data.draw_indirect_buffer = std::move(*draw_indirect);
+    data.tile_ranges_buffer = std::move(*ranges);
 
     // GPU-only working set: shaders / cmdFillBuffer overwrite these each frame.
     return true;

@@ -53,7 +53,7 @@ public:
 
 private:
   std::vector<T> host_data_;
-  vulkan::Buffer buffer_{};
+  vulkan::Buffer buffer_;
 };
 
 template<TriviallyCopyable T>

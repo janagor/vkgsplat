@@ -52,18 +52,18 @@ struct RenderData
 
   VkPipeline graphics_pipeline{};
 
-  vulkan::Buffer geometry_buffer{};
-  vulkan::Buffer appearance_buffer{};
-  vulkan::Buffer projected_buffer{};
-  vulkan::Buffer unsorted_keys_buffer{};
-  vulkan::Buffer unsorted_values_buffer{};
-  vulkan::Buffer instance_count_buffer{};
-  vulkan::Buffer sorted_keys_buffer{};
-  vulkan::Buffer sorted_values_buffer{};
-  vulkan::Buffer sort_histogram_buffer{};
-  vulkan::Buffer radix_dispatch_buffer{};
-  vulkan::Buffer draw_indirect_buffer{};
-  vulkan::Buffer tile_ranges_buffer{};
+  vulkan::Buffer geometry_buffer;
+  vulkan::Buffer appearance_buffer;
+  vulkan::Buffer projected_buffer;
+  vulkan::Buffer unsorted_keys_buffer;
+  vulkan::Buffer unsorted_values_buffer;
+  vulkan::Buffer instance_count_buffer;
+  vulkan::Buffer sorted_keys_buffer;
+  vulkan::Buffer sorted_values_buffer;
+  vulkan::Buffer sort_histogram_buffer;
+  vulkan::Buffer radix_dispatch_buffer;
+  vulkan::Buffer draw_indirect_buffer;
+  vulkan::Buffer tile_ranges_buffer;
   VkImage color_image{};
   VmaAllocation color_allocation{};
   VkImageView color_image_view{};
@@ -88,7 +88,7 @@ struct RenderData
   std::array<u32, 2> lfd_emulate_cell{ 0U, 0U };
   compute::Tensor<u32> sorted_indices;
   compute::Tensor<compute::SortEntry> sort_entries;
-  vulkan::Buffer descriptor_heap_buffer{};
+  vulkan::Buffer descriptor_heap_buffer;
   VkDeviceSize descriptor_heap_size{};
   VkDeviceSize reserved_range_offset{};
   VkDeviceSize reserved_range_size{};

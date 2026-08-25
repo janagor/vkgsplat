@@ -38,8 +38,8 @@ namespace vkgsplat {
 struct ImGuiOverlayState
 {
   bool initialized = false;
-  vulkan::Buffer resource_heap{};
-  vulkan::Buffer sampler_heap{};
+  vulkan::Buffer resource_heap;
+  vulkan::Buffer sampler_heap;
   VkBindHeapInfoEXT resource_bind{};
   VkBindHeapInfoEXT sampler_bind{};
   void *resource_mapped = nullptr;
@@ -495,8 +495,8 @@ auto InitImguiOverlay(vulkan::Context &context, RenderData &data) -> std::expect
     return std::unexpected{ MakeError(std::errc::io_error, "failed to map ImGui sampler heap") };
   }
 
-  overlay->resource_heap = *resource_heap;
-  overlay->sampler_heap = *sampler_heap;
+  overlay->resource_heap = std::move(*resource_heap);
+  overlay->sampler_heap = std::move(*sampler_heap);
   overlay->resource_mapped = resource_mapped->data();
   overlay->sampler_mapped = sampler_mapped->data();
   overlay->resource_stride = heap_props.imageDescriptorSize;
