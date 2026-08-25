@@ -4,11 +4,14 @@
 #include <vulkan/vulkan_core.h>
 
 #include <vulkan/gpu_allocator.hpp>
-#include <vulkan/initializers.hpp>
 #include <vkgsplat_utility/error.hpp>
 
+#include <vkexec/gpu_buffer.hpp>
+
 #include <cstddef>
+#include <exception>
 #include <expected>
+#include <memory>
 #include <span>
 #include <system_error>
 #include <utility>
@@ -20,6 +23,16 @@ namespace {
   [[nodiscard]] auto MakeAllocatorError(std::string message) -> Error
   { return MakeError(std::errc::io_error, std::move(message)); }
 
+  [[nodiscard]] auto MirrorVkexec(std::unique_ptr<vkexec::gpu_buffer> owned) -> Buffer
+  {
+    Buffer buffer;
+    buffer.handle = owned->handle();
+    buffer.size = owned->size();
+    buffer.allocation = VK_NULL_HANDLE;
+    buffer.vkexec_buffer = std::move(owned);
+    return buffer;
+  }
+
 }// namespace
 
 GPUAllocator::~GPUAllocator() noexcept
@@ -29,7 +42,8 @@ GPUAllocator::~GPUAllocator() noexcept
 
 GPUAllocator::GPUAllocator(GPUAllocator &&other) noexcept
   : allocator_(std::exchange(other.allocator_, VK_NULL_HANDLE)), device_(std::exchange(other.device_, VK_NULL_HANDLE)),
-    get_buffer_device_address_(std::exchange(other.get_buffer_device_address_, nullptr))
+    get_buffer_device_address_(std::exchange(other.get_buffer_device_address_, nullptr)),
+    vkexec_(std::exchange(other.vkexec_, nullptr))
 {}
 
 auto GPUAllocator::operator=(GPUAllocator &&other) noexcept -> GPUAllocator &
@@ -39,6 +53,7 @@ auto GPUAllocator::operator=(GPUAllocator &&other) noexcept -> GPUAllocator &
     allocator_ = std::exchange(other.allocator_, VK_NULL_HANDLE);
     device_ = std::exchange(other.device_, VK_NULL_HANDLE);
     get_buffer_device_address_ = std::exchange(other.get_buffer_device_address_, nullptr);
+    vkexec_ = std::exchange(other.vkexec_, nullptr);
   }
   return *this;
 }
@@ -76,103 +91,55 @@ GPUAllocator::GPUAllocator(VmaAllocator allocator,
   : allocator_{ allocator }, device_{ device }, get_buffer_device_address_{ get_buffer_device_address }
 {}
 
+auto GPUAllocator::create_vkexec_buffer(VkDeviceSize size,
+  vkexec::gpu_buffer_memory memory,
+  bool shader_device_address) noexcept -> std::expected<Buffer, Error>
+{
+  if (vkexec_ == nullptr) {
+    return std::unexpected(MakeAllocatorError("vkexec context not bound; call bind_vkexec after adopt"));
+  }
+  try {
+    return MirrorVkexec(std::make_unique<vkexec::gpu_buffer>(vkexec::gpu_buffer::create(*vkexec_,
+      vkexec::gpu_buffer_create_info{
+        .size = size,
+        .memory = memory,
+        .shader_device_address = shader_device_address,
+      })));
+  } catch (std::exception const &ex) {
+    return std::unexpected(MakeAllocatorError(ex.what()));
+  }
+}
+
 auto GPUAllocator::create_storage_buffer(VkDeviceSize size) noexcept -> std::expected<Buffer, Error>
 {
-  // NOLINTBEGIN(hicpp-signed-bitwise)
-  auto const buffer_info = initializers::BufferCreateInfo(size,
-    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
-      | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT);
-  // NOLINTEND(hicpp-signed-bitwise)
-
-  VmaAllocationCreateInfo alloc_info = {};
-  alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
-  // Host uploads via write_buffer() are contiguous memcpy; VMA forbids combining
-  // SEQUENTIAL_WRITE with RANDOM.
-  alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-
-  Buffer buffer{ .size = size };
-  if (vmaCreateBuffer(allocator_, &buffer_info, &alloc_info, &buffer.handle, &buffer.allocation, nullptr)
-      != VK_SUCCESS) {
-    return std::unexpected(MakeAllocatorError("Failed to create storage buffer"));
-  }
-
-  return buffer;
+  return create_vkexec_buffer(size, vkexec::gpu_buffer_memory::host_visible, true);
 }
 
 auto GPUAllocator::create_device_storage_buffer(VkDeviceSize size) noexcept -> std::expected<Buffer, Error>
 {
-  // NOLINTBEGIN(hicpp-signed-bitwise)
-  auto const buffer_info = initializers::BufferCreateInfo(size,
-    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
-      | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT);
-  // NOLINTEND(hicpp-signed-bitwise)
-
-  VmaAllocationCreateInfo alloc_info = {};
-  alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-  alloc_info.flags = 0;
-
-  Buffer buffer{ .size = size };
-  if (vmaCreateBuffer(allocator_, &buffer_info, &alloc_info, &buffer.handle, &buffer.allocation, nullptr)
-      != VK_SUCCESS) {
-    return std::unexpected(MakeAllocatorError("Failed to create device storage buffer"));
-  }
-
-  return buffer;
+  return create_vkexec_buffer(size, vkexec::gpu_buffer_memory::device_local, true);
 }
 
 auto GPUAllocator::create_staging_buffer(VkDeviceSize size) noexcept -> std::expected<Buffer, Error>
 {
-  auto const buffer_info = initializers::BufferCreateInfo(size, VK_BUFFER_USAGE_TRANSFER_DST_BIT);
-
-  VmaAllocationCreateInfo alloc_info = {};
-  alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
-  // NOLINTBEGIN(hicpp-signed-bitwise)
-  alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
-  // NOLINTEND(hicpp-signed-bitwise)
-  alloc_info.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-  alloc_info.preferredFlags = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-
-  Buffer buffer{ .size = size };
-  if (vmaCreateBuffer(allocator_, &buffer_info, &alloc_info, &buffer.handle, &buffer.allocation, nullptr)
-      != VK_SUCCESS) {
-    return std::unexpected(MakeAllocatorError("Failed to create staging buffer"));
-  }
-
-  return buffer;
+  return create_vkexec_buffer(size, vkexec::gpu_buffer_memory::staging, false);
 }
 
 auto GPUAllocator::create_heap_buffer(VkDeviceSize size) noexcept -> std::expected<Buffer, Error>
 {
-  auto const buffer_info = initializers::BufferCreateInfo(
-    size, VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
-
-  VmaAllocationCreateInfo alloc_info = {};
-  alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
-  // NOLINTBEGIN(hicpp-signed-bitwise)
-  // Persistently mapped descriptor heaps are written at arbitrary slot offsets.
-  alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT
-                     // ANV (Gfx < 12.5) bindless heap addressing assumes a 4 KiB-aligned
-                     // device address; VMA suballocs of tiny heaps often are not.
-                     | VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
-  // NOLINTEND(hicpp-signed-bitwise)
-  alloc_info.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-  alloc_info.preferredFlags = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-
-  // Match ANV's BindlessSurfaceStateBaseAddress 4 KiB granularity.
-  constexpr VkDeviceSize kHeapDeviceAddressAlignment = 4096;
-
-  Buffer buffer{ .size = size };
-  if (vmaCreateBufferWithAlignment(
-        allocator_, &buffer_info, &alloc_info, kHeapDeviceAddressAlignment, &buffer.handle, &buffer.allocation, nullptr)
-      != VK_SUCCESS) {
-    return std::unexpected(MakeAllocatorError("Failed to create descriptor heap buffer"));
-  }
-
-  return buffer;
+  // descriptor_heap memory always requests device address inside vkexec.
+  return create_vkexec_buffer(size, vkexec::gpu_buffer_memory::descriptor_heap, true);
 }
 
 auto GPUAllocator::get_buffer_device_address(Buffer const &buffer) const noexcept -> VkDeviceAddress
 {
+  if (buffer.vkexec_buffer) {
+    try {
+      return buffer.vkexec_buffer->device_address();
+    } catch (...) {
+      return 0;
+    }
+  }
   VkBufferDeviceAddressInfo const info{
     .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
     .pNext = nullptr,
@@ -183,6 +150,10 @@ auto GPUAllocator::get_buffer_device_address(Buffer const &buffer) const noexcep
 
 void GPUAllocator::destroy_buffer(Buffer &buffer) noexcept
 {
+  if (buffer.vkexec_buffer) {
+    buffer = {};
+    return;
+  }
   if (buffer.handle != VK_NULL_HANDLE || buffer.allocation != VK_NULL_HANDLE) {
     vmaDestroyBuffer(allocator_, buffer.handle, buffer.allocation);
     buffer = {};
@@ -191,6 +162,13 @@ void GPUAllocator::destroy_buffer(Buffer &buffer) noexcept
 
 auto GPUAllocator::map_buffer(Buffer const &buffer) noexcept -> std::expected<std::span<std::byte>, Error>
 {
+  if (buffer.vkexec_buffer) {
+    try {
+      return buffer.vkexec_buffer->mapped();
+    } catch (std::exception const &ex) {
+      return std::unexpected(MakeAllocatorError(ex.what()));
+    }
+  }
   void *data = nullptr;
   if (vmaMapMemory(allocator_, buffer.allocation, &data) != VK_SUCCESS) {
     return std::unexpected(MakeAllocatorError("Failed to map buffer"));
@@ -198,12 +176,22 @@ auto GPUAllocator::map_buffer(Buffer const &buffer) noexcept -> std::expected<st
   return std::span<std::byte>(static_cast<std::byte *>(data), buffer.size);
 }
 
-void GPUAllocator::unmap_buffer(Buffer const &buffer) noexcept { vmaUnmapMemory(allocator_, buffer.allocation); }
+void GPUAllocator::unmap_buffer(Buffer const &buffer) noexcept
+{
+  if (buffer.vkexec_buffer) { return; }
+  vmaUnmapMemory(allocator_, buffer.allocation);
+}
 
 void GPUAllocator::flush_buffer(Buffer const &buffer) noexcept
-{ vmaFlushAllocation(allocator_, buffer.allocation, 0, VK_WHOLE_SIZE); }
+{
+  if (buffer.vkexec_buffer) { return; }
+  vmaFlushAllocation(allocator_, buffer.allocation, 0, VK_WHOLE_SIZE);
+}
 
 void GPUAllocator::invalidate_buffer(Buffer const &buffer) noexcept
-{ vmaInvalidateAllocation(allocator_, buffer.allocation, 0, VK_WHOLE_SIZE); }
+{
+  if (buffer.vkexec_buffer) { return; }
+  vmaInvalidateAllocation(allocator_, buffer.allocation, 0, VK_WHOLE_SIZE);
+}
 
 }// namespace vkgsplat::vulkan

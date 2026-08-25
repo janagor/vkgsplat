@@ -108,6 +108,7 @@ auto VulkanDriver::create(Platform &platform, DriverConfig const &config)
   if (auto adopted = AdoptVkexecContext(driver->context_); !adopted) {
     return std::unexpected(adopted.error());
   }
+  driver->context_.gpu_allocator.bind_vkexec(*driver->context_.vkexec_context);
 
   if (auto created = driver->create_swapchain(platform, platform.framebuffer_extent()); !created) {
     return std::unexpected(created.error());
