@@ -7,6 +7,7 @@
 
 #include <VkBootstrap.h>
 #include <VkBootstrapDispatch.h>
+#include <vkexec/context.hpp>
 
 #include "gpu_allocator.hpp"
 #include "presentable_swapchain.hpp"
@@ -23,6 +24,8 @@ struct Context
   VkSurfaceKHR surface{};
   vkb::Device device{};
   vkb::DispatchTable disp;
+  /// Adopted vkexec context (does not own instance/device/VMA). Destroy before device.
+  std::unique_ptr<vkexec::context> vkexec_context;
   std::unique_ptr<PresentableSwapchain> swapchain;
   GPUAllocator gpu_allocator;
   PFN_vkWriteResourceDescriptorsEXT write_resource_descriptors{};
