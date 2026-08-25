@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <print>
 #include <span>
+#include <utility>
 #include <vector>
 
 #include "app_state.hpp"
@@ -195,7 +196,7 @@ auto RefreshDescriptorHeap(vulkan::Context &context, RenderData &data) -> bool
     return false;
   }
 
-  data.descriptor_heap_buffer = *descriptor_heap_buffer;
+  data.descriptor_heap_buffer = std::move(*descriptor_heap_buffer);
   return true;
 }
 

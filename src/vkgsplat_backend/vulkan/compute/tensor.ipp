@@ -25,7 +25,7 @@ auto Tensor<T>::create(vulkan::Context &context, std::vector<T> data) -> std::ex
     return std::unexpected(gpu_buffer.error());
   }
 
-  result.buffer_ = *gpu_buffer;
+  result.buffer_ = std::move(*gpu_buffer);
 
   if (!result.sync_to_device(context)) {
     context.gpu_allocator.destroy_buffer(result.buffer_);

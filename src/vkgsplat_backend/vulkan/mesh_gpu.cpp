@@ -2,6 +2,7 @@
 
 #include <print>
 #include <span>
+#include <utility>
 
 #include "app_state.hpp"
 #include "gs/gaussian_splat.hpp"
@@ -48,9 +49,9 @@ auto CreateSphereBuffers(vulkan::Context &context, RenderData &data, SplatCpuDat
     return false;
   }
 
-  data.geometry_buffer = *geometry_buffer;
-  data.appearance_buffer = *appearance_buffer;
-  data.projected_buffer = *projected_buffer;
+  data.geometry_buffer = std::move(*geometry_buffer);
+  data.appearance_buffer = std::move(*appearance_buffer);
+  data.projected_buffer = std::move(*projected_buffer);
 
   if (!context.gpu_allocator.write_buffer(data.geometry_buffer, std::span{ cpu_data.geometries })) {
     std::println("Failed to upload splat geometry!");

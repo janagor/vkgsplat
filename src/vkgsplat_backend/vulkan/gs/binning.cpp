@@ -11,6 +11,7 @@
 #include <print>
 #include <span>
 #include <string>
+#include <utility>
 
 #include <vulkan/vulkan_core.h>
 
@@ -54,9 +55,9 @@ namespace {
       return false;
     }
 
-    data.unsorted_keys_buffer = *keys;
-    data.unsorted_values_buffer = *values;
-    data.instance_count_buffer = *count;
+    data.unsorted_keys_buffer = std::move(*keys);
+    data.unsorted_values_buffer = std::move(*values);
+    data.instance_count_buffer = std::move(*count);
 
     // GPU-only: instance count is cmdFillBuffer'd and keys/values rewritten each frame.
     return true;
