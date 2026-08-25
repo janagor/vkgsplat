@@ -25,6 +25,12 @@ auto GPUAllocator::write_buffer(Buffer const &buffer, std::span<const T> data) n
     return std::unexpected(MakeError(std::errc::invalid_argument, "write_buffer: data exceeds buffer size"));
   }
 
+  if (buffer.vkexec_buffer) {
+    auto mapped = buffer.vkexec_buffer->mapped();
+    std::memcpy(mapped.data(), data.data(), data.size_bytes());
+    return {};
+  }
+
   void *mapped = nullptr;
   if (vmaMapMemory(allocator_, buffer.allocation, &mapped) != VK_SUCCESS) {
     return std::unexpected(MakeError(std::errc::io_error, "write_buffer: failed to map memory"));
@@ -42,6 +48,13 @@ auto GPUAllocator::read_buffer(Buffer const &buffer, std::size_t count) noexcept
 {
   if (count * sizeof(T) > buffer.size) {
     return std::unexpected(MakeError(std::errc::invalid_argument, "read_buffer: count exceeds buffer size"));
+  }
+
+  if (buffer.vkexec_buffer) {
+    auto mapped = buffer.vkexec_buffer->mapped();
+    std::vector<T> result(count);
+    std::memcpy(result.data(), mapped.data(), count * sizeof(T));
+    return result;
   }
 
   invalidate_buffer(buffer);
