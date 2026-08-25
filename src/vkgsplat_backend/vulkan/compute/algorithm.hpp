@@ -2,13 +2,22 @@
 #define VKGSPLAT_BACKEND_VULKAN_COMPUTE_ALGORITHM_HPP
 
 #include "vulkan_context.hpp"
+
+#include <vkexec/compute_pipeline.hpp>
+#include <vkexec/pipeline.hpp>
+#include <vulkan/vulkan_core.h>
+
+#include <array>
+#include <cstdint>
+#include <optional>
 #include <span>
 #include <string>
-#include <vulkan/vulkan_core.h>
 
 namespace vkgsplat {
 
-namespace vulkan { struct Context; }
+namespace vulkan {
+  struct Context;
+}
 struct RenderData;
 
 namespace compute {
@@ -24,15 +33,17 @@ namespace compute {
     Algorithm(Algorithm &&other) noexcept;
     auto operator=(Algorithm &&other) noexcept -> Algorithm &;
 
-    [[nodiscard]] auto
-      init(vulkan::Context &context, std::string const &shader_path, std::span<const uint32_t> specialization_constants = {}) -> bool;
+    [[nodiscard]] auto init(vulkan::Context &context,
+      std::string const &shader_path,
+      std::span<const uint32_t> specialization_constants = {},
+      std::array<uint32_t, 3> local_size = vkexec::k_default_local_size) -> bool;
 
     void destroy(vulkan::Context &context) noexcept;
 
-    [[nodiscard]] auto pipeline() const noexcept -> VkPipeline { return pipeline_; }
+    [[nodiscard]] auto pipeline() const noexcept -> VkPipeline;
 
   private:
-    VkPipeline pipeline_{ VK_NULL_HANDLE };
+    std::optional<vkexec::compute_pipeline> pipeline_;
   };
 
 }// namespace compute

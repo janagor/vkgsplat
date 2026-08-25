@@ -1,89 +1,82 @@
 #include "compute/algorithm.hpp"
-#include "vulkan/initializers.hpp"
+
 #include "shader.hpp"
 #include "vulkan_context.hpp"
-#include <algorithm>
+
+#include <vkexec/compute_pipeline.hpp>
+#include <vkexec/pipeline.hpp>
+#include <vulkan/vulkan_core.h>
+
 #include <array>
-#include <cstddef>
 #include <cstdint>
+#include <exception>
+#include <optional>
 #include <print>
-#include <ranges>
 #include <span>
 #include <string>
-#include <utility>
-#include <vulkan/vulkan_core.h>
+#include <vector>
 
 namespace vkgsplat::compute {
 
-Algorithm::Algorithm(Algorithm &&other) noexcept : pipeline_(std::exchange(other.pipeline_, VK_NULL_HANDLE)) {}
+Algorithm::Algorithm(Algorithm &&other) noexcept : pipeline_(other.pipeline_) { other.pipeline_.reset(); }
 
 auto Algorithm::operator=(Algorithm &&other) noexcept -> Algorithm &
 {
-  if (this != &other) { pipeline_ = std::exchange(other.pipeline_, VK_NULL_HANDLE); }
+  if (this != &other) {
+    pipeline_ = other.pipeline_;
+    other.pipeline_.reset();
+  }
   return *this;
 }
 
-auto Algorithm::init(vulkan::Context &context, std::string const &shader_path, std::span<const uint32_t> specialization_constants)
-  -> bool
+auto Algorithm::init(vulkan::Context &context,
+  std::string const &shader_path,
+  std::span<const uint32_t> specialization_constants,
+  std::array<uint32_t, 3> local_size) -> bool
 {
+  if (context.vkexec_context == nullptr) {
+    std::println("vkexec context missing for compute pipeline: {}", shader_path);
+    return false;
+  }
+
   auto const comp_code = ReadFile(shader_path);
-  VkShaderModule comp_module = CreateShaderModule(context, comp_code);
-  if (comp_module == VK_NULL_HANDLE) {
-    std::println("Failed to create compute shader module: {}", shader_path);
+  if (comp_code.size() < sizeof(uint32_t) || (comp_code.size() % sizeof(uint32_t)) != 0) {
+    std::println("Invalid SPIR-V size for compute shader: {}", shader_path);
     return false;
   }
 
-  VkPipelineShaderStageCreateInfo stage =
-    initializers::PipelineShaderStageCreateInfo(VK_SHADER_STAGE_COMPUTE_BIT, comp_module, "main");
+  // NOLINTBEGIN(cppcoreguidelines-pro-type-reinterpret-cast)
+  auto const spirv = std::span{ reinterpret_cast<uint32_t const *>(comp_code.data()),
+    comp_code.size() / sizeof(uint32_t) };
+  // NOLINTEND(cppcoreguidelines-pro-type-reinterpret-cast)
 
-  VkSpecializationInfo specialization_info{};
-  constexpr size_t kMaxSpecializationConstants = 8;
-  std::array<VkSpecializationMapEntry, kMaxSpecializationConstants> specialization_map{};
-  if (!specialization_constants.empty()) {
-    auto const count = std::min(specialization_constants.size(), specialization_map.size());
-    std::ranges::for_each(std::views::iota(size_t{ 0 }, count), [&](size_t index) -> void {
-      specialization_map.at(index) = VkSpecializationMapEntry{
-        .constantID = static_cast<uint32_t>(index),
-        .offset = static_cast<uint32_t>(index * sizeof(uint32_t)),
-        .size = sizeof(uint32_t),
-      };
-    });
-    specialization_info.mapEntryCount = static_cast<uint32_t>(specialization_constants.size());
-    specialization_info.pMapEntries = specialization_map.data();
-    specialization_info.dataSize = specialization_constants.size_bytes();
-    specialization_info.pData = specialization_constants.data();
-    stage.pSpecializationInfo = &specialization_info;
-  }
+  vkexec::layout_desc desc{};
+  desc.descriptor_heap = true;
+  desc.push_constant_size = 0;
+  desc.local_size = local_size;
+  desc.specialization.assign(specialization_constants.begin(), specialization_constants.end());
 
-  VkPipelineCreateFlags2CreateInfo pipeline_flags = {
-    .sType = VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO,
-    .pNext = nullptr,
-    .flags = VK_PIPELINE_CREATE_2_DESCRIPTOR_HEAP_BIT_EXT,
-  };
-
-  VkComputePipelineCreateInfo const pipeline_info = {
-    .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-    .pNext = &pipeline_flags,
-    .flags = 0,
-    .stage = stage,
-    .layout = VK_NULL_HANDLE,
-    .basePipelineHandle = VK_NULL_HANDLE,
-    .basePipelineIndex = -1,
-  };
-
-  if (context.disp.createComputePipelines(VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &pipeline_) != VK_SUCCESS) {
-    std::println("Failed to create algorithm compute pipeline!");
-    context.disp.destroyShaderModule(comp_module, nullptr);
+  try {
+    pipeline_ = vkexec::compute_pipeline::from_spirv(*context.vkexec_context, spirv, desc);
+  } catch (std::exception const &ex) {
+    std::println("Failed to create algorithm compute pipeline ({}): {}", shader_path, ex.what());
+    pipeline_.reset();
     return false;
   }
-
-  context.disp.destroyShaderModule(comp_module, nullptr);
   return true;
 }
 
 void Algorithm::destroy(vulkan::Context &context) noexcept
 {
-  if (pipeline_ != VK_NULL_HANDLE) { context.disp.destroyPipeline(std::exchange(pipeline_, VK_NULL_HANDLE), nullptr); }
+  (void)context;
+  // Pipeline lifetime is owned by the vkexec context pipeline cache.
+  pipeline_.reset();
+}
+
+auto Algorithm::pipeline() const noexcept -> VkPipeline
+{
+  if (!pipeline_) { return VK_NULL_HANDLE; }
+  return pipeline_->resources().pipeline;
 }
 
 }// namespace vkgsplat::compute
