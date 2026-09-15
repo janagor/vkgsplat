@@ -3,7 +3,6 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <exception>
 #include <print>
 #include <span>
 #include <utility>
@@ -16,7 +15,7 @@
 #include <vkgsplat_utility/types.hpp>
 
 #include <vkexec/context.hpp>
-#include <vkexec/descriptor_heap.hpp>
+#include <vkexec_extensions/descriptor_heap/descriptor_heap.hpp>
 #include <vulkan/vulkan_core.h>
 
 namespace vkgsplat {
@@ -40,34 +39,29 @@ auto WriteStorageBufferDescriptor(vulkan::Context const &context,
 {
   auto *vkexec = RequireVkexec(context);
   if (vkexec == nullptr) { return false; }
-  try {
-    vkexec::write_storage_buffer_descriptor(*vkexec, buffer_address, buffer_size, destination);
-    return true;
-  } catch (std::exception const &ex) {
-    std::println("write_storage_buffer_descriptor failed: {}", ex.what());
+
+  auto const wrote = vkexec::write_storage_buffer_descriptor(*vkexec, buffer_address, buffer_size, destination);
+  if (!wrote) {
+    std::println("write_storage_buffer_descriptor failed: {}", wrote.error().message());
     return false;
   }
+  return true;
 }
 
-auto WriteStorageImageDescriptor(vulkan::Context &context,
+auto WriteStorageImageDescriptor(vulkan::Context const &context,
   VkImageViewCreateInfo const &view_info,
   VkImageLayout layout,
   std::span<std::byte> destination) -> bool
 {
-  // Image descriptors remain local until vkexec grows a matching helper.
-  VkImageDescriptorInfoEXT image_info{};
-  image_info.sType = VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT;
-  image_info.pView = &view_info;
-  image_info.layout = layout;
+  auto *vkexec = RequireVkexec(context);
+  if (vkexec == nullptr) { return false; }
 
-  VkResourceDescriptorInfoEXT resource_info{};
-  resource_info.sType = VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT;
-  resource_info.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-  resource_info.data.pImage = &image_info;
-
-  VkHostAddressRangeEXT const host_range = { .address = destination.data(), .size = destination.size() };
-
-  return context.write_resource_descriptors(context.device, 1, &resource_info, &host_range) == VK_SUCCESS;
+  auto const wrote = vkexec::write_storage_image_descriptor(*vkexec, view_info, layout, destination);
+  if (!wrote) {
+    std::println("write_storage_image_descriptor failed: {}", wrote.error().message());
+    return false;
+  }
+  return true;
 }
 
 auto QueryDescriptorHeapLayout(vulkan::Context const &context, RenderData &data) -> bool
@@ -75,21 +69,21 @@ auto QueryDescriptorHeapLayout(vulkan::Context const &context, RenderData &data)
   auto *vkexec = RequireVkexec(context);
   if (vkexec == nullptr) { return false; }
 
-  try {
-    auto const layout = vkexec::query_descriptor_heap_layout(*vkexec);
-    data.buffer_descriptor_size = layout.buffer_descriptor_size;
-    data.image_descriptor_size = layout.image_descriptor_size;
-    data.descriptor_stride = layout.descriptor_stride;
-    data.descriptor_heap_size = vkexec::descriptor_heap_byte_size(layout, kHeapDescriptorCount);
-    auto const descriptor_region =
-      static_cast<VkDeviceSize>(data.descriptor_stride) * static_cast<VkDeviceSize>(kHeapDescriptorCount);
-    data.reserved_range_offset = AlignUp(descriptor_region, layout.resource_heap_alignment);
-    data.reserved_range_size = layout.min_resource_heap_reserved_range;
-    return data.descriptor_stride > 0;
-  } catch (std::exception const &ex) {
-    std::println("query_descriptor_heap_layout failed: {}", ex.what());
+  auto const layout = vkexec::query_descriptor_heap_layout(*vkexec);
+  if (!layout) {
+    std::println("query_descriptor_heap_layout failed: {}", layout.error().message());
     return false;
   }
+
+  data.buffer_descriptor_size = layout->buffer_descriptor_size;
+  data.image_descriptor_size = layout->image_descriptor_size;
+  data.descriptor_stride = layout->descriptor_stride;
+  data.descriptor_heap_size = vkexec::descriptor_heap_byte_size(*layout, kHeapDescriptorCount);
+  auto const descriptor_region =
+    static_cast<VkDeviceSize>(data.descriptor_stride) * static_cast<VkDeviceSize>(kHeapDescriptorCount);
+  data.reserved_range_offset = AlignUp(descriptor_region, layout->resource_heap_alignment);
+  data.reserved_range_size = layout->min_resource_heap_reserved_range;
+  return data.descriptor_stride > 0;
 }
 
 void DestroyDescriptorHeap(vulkan::Context &context, RenderData &data)
@@ -213,16 +207,13 @@ void BindDescriptorHeap(vulkan::Context const &context, RenderData const &data, 
   if (vkexec == nullptr) { return; }
 
   VkDeviceAddress const heap_address = context.gpu_allocator.get_buffer_device_address(data.descriptor_heap_buffer);
-  try {
-    vkexec::cmd_bind_resource_heap(*vkexec,
-      command_buffer,
-      heap_address,
-      data.descriptor_heap_size,
-      data.reserved_range_offset,
-      data.reserved_range_size);
-  } catch (std::exception const &ex) {
-    std::println("cmd_bind_resource_heap failed: {}", ex.what());
-  }
+  auto const bound = vkexec::cmd_bind_resource_heap(*vkexec,
+    command_buffer,
+    heap_address,
+    data.descriptor_heap_size,
+    data.reserved_range_offset,
+    data.reserved_range_size);
+  if (!bound) { std::println("cmd_bind_resource_heap failed: {}", bound.error().message()); }
 }
 
 auto HeapSlotByteOffset(RenderData const &data, HeapSlot slot) -> uint32_t

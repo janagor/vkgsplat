@@ -37,7 +37,7 @@ inline constexpr size_t kHeapDescriptorCount = 12;
   VkDeviceSize buffer_size,
   std::span<std::byte> destination) -> bool;
 
-[[nodiscard]] auto WriteStorageImageDescriptor(vulkan::Context &context,
+[[nodiscard]] auto WriteStorageImageDescriptor(vulkan::Context const &context,
   VkImageViewCreateInfo const &view_info,
   VkImageLayout layout,
   std::span<std::byte> destination) -> bool;
