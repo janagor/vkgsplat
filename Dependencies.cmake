@@ -59,7 +59,7 @@ function(vkgsplat_setup_dependencies)
 
   # vkexec Vulkan *exec backend (pinned GitHub). Fetched after Vulkan/VMA/vk-bootstrap
   # so nested Dependencies.cmake reuses those targets (no second hard find_package).
-  set(VKEXEC_BUILD_EXAMPLES
+  set(vkexec_BUILD_EXAMPLES
       OFF
       CACHE BOOL "Build vkexec example executables" FORCE)
   if(NOT TARGET vkexec::vkexec)
@@ -69,17 +69,14 @@ function(vkgsplat_setup_dependencies)
       GITHUB_REPOSITORY
       "janagor/vkexec"
       GIT_TAG
-      "03f47728d76e4dcab0d73e90087456db80ab86e4"
+      "91d7feb75747ee7972dd73ad19bcf40caa504773"
       SYSTEM
       YES
       OPTIONS
-      "VKEXEC_BUILD_EXAMPLES OFF")
+      "vkexec_BUILD_EXAMPLES OFF")
   endif()
-  # vkexec_edsl includes <vulkan/...> but does not link Vulkan::Headers; when nested
-  # under vkgsplat the CPM Vulkan-Headers target must be attached explicitly.
-  if(TARGET vkexec_edsl AND TARGET Vulkan::Headers)
-    target_link_libraries(vkexec_edsl PUBLIC Vulkan::Headers)
-  endif()
+  # Nested vkexec includes <vulkan/...> but does not link Vulkan::Headers; attach the
+  # parent CPM Vulkan-Headers target so the build does not rely on system headers.
   if(TARGET vkexec AND TARGET Vulkan::Headers)
     target_link_libraries(vkexec PUBLIC Vulkan::Headers)
   endif()

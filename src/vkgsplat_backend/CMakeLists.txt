@@ -68,6 +68,7 @@ target_link_libraries(
          vk-bootstrap::vk-bootstrap
          GPUOpen::VulkanMemoryAllocator
          vkexec::vkexec
+         vkexec::ext_descriptor_heap
          glfw::glfw
          imgui::imgui
          vkgsplat::vkgsplat_utility
