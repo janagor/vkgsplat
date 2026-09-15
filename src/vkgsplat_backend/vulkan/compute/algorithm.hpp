@@ -3,8 +3,8 @@
 
 #include "vulkan_context.hpp"
 
-#include <vkexec/compute_pipeline.hpp>
 #include <vkexec/pipeline.hpp>
+#include <vkexec_extensions/descriptor_heap/heap_compute_pipeline.hpp>
 #include <vulkan/vulkan_core.h>
 
 #include <array>
@@ -43,7 +43,7 @@ namespace compute {
     [[nodiscard]] auto pipeline() const noexcept -> VkPipeline;
 
   private:
-    std::optional<vkexec::compute_pipeline> pipeline_;
+    std::optional<vkexec::heap_compute_pipeline> pipeline_;
   };
 
 }// namespace compute

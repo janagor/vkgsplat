@@ -3,13 +3,13 @@
 #include "shader.hpp"
 #include "vulkan_context.hpp"
 
-#include <vkexec/compute_pipeline.hpp>
 #include <vkexec/pipeline.hpp>
+#include <vkexec/sync_wait.hpp>
+#include <vkexec_extensions/descriptor_heap/heap_compute_pipeline.hpp>
 #include <vulkan/vulkan_core.h>
 
 #include <array>
 #include <cstdint>
-#include <exception>
 #include <optional>
 #include <print>
 #include <span>
@@ -50,19 +50,18 @@ auto Algorithm::init(vulkan::Context &context,
     comp_code.size() / sizeof(uint32_t) };
   // NOLINTEND(cppcoreguidelines-pro-type-reinterpret-cast)
 
-  vkexec::layout_desc desc{};
-  desc.descriptor_heap = true;
-  desc.push_constant_size = 0;
+  vkexec::heap_layout_desc desc{};
   desc.local_size = local_size;
   desc.specialization.assign(specialization_constants.begin(), specialization_constants.end());
 
-  try {
-    pipeline_ = vkexec::compute_pipeline::from_spirv(*context.vkexec_context, spirv, desc);
-  } catch (std::exception const &ex) {
-    std::println("Failed to create algorithm compute pipeline ({}): {}", shader_path, ex.what());
+  auto created = vkexec::try_sync_wait_value(
+    vkexec::heap_compute_pipeline::create(*context.vkexec_context, spirv, desc));
+  if (!created) {
+    std::println("Failed to create algorithm compute pipeline ({}): {}", shader_path, created.error().message());
     pipeline_.reset();
     return false;
   }
+  pipeline_ = *created;
   return true;
 }
 
