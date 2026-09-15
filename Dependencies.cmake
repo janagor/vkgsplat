@@ -69,7 +69,7 @@ function(vkgsplat_setup_dependencies)
       GITHUB_REPOSITORY
       "janagor/vkexec"
       GIT_TAG
-      "91d7feb75747ee7972dd73ad19bcf40caa504773"
+      "a6f57c466abdac50a33db6301ad559c9df72804e"
       SYSTEM
       YES
       OPTIONS
