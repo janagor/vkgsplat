@@ -30,6 +30,11 @@ auto GPUAllocator::write_buffer(Buffer const &buffer, std::span<const T> data) n
     std::memcpy(mapped.data(), data.data(), data.size_bytes());
     return {};
   }
+  if (buffer.vkexec_heap_buffer) {
+    auto mapped = buffer.vkexec_heap_buffer->mapped();
+    std::memcpy(mapped.data(), data.data(), data.size_bytes());
+    return {};
+  }
 
   void *mapped = nullptr;
   if (vmaMapMemory(allocator_, buffer.allocation, &mapped) != VK_SUCCESS) {
@@ -52,6 +57,12 @@ auto GPUAllocator::read_buffer(Buffer const &buffer, std::size_t count) noexcept
 
   if (buffer.vkexec_buffer) {
     auto mapped = buffer.vkexec_buffer->mapped();
+    std::vector<T> result(count);
+    std::memcpy(result.data(), mapped.data(), count * sizeof(T));
+    return result;
+  }
+  if (buffer.vkexec_heap_buffer) {
+    auto mapped = buffer.vkexec_heap_buffer->mapped();
     std::vector<T> result(count);
     std::memcpy(result.data(), mapped.data(), count * sizeof(T));
     return result;

@@ -6,6 +6,7 @@
 
 #include <vk_mem_alloc.h>
 #include <vkexec/gpu_buffer.hpp>
+#include <vkexec_extensions/descriptor_heap/buffer.hpp>
 #include <vulkan/vulkan_core.h>
 
 #include <cstddef>
@@ -26,6 +27,7 @@ namespace vkgsplat::vulkan {
 struct Buffer
 {
   std::unique_ptr<vkexec::gpu_buffer> vkexec_buffer;
+  std::unique_ptr<vkexec::descriptor_heap_buffer> vkexec_heap_buffer;
   VkBuffer handle = VK_NULL_HANDLE;
   VmaAllocation allocation = VK_NULL_HANDLE;
   VkDeviceSize size = 0;

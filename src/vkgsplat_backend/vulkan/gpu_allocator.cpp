@@ -6,10 +6,12 @@
 #include <vulkan/gpu_allocator.hpp>
 #include <vkgsplat_utility/error.hpp>
 
+#include <vkexec/error.hpp>
 #include <vkexec/gpu_buffer.hpp>
+#include <vkexec/sync_wait.hpp>
+#include <vkexec_extensions/descriptor_heap/buffer.hpp>
 
 #include <cstddef>
-#include <exception>
 #include <expected>
 #include <memory>
 #include <span>
@@ -23,13 +25,26 @@ namespace {
   [[nodiscard]] auto MakeAllocatorError(std::string message) -> Error
   { return MakeError(std::errc::io_error, std::move(message)); }
 
-  [[nodiscard]] auto MirrorVkexec(std::unique_ptr<vkexec::gpu_buffer> owned) -> Buffer
+  [[nodiscard]] auto MakeAllocatorError(vkexec::error const &err) -> Error
+  { return MakeAllocatorError(err.message()); }
+
+  [[nodiscard]] auto MirrorGpuBuffer(std::unique_ptr<vkexec::gpu_buffer> owned) -> Buffer
   {
     Buffer buffer;
     buffer.handle = owned->handle();
     buffer.size = owned->size();
     buffer.allocation = VK_NULL_HANDLE;
     buffer.vkexec_buffer = std::move(owned);
+    return buffer;
+  }
+
+  [[nodiscard]] auto MirrorHeapBuffer(std::unique_ptr<vkexec::descriptor_heap_buffer> owned) -> Buffer
+  {
+    Buffer buffer;
+    buffer.handle = owned->handle();
+    buffer.size = owned->size();
+    buffer.allocation = VK_NULL_HANDLE;
+    buffer.vkexec_heap_buffer = std::move(owned);
     return buffer;
   }
 
@@ -98,16 +113,15 @@ auto GPUAllocator::create_vkexec_buffer(VkDeviceSize size,
   if (vkexec_ == nullptr) {
     return std::unexpected(MakeAllocatorError("vkexec context not bound; call bind_vkexec after adopt"));
   }
-  try {
-    return MirrorVkexec(std::make_unique<vkexec::gpu_buffer>(vkexec::gpu_buffer::create(*vkexec_,
-      vkexec::gpu_buffer_create_info{
-        .size = size,
-        .memory = memory,
-        .shader_device_address = shader_device_address,
-      })));
-  } catch (std::exception const &ex) {
-    return std::unexpected(MakeAllocatorError(ex.what()));
-  }
+
+  auto created = vkexec::try_sync_wait_value(vkexec::gpu_buffer::create(*vkexec_,
+    vkexec::gpu_buffer_create_info{
+      .size = size,
+      .memory = memory,
+      .shader_device_address = shader_device_address,
+    }));
+  if (!created) { return std::unexpected(MakeAllocatorError(created.error())); }
+  return MirrorGpuBuffer(std::make_unique<vkexec::gpu_buffer>(std::move(*created)));
 }
 
 auto GPUAllocator::create_storage_buffer(VkDeviceSize size) noexcept -> std::expected<Buffer, Error>
@@ -127,18 +141,24 @@ auto GPUAllocator::create_staging_buffer(VkDeviceSize size) noexcept -> std::exp
 
 auto GPUAllocator::create_heap_buffer(VkDeviceSize size) noexcept -> std::expected<Buffer, Error>
 {
-  // descriptor_heap memory always requests device address inside vkexec.
-  return create_vkexec_buffer(size, vkexec::gpu_buffer_memory::descriptor_heap, true);
+  if (vkexec_ == nullptr) {
+    return std::unexpected(MakeAllocatorError("vkexec context not bound; call bind_vkexec after adopt"));
+  }
+
+  auto created = vkexec::try_sync_wait_value(vkexec::descriptor_heap_buffer::create(*vkexec_, size));
+  if (!created) { return std::unexpected(MakeAllocatorError(created.error())); }
+  return MirrorHeapBuffer(std::make_unique<vkexec::descriptor_heap_buffer>(std::move(*created)));
 }
 
 auto GPUAllocator::get_buffer_device_address(Buffer const &buffer) const noexcept -> VkDeviceAddress
 {
   if (buffer.vkexec_buffer) {
-    try {
-      return buffer.vkexec_buffer->device_address();
-    } catch (...) {
-      return 0;
-    }
+    auto const address = buffer.vkexec_buffer->device_address();
+    return address ? *address : 0;
+  }
+  if (buffer.vkexec_heap_buffer) {
+    auto const address = buffer.vkexec_heap_buffer->device_address();
+    return address ? *address : 0;
   }
   VkBufferDeviceAddressInfo const info{
     .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
@@ -150,7 +170,7 @@ auto GPUAllocator::get_buffer_device_address(Buffer const &buffer) const noexcep
 
 void GPUAllocator::destroy_buffer(Buffer &buffer) noexcept
 {
-  if (buffer.vkexec_buffer) {
+  if (buffer.vkexec_buffer || buffer.vkexec_heap_buffer) {
     buffer = {};
     return;
   }
@@ -162,13 +182,9 @@ void GPUAllocator::destroy_buffer(Buffer &buffer) noexcept
 
 auto GPUAllocator::map_buffer(Buffer const &buffer) noexcept -> std::expected<std::span<std::byte>, Error>
 {
-  if (buffer.vkexec_buffer) {
-    try {
-      return buffer.vkexec_buffer->mapped();
-    } catch (std::exception const &ex) {
-      return std::unexpected(MakeAllocatorError(ex.what()));
-    }
-  }
+  if (buffer.vkexec_buffer) { return buffer.vkexec_buffer->mapped(); }
+  if (buffer.vkexec_heap_buffer) { return buffer.vkexec_heap_buffer->mapped(); }
+
   void *data = nullptr;
   if (vmaMapMemory(allocator_, buffer.allocation, &data) != VK_SUCCESS) {
     return std::unexpected(MakeAllocatorError("Failed to map buffer"));
@@ -178,19 +194,19 @@ auto GPUAllocator::map_buffer(Buffer const &buffer) noexcept -> std::expected<st
 
 void GPUAllocator::unmap_buffer(Buffer const &buffer) noexcept
 {
-  if (buffer.vkexec_buffer) { return; }
+  if (buffer.vkexec_buffer || buffer.vkexec_heap_buffer) { return; }
   vmaUnmapMemory(allocator_, buffer.allocation);
 }
 
 void GPUAllocator::flush_buffer(Buffer const &buffer) noexcept
 {
-  if (buffer.vkexec_buffer) { return; }
+  if (buffer.vkexec_buffer || buffer.vkexec_heap_buffer) { return; }
   vmaFlushAllocation(allocator_, buffer.allocation, 0, VK_WHOLE_SIZE);
 }
 
 void GPUAllocator::invalidate_buffer(Buffer const &buffer) noexcept
 {
-  if (buffer.vkexec_buffer) { return; }
+  if (buffer.vkexec_buffer || buffer.vkexec_heap_buffer) { return; }
   vmaInvalidateAllocation(allocator_, buffer.allocation, 0, VK_WHOLE_SIZE);
 }
 
