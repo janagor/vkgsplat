@@ -1,7 +1,6 @@
 #include "vulkan_driver.hpp"
 
 #include <cstdint>
-#include <exception>
 #include <expected>
 #include <functional>
 #include <memory>
@@ -22,6 +21,7 @@
 
 #include <VkBootstrap.h>
 #include <vkexec/context.hpp>
+#include <vkexec/sync_wait.hpp>
 #include <vulkan/vulkan_core.h>
 
 namespace vkgsplat::vulkan {
@@ -47,23 +47,22 @@ namespace {
       compute_family = compute->second;
     }
 
-    try {
-      context.vkexec_context = vkexec::context::adopt({
-        .instance = context.instance.instance,
-        .physical_device = context.device.physical_device,
-        .device = context.device.device,
-        .allocator = context.gpu_allocator.vma_allocator(),
-        .compute_queue = compute_queue,
-        .compute_queue_family = compute_family,
-        .graphics_queue = graphics->first,
-        .graphics_queue_family = graphics->second,
-        .present_queue = present_queue,
-        .present_queue_family = present_family,
-      });
-    } catch (std::exception const &ex) {
-      return std::unexpected{ Error{ std::make_error_code(std::errc::invalid_argument), ex.what() } };
+    auto adopted = vkexec::try_sync_wait_value(vkexec::context::adopt({
+      .instance = context.instance.instance,
+      .physical_device = context.device.physical_device,
+      .device = context.device.device,
+      .allocator = context.gpu_allocator.vma_allocator(),
+      .compute_queue = compute_queue,
+      .compute_queue_family = compute_family,
+      .graphics_queue = graphics->first,
+      .graphics_queue_family = graphics->second,
+      .present_queue = present_queue,
+      .present_queue_family = present_family,
+    }));
+    if (!adopted) {
+      return std::unexpected{ Error{ std::make_error_code(std::errc::invalid_argument), adopted.error().message() } };
     }
-
+    context.vkexec_context = std::move(*adopted);
     return {};
   }
 
