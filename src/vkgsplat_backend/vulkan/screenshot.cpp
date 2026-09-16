@@ -122,7 +122,7 @@ auto SaveColorTargetPng(Context &context, RenderData &data, std::string_view pat
     .imageExtent = { .width = data.color_width, .height = data.color_height, .depth = 1 },
   };
   context.disp.cmdCopyImageToBuffer(
-    cmd, data.color_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, staging->handle, 1, &region);
+    cmd, data.color_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, staging->handle(), 1, &region);
 
   if (context.disp.endCommandBuffer(cmd) != VK_SUCCESS) {
     return fail(MakeError(std::errc::io_error, "failed to end screenshot command buffer"));

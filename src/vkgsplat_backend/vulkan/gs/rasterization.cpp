@@ -176,7 +176,7 @@ namespace {
 
     context.disp.cmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, data.graphics_pipeline);
     PushRasterConstants(context, push_constants, command_buffer);
-    context.disp.cmdDrawIndirect(command_buffer, data.draw_indirect_buffer.handle, 0, 1, sizeof(VkDrawIndirectCommand));
+    context.disp.cmdDrawIndirect(command_buffer, data.draw_indirect_buffer.handle(), 0, 1, sizeof(VkDrawIndirectCommand));
 
     context.disp.cmdEndRendering(command_buffer);
   }

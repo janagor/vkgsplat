@@ -6,7 +6,6 @@
 #include <vkgsplat_utility/concepts.hpp>
 #include <vkgsplat_utility/error.hpp>
 
-#include <vk_mem_alloc.h>
 #include <vulkan/vulkan_core.h>
 
 #include <cstddef>
@@ -14,72 +13,67 @@
 #include <expected>
 #include <span>
 #include <system_error>
+#include <variant>
 #include <vector>
 
 namespace vkgsplat::vulkan {
 
+namespace {
+
+  template<typename T>
+  [[nodiscard]] auto CopyFromMapped(std::span<std::byte> mapped, std::span<const T> data) -> std::expected<void, Error>
+  {
+    if (mapped.size() < data.size_bytes()) {
+      return std::unexpected(MakeError(std::errc::io_error, "write_buffer: buffer is not host-mapped"));
+    }
+    std::memcpy(mapped.data(), data.data(), data.size_bytes());
+    return {};
+  }
+
+  template<typename T>
+  [[nodiscard]] auto CopyToVector(std::span<std::byte> mapped, std::size_t count) -> std::expected<std::vector<T>, Error>
+  {
+    auto const bytes = count * sizeof(T);
+    if (mapped.size() < bytes) {
+      return std::unexpected(MakeError(std::errc::io_error, "read_buffer: buffer is not host-mapped"));
+    }
+    std::vector<T> result(count);
+    std::memcpy(result.data(), mapped.data(), bytes);
+    return result;
+  }
+
+}// namespace
+
 template<TriviallyCopyable T>
 auto GPUAllocator::write_buffer(Buffer const &buffer, std::span<const T> data) noexcept -> std::expected<void, Error>
 {
-  if (data.size_bytes() > buffer.size) {
+  if (data.size_bytes() > buffer.size()) {
     return std::unexpected(MakeError(std::errc::invalid_argument, "write_buffer: data exceeds buffer size"));
   }
 
-  if (buffer.vkexec_buffer) {
-    auto mapped = buffer.vkexec_buffer->mapped();
-    std::memcpy(mapped.data(), data.data(), data.size_bytes());
-    return {};
+  if (auto const *gpu = std::get_if<vkexec::gpu_buffer>(&buffer.storage)) {
+    return CopyFromMapped(gpu->mapped(), data);
   }
-  if (buffer.vkexec_heap_buffer) {
-    auto mapped = buffer.vkexec_heap_buffer->mapped();
-    std::memcpy(mapped.data(), data.data(), data.size_bytes());
-    return {};
+  if (auto const *heap = std::get_if<vkexec::descriptor_heap_buffer>(&buffer.storage)) {
+    return CopyFromMapped(heap->mapped(), data);
   }
-
-  void *mapped = nullptr;
-  if (vmaMapMemory(allocator_, buffer.allocation, &mapped) != VK_SUCCESS) {
-    return std::unexpected(MakeError(std::errc::io_error, "write_buffer: failed to map memory"));
-  }
-
-  std::memcpy(mapped, data.data(), data.size_bytes());
-  vmaUnmapMemory(allocator_, buffer.allocation);
-  flush_buffer(buffer);
-
-  return {};
+  return std::unexpected(MakeError(std::errc::io_error, "write_buffer: empty buffer"));
 }
 
 template<TriviallyCopyable T>
 auto GPUAllocator::read_buffer(Buffer const &buffer, std::size_t count) noexcept -> std::expected<std::vector<T>, Error>
 {
-  if (count * sizeof(T) > buffer.size) {
+  if (count * sizeof(T) > buffer.size()) {
     return std::unexpected(MakeError(std::errc::invalid_argument, "read_buffer: count exceeds buffer size"));
   }
 
-  if (buffer.vkexec_buffer) {
-    auto mapped = buffer.vkexec_buffer->mapped();
-    std::vector<T> result(count);
-    std::memcpy(result.data(), mapped.data(), count * sizeof(T));
-    return result;
+  if (auto const *gpu = std::get_if<vkexec::gpu_buffer>(&buffer.storage)) {
+    return CopyToVector<T>(gpu->mapped(), count);
   }
-  if (buffer.vkexec_heap_buffer) {
-    auto mapped = buffer.vkexec_heap_buffer->mapped();
-    std::vector<T> result(count);
-    std::memcpy(result.data(), mapped.data(), count * sizeof(T));
-    return result;
+  if (auto const *heap = std::get_if<vkexec::descriptor_heap_buffer>(&buffer.storage)) {
+    return CopyToVector<T>(heap->mapped(), count);
   }
-
-  invalidate_buffer(buffer);
-
-  void *mapped = nullptr;
-  if (vmaMapMemory(allocator_, buffer.allocation, &mapped) != VK_SUCCESS) {
-    return std::unexpected(MakeError(std::errc::io_error, "read_buffer: failed to map memory"));
-  }
-
-  std::vector<T> result(count);
-  std::memcpy(result.data(), mapped, count * sizeof(T));
-  vmaUnmapMemory(allocator_, buffer.allocation);
-
-  return result;
+  return std::unexpected(MakeError(std::errc::io_error, "read_buffer: empty buffer"));
 }
 
 }// namespace vkgsplat::vulkan
