@@ -173,12 +173,12 @@ void OpRadixSort::record(vulkan::Context const &context, RenderData const &data,
     context.disp.cmdBindPipeline(
       command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, data.radix_histogram_algorithm.pipeline());
     PushConstants(context, &radix_push, sizeof(RadixPushConstants), command_buffer);
-    context.disp.cmdDispatchIndirect(command_buffer, data.radix_dispatch_buffer.handle, 0);
+    context.disp.cmdDispatchIndirect(command_buffer, data.radix_dispatch_buffer.handle(), 0);
     Barrier::compute_to_compute(context.disp, command_buffer);
 
     context.disp.cmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, data.radix_scatter_algorithm.pipeline());
     PushConstants(context, &radix_push, sizeof(RadixPushConstants), command_buffer);
-    context.disp.cmdDispatchIndirect(command_buffer, data.radix_dispatch_buffer.handle, 0);
+    context.disp.cmdDispatchIndirect(command_buffer, data.radix_dispatch_buffer.handle(), 0);
     Barrier::compute_to_compute(context.disp, command_buffer);
   }
 }

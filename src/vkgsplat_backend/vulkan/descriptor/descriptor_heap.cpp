@@ -98,12 +98,10 @@ auto RefreshDescriptorHeap(vulkan::Context &context, RenderData &data) -> bool
 
   DestroyDescriptorHeap(context, data);
 
-  if (data.geometry_buffer.handle == VK_NULL_HANDLE || data.appearance_buffer.handle == VK_NULL_HANDLE
-      || data.projected_buffer.handle == VK_NULL_HANDLE || data.unsorted_keys_buffer.handle == VK_NULL_HANDLE
-      || data.unsorted_values_buffer.handle == VK_NULL_HANDLE || data.sorted_keys_buffer.handle == VK_NULL_HANDLE
-      || data.sorted_values_buffer.handle == VK_NULL_HANDLE || data.sort_histogram_buffer.handle == VK_NULL_HANDLE
-      || data.tile_ranges_buffer.handle == VK_NULL_HANDLE || data.sorted_indices.buffer().handle == VK_NULL_HANDLE
-      || data.sort_entries.buffer().handle == VK_NULL_HANDLE) {
+  if (data.geometry_buffer.empty() || data.appearance_buffer.empty() || data.projected_buffer.empty()
+      || data.unsorted_keys_buffer.empty() || data.unsorted_values_buffer.empty() || data.sorted_keys_buffer.empty()
+      || data.sorted_values_buffer.empty() || data.sort_histogram_buffer.empty() || data.tile_ranges_buffer.empty()
+      || data.sorted_indices.buffer().empty() || data.sort_entries.buffer().empty()) {
     return true;
   }
 

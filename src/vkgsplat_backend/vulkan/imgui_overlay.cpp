@@ -394,11 +394,11 @@ namespace {
 
   void DestroyImguiHeaps(vulkan::Context &context, ImGuiOverlayState &overlay)
   {
-    if (overlay.resource_mapped != nullptr && overlay.resource_heap.handle != VK_NULL_HANDLE) {
+    if (overlay.resource_mapped != nullptr && !overlay.resource_heap.empty()) {
       context.gpu_allocator.unmap_buffer(overlay.resource_heap);
       overlay.resource_mapped = nullptr;
     }
-    if (overlay.sampler_mapped != nullptr && overlay.sampler_heap.handle != VK_NULL_HANDLE) {
+    if (overlay.sampler_mapped != nullptr && !overlay.sampler_heap.empty()) {
       context.gpu_allocator.unmap_buffer(overlay.sampler_heap);
       overlay.sampler_mapped = nullptr;
     }
@@ -521,7 +521,7 @@ auto InitImguiOverlay(vulkan::Context &context, RenderData &data) -> std::expect
     .sType = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
     .pNext = nullptr,
     .heapRange = {
-      .address = context.gpu_allocator.get_buffer_device_address(*resource_heap),
+      .address = context.gpu_allocator.get_buffer_device_address(overlay->resource_heap),
       .size = overlay->resource_heap_size,
     },
     .reservedRangeOffset = overlay->resource_reserved_offset,
@@ -532,7 +532,7 @@ auto InitImguiOverlay(vulkan::Context &context, RenderData &data) -> std::expect
     .sType = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
     .pNext = nullptr,
     .heapRange = {
-      .address = context.gpu_allocator.get_buffer_device_address(*sampler_heap),
+      .address = context.gpu_allocator.get_buffer_device_address(overlay->sampler_heap),
       .size = overlay->sampler_heap_size,
     },
     .reservedRangeOffset = overlay->sampler_reserved_offset,

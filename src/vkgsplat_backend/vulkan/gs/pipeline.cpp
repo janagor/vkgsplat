@@ -44,7 +44,7 @@ namespace {
   {
     data.gs_sequence.emplace<OpProjection>()
       .emplace<compute::OpFillBuffer>(compute::FillBufferParams{
-        .buffer = data.instance_count_buffer.handle,
+        .buffer = data.instance_count_buffer.handle(),
         .offset = 0,
         .size = sizeof(u32),
         .value = 0U,

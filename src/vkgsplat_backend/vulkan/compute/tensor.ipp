@@ -52,14 +52,14 @@ void Tensor<T>::destroy(vulkan::Context &context) noexcept
 template<TriviallyCopyable T>
 auto Tensor<T>::sync_to_device(vulkan::Context &context) const noexcept -> bool
 {
-  if (buffer_.handle == VK_NULL_HANDLE) { return false; }
+  if (buffer_.empty()) { return false; }
   return static_cast<bool>(context.gpu_allocator.write_buffer(buffer_, std::span<const T>{ host_data_ }));
 }
 
 template<TriviallyCopyable T>
 auto Tensor<T>::sync_from_device(vulkan::Context &context) noexcept -> bool
 {
-  if (buffer_.handle == VK_NULL_HANDLE) { return false; }
+  if (buffer_.empty()) { return false; }
 
   auto const host_values = context.gpu_allocator.read_buffer<T>(buffer_, host_data_.size());
   if (!host_values) { return false; }
