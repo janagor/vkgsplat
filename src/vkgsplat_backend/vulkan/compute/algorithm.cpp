@@ -14,18 +14,16 @@
 #include <print>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace vkgsplat::compute {
 
-Algorithm::Algorithm(Algorithm &&other) noexcept : pipeline_(other.pipeline_) { other.pipeline_.reset(); }
+Algorithm::Algorithm(Algorithm &&other) noexcept : pipeline_(std::move(other.pipeline_)) {}
 
 auto Algorithm::operator=(Algorithm &&other) noexcept -> Algorithm &
 {
-  if (this != &other) {
-    pipeline_ = other.pipeline_;
-    other.pipeline_.reset();
-  }
+  if (this != &other) { pipeline_ = std::move(other.pipeline_); }
   return *this;
 }
 
@@ -61,14 +59,14 @@ auto Algorithm::init(vulkan::Context &context,
     pipeline_.reset();
     return false;
   }
-  pipeline_ = *created;
+  pipeline_ = std::move(*created);
   return true;
 }
 
 void Algorithm::destroy(vulkan::Context &context) noexcept
 {
   (void)context;
-  // Pipeline lifetime is owned by the vkexec context pipeline cache.
+  // heap_compute_pipeline owns its Vulkan objects; destroy after GPU work using it finishes.
   pipeline_.reset();
 }
 
