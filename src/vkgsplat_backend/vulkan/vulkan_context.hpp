@@ -28,10 +28,6 @@ struct Context
   std::unique_ptr<vkexec::context> vkexec_context;
   std::unique_ptr<PresentableSwapchain> swapchain;
   GPUAllocator gpu_allocator;
-  PFN_vkWriteResourceDescriptorsEXT write_resource_descriptors{};
-  PFN_vkWriteSamplerDescriptorsEXT write_sampler_descriptors{};
-  PFN_vkCmdBindResourceHeapEXT cmd_bind_resource_heap{};
-  PFN_vkCmdBindSamplerHeapEXT cmd_bind_sampler_heap{};
 
   bool present_timing_enabled = false;
   bool present_id2_enabled = false;

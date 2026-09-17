@@ -29,6 +29,7 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_vulkan.h>
 
+#include <vkexec_extensions/descriptor_heap/descriptor_heap.hpp>
 #include <vulkan/vulkan_core.h>
 
 #include <VkBootstrap.h>
@@ -54,10 +55,8 @@ struct ImGuiOverlayState
   VkDeviceSize sampler_reserved_size{};
   uint64_t resource_freelist{};
   uint64_t sampler_freelist{};
-  VkDevice device{};
+  vkexec::context *vkexec_context{};
   vulkan::GPUAllocator *gpu_allocator{};
-  PFN_vkWriteResourceDescriptorsEXT write_resource_descriptors{};
-  PFN_vkWriteSamplerDescriptorsEXT write_sampler_descriptors{};
   ImGui_ImplVulkan_DescriptorHeapInfo heap_info{};
   VkPipelineRenderingCreateInfo pipeline_rendering{};
   VkFormat color_format{ VK_FORMAT_UNDEFINED };
@@ -114,15 +113,17 @@ namespace {
 
   void FreeSlot(uint64_t &freelist, uint32_t index) { freelist |= (uint64_t{ 1 } << index); }
 
-  [[nodiscard]] auto HostDescriptorAddress(void *mapped, VkDeviceSize stride, uint32_t index) -> void *
+  [[nodiscard]] auto HostDescriptorSpan(void *mapped, VkDeviceSize stride, uint32_t index) -> std::span<std::byte>
   {
     auto const bytes = std::span{ static_cast<std::byte *>(mapped), static_cast<size_t>((index + 1U) * stride) };
-    return bytes.subspan(static_cast<size_t>(index * stride)).data();
+    return bytes.subspan(static_cast<size_t>(index * stride), static_cast<size_t>(stride));
   }
 
   auto RegisterImage(void *user_context, VkImageViewCreateInfo const *create_info) -> uint32_t
   {
     auto *overlay = static_cast<ImGuiOverlayState *>(user_context);
+    if (overlay->vkexec_context == nullptr || create_info == nullptr) { return 0; }
+
     uint32_t const index = AllocateSlot(overlay->resource_freelist);
     // ImTextureID 0 is ImTextureID_Invalid; descriptor-heap mode requires non-zero RegisterImage indices.
     if (index == 0) {
@@ -130,22 +131,13 @@ namespace {
       return 0;
     }
 
-    VkImageDescriptorInfoEXT image_info{};
-    image_info.sType = VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT;
-    image_info.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    image_info.pView = create_info;
-
-    VkResourceDescriptorInfoEXT resource_info{};
-    resource_info.sType = VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT;
-    resource_info.type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-    resource_info.data.pImage = &image_info;
-
-    VkHostAddressRangeEXT const host_range{
-      .address = HostDescriptorAddress(overlay->resource_mapped, overlay->resource_stride, index),
-      .size = overlay->resource_stride,
-    };
-    if (overlay->write_resource_descriptors(overlay->device, 1, &resource_info, &host_range) != VK_SUCCESS) {
-      std::println(stderr, "[imgui] vkWriteResourceDescriptorsEXT failed for image slot {}", index);
+    auto const destination = HostDescriptorSpan(overlay->resource_mapped, overlay->resource_stride, index);
+    auto const wrote = vkexec::write_sampled_image_descriptor(
+      *overlay->vkexec_context, *create_info, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, destination);
+    if (!wrote) {
+      std::println(stderr, "[imgui] write_sampled_image_descriptor failed for image slot {}: {}",
+        index,
+        wrote.error().message());
       FreeSlot(overlay->resource_freelist, index);
       return 0;
     }
@@ -162,14 +154,18 @@ namespace {
   auto RegisterSampler(void *user_context, VkSamplerCreateInfo const *create_info) -> uint32_t
   {
     auto *overlay = static_cast<ImGuiOverlayState *>(user_context);
-    uint32_t const index = AllocateSlot(overlay->sampler_freelist);
+    if (overlay->vkexec_context == nullptr || create_info == nullptr) { return 0; }
 
-    VkHostAddressRangeEXT const host_range{
-      .address = HostDescriptorAddress(overlay->sampler_mapped, overlay->sampler_stride, index),
-      .size = overlay->sampler_stride,
-    };
-    if (overlay->write_sampler_descriptors(overlay->device, 1, create_info, &host_range) != VK_SUCCESS) {
-      std::println(stderr, "[imgui] vkWriteSamplerDescriptorsEXT failed for sampler slot {}", index);
+    uint32_t const index = AllocateSlot(overlay->sampler_freelist);
+    auto const destination = HostDescriptorSpan(overlay->sampler_mapped, overlay->sampler_stride, index);
+    auto const wrote = vkexec::write_sampler_descriptor(*overlay->vkexec_context, *create_info, destination);
+    if (!wrote) {
+      std::println(stderr,
+        "[imgui] write_sampler_descriptor failed for sampler slot {}: {}",
+        index,
+        wrote.error().message());
+      FreeSlot(overlay->sampler_freelist, index);
+      return 0;
     }
     return index;
   }
@@ -442,10 +438,11 @@ auto InitImguiOverlay(vulkan::Context &context, RenderData &data) -> std::expect
   }
 
   auto overlay = std::make_unique<ImGuiOverlayState>();
-  overlay->device = context.device;
+  if (context.vkexec_context == nullptr) {
+    return std::unexpected{ MakeError(std::errc::function_not_supported, "vkexec context missing for ImGui heaps") };
+  }
+  overlay->vkexec_context = context.vkexec_context.get();
   overlay->gpu_allocator = &context.gpu_allocator;
-  overlay->write_resource_descriptors = context.write_resource_descriptors;
-  overlay->write_sampler_descriptors = context.write_sampler_descriptors;
 
   VkPhysicalDeviceDescriptorHeapPropertiesEXT heap_props{};
   heap_props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_PROPERTIES_EXT;
@@ -500,14 +497,6 @@ auto InitImguiOverlay(vulkan::Context &context, RenderData &data) -> std::expect
   overlay->sampler_reserved_size = heap_props.minSamplerHeapReservedRange;
   overlay->resource_freelist = ((uint64_t{ 1 } << kImguiImageSlots) - uint64_t{ 1 }) & ~uint64_t{ 1 };// slot 0 reserved
   overlay->sampler_freelist = (uint64_t{ 1 } << kImguiSamplerSlots) - uint64_t{ 1 };
-  overlay->heap_info = {
-    .RegisterImage = RegisterImage,
-    .UnRegisterImage = UnregisterImage,
-    .RegisterSampler = RegisterSampler,
-    .UnRegisterSampler = UnregisterSampler,
-    .UserContext = overlay.get(),
-  };
-
   overlay->resource_bind = {
     .sType = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
     .pNext = nullptr,
@@ -518,7 +507,6 @@ auto InitImguiOverlay(vulkan::Context &context, RenderData &data) -> std::expect
     .reservedRangeOffset = overlay->resource_reserved_offset,
     .reservedRangeSize = overlay->resource_reserved_size,
   };
-
   overlay->sampler_bind = {
     .sType = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
     .pNext = nullptr,
@@ -529,7 +517,13 @@ auto InitImguiOverlay(vulkan::Context &context, RenderData &data) -> std::expect
     .reservedRangeOffset = overlay->sampler_reserved_offset,
     .reservedRangeSize = overlay->sampler_reserved_size,
   };
-
+  overlay->heap_info = {
+    .RegisterImage = RegisterImage,
+    .UnRegisterImage = UnregisterImage,
+    .RegisterSampler = RegisterSampler,
+    .UnRegisterSampler = UnregisterSampler,
+    .UserContext = overlay.get(),
+  };
 
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
@@ -700,8 +694,26 @@ void RecordImguiOverlay(vulkan::Context &context, RenderData const &data, VkComm
     RecordOverlaySecondary(context, data, frame_slot);
   }
 
-  context.cmd_bind_resource_heap(command_buffer, &overlay.resource_bind);
-  context.cmd_bind_sampler_heap(command_buffer, &overlay.sampler_bind);
+  if (context.vkexec_context != nullptr) {
+    auto const resource_bound = vkexec::cmd_bind_resource_heap(*context.vkexec_context,
+      command_buffer,
+      overlay.resource_bind.heapRange.address,
+      overlay.resource_bind.heapRange.size,
+      overlay.resource_bind.reservedRangeOffset,
+      overlay.resource_bind.reservedRangeSize);
+    if (!resource_bound) {
+      std::println(stderr, "[imgui] cmd_bind_resource_heap failed: {}", resource_bound.error().message());
+    }
+    auto const sampler_bound = vkexec::cmd_bind_sampler_heap(*context.vkexec_context,
+      command_buffer,
+      overlay.sampler_bind.heapRange.address,
+      overlay.sampler_bind.heapRange.size,
+      overlay.sampler_bind.reservedRangeOffset,
+      overlay.sampler_bind.reservedRangeSize);
+    if (!sampler_bound) {
+      std::println(stderr, "[imgui] cmd_bind_sampler_heap failed: {}", sampler_bound.error().message());
+    }
+  }
 
   VkImageView swapchain_view = context.swapchain->image_views().at(image_index);
 
