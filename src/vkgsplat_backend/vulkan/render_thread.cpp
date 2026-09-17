@@ -28,6 +28,7 @@
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
 
+#include <vkexec/queue_submit.hpp>
 #include <vulkan/vulkan_core.h>
 
 namespace vkgsplat {
@@ -225,12 +226,13 @@ auto RenderThread::DrawFrameVulkan(size_t frame_slot) -> std::expected<void, Err
   RenderData &data = *data_;
   data.current_slot = frame_slot;
 
-  if (!data.frame_timeline.has_value()) {
-    return std::unexpected{ MakeError(std::errc::state_not_recoverable, "frame timeline semaphore is not initialized") };
+  if (!data.frame_ring.has_value() || context.vkexec_context == nullptr) {
+    return std::unexpected{ MakeError(std::errc::state_not_recoverable, "frame_ring is not initialized") };
   }
+  auto &ring = *data.frame_ring;
 
-  if (auto waited = data.frame_timeline->wait_value(data.slot_timeline_value.at(frame_slot)); !waited) {
-    return std::unexpected{ waited.error() };
+  if (auto waited = ring.wait_slot(frame_slot); !waited) {
+    return std::unexpected{ MakeError(std::errc::io_error, waited.error().message()) };
   }
 
   if (data.gpu_pass_timer.enabled()) {
@@ -254,10 +256,14 @@ auto RenderThread::DrawFrameVulkan(size_t frame_slot) -> std::expected<void, Err
     }
   }
 
+  auto acquire_semaphore = ring.acquire_semaphore(frame_slot);
+  if (!acquire_semaphore) {
+    return std::unexpected{ MakeError(std::errc::io_error, acquire_semaphore.error().message()) };
+  }
+
   uint32_t image_index = 0;
-  auto *available_semaphore = data.available_semaphores.at(frame_slot).handle();
   VkResult result = context.disp.acquireNextImageKHR(
-    context.swapchain->handle(), UINT64_MAX, available_semaphore, VK_NULL_HANDLE, &image_index);
+    context.swapchain->handle(), UINT64_MAX, *acquire_semaphore, VK_NULL_HANDLE, &image_index);
 
   if (result == VK_ERROR_OUT_OF_DATE_KHR) {
     if (auto recreated = RecreateSwapchain(context, data); !recreated) { return std::unexpected{ recreated.error() }; }
@@ -269,8 +275,8 @@ auto RenderThread::DrawFrameVulkan(size_t frame_slot) -> std::expected<void, Err
       std::errc::io_error, "failed to acquire swapchain image. VkResult=" + std::to_string(result)) };
   }
 
-  if (auto waited = data.frame_timeline->wait_value(data.image_timeline_value.at(image_index)); !waited) {
-    return std::unexpected{ waited.error() };
+  if (auto waited = ring.wait_image(image_index); !waited) {
+    return std::unexpected{ MakeError(std::errc::io_error, waited.error().message()) };
   }
 
   FrameSetup &setup = data.frames.at(frame_slot).setup;
@@ -284,31 +290,35 @@ auto RenderThread::DrawFrameVulkan(size_t frame_slot) -> std::expected<void, Err
     });
   if (!recorded) { return std::unexpected{ recorded.error() }; }
 
-  auto const signal_value = data.next_timeline_value + 1U;
-  data.next_timeline_value = signal_value;
-
-  std::array<VkSemaphore, 1> wait_semaphores = { available_semaphore };
-  std::array<VkPipelineStageFlags, 1> wait_stages = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-  auto *finished_semaphore = data.finished_semaphore.at(image_index).handle();
-  std::array<VkSemaphore, 2> signal_semaphores = { finished_semaphore, data.frame_timeline->handle() };
-  std::array<u64, 1> const wait_values{ 0 };
-  std::array<u64, 2> const signal_values{ 0, signal_value };
-  auto timeline_submit = initializers::TimelineSemaphoreSubmitInfo(wait_values, signal_values);
-
-  auto *command_buffer = data.command_buffers.at(image_index).handle();
-  auto submit_info =
-    initializers::SubmitInfo(wait_semaphores, wait_stages, std::span{ &command_buffer, 1 }, signal_semaphores);
-  submit_info.pNext = &timeline_submit;
-
-  if (context.disp.queueSubmit(data.graphics_queue, 1, &submit_info, VK_NULL_HANDLE) != VK_SUCCESS) {
-    return std::unexpected{ MakeError(std::errc::io_error, "failed to submit draw command buffer") };
+  auto const signal_value = ring.allocate_signal_value();
+  auto submit_sync = ring.make_submit_sync(frame_slot, image_index, signal_value);
+  if (!submit_sync) {
+    return std::unexpected{ MakeError(std::errc::io_error, submit_sync.error().message()) };
   }
 
-  data.slot_timeline_value.at(frame_slot) = signal_value;
-  data.image_timeline_value.at(image_index) = signal_value;
+  auto *command_buffer = data.command_buffers.at(image_index).handle();
+  std::array<VkCommandBuffer, 1> const cmds{ command_buffer };
+  if (auto submitted = context.vkexec_context->submit(vkexec::queue_submit{
+        .command_buffers = cmds,
+        .waits = submit_sync->waits,
+        .signals = submit_sync->signals,
+        .queue = data.graphics_queue,
+      });
+    !submitted) {
+    return std::unexpected{ MakeError(std::errc::io_error, submitted.error().message()) };
+  }
+
+  if (auto marked = ring.mark_submitted(frame_slot, image_index, signal_value); !marked) {
+    return std::unexpected{ MakeError(std::errc::io_error, marked.error().message()) };
+  }
+
+  auto finished_semaphore = ring.render_finished_semaphore(image_index);
+  if (!finished_semaphore) {
+    return std::unexpected{ MakeError(std::errc::io_error, finished_semaphore.error().message()) };
+  }
 
   std::array<VkSwapchainKHR, 1> const swap_chains = { context.swapchain->handle() };
-  std::array<VkSemaphore, 1> present_wait = { finished_semaphore };
+  std::array<VkSemaphore, 1> present_wait = { *finished_semaphore };
   auto present_info = initializers::PresentInfoKHR(present_wait, swap_chains, std::span{ &image_index, 1 });
 
   if (data.present_pacer != nullptr) { data.present_pacer->PreparePresent(context, present_info); }
