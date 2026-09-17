@@ -32,7 +32,6 @@ struct Context
   PFN_vkWriteSamplerDescriptorsEXT write_sampler_descriptors{};
   PFN_vkCmdBindResourceHeapEXT cmd_bind_resource_heap{};
   PFN_vkCmdBindSamplerHeapEXT cmd_bind_sampler_heap{};
-  PFN_vkCmdPushDataEXT cmd_push_data{};
 
   bool present_timing_enabled = false;
   bool present_id2_enabled = false;

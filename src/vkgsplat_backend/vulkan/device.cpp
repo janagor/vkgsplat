@@ -220,7 +220,6 @@ auto DeviceInitialization(vulkan::Context &context, DriverConfig const &config) 
         reinterpret_cast<PFN_vkCmdBindResourceHeapEXT>(vkGetDeviceProcAddr(context.device, "vkCmdBindResourceHeapEXT"));
       context.cmd_bind_sampler_heap =
         reinterpret_cast<PFN_vkCmdBindSamplerHeapEXT>(vkGetDeviceProcAddr(context.device, "vkCmdBindSamplerHeapEXT"));
-      context.cmd_push_data = reinterpret_cast<PFN_vkCmdPushDataEXT>(vkGetDeviceProcAddr(context.device, "vkCmdPushDataEXT"));
 
       context.set_swapchain_present_timing_queue_size = reinterpret_cast<PFN_vkSetSwapchainPresentTimingQueueSizeEXT>(
         vkGetDeviceProcAddr(context.device, "vkSetSwapchainPresentTimingQueueSizeEXT"));
@@ -233,8 +232,7 @@ auto DeviceInitialization(vulkan::Context &context, DriverConfig const &config) 
       // NOLINTEND(cppcoreguidelines-pro-type-reinterpret-cast)
 
       if (context.write_resource_descriptors == nullptr || context.write_sampler_descriptors == nullptr
-          || context.cmd_bind_resource_heap == nullptr || context.cmd_bind_sampler_heap == nullptr
-          || context.cmd_push_data == nullptr) {
+          || context.cmd_bind_resource_heap == nullptr || context.cmd_bind_sampler_heap == nullptr) {
         return std::unexpected{ Error{ std::make_error_code(std::errc::function_not_supported),
           "VK_EXT_descriptor_heap entry points are unavailable" } };
       }

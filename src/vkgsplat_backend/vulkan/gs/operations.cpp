@@ -10,8 +10,10 @@
 
 #include <cstddef>
 #include <print>
+#include <span>
 
 #include <vkexec/barrier.hpp>
+#include <vkexec_extensions/descriptor_heap/push_data.hpp>
 #include <vulkan/vulkan_core.h>
 
 namespace vkgsplat::gs {
@@ -55,13 +57,9 @@ namespace {
 
   void PushConstants(vulkan::Context const &context, void const *data, size_t size, VkCommandBuffer command_buffer)
   {
-    VkPushDataInfoEXT const push_info = {
-      .sType = VK_STRUCTURE_TYPE_PUSH_DATA_INFO_EXT,
-      .pNext = nullptr,
-      .offset = 0,
-      .data = { .address = data, .size = size },
-    };
-    context.cmd_push_data(command_buffer, &push_info);
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+    auto const bytes = std::span{ reinterpret_cast<std::byte const *>(data), size };
+    (void)vkexec::cmd_push_data(*context.vkexec_context, command_buffer, bytes);
   }
 
   [[nodiscard]] auto Dispatch2dForThreads(vulkan::Context const &context, u32 thread_count, u32 local_size_x) -> Dispatch2D
