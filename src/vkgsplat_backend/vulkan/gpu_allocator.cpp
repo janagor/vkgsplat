@@ -141,22 +141,4 @@ auto GPUAllocator::map_buffer(Buffer const &buffer) noexcept -> std::expected<st
   return std::unexpected(MakeAllocatorError("Cannot map empty buffer"));
 }
 
-void GPUAllocator::unmap_buffer(Buffer const &buffer) noexcept
-{
-  // vkexec buffers are persistently mapped; nothing to unmap.
-  (void)buffer;
-}
-
-void GPUAllocator::flush_buffer(Buffer const &buffer) noexcept
-{
-  // vkexec host-visible buffers do not require explicit flush via VMA.
-  (void)buffer;
-}
-
-void GPUAllocator::invalidate_buffer(Buffer const &buffer) noexcept
-{
-  // vkexec host-visible buffers do not require explicit invalidate via VMA.
-  (void)buffer;
-}
-
 }// namespace vkgsplat::vulkan
