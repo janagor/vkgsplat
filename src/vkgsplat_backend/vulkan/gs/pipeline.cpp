@@ -3,7 +3,7 @@
 #include "app_state.hpp"
 #include "vulkan/frame_context.hpp"
 #include "vulkan/gpu_pass_timer.hpp"
-#include "vulkan/sync_objects/barrier.hpp"
+#include <vkexec/barrier.hpp>
 #include "compute/op_fill_buffer.hpp"
 #include "gs/gaussian_splat.hpp"
 #include "gs/operations.hpp"
@@ -177,7 +177,7 @@ void EvalGsPipeline(vulkan::Context &context, RenderData &data, VkCommandBuffer 
     bool first_tile = true;
     for (u32 row = 0U; row < rows; ++row) {
       for (u32 col = 0U; col < cols; ++col) {
-        if (!first_tile) { Barrier::graphics_to_compute(context.disp, command_buffer); }
+        if (!first_tile) { vkexec::barrier::graphics_to_compute(command_buffer); }
 
         LfdGridCell const logical = LfdLogicalCellForGridPosition(data.lfd_view_order, data.lfd_grid, col, row);
 

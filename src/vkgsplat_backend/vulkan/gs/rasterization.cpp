@@ -2,7 +2,7 @@
 
 #include "app_state.hpp"
 #include "vulkan/initializers.hpp"
-#include "vulkan/sync_objects/barrier.hpp"
+#include <vkexec/barrier.hpp>
 #include "gs/push_constants.hpp"
 #include "vulkan_context.hpp"
 
@@ -213,7 +213,7 @@ void DrawQuiltTile(vulkan::Context const &context,
   VkRect2D tile,
   bool clear_attachment)
 {
-  Barrier::compute_to_graphics(context.disp, command_buffer);
+  vkexec::barrier::compute_to_graphics(command_buffer);
 
   // First tile may clear the full atlas; later tiles LOAD and only write their viewport.
   VkRect2D const render_area = clear_attachment
