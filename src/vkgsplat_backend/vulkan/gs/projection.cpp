@@ -11,6 +11,7 @@
 #include <string>
 
 #include <vkexec/barrier.hpp>
+#include <vkexec_extensions/descriptor_heap/push_data.hpp>
 #include <vulkan/vulkan_core.h>
 
 #include "vkgsplat/example_config.h"
@@ -35,14 +36,7 @@ void DispatchProjection(vulkan::Context const &context,
   VkCommandBuffer command_buffer)
 {
   context.disp.cmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, data.project_algorithm.pipeline());
-
-  VkPushDataInfoEXT const push_info = {
-    .sType = VK_STRUCTURE_TYPE_PUSH_DATA_INFO_EXT,
-    .pNext = nullptr,
-    .offset = 0,
-    .data = { .address = &push_constants, .size = sizeof(ProjectPushConstants) },
-  };
-  context.cmd_push_data(command_buffer, &push_info);
+  (void)vkexec::cmd_push_data(*context.vkexec_context, command_buffer, push_constants);
 
   uint32_t const workgroup_count = (data.splat_count + 63U) / 64U;
   context.disp.cmdDispatch(command_buffer, workgroup_count, 1U, 1U);

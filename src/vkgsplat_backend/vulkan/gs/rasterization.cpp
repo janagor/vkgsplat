@@ -20,6 +20,7 @@
 #include <vkexec/image.hpp>
 #include <vkexec/image_view.hpp>
 #include <vkexec/sync_wait.hpp>
+#include <vkexec_extensions/descriptor_heap/push_data.hpp>
 #include <vulkan/vulkan_core.h>
 
 namespace vkgsplat::gs {
@@ -95,13 +96,7 @@ namespace {
 
   void PushRasterConstants(vulkan::Context const &context, RasterPushConstants const &push_constants, VkCommandBuffer command_buffer)
   {
-    VkPushDataInfoEXT const push_info = {
-      .sType = VK_STRUCTURE_TYPE_PUSH_DATA_INFO_EXT,
-      .pNext = nullptr,
-      .offset = 0,
-      .data = { .address = &push_constants, .size = sizeof(RasterPushConstants) },
-    };
-    context.cmd_push_data(command_buffer, &push_info);
+    (void)vkexec::cmd_push_data(*context.vkexec_context, command_buffer, push_constants);
   }
 
   [[nodiscard]] auto ColorRange() -> VkImageSubresourceRange
