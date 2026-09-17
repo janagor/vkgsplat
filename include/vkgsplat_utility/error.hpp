@@ -5,6 +5,7 @@
 #include <string>
 #include <system_error>
 #include <type_traits>
+#include <utility>
 
 namespace vkgsplat {
 
@@ -37,10 +38,11 @@ template<class ErrorCodeEnum>
   requires std::is_error_code_enum_v<ErrorCodeEnum>
 [[nodiscard]] auto MakeError(ErrorCodeEnum code,
   std::string message = "",
-  std::source_location source_location = std::source_location::current()) -> Error;
+  std::source_location source_location = std::source_location::current()) -> Error
+{
+  return MakeError(make_error_code(code), std::move(message), source_location);
+}
 
 }// namespace vkgsplat
-
-#include <vkgsplat_utility/error.ipp>// IWYU pragma: export
 
 #endif// VKGSPLAT_UTILITY_ERROR_HPP
