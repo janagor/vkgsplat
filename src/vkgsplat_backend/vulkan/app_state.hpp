@@ -29,6 +29,7 @@
 #include <vkexec/tensor.hpp>
 #include <vkexec_extensions/descriptor_heap/algorithm.hpp>
 #include <vkexec_extensions/descriptor_heap/buffer.hpp>
+#include <vkexec_extensions/descriptor_heap/heap_graphics_pipeline.hpp>
 #include <vkgsplat/lfd_config.hpp>
 
 
@@ -50,7 +51,7 @@ struct RenderData
   VkQueue graphics_queue{};
   VkQueue present_queue{};
 
-  VkPipeline graphics_pipeline{};
+  std::optional<vkexec::heap_graphics_pipeline> graphics_pipeline;
 
   std::optional<vkexec::gpu_buffer> geometry_buffer;
   std::optional<vkexec::gpu_buffer> appearance_buffer;
