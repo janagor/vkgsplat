@@ -15,7 +15,6 @@
 #include "vulkan/gs/sorting.hpp"
 #include "vulkan/imgui_overlay.hpp"
 #include "vulkan/sphere_setup.hpp"
-#include "vulkan/sync_objects/semaphore.hpp"
 #include "vulkan/vulkan_bootstrap.hpp"
 #include "gs/pipeline.hpp"
 #include "vulkan/gpu_pass_timer.hpp"
@@ -25,6 +24,8 @@
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
 
+#include <vkexec/sync_wait.hpp>
+#include <vkexec_extensions/timeline_semaphore/frame_ring.hpp>
 #include <vulkan/vulkan_core.h>
 
 #include <VkBootstrap.h>
@@ -63,32 +64,24 @@ auto CreateCommandResources(vulkan::Context &context, RenderData &data) -> std::
 
 auto CreateSyncObjects(vulkan::Context &context, RenderData &data) -> std::expected<void, Error>
 {
-  data.available_semaphores.clear();
-  data.finished_semaphore.clear();
-  data.frame_timeline.reset();
-  data.next_timeline_value = 0;
-  data.slot_timeline_value.fill(0);
-  data.image_timeline_value.assign(context.swapchain->image_count(), 0);
+  data.frame_ring.reset();
 
-  data.available_semaphores.reserve(kFrameSlotCount);
-  data.finished_semaphore.reserve(context.swapchain->image_count());
-
-  for (size_t i = 0; i < context.swapchain->image_count(); i++) {
-    auto semaphore = Semaphore::create(std::ref(context.disp));
-    if (!semaphore) { return std::unexpected{ semaphore.error() }; }
-    data.finished_semaphore.push_back(std::move(*semaphore));
+  if (context.vkexec_context == nullptr) {
+    return std::unexpected{ MakeError(std::errc::state_not_recoverable, "vkexec context missing for frame_ring") };
+  }
+  if (context.swapchain == nullptr) {
+    return std::unexpected{ MakeError(std::errc::state_not_recoverable, "swapchain is not initialized") };
   }
 
-  for (size_t i = 0; i < kFrameSlotCount; i++) {
-    auto available = Semaphore::create(std::ref(context.disp));
-    if (!available) { return std::unexpected{ available.error() }; }
-    data.available_semaphores.push_back(std::move(*available));
+  auto created = vkexec::try_sync_wait_value(vkexec::frame_ring::create(*context.vkexec_context,
+    vkexec::frame_ring::create_info{
+      .slot_count = kFrameSlotCount,
+      .image_count = context.swapchain->image_count(),
+    }));
+  if (!created) {
+    return std::unexpected{ MakeError(std::errc::io_error, created.error().message()) };
   }
-
-  auto timeline = Semaphore::create_timeline(std::ref(context.disp));
-  if (!timeline) { return std::unexpected{ timeline.error() }; }
-  data.frame_timeline = std::move(*timeline);
-
+  data.frame_ring = std::move(*created);
   return {};
 }
 
@@ -108,15 +101,14 @@ auto RecreateSwapchain(vulkan::Context &context, RenderData &data) -> std::expec
     return std::unexpected{ recreated.error() };
   }
 
-  // Present wait semaphores are per swapchain image; recreate after idle resize.
-  data.finished_semaphore.clear();
-  data.finished_semaphore.reserve(context.swapchain->image_count());
-  for (size_t i = 0; i < context.swapchain->image_count(); ++i) {
-    auto semaphore = Semaphore::create(std::ref(context.disp));
-    if (!semaphore) { return std::unexpected{ semaphore.error() }; }
-    data.finished_semaphore.push_back(std::move(*semaphore));
+  if (!data.frame_ring.has_value()) {
+    return std::unexpected{ MakeError(std::errc::state_not_recoverable, "frame_ring is not initialized") };
   }
-  data.image_timeline_value.assign(context.swapchain->image_count(), 0);
+  if (auto resized = data.frame_ring->resize_images(context.swapchain->image_count()); !resized) {
+    return std::unexpected{ MakeError(std::errc::io_error, resized.error().message()) };
+  }
+  data.frame_ring->reset_completion_tracking();
+
   if (0 != CreateGraphicsPipeline(context, data)) {
     return std::unexpected{ MakeError(std::errc::io_error, "failed to recreate graphics pipeline") };
   }
@@ -135,12 +127,7 @@ void Cleanup(vulkan::Context &context, RenderData &data)
 {
   context.disp.deviceWaitIdle();
 
-  data.available_semaphores.clear();
-  data.finished_semaphore.clear();
-  data.frame_timeline.reset();
-  data.next_timeline_value = 0;
-  data.slot_timeline_value.fill(0);
-  data.image_timeline_value.clear();
+  data.frame_ring.reset();
 
   data.command_buffers.clear();
   data.command_pool.reset();
