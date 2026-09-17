@@ -13,7 +13,7 @@
 
 #include <vkexec/barrier.hpp>
 #include <vkexec/pass.hpp>
-#include <vkexec_extensions/descriptor_heap/heap_compute_pipeline.hpp>
+#include <vkexec_extensions/descriptor_heap/algorithm.hpp>
 #include <vkexec_extensions/descriptor_heap/pass.hpp>
 #include <vulkan/vulkan_core.h>
 
@@ -53,7 +53,7 @@ namespace {
   template<typename Params>
   void RecordHeapDispatch(vulkan::Context const &context,
     VkCommandBuffer command_buffer,
-    vkexec::heap_compute_pipeline const &algorithm,
+    vkexec::heap_algorithm const &algorithm,
     Params const &params,
     u32 work_count)
   {
@@ -67,7 +67,7 @@ namespace {
   template<typename Params>
   void RecordHeapIndirect(vulkan::Context const &context,
     VkCommandBuffer command_buffer,
-    vkexec::heap_compute_pipeline const &algorithm,
+    vkexec::heap_algorithm const &algorithm,
     Params const &params,
     VkBuffer indirect_buffer)
   {
@@ -78,8 +78,8 @@ namespace {
       vkexec::indirect_dispatch{ .buffer = indirect_buffer, .offset = 0 });
   }
 
-  // Prefer dispatch_groups_for: tip's dispatch(...) function shadows the dispatch struct.
   [[nodiscard]] auto Dispatch2dForThreads(vulkan::Context const &context, u32 thread_count, u32 local_size_x)
+    -> vkexec::dispatch
   {
     u32 const groups = (thread_count + local_size_x - 1U) / local_size_x;
     u32 const max_x = context.device.physical_device.properties.limits.maxComputeWorkGroupCount[0];
@@ -92,10 +92,7 @@ namespace {
       std::println(
         "Sort dispatch needs {}x{} groups but device max is {}x{}", group_count_x, group_count_y, max_x, max_y);
     }
-    auto grid = vkexec::dispatch_groups_for(group_count_x, 1U);
-    grid.x = group_count_x;
-    grid.y = group_count_y;
-    return grid;
+    return vkexec::dispatch{ .x = group_count_x, .y = group_count_y, .z = 1U };
   }
 
 }// namespace
