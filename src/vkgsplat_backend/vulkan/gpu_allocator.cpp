@@ -30,6 +30,20 @@ namespace {
 
 }// namespace
 
+auto Buffer::handle() const noexcept -> VkBuffer
+{
+  if (auto const *gpu = std::get_if<vkexec::gpu_buffer>(&storage)) { return gpu->handle(); }
+  if (auto const *heap = std::get_if<vkexec::descriptor_heap_buffer>(&storage)) { return heap->handle(); }
+  return VK_NULL_HANDLE;
+}
+
+auto Buffer::size() const noexcept -> VkDeviceSize
+{
+  if (auto const *gpu = std::get_if<vkexec::gpu_buffer>(&storage)) { return gpu->size(); }
+  if (auto const *heap = std::get_if<vkexec::descriptor_heap_buffer>(&storage)) { return heap->size(); }
+  return 0;
+}
+
 GPUAllocator::~GPUAllocator() noexcept
 {
   if (allocator_ != VK_NULL_HANDLE) { vmaDestroyAllocator(std::exchange(allocator_, VK_NULL_HANDLE)); }

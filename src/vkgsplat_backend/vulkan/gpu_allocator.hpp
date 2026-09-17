@@ -13,6 +13,7 @@
 #include <cstring>
 #include <expected>
 #include <span>
+#include <system_error>
 #include <variant>
 #include <vector>
 
@@ -36,19 +37,8 @@ struct Buffer
 
   [[nodiscard]] auto empty() const noexcept -> bool { return std::holds_alternative<std::monostate>(storage); }
 
-  [[nodiscard]] auto handle() const noexcept -> VkBuffer
-  {
-    if (auto const *gpu = std::get_if<vkexec::gpu_buffer>(&storage)) { return gpu->handle(); }
-    if (auto const *heap = std::get_if<vkexec::descriptor_heap_buffer>(&storage)) { return heap->handle(); }
-    return VK_NULL_HANDLE;
-  }
-
-  [[nodiscard]] auto size() const noexcept -> VkDeviceSize
-  {
-    if (auto const *gpu = std::get_if<vkexec::gpu_buffer>(&storage)) { return gpu->size(); }
-    if (auto const *heap = std::get_if<vkexec::descriptor_heap_buffer>(&storage)) { return heap->size(); }
-    return 0;
-  }
+  [[nodiscard]] auto handle() const noexcept -> VkBuffer;
+  [[nodiscard]] auto size() const noexcept -> VkDeviceSize;
 };
 
 class [[nodiscard]] GPUAllocator
@@ -98,7 +88,66 @@ private:
   vkexec::context *vkexec_{ nullptr };
 };
 
+namespace gpu_allocator_detail {
+
+  template<typename T>
+  [[nodiscard]] inline auto CopyFromMapped(std::span<std::byte> mapped, std::span<const T> data)
+    -> std::expected<void, Error>
+  {
+    if (mapped.size() < data.size_bytes()) {
+      return std::unexpected(MakeError(std::errc::io_error, "write_buffer: buffer is not host-mapped"));
+    }
+    std::memcpy(mapped.data(), data.data(), data.size_bytes());
+    return {};
+  }
+
+  template<typename T>
+  [[nodiscard]] inline auto CopyToVector(std::span<std::byte> mapped, std::size_t count)
+    -> std::expected<std::vector<T>, Error>
+  {
+    auto const bytes = count * sizeof(T);
+    if (mapped.size() < bytes) {
+      return std::unexpected(MakeError(std::errc::io_error, "read_buffer: buffer is not host-mapped"));
+    }
+    std::vector<T> result(count);
+    std::memcpy(result.data(), mapped.data(), bytes);
+    return result;
+  }
+
+}// namespace gpu_allocator_detail
+
+template<TriviallyCopyable T>
+auto GPUAllocator::write_buffer(Buffer const &buffer, std::span<const T> data) noexcept -> std::expected<void, Error>
+{
+  if (data.size_bytes() > buffer.size()) {
+    return std::unexpected(MakeError(std::errc::invalid_argument, "write_buffer: data exceeds buffer size"));
+  }
+
+  if (auto const *gpu = std::get_if<vkexec::gpu_buffer>(&buffer.storage)) {
+    return gpu_allocator_detail::CopyFromMapped(gpu->mapped(), data);
+  }
+  if (auto const *heap = std::get_if<vkexec::descriptor_heap_buffer>(&buffer.storage)) {
+    return gpu_allocator_detail::CopyFromMapped(heap->mapped(), data);
+  }
+  return std::unexpected(MakeError(std::errc::io_error, "write_buffer: empty buffer"));
+}
+
+template<TriviallyCopyable T>
+auto GPUAllocator::read_buffer(Buffer const &buffer, std::size_t count) noexcept -> std::expected<std::vector<T>, Error>
+{
+  if (count * sizeof(T) > buffer.size()) {
+    return std::unexpected(MakeError(std::errc::invalid_argument, "read_buffer: count exceeds buffer size"));
+  }
+
+  if (auto const *gpu = std::get_if<vkexec::gpu_buffer>(&buffer.storage)) {
+    return gpu_allocator_detail::CopyToVector<T>(gpu->mapped(), count);
+  }
+  if (auto const *heap = std::get_if<vkexec::descriptor_heap_buffer>(&buffer.storage)) {
+    return gpu_allocator_detail::CopyToVector<T>(heap->mapped(), count);
+  }
+  return std::unexpected(MakeError(std::errc::io_error, "read_buffer: empty buffer"));
+}
+
 }// namespace vkgsplat::vulkan
-#include <vulkan/gpu_allocator.ipp>
 
 #endif// VKGSPLAT_BACKEND_VULKAN_GPU_ALLOCATOR_HPP
