@@ -66,6 +66,18 @@ static_assert(sizeof(TileRange) == kTileRangeSize);
 static_assert(TriviallyCopyable<TileRange>);
 static_assert(std::is_standard_layout_v<TileRange>);
 
+// Legacy host/device sort record (luminance key + splat index).
+struct SortEntry
+{
+  f32 luminance{};
+  u32 index{};
+};
+
+inline constexpr size_t kSortEntrySize = sizeof(f32) + sizeof(u32);
+static_assert(sizeof(SortEntry) == kSortEntrySize);
+static_assert(TriviallyCopyable<SortEntry>);
+static_assert(std::is_standard_layout_v<SortEntry>);
+
 // Max tile grid supported for tile_ranges allocation (16px tiles → up to 4096² viewport).
 inline constexpr u32 kMaxTileGridDim = 256;
 inline constexpr u32 kMaxTiles = kMaxTileGridDim * kMaxTileGridDim;

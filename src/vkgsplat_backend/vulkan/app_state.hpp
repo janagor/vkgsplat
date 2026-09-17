@@ -14,10 +14,7 @@
 #include "vulkan/sync_objects/semaphore.hpp"
 #include "frame_context.hpp"
 #include "present_pacer.hpp"
-#include "compute/algorithm.hpp"
-#include "compute/sequence.hpp"
-#include "compute/sort_entry.hpp"
-#include "compute/tensor.hpp"
+#include "gs/gaussian_splat.hpp"
 #include "gs/push_constants.hpp"
 #include <vkgsplat_utility/types.hpp>
 
@@ -29,6 +26,8 @@
 
 #include <vkexec/image.hpp>
 #include <vkexec/image_view.hpp>
+#include <vkexec/tensor.hpp>
+#include <vkexec_extensions/descriptor_heap/heap_compute_pipeline.hpp>
 #include <vkgsplat/lfd_config.hpp>
 
 
@@ -40,7 +39,6 @@ namespace vkgsplat {
 constexpr size_t kFrameSlotCount = 2;
 
 constexpr u32 kVertsPerSphere = 6;
-constexpr size_t kSortEntrySize = sizeof(f32) + sizeof(u32);
 
 struct ImGuiOverlayState;
 
@@ -86,8 +84,8 @@ struct RenderData
   VkExtent2D quilt_tile_extent{};
   bool lfd_emulate_active{ false };
   std::array<u32, 2> lfd_emulate_cell{ 0U, 0U };
-  compute::Tensor<u32> sorted_indices;
-  compute::Tensor<compute::SortEntry> sort_entries;
+  std::optional<vkexec::tensor<u32>> sorted_indices;
+  std::optional<vkexec::tensor<gs::SortEntry>> sort_entries;
   vulkan::Buffer descriptor_heap_buffer;
   VkDeviceSize descriptor_heap_size{};
   VkDeviceSize reserved_range_offset{};
@@ -96,14 +94,13 @@ struct RenderData
   size_t buffer_descriptor_size{};
   size_t image_descriptor_size{};
 
-  compute::Algorithm project_algorithm;
-  compute::Algorithm bin_algorithm;
-  compute::Algorithm prepare_sort_algorithm;
-  compute::Algorithm radix_histogram_algorithm;
-  compute::Algorithm radix_scatter_algorithm;
-  compute::Algorithm identify_ranges_algorithm;
-  compute::Algorithm rasterize_algorithm;
-  compute::Sequence gs_sequence;
+  std::optional<vkexec::heap_compute_pipeline> project_algorithm;
+  std::optional<vkexec::heap_compute_pipeline> bin_algorithm;
+  std::optional<vkexec::heap_compute_pipeline> prepare_sort_algorithm;
+  std::optional<vkexec::heap_compute_pipeline> radix_histogram_algorithm;
+  std::optional<vkexec::heap_compute_pipeline> radix_scatter_algorithm;
+  std::optional<vkexec::heap_compute_pipeline> identify_ranges_algorithm;
+  std::optional<vkexec::heap_compute_pipeline> rasterize_algorithm;
   gs::ProjectPushConstants project_push{};
   gs::BinPushConstants bin_push{};
   gs::SortPushConstants sort_push{};

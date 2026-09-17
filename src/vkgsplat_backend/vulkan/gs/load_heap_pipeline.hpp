@@ -1,4 +1,5 @@
-#include "compute/algorithm.hpp"
+#ifndef VKGSPLAT_BACKEND_VULKAN_GS_LOAD_HEAP_PIPELINE_HPP
+#define VKGSPLAT_BACKEND_VULKAN_GS_LOAD_HEAP_PIPELINE_HPP
 
 #include "shader.hpp"
 #include "vulkan_context.hpp"
@@ -6,7 +7,6 @@
 #include <vkexec/pipeline.hpp>
 #include <vkexec/sync_wait.hpp>
 #include <vkexec_extensions/descriptor_heap/heap_compute_pipeline.hpp>
-#include <vulkan/vulkan_core.h>
 
 #include <array>
 #include <cstdint>
@@ -14,33 +14,24 @@
 #include <print>
 #include <span>
 #include <string>
-#include <utility>
 #include <vector>
 
-namespace vkgsplat::compute {
+namespace vkgsplat::gs {
 
-Algorithm::Algorithm(Algorithm &&other) noexcept : pipeline_(std::move(other.pipeline_)) {}
-
-auto Algorithm::operator=(Algorithm &&other) noexcept -> Algorithm &
-{
-  if (this != &other) { pipeline_ = std::move(other.pipeline_); }
-  return *this;
-}
-
-auto Algorithm::init(vulkan::Context &context,
+[[nodiscard]] inline auto LoadHeapAlgorithm(vulkan::Context &context,
   std::string const &shader_path,
-  std::span<const uint32_t> specialization_constants,
-  std::array<uint32_t, 3> local_size) -> bool
+  std::span<const uint32_t> specialization_constants = {},
+  std::array<uint32_t, 3> local_size = vkexec::k_default_local_size) -> std::optional<vkexec::heap_compute_pipeline>
 {
   if (context.vkexec_context == nullptr) {
     std::println("vkexec context missing for compute pipeline: {}", shader_path);
-    return false;
+    return std::nullopt;
   }
 
   auto const comp_code = ReadFile(shader_path);
   if (comp_code.size() < sizeof(uint32_t) || (comp_code.size() % sizeof(uint32_t)) != 0) {
     std::println("Invalid SPIR-V size for compute shader: {}", shader_path);
-    return false;
+    return std::nullopt;
   }
 
   // NOLINTBEGIN(cppcoreguidelines-pro-type-reinterpret-cast)
@@ -55,25 +46,12 @@ auto Algorithm::init(vulkan::Context &context,
   auto created = vkexec::try_sync_wait_value(
     vkexec::heap_compute_pipeline::create(*context.vkexec_context, spirv, desc));
   if (!created) {
-    std::println("Failed to create algorithm compute pipeline ({}): {}", shader_path, created.error().message());
-    pipeline_.reset();
-    return false;
+    std::println("Failed to create heap algorithm ({}): {}", shader_path, created.error().message());
+    return std::nullopt;
   }
-  pipeline_ = std::move(*created);
-  return true;
+  return std::move(*created);
 }
 
-void Algorithm::destroy(vulkan::Context &context) noexcept
-{
-  (void)context;
-  // heap_compute_pipeline owns its Vulkan objects; destroy after GPU work using it finishes.
-  pipeline_.reset();
-}
+}// namespace vkgsplat::gs
 
-auto Algorithm::pipeline() const noexcept -> VkPipeline
-{
-  if (!pipeline_) { return VK_NULL_HANDLE; }
-  return pipeline_->resources().pipeline;
-}
-
-}// namespace vkgsplat::compute
+#endif// VKGSPLAT_BACKEND_VULKAN_GS_LOAD_HEAP_PIPELINE_HPP

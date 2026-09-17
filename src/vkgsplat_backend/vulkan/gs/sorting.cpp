@@ -3,6 +3,7 @@
 #include "app_state.hpp"
 #include "vulkan/descriptor/descriptor_heap.hpp"
 #include "gs/gaussian_splat.hpp"
+#include "gs/load_heap_pipeline.hpp"
 #include "vulkan_context.hpp"
 
 #include <vkgsplat_utility/types.hpp>
@@ -110,21 +111,25 @@ auto InitSorting(vulkan::Context &context, RenderData &data) -> bool
   std::string const hist_path = std::string(kShaderDirectory) + "/multi_radixsort_histograms.comp.spv";
   std::string const scatter_path = std::string(kShaderDirectory) + "/multi_radixsort.comp.spv";
 
-  if (!data.prepare_sort_algorithm.init(context, prepare_path, std::span{ sort_size_spec })
-      || !data.radix_histogram_algorithm.init(context, hist_path)
-      || !data.radix_scatter_algorithm.init(context, scatter_path)) {
+  auto prepare = LoadHeapAlgorithm(context, prepare_path, std::span{ sort_size_spec });
+  auto hist = LoadHeapAlgorithm(context, hist_path);
+  auto scatter = LoadHeapAlgorithm(context, scatter_path);
+  if (!prepare || !hist || !scatter) {
     DestroySortBuffers(context, data);
     return false;
   }
+  data.prepare_sort_algorithm = std::move(*prepare);
+  data.radix_histogram_algorithm = std::move(*hist);
+  data.radix_scatter_algorithm = std::move(*scatter);
 
   return RefreshDescriptorHeap(context, data);
 }
 
 void DestroySorting(vulkan::Context &context, RenderData &data)
 {
-  data.prepare_sort_algorithm.destroy(context);
-  data.radix_histogram_algorithm.destroy(context);
-  data.radix_scatter_algorithm.destroy(context);
+  data.prepare_sort_algorithm.reset();
+  data.radix_histogram_algorithm.reset();
+  data.radix_scatter_algorithm.reset();
   DestroySortBuffers(context, data);
 }
 
