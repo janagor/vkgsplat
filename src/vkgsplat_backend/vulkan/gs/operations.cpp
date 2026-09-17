@@ -2,7 +2,6 @@
 
 #include "app_state.hpp"
 #include "vulkan/gpu_pass_timer.hpp"
-#include "vulkan/sync_objects/barrier.hpp"
 #include "gs/push_constants.hpp"
 #include "gs/rasterization.hpp"
 #include "vulkan_context.hpp"
@@ -12,6 +11,7 @@
 #include <cstddef>
 #include <print>
 
+#include <vkexec/barrier.hpp>
 #include <vulkan/vulkan_core.h>
 
 namespace vkgsplat::gs {
@@ -115,7 +115,7 @@ void RecordProjection(vulkan::Context const &context,
 
   u32 const workgroup_count = (data.splat_count + kComputeLocalSizeX - 1U) / kComputeLocalSizeX;
   DispatchCompute1d(context, command_buffer, workgroup_count);
-  Barrier::compute_read(context.disp, command_buffer);
+  vkexec::barrier::compute_read(command_buffer);
 
   if (time_pass) {
     data.gpu_pass_timer.write(context, data.current_slot, GpuPass::kProjection, true, command_buffer);
@@ -134,7 +134,7 @@ void OpBinning::record(vulkan::Context const &context, RenderData const &data, V
 
   u32 const workgroup_count = (data.splat_count + kComputeLocalSizeX - 1U) / kComputeLocalSizeX;
   DispatchCompute1d(context, command_buffer, workgroup_count);
-  Barrier::compute_read(context.disp, command_buffer);
+  vkexec::barrier::compute_read(command_buffer);
 }
 
 void OpPrepareSort::record(vulkan::Context const &context, RenderData const &data, VkCommandBuffer command_buffer)
@@ -149,7 +149,7 @@ void OpPrepareSort::record(vulkan::Context const &context, RenderData const &dat
     &data.sort_push,
     sizeof(SortPushConstants),
     sort_grid);
-  Barrier::compute_to_compute(context.disp, command_buffer);
+  vkexec::barrier::compute_to_compute(command_buffer);
 }
 
 void OpRadixSort::record(vulkan::Context const &context, RenderData const &data, VkCommandBuffer command_buffer)
@@ -174,12 +174,12 @@ void OpRadixSort::record(vulkan::Context const &context, RenderData const &data,
       command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, data.radix_histogram_algorithm.pipeline());
     PushConstants(context, &radix_push, sizeof(RadixPushConstants), command_buffer);
     context.disp.cmdDispatchIndirect(command_buffer, data.radix_dispatch_buffer.handle(), 0);
-    Barrier::compute_to_compute(context.disp, command_buffer);
+    vkexec::barrier::compute_to_compute(command_buffer);
 
     context.disp.cmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, data.radix_scatter_algorithm.pipeline());
     PushConstants(context, &radix_push, sizeof(RadixPushConstants), command_buffer);
     context.disp.cmdDispatchIndirect(command_buffer, data.radix_dispatch_buffer.handle(), 0);
-    Barrier::compute_to_compute(context.disp, command_buffer);
+    vkexec::barrier::compute_to_compute(command_buffer);
   }
 }
 

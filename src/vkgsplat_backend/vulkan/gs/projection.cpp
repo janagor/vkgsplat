@@ -10,6 +10,7 @@
 #include <span>
 #include <string>
 
+#include <vkexec/barrier.hpp>
 #include <vulkan/vulkan_core.h>
 
 #include "vkgsplat/example_config.h"
@@ -45,23 +46,7 @@ void DispatchProjection(vulkan::Context const &context,
 
   uint32_t const workgroup_count = (data.splat_count + 63U) / 64U;
   context.disp.cmdDispatch(command_buffer, workgroup_count, 1U, 1U);
-
-  VkMemoryBarrier const barrier = {
-    .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
-    .pNext = nullptr,
-    .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
-    .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-  };
-  context.disp.cmdPipelineBarrier(command_buffer,
-    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-    VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-    0,
-    1,
-    &barrier,
-    0,
-    nullptr,
-    0,
-    nullptr);
+  vkexec::barrier::compute_read(command_buffer);
 }
 
 void DestroyProjection(vulkan::Context &context, RenderData &data) { data.project_algorithm.destroy(context); }
