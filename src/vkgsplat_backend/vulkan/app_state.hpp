@@ -10,7 +10,6 @@
 #include "vulkan/command/buffer.hpp"
 #include "vulkan/command/pool.hpp"
 #include "vulkan/gpu_pass_timer.hpp"
-#include "vulkan/sync_objects/semaphore.hpp"
 #include "frame_context.hpp"
 #include "present_pacer.hpp"
 #include "gs/gaussian_splat.hpp"
@@ -30,6 +29,7 @@
 #include <vkexec_extensions/descriptor_heap/algorithm.hpp>
 #include <vkexec_extensions/descriptor_heap/buffer.hpp>
 #include <vkexec_extensions/descriptor_heap/heap_graphics_pipeline.hpp>
+#include <vkexec_extensions/timeline_semaphore/frame_ring.hpp>
 #include <vkgsplat/lfd_config.hpp>
 
 
@@ -37,7 +37,7 @@ namespace vkgsplat {
 
 // CPU/GPU pipelining depth: ring of frame slots.
 // CPU ring (BoundedQueue + slot_ready) gates FrameSetup reuse after record/submit;
-// frame_timeline + per-slot/image values gate GPU resource reuse.
+// frame_ring timeline + per-slot/image values gate GPU resource reuse.
 constexpr size_t kFrameSlotCount = 2;
 
 constexpr u32 kVertsPerSphere = 6;
@@ -112,14 +112,8 @@ struct RenderData
   std::optional<vulkan::CommandPool> command_pool;
   std::vector<vulkan::CommandBuffer> command_buffers;
 
-  // Binary WSI sync: acquire signals available[slot]; present waits finished[image].
-  std::vector<Semaphore> available_semaphores;
-  std::vector<Semaphore> finished_semaphore;
-  // Monotonic GPU completion for frame slots and swapchain images (replaces fences).
-  std::optional<Semaphore> frame_timeline;
-  u64 next_timeline_value = 0;
-  std::array<u64, kFrameSlotCount> slot_timeline_value{};
-  std::vector<u64> image_timeline_value;
+  // Binary WSI acquire/present semaphores + timeline gates for slot/image reuse.
+  std::optional<vkexec::frame_ring> frame_ring;
   size_t current_slot = {};
   std::array<FrameContext, kFrameSlotCount> frames{};
   GpuPassTimer gpu_pass_timer;
