@@ -1,7 +1,7 @@
 #include "screenshot.hpp"
 
 #include "app_state.hpp"
-#include "vulkan/gpu_allocator.hpp"
+#include "vulkan/gpu_buffers.hpp"
 #include "vulkan/initializers.hpp"
 #include <vkgsplat_io/write_png.hpp>
 #include "vulkan_context.hpp"
@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <optional>
 #include <span>
 #include <string_view>
 #include <system_error>
@@ -19,13 +20,12 @@
 #include <vkgsplat_utility/types.hpp>
 
 #include <vkexec/barrier.hpp>
+#include <vkexec/gpu_buffer.hpp>
 #include <vulkan/vulkan_core.h>
 
 namespace vkgsplat::vulkan {
 
 namespace {
-
-  void DestroyStaging(Context &context, Buffer &staging) { context.gpu_allocator.destroy_buffer(staging); }
 
   void FreeCmd(Context &context, RenderData &data, VkCommandBuffer cmd)
   {
@@ -47,6 +47,9 @@ auto SaveColorTargetPng(Context &context, RenderData &data, std::string_view pat
   if (!data.command_pool.has_value()) {
     return std::unexpected{ MakeError(std::errc::state_not_recoverable, "command pool missing for screenshot") };
   }
+  if (context.vkexec_context == nullptr) {
+    return std::unexpected{ MakeError(std::errc::state_not_recoverable, "vkexec context missing for screenshot") };
+  }
 
   if (data.frame_timeline.has_value()) {
     if (auto waited = data.frame_timeline->wait_value(data.next_timeline_value); !waited) {
@@ -58,19 +61,19 @@ auto SaveColorTargetPng(Context &context, RenderData &data, std::string_view pat
 
   constexpr u32 kChannels = 4;
   auto const byte_size = static_cast<VkDeviceSize>(data.color_width) * data.color_height * kChannels;
-  auto staging = context.gpu_allocator.create_staging_buffer(byte_size);
-  if (!staging) { return std::unexpected{ staging.error() }; }
+  auto staging_created = CreateStagingBuffer(*context.vkexec_context, byte_size);
+  if (!staging_created) { return std::unexpected{ staging_created.error() }; }
+  auto staging = std::optional<vkexec::gpu_buffer>{ std::move(*staging_created) };
 
   auto buffers = data.command_pool->allocate_buffers(1);
   if (!buffers) {
-    DestroyStaging(context, *staging);
     return std::unexpected{ buffers.error() };
   }
   VkCommandBuffer cmd = buffers->front().handle();
 
   auto fail = [&](Error err) -> std::expected<void, Error> {
     FreeCmd(context, data, cmd);
-    DestroyStaging(context, *staging);
+    staging.reset();
     return std::unexpected{ std::move(err) };
   };
 
@@ -160,19 +163,18 @@ auto SaveColorTargetPng(Context &context, RenderData &data, std::string_view pat
   FreeCmd(context, data, cmd);
   cmd = VK_NULL_HANDLE;
 
-  auto mapped = context.gpu_allocator.map_buffer(*staging);
-  if (!mapped) {
-    DestroyStaging(context, *staging);
-    return std::unexpected{ mapped.error() };
+  auto const mapped = staging->mapped();
+  if (mapped.empty()) {
+    return std::unexpected{ MakeError(std::errc::io_error, "failed to map screenshot staging buffer") };
   }
 
   auto const pixels = std::span<std::uint8_t const>{
     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-    reinterpret_cast<std::uint8_t const *>(mapped->data()),
+    reinterpret_cast<std::uint8_t const *>(mapped.data()),
     static_cast<std::size_t>(byte_size),
   };
   auto const written = WritePng(path, data.color_width, data.color_height, kChannels, pixels);
-  DestroyStaging(context, *staging);
+  staging.reset();
   return written;
 }
 

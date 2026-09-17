@@ -1,7 +1,7 @@
 #include "vulkan/imgui_overlay.hpp"
 
 #include "app_state.hpp"
-#include "vulkan/gpu_allocator.hpp"
+#include "vulkan/gpu_buffers.hpp"
 #include "vulkan/gpu_pass_timer.hpp"
 #include "frame_context.hpp"
 #include "vulkan_context.hpp"
@@ -17,6 +17,7 @@
 #include <cstring>
 #include <expected>
 #include <memory>
+#include <optional>
 #include <print>
 #include <span>
 #include <system_error>
@@ -29,6 +30,8 @@
 #include <imgui_impl_vulkan.h>
 
 #include <vkexec/barrier.hpp>
+#include <vkexec/context.hpp>
+#include <vkexec_extensions/descriptor_heap/buffer.hpp>
 #include <vkexec_extensions/descriptor_heap/descriptor_heap.hpp>
 #include <vulkan/vulkan_core.h>
 
@@ -39,8 +42,8 @@ namespace vkgsplat {
 struct ImGuiOverlayState
 {
   bool initialized = false;
-  vulkan::Buffer resource_heap;
-  vulkan::Buffer sampler_heap;
+  std::optional<vkexec::descriptor_heap_buffer> resource_heap;
+  std::optional<vkexec::descriptor_heap_buffer> sampler_heap;
   VkBindHeapInfoEXT resource_bind{};
   VkBindHeapInfoEXT sampler_bind{};
   void *resource_mapped = nullptr;
@@ -56,7 +59,6 @@ struct ImGuiOverlayState
   uint64_t resource_freelist{};
   uint64_t sampler_freelist{};
   vkexec::context *vkexec_context{};
-  vulkan::GPUAllocator *gpu_allocator{};
   ImGui_ImplVulkan_DescriptorHeapInfo heap_info{};
   VkPipelineRenderingCreateInfo pipeline_rendering{};
   VkFormat color_format{ VK_FORMAT_UNDEFINED };
@@ -388,10 +390,11 @@ namespace {
 
   void DestroyImguiHeaps(vulkan::Context &context, ImGuiOverlayState &overlay)
   {
+    (void)context;
     overlay.resource_mapped = nullptr;
     overlay.sampler_mapped = nullptr;
-    context.gpu_allocator.destroy_buffer(overlay.resource_heap);
-    context.gpu_allocator.destroy_buffer(overlay.sampler_heap);
+    overlay.resource_heap.reset();
+    overlay.sampler_heap.reset();
   }
 
 }// namespace
@@ -442,7 +445,6 @@ auto InitImguiOverlay(vulkan::Context &context, RenderData &data) -> std::expect
     return std::unexpected{ MakeError(std::errc::function_not_supported, "vkexec context missing for ImGui heaps") };
   }
   overlay->vkexec_context = context.vkexec_context.get();
-  overlay->gpu_allocator = &context.gpu_allocator;
 
   VkPhysicalDeviceDescriptorHeapPropertiesEXT heap_props{};
   heap_props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_PROPERTIES_EXT;
@@ -460,33 +462,23 @@ auto InitImguiOverlay(vulkan::Context &context, RenderData &data) -> std::expect
   VkDeviceSize const sampler_size =
     AlignBufferSize(sampler_descriptors_size + heap_props.minSamplerHeapReservedRange, heap_props.samplerHeapAlignment);
 
-  auto resource_heap = context.gpu_allocator.create_heap_buffer(resource_size);
+  auto resource_heap = vulkan::CreateDescriptorHeapBuffer(*context.vkexec_context, resource_size);
   if (!resource_heap) {
     return std::unexpected{ MakeError(std::errc::not_enough_memory, "failed to create ImGui resource heap") };
   }
-  auto sampler_heap = context.gpu_allocator.create_heap_buffer(sampler_size);
+  auto sampler_heap = vulkan::CreateDescriptorHeapBuffer(*context.vkexec_context, sampler_size);
   if (!sampler_heap) {
-    context.gpu_allocator.destroy_buffer(*resource_heap);
     return std::unexpected{ MakeError(std::errc::not_enough_memory, "failed to create ImGui sampler heap") };
-  }
-
-  auto resource_mapped = context.gpu_allocator.map_buffer(*resource_heap);
-  if (!resource_mapped) {
-    context.gpu_allocator.destroy_buffer(*sampler_heap);
-    context.gpu_allocator.destroy_buffer(*resource_heap);
-    return std::unexpected{ MakeError(std::errc::io_error, "failed to map ImGui resource heap") };
-  }
-  auto sampler_mapped = context.gpu_allocator.map_buffer(*sampler_heap);
-  if (!sampler_mapped) {
-    context.gpu_allocator.destroy_buffer(*sampler_heap);
-    context.gpu_allocator.destroy_buffer(*resource_heap);
-    return std::unexpected{ MakeError(std::errc::io_error, "failed to map ImGui sampler heap") };
   }
 
   overlay->resource_heap = std::move(*resource_heap);
   overlay->sampler_heap = std::move(*sampler_heap);
-  overlay->resource_mapped = resource_mapped->data();
-  overlay->sampler_mapped = sampler_mapped->data();
+  overlay->resource_mapped = overlay->resource_heap->mapped().data();
+  overlay->sampler_mapped = overlay->sampler_heap->mapped().data();
+  if (overlay->resource_mapped == nullptr || overlay->sampler_mapped == nullptr) {
+    DestroyImguiHeaps(context, *overlay);
+    return std::unexpected{ MakeError(std::errc::io_error, "failed to map ImGui heaps") };
+  }
   overlay->resource_stride = heap_props.imageDescriptorSize;
   overlay->sampler_stride = heap_props.samplerDescriptorSize;
   overlay->resource_heap_size = resource_descriptors_size + heap_props.minResourceHeapReservedRange;
@@ -501,7 +493,7 @@ auto InitImguiOverlay(vulkan::Context &context, RenderData &data) -> std::expect
     .sType = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
     .pNext = nullptr,
     .heapRange = {
-      .address = context.gpu_allocator.get_buffer_device_address(overlay->resource_heap),
+      .address = vulkan::DeviceAddressOrZero(*overlay->resource_heap),
       .size = overlay->resource_heap_size,
     },
     .reservedRangeOffset = overlay->resource_reserved_offset,
@@ -511,7 +503,7 @@ auto InitImguiOverlay(vulkan::Context &context, RenderData &data) -> std::expect
     .sType = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
     .pNext = nullptr,
     .heapRange = {
-      .address = context.gpu_allocator.get_buffer_device_address(overlay->sampler_heap),
+      .address = vulkan::DeviceAddressOrZero(*overlay->sampler_heap),
       .size = overlay->sampler_heap_size,
     },
     .reservedRangeOffset = overlay->sampler_reserved_offset,

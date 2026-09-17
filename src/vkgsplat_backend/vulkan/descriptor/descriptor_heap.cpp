@@ -10,6 +10,7 @@
 
 #include "app_state.hpp"
 #include "gs/gaussian_splat.hpp"
+#include "vulkan/gpu_buffers.hpp"
 #include "vulkan_context.hpp"
 #include <vkgsplat_io/splat_cpu.hpp>
 #include <vkgsplat_utility/types.hpp>
@@ -88,8 +89,8 @@ auto QueryDescriptorHeapLayout(vulkan::Context const &context, RenderData &data)
 
 void DestroyDescriptorHeap(vulkan::Context &context, RenderData &data)
 {
-  context.gpu_allocator.destroy_buffer(data.descriptor_heap_buffer);
-  data.descriptor_heap_buffer = {};
+  (void)context;
+  data.descriptor_heap_buffer.reset();
 }
 
 auto RefreshDescriptorHeap(vulkan::Context &context, RenderData &data) -> bool
@@ -98,15 +99,17 @@ auto RefreshDescriptorHeap(vulkan::Context &context, RenderData &data) -> bool
 
   DestroyDescriptorHeap(context, data);
 
-  if (data.geometry_buffer.empty() || data.appearance_buffer.empty() || data.projected_buffer.empty()
-      || data.unsorted_keys_buffer.empty() || data.unsorted_values_buffer.empty() || data.sorted_keys_buffer.empty()
-      || data.sorted_values_buffer.empty() || data.sort_histogram_buffer.empty() || data.tile_ranges_buffer.empty()
-      || !data.sorted_indices || data.sorted_indices->size() == 0 || !data.sort_entries
-      || data.sort_entries->size() == 0) {
+  if (!data.geometry_buffer || !data.appearance_buffer || !data.projected_buffer || !data.unsorted_keys_buffer
+      || !data.unsorted_values_buffer || !data.sorted_keys_buffer || !data.sorted_values_buffer
+      || !data.sort_histogram_buffer || !data.tile_ranges_buffer || !data.sorted_indices
+      || data.sorted_indices->size() == 0 || !data.sort_entries || data.sort_entries->size() == 0) {
     return true;
   }
 
-  auto descriptor_heap_buffer = context.gpu_allocator.create_heap_buffer(data.descriptor_heap_size);
+  auto *vkexec = RequireVkexec(context);
+  if (vkexec == nullptr) { return false; }
+
+  auto descriptor_heap_buffer = vulkan::CreateDescriptorHeapBuffer(*vkexec, data.descriptor_heap_size);
   if (!descriptor_heap_buffer) {
     std::println("Failed to create descriptor heap buffer!");
     return false;
@@ -136,11 +139,11 @@ auto RefreshDescriptorHeap(vulkan::Context &context, RenderData &data) -> bool
   std::vector<std::byte> descriptor_data(data.descriptor_stride * kHeapDescriptorCount);
   std::array<VkDeviceAddressRangeEXT, kHeapDescriptorCount> address_ranges{};
   address_ranges.at(static_cast<size_t>(HeapSlot::kGeometry)) = {
-    .address = context.gpu_allocator.get_buffer_device_address(data.geometry_buffer),
+    .address = vulkan::DeviceAddressOrZero(*data.geometry_buffer),
     .size = geometry_buffer_size,
   };
   address_ranges.at(static_cast<size_t>(HeapSlot::kAppearance)) = {
-    .address = context.gpu_allocator.get_buffer_device_address(data.appearance_buffer),
+    .address = vulkan::DeviceAddressOrZero(*data.appearance_buffer),
     .size = appearance_buffer_size,
   };
   address_ranges.at(static_cast<size_t>(HeapSlot::kSortedIndices)) = {
@@ -152,31 +155,31 @@ auto RefreshDescriptorHeap(vulkan::Context &context, RenderData &data) -> bool
     .size = sort_entries_buffer_size,
   };
   address_ranges.at(static_cast<size_t>(HeapSlot::kProjected)) = {
-    .address = context.gpu_allocator.get_buffer_device_address(data.projected_buffer),
+    .address = vulkan::DeviceAddressOrZero(*data.projected_buffer),
     .size = projected_buffer_size,
   };
   address_ranges.at(static_cast<size_t>(HeapSlot::kUnsortedKeys)) = {
-    .address = context.gpu_allocator.get_buffer_device_address(data.unsorted_keys_buffer),
+    .address = vulkan::DeviceAddressOrZero(*data.unsorted_keys_buffer),
     .size = unsorted_keys_buffer_size,
   };
   address_ranges.at(static_cast<size_t>(HeapSlot::kUnsortedValues)) = {
-    .address = context.gpu_allocator.get_buffer_device_address(data.unsorted_values_buffer),
+    .address = vulkan::DeviceAddressOrZero(*data.unsorted_values_buffer),
     .size = unsorted_values_buffer_size,
   };
   address_ranges.at(static_cast<size_t>(HeapSlot::kSortedKeys)) = {
-    .address = context.gpu_allocator.get_buffer_device_address(data.sorted_keys_buffer),
+    .address = vulkan::DeviceAddressOrZero(*data.sorted_keys_buffer),
     .size = sorted_keys_buffer_size,
   };
   address_ranges.at(static_cast<size_t>(HeapSlot::kSortedValues)) = {
-    .address = context.gpu_allocator.get_buffer_device_address(data.sorted_values_buffer),
+    .address = vulkan::DeviceAddressOrZero(*data.sorted_values_buffer),
     .size = sorted_values_buffer_size,
   };
   address_ranges.at(static_cast<size_t>(HeapSlot::kTileRanges)) = {
-    .address = context.gpu_allocator.get_buffer_device_address(data.tile_ranges_buffer),
+    .address = vulkan::DeviceAddressOrZero(*data.tile_ranges_buffer),
     .size = tile_ranges_buffer_size,
   };
   address_ranges.at(static_cast<size_t>(HeapSlot::kSortHistogram)) = {
-    .address = context.gpu_allocator.get_buffer_device_address(data.sort_histogram_buffer),
+    .address = vulkan::DeviceAddressOrZero(*data.sort_histogram_buffer),
     .size = sort_histogram_buffer_size,
   };
 
@@ -198,7 +201,7 @@ auto RefreshDescriptorHeap(vulkan::Context &context, RenderData &data) -> bool
     }
   }
 
-  if (!context.gpu_allocator.write_buffer<std::byte>(*descriptor_heap_buffer, std::span{ descriptor_data })) {
+  if (!vulkan::WriteMapped<std::byte>(*descriptor_heap_buffer, std::span<std::byte const>{ descriptor_data })) {
     std::println("Failed to upload descriptor heap!");
     return false;
   }
@@ -210,9 +213,9 @@ auto RefreshDescriptorHeap(vulkan::Context &context, RenderData &data) -> bool
 void BindDescriptorHeap(vulkan::Context const &context, RenderData const &data, VkCommandBuffer command_buffer)
 {
   auto *vkexec = RequireVkexec(context);
-  if (vkexec == nullptr) { return; }
+  if (vkexec == nullptr || !data.descriptor_heap_buffer) { return; }
 
-  VkDeviceAddress const heap_address = context.gpu_allocator.get_buffer_device_address(data.descriptor_heap_buffer);
+  VkDeviceAddress const heap_address = vulkan::DeviceAddressOrZero(*data.descriptor_heap_buffer);
   auto const bound = vkexec::cmd_bind_resource_heap(*vkexec,
     command_buffer,
     heap_address,

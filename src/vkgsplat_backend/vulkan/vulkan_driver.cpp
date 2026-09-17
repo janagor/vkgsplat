@@ -14,7 +14,6 @@
 #include <vkgsplat_utility/types.hpp>
 
 #include "device.hpp"
-#include "gpu_allocator.hpp"
 #include "presentable_swapchain.hpp"
 #include "swapchain_resource.hpp"
 #include "vulkan_context.hpp"
@@ -47,11 +46,12 @@ namespace {
       compute_family = compute->second;
     }
 
+    // Null allocator: vkexec creates and owns VMA (BUFFER_DEVICE_ADDRESS).
     auto adopted = vkexec::try_sync_wait_value(vkexec::context::adopt({
       .instance = context.instance.instance,
       .physical_device = context.device.physical_device,
       .device = context.device.device,
-      .allocator = context.gpu_allocator.vma_allocator(),
+      .allocator = VK_NULL_HANDLE,
       .compute_queue = compute_queue,
       .compute_queue_family = compute_family,
       .graphics_queue = graphics->first,
@@ -73,9 +73,8 @@ VulkanDriver::VulkanDriver(Platform &platform) noexcept { context_.platform = &p
 VulkanDriver::~VulkanDriver()
 {
   context_.swapchain.reset();
-  // vkexec owns a command pool / pipeline cache on this device; drop it before VMA/device.
+  // vkexec owns VMA, command pool, and pipeline cache; drop before device.
   context_.vkexec_context.reset();
-  context_.gpu_allocator = GPUAllocator{};
   if (context_.device.device != VK_NULL_HANDLE) {
     context_.disp.deviceWaitIdle();
     vkb::destroy_device(context_.device);
@@ -99,15 +98,9 @@ auto VulkanDriver::create(Platform &platform, DriverConfig const &config)
     return std::unexpected(initialized.error());
   }
 
-  auto gpu_allocator =
-    GPUAllocator::create(driver->context_.instance, driver->context_.device, driver->context_.device.physical_device);
-  if (!gpu_allocator) { return std::unexpected(gpu_allocator.error()); }
-  driver->context_.gpu_allocator = std::move(*gpu_allocator);
-
   if (auto adopted = AdoptVkexecContext(driver->context_); !adopted) {
     return std::unexpected(adopted.error());
   }
-  driver->context_.gpu_allocator.bind_vkexec(*driver->context_.vkexec_context);
 
   if (auto created = driver->create_swapchain(platform, platform.framebuffer_extent()); !created) {
     return std::unexpected(created.error());
