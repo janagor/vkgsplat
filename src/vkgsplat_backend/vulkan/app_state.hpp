@@ -27,7 +27,7 @@
 #include <vkexec/image.hpp>
 #include <vkexec/image_view.hpp>
 #include <vkexec/tensor.hpp>
-#include <vkexec_extensions/descriptor_heap/heap_compute_pipeline.hpp>
+#include <vkexec_extensions/descriptor_heap/algorithm.hpp>
 #include <vkgsplat/lfd_config.hpp>
 
 
@@ -94,13 +94,13 @@ struct RenderData
   size_t buffer_descriptor_size{};
   size_t image_descriptor_size{};
 
-  std::optional<vkexec::heap_compute_pipeline> project_algorithm;
-  std::optional<vkexec::heap_compute_pipeline> bin_algorithm;
-  std::optional<vkexec::heap_compute_pipeline> prepare_sort_algorithm;
-  std::optional<vkexec::heap_compute_pipeline> radix_histogram_algorithm;
-  std::optional<vkexec::heap_compute_pipeline> radix_scatter_algorithm;
-  std::optional<vkexec::heap_compute_pipeline> identify_ranges_algorithm;
-  std::optional<vkexec::heap_compute_pipeline> rasterize_algorithm;
+  std::optional<vkexec::heap_algorithm> project_algorithm;
+  std::optional<vkexec::heap_algorithm> bin_algorithm;
+  std::optional<vkexec::heap_algorithm> prepare_sort_algorithm;
+  std::optional<vkexec::heap_algorithm> radix_histogram_algorithm;
+  std::optional<vkexec::heap_algorithm> radix_scatter_algorithm;
+  std::optional<vkexec::heap_algorithm> identify_ranges_algorithm;
+  std::optional<vkexec::heap_algorithm> rasterize_algorithm;
   gs::ProjectPushConstants project_push{};
   gs::BinPushConstants bin_push{};
   gs::SortPushConstants sort_push{};
