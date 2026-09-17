@@ -259,16 +259,6 @@ inline auto CommandPoolCreateInfo(u32 queue_family_index, VkCommandPoolCreateFla
   };
 }
 
-inline auto MemoryAllocateInfo(VkDeviceSize allocation_size, u32 memory_type_index) -> VkMemoryAllocateInfo
-{
-  return VkMemoryAllocateInfo{
-    .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-    .pNext = nullptr,
-    .allocationSize = allocation_size,
-    .memoryTypeIndex = memory_type_index,
-  };
-}
-
 inline auto WriteDescriptorSet(VkDescriptorSet dst_set,
   u32 dst_binding,
   u32 dst_array_element,
@@ -354,61 +344,6 @@ inline auto RenderPassBeginInfo(VkRenderPass render_pass,
     .renderArea = render_area,
     .clearValueCount = static_cast<u32>(clear_values.size()),
     .pClearValues = clear_values.data(),
-  };
-}
-
-inline auto BufferCreateInfo(VkDeviceSize size, VkBufferUsageFlags usage, VkBufferCreateFlags flags = 0)
-  -> VkBufferCreateInfo
-{
-  return VkBufferCreateInfo{
-    .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-    .pNext = nullptr,
-    .flags = flags,
-    .size = size,
-    .usage = usage,
-    .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-    .queueFamilyIndexCount = 0,
-    .pQueueFamilyIndices = nullptr,
-  };
-}
-
-inline auto ImageCreateInfo() -> VkImageCreateInfo
-{
-  return VkImageCreateInfo{
-    .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-    .pNext = nullptr,
-    .flags = 0,
-    .imageType = VK_IMAGE_TYPE_2D,
-    .format = VK_FORMAT_UNDEFINED,
-    .extent = { .width = 0, .height = 0, .depth = 0 },
-    .mipLevels = 1,
-    .arrayLayers = 1,
-    .samples = VK_SAMPLE_COUNT_1_BIT,
-    .tiling = VK_IMAGE_TILING_OPTIMAL,
-    .usage = 0,
-    .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-    .queueFamilyIndexCount = 0,
-    .pQueueFamilyIndices = nullptr,
-    .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-  };
-}
-
-inline auto ImageMemoryBarrier(VkImageLayout old_layout,
-  VkImageLayout new_layout,
-  VkImage image,
-  VkImageSubresourceRange subresource_range) -> VkImageMemoryBarrier
-{
-  return VkImageMemoryBarrier{
-    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-    .pNext = nullptr,
-    .srcAccessMask = VK_ACCESS_NONE,
-    .dstAccessMask = VK_ACCESS_NONE,
-    .oldLayout = old_layout,
-    .newLayout = new_layout,
-    .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-    .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-    .image = image,
-    .subresourceRange = subresource_range,
   };
 }
 
