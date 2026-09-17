@@ -78,9 +78,6 @@ public:
   [[nodiscard]] static auto get_buffer_device_address(Buffer const &buffer) noexcept -> VkDeviceAddress;
   static void destroy_buffer(Buffer &buffer) noexcept;
   [[nodiscard]] static auto map_buffer(Buffer const &buffer) noexcept -> std::expected<std::span<std::byte>, Error>;
-  static void unmap_buffer(Buffer const &buffer) noexcept;
-  static void flush_buffer(Buffer const &buffer) noexcept;
-  static void invalidate_buffer(Buffer const &buffer) noexcept;
 
   template<TriviallyCopyable T>
   [[nodiscard]] static auto write_buffer(Buffer const &buffer, std::span<const T> data) noexcept

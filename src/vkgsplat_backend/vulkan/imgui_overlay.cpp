@@ -149,7 +149,6 @@ namespace {
       FreeSlot(overlay->resource_freelist, index);
       return 0;
     }
-    if (overlay->gpu_allocator != nullptr) { overlay->gpu_allocator->flush_buffer(overlay->resource_heap); }
     return index;
   }
 
@@ -172,7 +171,6 @@ namespace {
     if (overlay->write_sampler_descriptors(overlay->device, 1, create_info, &host_range) != VK_SUCCESS) {
       std::println(stderr, "[imgui] vkWriteSamplerDescriptorsEXT failed for sampler slot {}", index);
     }
-    if (overlay->gpu_allocator != nullptr) { overlay->gpu_allocator->flush_buffer(overlay->sampler_heap); }
     return index;
   }
 
@@ -394,14 +392,8 @@ namespace {
 
   void DestroyImguiHeaps(vulkan::Context &context, ImGuiOverlayState &overlay)
   {
-    if (overlay.resource_mapped != nullptr && !overlay.resource_heap.empty()) {
-      context.gpu_allocator.unmap_buffer(overlay.resource_heap);
-      overlay.resource_mapped = nullptr;
-    }
-    if (overlay.sampler_mapped != nullptr && !overlay.sampler_heap.empty()) {
-      context.gpu_allocator.unmap_buffer(overlay.sampler_heap);
-      overlay.sampler_mapped = nullptr;
-    }
+    overlay.resource_mapped = nullptr;
+    overlay.sampler_mapped = nullptr;
     context.gpu_allocator.destroy_buffer(overlay.resource_heap);
     context.gpu_allocator.destroy_buffer(overlay.sampler_heap);
   }
@@ -489,7 +481,6 @@ auto InitImguiOverlay(vulkan::Context &context, RenderData &data) -> std::expect
   }
   auto sampler_mapped = context.gpu_allocator.map_buffer(*sampler_heap);
   if (!sampler_mapped) {
-    context.gpu_allocator.unmap_buffer(*resource_heap);
     context.gpu_allocator.destroy_buffer(*sampler_heap);
     context.gpu_allocator.destroy_buffer(*resource_heap);
     return std::unexpected{ MakeError(std::errc::io_error, "failed to map ImGui sampler heap") };
