@@ -3,6 +3,7 @@
 #include "app_state.hpp"
 #include "gs/gaussian_splat.hpp"
 #include "gs/load_heap_pipeline.hpp"
+#include "vulkan/gpu_buffers.hpp"
 #include "vulkan_context.hpp"
 
 #include <vkgsplat_utility/types.hpp>
@@ -24,18 +25,22 @@ namespace {
 
   void DestroyBinBuffers(vulkan::Context &context, RenderData &data)
   {
-    context.gpu_allocator.destroy_buffer(data.unsorted_keys_buffer);
-    context.gpu_allocator.destroy_buffer(data.unsorted_values_buffer);
-    context.gpu_allocator.destroy_buffer(data.instance_count_buffer);
-    data.unsorted_keys_buffer = {};
-    data.unsorted_values_buffer = {};
-    data.instance_count_buffer = {};
+    (void)context;
+    data.unsorted_keys_buffer.reset();
+    data.unsorted_values_buffer.reset();
+    data.instance_count_buffer.reset();
     data.max_bin_instances = 0;
   }
 
   [[nodiscard]] auto CreateBinBuffers(vulkan::Context &context, RenderData &data) -> bool
   {
     DestroyBinBuffers(context, data);
+
+    if (context.vkexec_context == nullptr) {
+      std::println("vkexec context missing for binning buffers!");
+      return false;
+    }
+    auto &vkexec = *context.vkexec_context;
 
     data.max_bin_instances = data.splat_count;
     if (data.max_bin_instances == 0) {
@@ -47,9 +52,9 @@ namespace {
     auto const values_size = static_cast<VkDeviceSize>(data.max_bin_instances * sizeof(u32));
     auto const count_size = static_cast<VkDeviceSize>(sizeof(u32));
 
-    auto keys = context.gpu_allocator.create_device_storage_buffer(keys_size);
-    auto values = context.gpu_allocator.create_device_storage_buffer(values_size);
-    auto count = context.gpu_allocator.create_device_storage_buffer(count_size);
+    auto keys = vulkan::CreateDeviceStorageBuffer(vkexec, keys_size);
+    auto values = vulkan::CreateDeviceStorageBuffer(vkexec, values_size);
+    auto count = vulkan::CreateDeviceStorageBuffer(vkexec, count_size);
     if (!keys || !values || !count) {
       std::println("Failed to create binning buffers!");
       DestroyBinBuffers(context, data);

@@ -9,7 +9,6 @@
 
 #include "vulkan/command/buffer.hpp"
 #include "vulkan/command/pool.hpp"
-#include "vulkan/gpu_allocator.hpp"
 #include "vulkan/gpu_pass_timer.hpp"
 #include "vulkan/sync_objects/semaphore.hpp"
 #include "frame_context.hpp"
@@ -24,10 +23,12 @@
 #include <VkBootstrap.h>
 #include <VkBootstrapDispatch.h>
 
+#include <vkexec/gpu_buffer.hpp>
 #include <vkexec/image.hpp>
 #include <vkexec/image_view.hpp>
 #include <vkexec/tensor.hpp>
 #include <vkexec_extensions/descriptor_heap/algorithm.hpp>
+#include <vkexec_extensions/descriptor_heap/buffer.hpp>
 #include <vkgsplat/lfd_config.hpp>
 
 
@@ -51,18 +52,18 @@ struct RenderData
 
   VkPipeline graphics_pipeline{};
 
-  vulkan::Buffer geometry_buffer;
-  vulkan::Buffer appearance_buffer;
-  vulkan::Buffer projected_buffer;
-  vulkan::Buffer unsorted_keys_buffer;
-  vulkan::Buffer unsorted_values_buffer;
-  vulkan::Buffer instance_count_buffer;
-  vulkan::Buffer sorted_keys_buffer;
-  vulkan::Buffer sorted_values_buffer;
-  vulkan::Buffer sort_histogram_buffer;
-  vulkan::Buffer radix_dispatch_buffer;
-  vulkan::Buffer draw_indirect_buffer;
-  vulkan::Buffer tile_ranges_buffer;
+  std::optional<vkexec::gpu_buffer> geometry_buffer;
+  std::optional<vkexec::gpu_buffer> appearance_buffer;
+  std::optional<vkexec::gpu_buffer> projected_buffer;
+  std::optional<vkexec::gpu_buffer> unsorted_keys_buffer;
+  std::optional<vkexec::gpu_buffer> unsorted_values_buffer;
+  std::optional<vkexec::gpu_buffer> instance_count_buffer;
+  std::optional<vkexec::gpu_buffer> sorted_keys_buffer;
+  std::optional<vkexec::gpu_buffer> sorted_values_buffer;
+  std::optional<vkexec::gpu_buffer> sort_histogram_buffer;
+  std::optional<vkexec::gpu_buffer> radix_dispatch_buffer;
+  std::optional<vkexec::gpu_buffer> draw_indirect_buffer;
+  std::optional<vkexec::gpu_buffer> tile_ranges_buffer;
   std::optional<vkexec::image> color_image;
   std::optional<vkexec::image_view> color_image_view;
   // 3DGS is trained for gamma-space blending (typical WebGL UNORM8). A float RT
@@ -86,7 +87,7 @@ struct RenderData
   std::array<u32, 2> lfd_emulate_cell{ 0U, 0U };
   std::optional<vkexec::tensor<u32>> sorted_indices;
   std::optional<vkexec::tensor<gs::SortEntry>> sort_entries;
-  vulkan::Buffer descriptor_heap_buffer;
+  std::optional<vkexec::descriptor_heap_buffer> descriptor_heap_buffer;
   VkDeviceSize descriptor_heap_size{};
   VkDeviceSize reserved_range_offset{};
   VkDeviceSize reserved_range_size{};

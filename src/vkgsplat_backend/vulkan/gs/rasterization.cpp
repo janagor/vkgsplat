@@ -108,7 +108,7 @@ namespace {
     VkRect2D const scissor,
     bool clear_attachment)
   {
-    if (!data.color_image_view.has_value()) { return; }
+    if (!data.color_image_view.has_value() || !data.draw_indirect_buffer) { return; }
 
     std::array<float, 4> clear_rgba{};
     std::memcpy(clear_rgba.data(), glm::value_ptr(push_constants.background), 3U * sizeof(float));
@@ -147,7 +147,8 @@ namespace {
 
     context.disp.cmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, data.graphics_pipeline);
     PushRasterConstants(context, push_constants, command_buffer);
-    context.disp.cmdDrawIndirect(command_buffer, data.draw_indirect_buffer.handle(), 0, 1, sizeof(VkDrawIndirectCommand));
+    context.disp.cmdDrawIndirect(
+      command_buffer, data.draw_indirect_buffer->handle(), 0, 1, sizeof(VkDrawIndirectCommand));
 
     context.disp.cmdEndRendering(command_buffer);
   }

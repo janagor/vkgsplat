@@ -1,6 +1,7 @@
 #include "gs/operations.hpp"
 
 #include "app_state.hpp"
+#include "vulkan/gpu_buffers.hpp"
 #include "vulkan/gpu_pass_timer.hpp"
 #include "gs/push_constants.hpp"
 #include "gs/rasterization.hpp"
@@ -118,11 +119,11 @@ void RecordProjection(vulkan::Context const &context,
 
 void RecordPhaseACompute(vulkan::Context const &context, RenderData const &data, VkCommandBuffer command_buffer)
 {
-  if (context.vkexec_context == nullptr) { return; }
+  if (context.vkexec_context == nullptr || !data.instance_count_buffer) { return; }
 
   RecordProjection(context, data, command_buffer, true);
 
-  context.disp.cmdFillBuffer(command_buffer, data.instance_count_buffer.handle(), 0, sizeof(u32), 0U);
+  context.disp.cmdFillBuffer(command_buffer, data.instance_count_buffer->handle(), 0, sizeof(u32), 0U);
   vkexec::barrier::transfer_to_compute(command_buffer);
 
   if (data.bin_algorithm) {
@@ -142,11 +143,11 @@ void RecordPhaseACompute(vulkan::Context const &context, RenderData const &data,
     vkexec::barrier::compute_to_compute(command_buffer);
   }
 
-  if (data.radix_histogram_algorithm && data.radix_scatter_algorithm) {
+  if (data.radix_histogram_algorithm && data.radix_scatter_algorithm && data.radix_dispatch_buffer) {
     ScopedGpuPass const timer{ context, data, command_buffer, GpuPass::kRadixSort };
 
     constexpr u32 kRadixPasses = 4U;
-    u64 const instance_count_address = context.gpu_allocator.get_buffer_device_address(data.instance_count_buffer);
+    u64 const instance_count_address = vulkan::DeviceAddressOrZero(data.instance_count_buffer);
 
     for (u32 pass = 0U; pass < kRadixPasses; ++pass) {
       RadixPushConstants const radix_push{
@@ -160,11 +161,11 @@ void RecordPhaseACompute(vulkan::Context const &context, RenderData const &data,
       };
 
       RecordHeapIndirect(
-        context, command_buffer, *data.radix_histogram_algorithm, radix_push, data.radix_dispatch_buffer.handle());
+        context, command_buffer, *data.radix_histogram_algorithm, radix_push, data.radix_dispatch_buffer->handle());
       vkexec::barrier::compute_to_compute(command_buffer);
 
       RecordHeapIndirect(
-        context, command_buffer, *data.radix_scatter_algorithm, radix_push, data.radix_dispatch_buffer.handle());
+        context, command_buffer, *data.radix_scatter_algorithm, radix_push, data.radix_dispatch_buffer->handle());
       vkexec::barrier::compute_to_compute(command_buffer);
     }
   }

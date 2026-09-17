@@ -1,6 +1,7 @@
 #include "frame_context.hpp"
 
 #include "app_state.hpp"
+#include "vulkan/gpu_buffers.hpp"
 #include "vulkan/imgui_overlay.hpp"
 #include "gs/gaussian_splat.hpp"
 #include "vulkan_context.hpp"
@@ -59,13 +60,13 @@ namespace {
       .viewport = { tile.width, tile.height },
       .max_instances = data.max_bin_instances,
       .tile_size = gs::kTileSize,
-      .instance_count_address = context.gpu_allocator.get_buffer_device_address(data.instance_count_buffer),
+      .instance_count_address = vulkan::DeviceAddressOrZero(data.instance_count_buffer),
     };
 
     frame_gs.sort = {
-      .instance_count_address = context.gpu_allocator.get_buffer_device_address(data.instance_count_buffer),
-      .radix_dispatch_address = context.gpu_allocator.get_buffer_device_address(data.radix_dispatch_buffer),
-      .draw_indirect_address = context.gpu_allocator.get_buffer_device_address(data.draw_indirect_buffer),
+      .instance_count_address = vulkan::DeviceAddressOrZero(data.instance_count_buffer),
+      .radix_dispatch_address = vulkan::DeviceAddressOrZero(data.radix_dispatch_buffer),
+      .draw_indirect_address = vulkan::DeviceAddressOrZero(data.draw_indirect_buffer),
       .sort_size = data.gaussian_sort_size,
       .tile_count = data.tile_count,
       .blocks_per_workgroup = data.radix_blocks_per_workgroup,

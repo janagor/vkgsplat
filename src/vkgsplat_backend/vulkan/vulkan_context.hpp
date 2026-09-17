@@ -9,7 +9,6 @@
 #include <VkBootstrapDispatch.h>
 #include <vkexec/context.hpp>
 
-#include "gpu_allocator.hpp"
 #include "presentable_swapchain.hpp"
 #include <vkgsplat/platform.hpp>
 
@@ -24,10 +23,9 @@ struct Context
   VkSurfaceKHR surface{};
   vkb::Device device{};
   vkb::DispatchTable disp;
-  /// Adopted vkexec context (does not own instance/device/VMA). Destroy before device.
+  /// Adopted vkexec context: owns VMA; does not own instance/device. Destroy before device.
   std::unique_ptr<vkexec::context> vkexec_context;
   std::unique_ptr<PresentableSwapchain> swapchain;
-  GPUAllocator gpu_allocator;
 
   bool present_timing_enabled = false;
   bool present_id2_enabled = false;

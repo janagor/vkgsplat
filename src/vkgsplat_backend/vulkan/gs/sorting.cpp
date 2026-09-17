@@ -4,6 +4,7 @@
 #include "vulkan/descriptor/descriptor_heap.hpp"
 #include "gs/gaussian_splat.hpp"
 #include "gs/load_heap_pipeline.hpp"
+#include "vulkan/gpu_buffers.hpp"
 #include "vulkan_context.hpp"
 
 #include <vkgsplat_utility/types.hpp>
@@ -37,18 +38,13 @@ namespace {
 
   void DestroySortBuffers(vulkan::Context &context, RenderData &data)
   {
-    context.gpu_allocator.destroy_buffer(data.sorted_keys_buffer);
-    context.gpu_allocator.destroy_buffer(data.sorted_values_buffer);
-    context.gpu_allocator.destroy_buffer(data.sort_histogram_buffer);
-    context.gpu_allocator.destroy_buffer(data.radix_dispatch_buffer);
-    context.gpu_allocator.destroy_buffer(data.draw_indirect_buffer);
-    context.gpu_allocator.destroy_buffer(data.tile_ranges_buffer);
-    data.sorted_keys_buffer = {};
-    data.sorted_values_buffer = {};
-    data.sort_histogram_buffer = {};
-    data.radix_dispatch_buffer = {};
-    data.draw_indirect_buffer = {};
-    data.tile_ranges_buffer = {};
+    (void)context;
+    data.sorted_keys_buffer.reset();
+    data.sorted_values_buffer.reset();
+    data.sort_histogram_buffer.reset();
+    data.radix_dispatch_buffer.reset();
+    data.draw_indirect_buffer.reset();
+    data.tile_ranges_buffer.reset();
     data.gaussian_sort_size = 0;
     data.radix_num_workgroups = 0;
     data.tile_count = 0;
@@ -57,6 +53,12 @@ namespace {
   [[nodiscard]] auto CreateSortBuffers(vulkan::Context &context, RenderData &data) -> bool
   {
     DestroySortBuffers(context, data);
+
+    if (context.vkexec_context == nullptr) {
+      std::println("vkexec context missing for sort buffers!");
+      return false;
+    }
+    auto &vkexec = *context.vkexec_context;
 
     if (data.max_bin_instances == 0) {
       std::println("Sort gaussians requires binning buffers first!");
@@ -77,12 +79,12 @@ namespace {
     auto const dispatch_size = static_cast<VkDeviceSize>(sizeof(VkDispatchIndirectCommand));
     auto const draw_indirect_size = static_cast<VkDeviceSize>(sizeof(VkDrawIndirectCommand));
 
-    auto keys = context.gpu_allocator.create_device_storage_buffer(keys_size);
-    auto values = context.gpu_allocator.create_device_storage_buffer(values_size);
-    auto histogram = context.gpu_allocator.create_device_storage_buffer(histogram_size);
-    auto dispatch = context.gpu_allocator.create_device_storage_buffer(dispatch_size);
-    auto draw_indirect = context.gpu_allocator.create_device_storage_buffer(draw_indirect_size);
-    auto ranges = context.gpu_allocator.create_device_storage_buffer(ranges_size);
+    auto keys = vulkan::CreateDeviceStorageBuffer(vkexec, keys_size);
+    auto values = vulkan::CreateDeviceStorageBuffer(vkexec, values_size);
+    auto histogram = vulkan::CreateDeviceStorageBuffer(vkexec, histogram_size);
+    auto dispatch = vulkan::CreateDeviceStorageBuffer(vkexec, dispatch_size);
+    auto draw_indirect = vulkan::CreateDeviceStorageBuffer(vkexec, draw_indirect_size);
+    auto ranges = vulkan::CreateDeviceStorageBuffer(vkexec, ranges_size);
     if (!keys || !values || !histogram || !dispatch || !draw_indirect || !ranges) {
       std::println("Failed to create sort buffers!");
       DestroySortBuffers(context, data);
