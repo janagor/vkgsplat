@@ -212,15 +212,6 @@ auto DeviceInitialization(vulkan::Context &context, DriverConfig const &config) 
         static_cast<unsigned>(subgroup_props.supportedOperations));
 
       // NOLINTBEGIN(cppcoreguidelines-pro-type-reinterpret-cast)
-      context.write_resource_descriptors = reinterpret_cast<PFN_vkWriteResourceDescriptorsEXT>(
-        vkGetDeviceProcAddr(context.device, "vkWriteResourceDescriptorsEXT"));
-      context.write_sampler_descriptors = reinterpret_cast<PFN_vkWriteSamplerDescriptorsEXT>(
-        vkGetDeviceProcAddr(context.device, "vkWriteSamplerDescriptorsEXT"));
-      context.cmd_bind_resource_heap =
-        reinterpret_cast<PFN_vkCmdBindResourceHeapEXT>(vkGetDeviceProcAddr(context.device, "vkCmdBindResourceHeapEXT"));
-      context.cmd_bind_sampler_heap =
-        reinterpret_cast<PFN_vkCmdBindSamplerHeapEXT>(vkGetDeviceProcAddr(context.device, "vkCmdBindSamplerHeapEXT"));
-
       context.set_swapchain_present_timing_queue_size = reinterpret_cast<PFN_vkSetSwapchainPresentTimingQueueSizeEXT>(
         vkGetDeviceProcAddr(context.device, "vkSetSwapchainPresentTimingQueueSizeEXT"));
       context.get_swapchain_timing_properties = reinterpret_cast<PFN_vkGetSwapchainTimingPropertiesEXT>(
@@ -230,12 +221,6 @@ auto DeviceInitialization(vulkan::Context &context, DriverConfig const &config) 
       context.get_past_presentation_timing = reinterpret_cast<PFN_vkGetPastPresentationTimingEXT>(
         vkGetDeviceProcAddr(context.device, "vkGetPastPresentationTimingEXT"));
       // NOLINTEND(cppcoreguidelines-pro-type-reinterpret-cast)
-
-      if (context.write_resource_descriptors == nullptr || context.write_sampler_descriptors == nullptr
-          || context.cmd_bind_resource_heap == nullptr || context.cmd_bind_sampler_heap == nullptr) {
-        return std::unexpected{ Error{ std::make_error_code(std::errc::function_not_supported),
-          "VK_EXT_descriptor_heap entry points are unavailable" } };
-      }
 
       if (context.present_timing_enabled
           && (context.set_swapchain_present_timing_queue_size == nullptr || context.get_swapchain_timing_properties == nullptr
