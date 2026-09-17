@@ -37,7 +37,7 @@ namespace {
 
 auto SaveColorTargetPng(Context &context, RenderData &data, std::string_view path) -> std::expected<void, Error>
 {
-  if (data.color_image == VK_NULL_HANDLE || data.color_width == 0 || data.color_height == 0) {
+  if (!data.color_image.has_value() || data.color_width == 0 || data.color_height == 0) {
     return std::unexpected{ MakeError(std::errc::invalid_argument, "no color target available for screenshot") };
   }
   if (data.color_format != VK_FORMAT_R8G8B8A8_UNORM) {
@@ -93,7 +93,7 @@ auto SaveColorTargetPng(Context &context, RenderData &data, std::string_view pat
 
   // After a normal frame the color target is already TRANSFER_SRC_OPTIMAL.
   auto to_src = initializers::ImageMemoryBarrier(
-    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, data.color_image, color_range);
+    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, data.color_image->handle(), color_range);
   to_src.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
   to_src.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
   context.disp.cmdPipelineBarrier(cmd,
@@ -122,7 +122,7 @@ auto SaveColorTargetPng(Context &context, RenderData &data, std::string_view pat
     .imageExtent = { .width = data.color_width, .height = data.color_height, .depth = 1 },
   };
   context.disp.cmdCopyImageToBuffer(
-    cmd, data.color_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, staging->handle(), 1, &region);
+    cmd, data.color_image->handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, staging->handle(), 1, &region);
 
   if (context.disp.endCommandBuffer(cmd) != VK_SUCCESS) {
     return fail(MakeError(std::errc::io_error, "failed to end screenshot command buffer"));
@@ -171,7 +171,6 @@ auto SaveColorTargetPng(Context &context, RenderData &data, std::string_view pat
   FreeCmd(context, data, cmd);
   cmd = VK_NULL_HANDLE;
 
-  context.gpu_allocator.invalidate_buffer(*staging);
   auto mapped = context.gpu_allocator.map_buffer(*staging);
   if (!mapped) {
     DestroyStaging(context, *staging);
@@ -184,7 +183,6 @@ auto SaveColorTargetPng(Context &context, RenderData &data, std::string_view pat
     static_cast<std::size_t>(byte_size),
   };
   auto const written = WritePng(path, data.color_width, data.color_height, kChannels, pixels);
-  context.gpu_allocator.unmap_buffer(*staging);
   DestroyStaging(context, *staging);
   return written;
 }
