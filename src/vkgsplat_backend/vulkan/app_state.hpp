@@ -22,12 +22,13 @@
 #include <vkgsplat_utility/types.hpp>
 
 #include <array>
-#include <vk_mem_alloc.h>
 #include <vulkan/vulkan_core.h>
 
 #include <VkBootstrap.h>
 #include <VkBootstrapDispatch.h>
 
+#include <vkexec/image.hpp>
+#include <vkexec/image_view.hpp>
 #include <vkgsplat/lfd_config.hpp>
 
 
@@ -64,9 +65,8 @@ struct RenderData
   vulkan::Buffer radix_dispatch_buffer;
   vulkan::Buffer draw_indirect_buffer;
   vulkan::Buffer tile_ranges_buffer;
-  VkImage color_image{};
-  VmaAllocation color_allocation{};
-  VkImageView color_image_view{};
+  std::optional<vkexec::image> color_image;
+  std::optional<vkexec::image_view> color_image_view;
   // 3DGS is trained for gamma-space blending (typical WebGL UNORM8). A float RT
   // blends the same gamma-coded SH colors with linear-like precision and shifts hue.
   VkFormat color_format{ VK_FORMAT_R8G8B8A8_UNORM };

@@ -14,26 +14,23 @@
 #include <cstdint>
 #include <cstring>
 #include <print>
+#include <utility>
 
 #include <glm/gtc/type_ptr.hpp>
-#include <vk_mem_alloc.h>
+#include <vkexec/image.hpp>
+#include <vkexec/image_view.hpp>
+#include <vkexec/sync_wait.hpp>
 #include <vulkan/vulkan_core.h>
 
 namespace vkgsplat::gs {
 
 namespace {
 
-  void DestroyColorTarget(vulkan::Context const &context, RenderData &data)
+  void DestroyColorTarget(vulkan::Context const & /*context*/, RenderData &data)
   {
-    if (data.color_image_view != VK_NULL_HANDLE) {
-      context.disp.destroyImageView(data.color_image_view, nullptr);
-      data.color_image_view = VK_NULL_HANDLE;
-    }
-    if (data.color_image != VK_NULL_HANDLE || data.color_allocation != VK_NULL_HANDLE) {
-      vmaDestroyImage(context.gpu_allocator.vma_allocator(), data.color_image, data.color_allocation);
-      data.color_image = VK_NULL_HANDLE;
-      data.color_allocation = VK_NULL_HANDLE;
-    }
+    // View must be destroyed before the image it references.
+    data.color_image_view.reset();
+    data.color_image.reset();
     data.color_width = 0;
     data.color_height = 0;
     data.quilt_tile_extent = {};
@@ -42,6 +39,11 @@ namespace {
   [[nodiscard]] auto CreateColorTarget(vulkan::Context &context, RenderData &data) -> bool
   {
     DestroyColorTarget(context, data);
+
+    if (context.vkexec_context == nullptr) {
+      std::println("vkexec context missing for raster color target");
+      return false;
+    }
 
     u32 const tile_w = context.swapchain->vk_extent().width;
     u32 const tile_h = context.swapchain->vk_extent().height;
@@ -64,46 +66,29 @@ namespace {
     data.color_width = static_cast<u32>(atlas_w);
     data.color_height = static_cast<u32>(atlas_h);
 
-    auto image_info = initializers::ImageCreateInfo();
-    image_info.imageType = VK_IMAGE_TYPE_2D;
-    image_info.format = data.color_format;
-    image_info.extent = { .width = data.color_width, .height = data.color_height, .depth = 1 };
-    image_info.mipLevels = 1;
-    image_info.arrayLayers = 1;
-    image_info.samples = VK_SAMPLE_COUNT_1_BIT;
-    image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
-    image_info.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-    image_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-
-    VmaAllocationCreateInfo alloc_info = {};
-    alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-    if (vmaCreateImage(context.gpu_allocator.vma_allocator(),
-          &image_info,
-          &alloc_info,
-          &data.color_image,
-          &data.color_allocation,
-          nullptr)
-        != VK_SUCCESS) {
-      std::println("Failed to create raster color target!");
+    auto created_image = vkexec::try_sync_wait_value(vkexec::image::create(*context.vkexec_context,
+      vkexec::image_create_info{
+        .width = data.color_width,
+        .height = data.color_height,
+        .usage = vkexec::image_usage::color_storage,
+        .format = data.color_format,
+      }));
+    if (!created_image) {
+      std::println("Failed to create raster color target: {}", created_image.error().message());
       DestroyColorTarget(context, data);
       return false;
     }
+    data.color_image = std::move(*created_image);
 
-    VkImageSubresourceRange const subresource_range = {
-      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-      .baseMipLevel = 0,
-      .levelCount = 1,
-      .baseArrayLayer = 0,
-      .layerCount = 1,
-    };
-    auto const view_info =
-      initializers::ImageViewCreateInfo(data.color_image, VK_IMAGE_VIEW_TYPE_2D, data.color_format, subresource_range);
-    if (context.disp.createImageView(&view_info, nullptr, &data.color_image_view) != VK_SUCCESS) {
-      std::println("Failed to create raster color target view!");
+    auto created_view =
+      vkexec::try_sync_wait_value(vkexec::image_view::create(*context.vkexec_context, *data.color_image));
+    if (!created_view) {
+      std::println("Failed to create raster color target view: {}", created_view.error().message());
       DestroyColorTarget(context, data);
       return false;
     }
+    data.color_image_view = std::move(*created_view);
+    data.color_format = data.color_image->format();
 
     return true;
   }
@@ -139,6 +124,8 @@ namespace {
     VkRect2D const scissor,
     bool clear_attachment)
   {
+    if (!data.color_image_view.has_value()) { return; }
+
     std::array<float, 4> clear_rgba{};
     std::memcpy(clear_rgba.data(), glm::value_ptr(push_constants.background), 3U * sizeof(float));
     VkClearValue clear_value{};
@@ -147,7 +134,7 @@ namespace {
     VkRenderingAttachmentInfo const color_attachment = {
       .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
       .pNext = nullptr,
-      .imageView = data.color_image_view,
+      .imageView = data.color_image_view->handle(),
       .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
       .resolveMode = VK_RESOLVE_MODE_NONE,
       .resolveImageView = VK_NULL_HANDLE,
@@ -192,10 +179,12 @@ void PrepareQuiltPresent(vulkan::Context const &context,
   VkCommandBuffer command_buffer,
   size_t image_index)
 {
+  if (!data.color_image.has_value()) { return; }
+
   VkImageSubresourceRange const color_range = ColorRange();
 
   auto target_to_color = initializers::ImageMemoryBarrier(
-    VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, data.color_image, color_range);
+    VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, data.color_image->handle(), color_range);
   target_to_color.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
   auto swap_to_dst = initializers::ImageMemoryBarrier(VK_IMAGE_LAYOUT_UNDEFINED,
@@ -249,10 +238,12 @@ void BlitQuiltToSwapchain(vulkan::Context const &context,
   VkCommandBuffer command_buffer,
   size_t image_index)
 {
+  if (!data.color_image.has_value()) { return; }
+
   VkImageSubresourceRange const color_range = ColorRange();
 
   auto target_to_src = initializers::ImageMemoryBarrier(
-    VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, data.color_image, color_range);
+    VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, data.color_image->handle(), color_range);
   target_to_src.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
   target_to_src.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
   context.disp.cmdPipelineBarrier(command_buffer,
@@ -295,7 +286,7 @@ void BlitQuiltToSwapchain(vulkan::Context const &context,
       },
   };
   context.disp.cmdBlitImage(command_buffer,
-    data.color_image,
+    data.color_image->handle(),
     VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
     context.swapchain->images().at(image_index),
     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
