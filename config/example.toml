@@ -3,7 +3,7 @@
 # CLI arguments override values from this file.
 
 ply_path = "resources/x/PLY/point_cloud/iteration_100/point_cloud_1.ply"
-validation = false
+validation = true
 imgui = true
 gpu-timers = true
 # frame-rate = "display"   # or "adaptive", or a positive integer like 60
