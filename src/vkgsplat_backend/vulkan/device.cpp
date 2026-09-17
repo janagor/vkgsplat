@@ -4,6 +4,7 @@
 #include <print>
 #include <system_error>
 
+#include "vkexec_requirements.hpp"
 #include "vulkan_bootstrap.hpp"
 #include "vulkan_context.hpp"
 #include "vulkan_platform.hpp"
@@ -137,27 +138,10 @@ auto DeviceInitialization(vulkan::Context &context, DriverConfig const &config) 
     return std::unexpected{ Error{ std::make_error_code(std::errc::invalid_argument), "Platform is required" } };
   }
 
-  VkPhysicalDeviceDescriptorHeapFeaturesEXT descriptor_heap_features{};
-  descriptor_heap_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_FEATURES_EXT;
-  descriptor_heap_features.descriptorHeap = VK_TRUE;
-
-  VkPhysicalDeviceShaderUntypedPointersFeaturesKHR untyped_pointers_features{};
-  untyped_pointers_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_UNTYPED_POINTERS_FEATURES_KHR;
-  untyped_pointers_features.shaderUntypedPointers = VK_TRUE;
-
-  VkPhysicalDeviceVulkan12Features features_12{};
-  features_12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
-  features_12.bufferDeviceAddress = VK_TRUE;
-  features_12.timelineSemaphore = VK_TRUE;
-
-  VkPhysicalDeviceVulkan13Features features_13{};
-  features_13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
-  features_13.dynamicRendering = VK_TRUE;
-  features_13.shaderDemoteToHelperInvocation = VK_TRUE;
-  features_13.maintenance4 = VK_TRUE;
+  auto const requirements = vulkan::MakeVkexecRequirements();
 
   vkb::InstanceBuilder instance_builder;
-  instance_builder.require_api_version(1, 4, 0);
+  instance_builder.require_api_version(requirements.api_version_major, requirements.api_version_minor, 0);
   if (config.request_present_timing) {
     // Required to query present-timing / present-id2 surface capabilities.
     instance_builder.enable_extension(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME);
@@ -178,16 +162,13 @@ auto DeviceInitialization(vulkan::Context &context, DriverConfig const &config) 
       context.surface = *surface;
 
       vkb::PhysicalDeviceSelector phys_device_selector(context.instance);
+      phys_device_selector.set_surface(context.surface);
+      for (char const *extension : requirements.device_extensions) {
+        phys_device_selector.add_required_extension(extension);
+      }
+      for (auto const &feature : requirements.required_extension_features) { feature.require(phys_device_selector); }
 
-      return VKBResultToExpected(phys_device_selector.set_surface(context.surface)
-          .add_required_extension(VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME)
-          .add_required_extension(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME)
-          .add_required_extension(VK_KHR_SHADER_UNTYPED_POINTERS_EXTENSION_NAME)
-          .add_required_extension_features(descriptor_heap_features)
-          .add_required_extension_features(untyped_pointers_features)
-          .set_required_features_12(features_12)
-          .set_required_features_13(features_13)
-          .select());
+      return VKBResultToExpected(phys_device_selector.select());
     })
     .and_then([&](vkb::PhysicalDevice physical_device) -> std::expected<vkb::Device, Error> {
       if (config.request_present_timing) { TryEnablePresentTiming(context, physical_device); }
