@@ -63,6 +63,7 @@ target_link_libraries(
          GPUOpen::VulkanMemoryAllocator
          vkexec::vkexec
          vkexec::ext_descriptor_heap
+         vkexec::ext_timeline_semaphore
          glfw::glfw
          imgui::imgui
          vkgsplat::vkgsplat_utility
