@@ -101,7 +101,8 @@ auto RefreshDescriptorHeap(vulkan::Context &context, RenderData &data) -> bool
   if (data.geometry_buffer.empty() || data.appearance_buffer.empty() || data.projected_buffer.empty()
       || data.unsorted_keys_buffer.empty() || data.unsorted_values_buffer.empty() || data.sorted_keys_buffer.empty()
       || data.sorted_values_buffer.empty() || data.sort_histogram_buffer.empty() || data.tile_ranges_buffer.empty()
-      || data.sorted_indices.buffer().empty() || data.sort_entries.buffer().empty()) {
+      || !data.sorted_indices || data.sorted_indices->size() == 0 || !data.sort_entries
+      || data.sort_entries->size() == 0) {
     return true;
   }
 
@@ -122,8 +123,15 @@ auto RefreshDescriptorHeap(vulkan::Context &context, RenderData &data) -> bool
   auto const sort_histogram_buffer_size =
     static_cast<VkDeviceSize>(static_cast<size_t>(data.radix_num_workgroups) * 256U * sizeof(u32));
   auto const tile_ranges_buffer_size = static_cast<VkDeviceSize>(data.tile_count * sizeof(gs::TileRange));
-  auto const sorted_indices_buffer_size = data.sorted_indices.byte_size();
-  auto const sort_entries_buffer_size = data.sort_entries.byte_size();
+  auto const sorted_indices_buffer_size = data.sorted_indices->byte_size();
+  auto const sort_entries_buffer_size = data.sort_entries->byte_size();
+
+  auto const sorted_indices_address = data.sorted_indices->device().device_address();
+  auto const sort_entries_address = data.sort_entries->device().device_address();
+  if (!sorted_indices_address || !sort_entries_address) {
+    std::println("Failed to query sort tensor device addresses!");
+    return false;
+  }
 
   std::vector<std::byte> descriptor_data(data.descriptor_stride * kHeapDescriptorCount);
   std::array<VkDeviceAddressRangeEXT, kHeapDescriptorCount> address_ranges{};
@@ -136,11 +144,11 @@ auto RefreshDescriptorHeap(vulkan::Context &context, RenderData &data) -> bool
     .size = appearance_buffer_size,
   };
   address_ranges.at(static_cast<size_t>(HeapSlot::kSortedIndices)) = {
-    .address = context.gpu_allocator.get_buffer_device_address(data.sorted_indices.buffer()),
+    .address = *sorted_indices_address,
     .size = sorted_indices_buffer_size,
   };
   address_ranges.at(static_cast<size_t>(HeapSlot::kSortEntries)) = {
-    .address = context.gpu_allocator.get_buffer_device_address(data.sort_entries.buffer()),
+    .address = *sort_entries_address,
     .size = sort_entries_buffer_size,
   };
   address_ranges.at(static_cast<size_t>(HeapSlot::kProjected)) = {

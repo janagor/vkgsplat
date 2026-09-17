@@ -312,7 +312,8 @@ void DispatchRasterization(vulkan::Context const &context,
 
 void DestroyRasterization(vulkan::Context &context, RenderData &data)
 {
-  data.rasterize_algorithm.destroy(context);
+  (void)context;
+  data.rasterize_algorithm.reset();
   DestroyColorTarget(context, data);
 }
 

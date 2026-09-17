@@ -26,10 +26,6 @@ add_library(
   vulkan/gs/operations.cpp
   vulkan/gpu_allocator.cpp
   vulkan/screenshot.cpp
-  vulkan/compute/algorithm.cpp
-  vulkan/compute/op_fill_buffer.cpp
-  vulkan/compute/op_tensor_sync_device.cpp
-  vulkan/compute/op_tensor_sync_local.cpp
   vulkan/descriptor/descriptor_heap.cpp
   vulkan/gpu_pass_timer.cpp
   vulkan/imgui_overlay.cpp

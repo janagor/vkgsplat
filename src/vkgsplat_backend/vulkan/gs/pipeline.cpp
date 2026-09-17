@@ -4,7 +4,6 @@
 #include "vulkan/frame_context.hpp"
 #include "vulkan/gpu_pass_timer.hpp"
 #include <vkexec/barrier.hpp>
-#include "compute/op_fill_buffer.hpp"
 #include "gs/gaussian_splat.hpp"
 #include "gs/operations.hpp"
 #include "gs/rasterization.hpp"
@@ -38,20 +37,6 @@ namespace {
     constexpr f32 kHalfConeFactor = 0.5F;
     f32 const half_cone = static_cast<f32>(glm::radians(data.view_cone_deg * static_cast<f64>(kHalfConeFactor)));
     return std::max(kDefaultProjectionCullMargin, 1.0F + (kCullMarginSlope * std::tan(half_cone)));
-  }
-
-  void RecordPhaseA(RenderData &data)
-  {
-    data.gs_sequence.emplace<OpProjection>()
-      .emplace<compute::OpFillBuffer>(compute::FillBufferParams{
-        .buffer = data.instance_count_buffer.handle(),
-        .offset = 0,
-        .size = sizeof(u32),
-        .value = 0U,
-      })
-      .emplace<OpBinning>()
-      .emplace<OpPrepareSort>()
-      .emplace<OpRadixSort>();
   }
 
   struct QuiltTileRect
@@ -107,8 +92,8 @@ namespace {
 
 void RecordGsPipeline(RenderData &data)
 {
-  // Phase A only. Rasterization is recorded in EvalGsPipeline (mono or quilt Phase B).
-  RecordPhaseA(data);
+  (void)data;
+  // Phase A is recorded each frame in EvalGsPipeline (no retained Sequence).
 }
 
 void EvalGsPipeline(vulkan::Context &context, RenderData &data, VkCommandBuffer command_buffer)
@@ -117,10 +102,10 @@ void EvalGsPipeline(vulkan::Context &context, RenderData &data, VkCommandBuffer 
   if (data.gpu_pass_timer.enabled()) { data.gpu_pass_timer.begin_frame(context, slot, command_buffer); }
 
   data.project_push.cull_margin = PhaseACullMargin(data);
-  data.gs_sequence.eval(context, data, command_buffer);
+  RecordPhaseACompute(context, data, command_buffer);
 
   if (IsMonoQuilt(data)) {
-    OpRasterization{}.record(context, data, command_buffer);
+    RecordRasterization(context, data, command_buffer);
   } else if (data.lfd_emulate_active) {
     FrameSetup const &setup = FrameSetupFor(data, slot);
 
@@ -158,7 +143,7 @@ void EvalGsPipeline(vulkan::Context &context, RenderData &data, VkCommandBuffer 
     // Re-run projection for the emulated off-axis camera so rasterization sees updated projected data.
     RecordProjection(context, data, command_buffer, false);
 
-    OpRasterization{}.record(context, data, command_buffer);
+    RecordRasterization(context, data, command_buffer);
   } else {
     // One begin/end pair for all quilt cells: re-project + draw + blit (raster bucket).
     ScopedGpuPass const raster_timer{ context, data, command_buffer, GpuPass::kRasterize };
@@ -217,6 +202,6 @@ void EvalGsPipeline(vulkan::Context &context, RenderData &data, VkCommandBuffer 
   if (data.gpu_pass_timer.enabled()) { data.gpu_pass_timer.mark_submitted(slot); }
 }
 
-void DestroyGsPipeline(RenderData &data) { data.gs_sequence.clear(); }
+void DestroyGsPipeline(RenderData &data) { (void)data; }
 
 }// namespace vkgsplat::gs

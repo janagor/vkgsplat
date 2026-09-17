@@ -1,8 +1,6 @@
 #ifndef VKGSPLAT_BACKEND_VULKAN_GS_OPERATIONS_HPP
 #define VKGSPLAT_BACKEND_VULKAN_GS_OPERATIONS_HPP
 
-#include "compute/operation.hpp"
-
 #include <vulkan/vulkan_core.h>
 
 namespace vkgsplat {
@@ -18,35 +16,9 @@ void RecordProjection(vulkan::Context const &context,
   VkCommandBuffer command_buffer,
   bool time_pass);
 
-class OpProjection : public compute::Operation
-{
-public:
-  void record(vulkan::Context const &context, RenderData const &data, VkCommandBuffer command_buffer) override;
-};
+void RecordPhaseACompute(vulkan::Context const &context, RenderData const &data, VkCommandBuffer command_buffer);
 
-class OpBinning : public compute::Operation
-{
-public:
-  void record(vulkan::Context const &context, RenderData const &data, VkCommandBuffer command_buffer) override;
-};
-
-class OpPrepareSort : public compute::Operation
-{
-public:
-  void record(vulkan::Context const &context, RenderData const &data, VkCommandBuffer command_buffer) override;
-};
-
-class OpRadixSort : public compute::Operation
-{
-public:
-  void record(vulkan::Context const &context, RenderData const &data, VkCommandBuffer command_buffer) override;
-};
-
-class OpRasterization : public compute::Operation
-{
-public:
-  void record(vulkan::Context const &context, RenderData const &data, VkCommandBuffer command_buffer) override;
-};
+void RecordRasterization(vulkan::Context const &context, RenderData const &data, VkCommandBuffer command_buffer);
 
 }// namespace gs
 

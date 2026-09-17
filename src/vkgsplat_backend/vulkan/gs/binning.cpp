@@ -2,6 +2,7 @@
 
 #include "app_state.hpp"
 #include "gs/gaussian_splat.hpp"
+#include "gs/load_heap_pipeline.hpp"
 #include "vulkan_context.hpp"
 
 #include <vkgsplat_utility/types.hpp>
@@ -76,17 +77,18 @@ auto InitBinning(vulkan::Context &context, RenderData &data) -> bool
 
   std::array<uint32_t, 1> const specialization_constants{ data.splat_count };
   std::string const shader_path = std::string(kShaderDirectory) + "/binning.comp.spv";
-  if (!data.bin_algorithm.init(context, shader_path, std::span{ specialization_constants })) {
+  auto algorithm = LoadHeapAlgorithm(context, shader_path, std::span{ specialization_constants });
+  if (!algorithm) {
     DestroyBinBuffers(context, data);
     return false;
   }
-
+  data.bin_algorithm = std::move(*algorithm);
   return true;
 }
 
 void DestroyBinning(vulkan::Context &context, RenderData &data)
 {
-  data.bin_algorithm.destroy(context);
+  data.bin_algorithm.reset();
   DestroyBinBuffers(context, data);
 }
 
