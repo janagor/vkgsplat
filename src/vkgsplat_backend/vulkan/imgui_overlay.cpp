@@ -3,7 +3,6 @@
 #include "app_state.hpp"
 #include "vulkan/gpu_allocator.hpp"
 #include "vulkan/gpu_pass_timer.hpp"
-#include "vulkan/initializers.hpp"
 #include "frame_context.hpp"
 #include "vulkan_context.hpp"
 #include <vkgsplat/platform.hpp>
@@ -29,6 +28,7 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_vulkan.h>
 
+#include <vkexec/barrier.hpp>
 #include <vkexec_extensions/descriptor_heap/descriptor_heap.hpp>
 #include <vulkan/vulkan_core.h>
 
@@ -638,29 +638,19 @@ void BuildImGuiFrameSnapshot(RenderData &data, size_t frame_slot, ImGuiFrameSnap
 void RecordImguiOverlay(vulkan::Context &context, RenderData const &data, VkCommandBuffer command_buffer, size_t image_index)
 {
   VkImage swapchain_image = context.swapchain->images().at(image_index);
-  VkImageSubresourceRange const color_range = {
-    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-    .baseMipLevel = 0,
-    .levelCount = 1,
-    .baseArrayLayer = 0,
-    .layerCount = 1,
-  };
 
   // Raster blits into TRANSFER_DST; always finish with PRESENT.
   if (data.imgui == nullptr || !data.imgui->initialized) {
-    auto to_present = initializers::ImageMemoryBarrier(
-      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, swapchain_image, color_range);
-    to_present.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    context.disp.cmdPipelineBarrier(command_buffer,
-      VK_PIPELINE_STAGE_TRANSFER_BIT,
-      VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-      0,
-      0,
-      nullptr,
-      0,
-      nullptr,
-      1,
-      &to_present);
+    vkexec::image_barrier(command_buffer,
+      {
+        .image = swapchain_image,
+        .old_layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        .new_layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+        .src_stage = VK_PIPELINE_STAGE_TRANSFER_BIT,
+        .dst_stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+        .src_access = VK_ACCESS_TRANSFER_WRITE_BIT,
+        .dst_access = 0,
+      });
     return;
   }
 
@@ -674,19 +664,16 @@ void RecordImguiOverlay(vulkan::Context &context, RenderData const &data, VkComm
 
   size_t const frame_slot = data.current_slot;
   if (overlay.overlay_secondaries.at(frame_slot) == VK_NULL_HANDLE) {
-    auto to_present = initializers::ImageMemoryBarrier(
-      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, swapchain_image, color_range);
-    to_present.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    context.disp.cmdPipelineBarrier(command_buffer,
-      VK_PIPELINE_STAGE_TRANSFER_BIT,
-      VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-      0,
-      0,
-      nullptr,
-      0,
-      nullptr,
-      1,
-      &to_present);
+    vkexec::image_barrier(command_buffer,
+      {
+        .image = swapchain_image,
+        .old_layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        .new_layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+        .src_stage = VK_PIPELINE_STAGE_TRANSFER_BIT,
+        .dst_stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+        .src_access = VK_ACCESS_TRANSFER_WRITE_BIT,
+        .dst_access = 0,
+      });
     return;
   }
 
@@ -717,20 +704,16 @@ void RecordImguiOverlay(vulkan::Context &context, RenderData const &data, VkComm
 
   VkImageView swapchain_view = context.swapchain->image_views().at(image_index);
 
-  auto to_color_attachment = initializers::ImageMemoryBarrier(
-    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, swapchain_image, color_range);
-  to_color_attachment.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-  to_color_attachment.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-  context.disp.cmdPipelineBarrier(command_buffer,
-    VK_PIPELINE_STAGE_TRANSFER_BIT,
-    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-    0,
-    0,
-    nullptr,
-    0,
-    nullptr,
-    1,
-    &to_color_attachment);
+  vkexec::image_barrier(command_buffer,
+    {
+      .image = swapchain_image,
+      .old_layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+      .new_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+      .src_stage = VK_PIPELINE_STAGE_TRANSFER_BIT,
+      .dst_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+      .src_access = VK_ACCESS_TRANSFER_WRITE_BIT,
+      .dst_access = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+    });
 
   VkRenderingAttachmentInfo const color_attachment = {
     .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
@@ -762,19 +745,16 @@ void RecordImguiOverlay(vulkan::Context &context, RenderData const &data, VkComm
   context.disp.cmdExecuteCommands(command_buffer, 1, &overlay.overlay_secondaries.at(frame_slot));
   context.disp.cmdEndRendering(command_buffer);
 
-  auto to_present = initializers::ImageMemoryBarrier(
-    VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, swapchain_image, color_range);
-  to_present.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-  context.disp.cmdPipelineBarrier(command_buffer,
-    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-    VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-    0,
-    0,
-    nullptr,
-    0,
-    nullptr,
-    1,
-    &to_present);
+  vkexec::image_barrier(command_buffer,
+    {
+      .image = swapchain_image,
+      .old_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+      .new_layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+      .src_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+      .dst_stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+      .src_access = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+      .dst_access = 0,
+    });
 }
 
 }// namespace vkgsplat
