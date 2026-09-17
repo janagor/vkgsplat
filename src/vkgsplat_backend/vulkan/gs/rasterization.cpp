@@ -1,10 +1,10 @@
 #include "gs/rasterization.hpp"
 
 #include "app_state.hpp"
-#include "vulkan/initializers.hpp"
-#include <vkexec/barrier.hpp>
 #include "gs/push_constants.hpp"
 #include "vulkan_context.hpp"
+
+#include <vkexec/barrier.hpp>
 
 #include <vkgsplat_utility/types.hpp>
 
@@ -99,17 +99,6 @@ namespace {
     (void)vkexec::cmd_push_data(*context.vkexec_context, command_buffer, push_constants);
   }
 
-  [[nodiscard]] auto ColorRange() -> VkImageSubresourceRange
-  {
-    return {
-      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-      .baseMipLevel = 0,
-      .levelCount = 1,
-      .baseArrayLayer = 0,
-      .layerCount = 1,
-    };
-  }
-
   void DrawIntoColorTarget(vulkan::Context const &context,
     RenderData const &data,
     RasterPushConstants const &push_constants,
@@ -176,29 +165,26 @@ void PrepareQuiltPresent(vulkan::Context const &context,
 {
   if (!data.color_image.has_value()) { return; }
 
-  VkImageSubresourceRange const color_range = ColorRange();
-
-  auto target_to_color = initializers::ImageMemoryBarrier(
-    VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, data.color_image->handle(), color_range);
-  target_to_color.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-
-  auto swap_to_dst = initializers::ImageMemoryBarrier(VK_IMAGE_LAYOUT_UNDEFINED,
-    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-    context.swapchain->images().at(image_index),
-    color_range);
-  swap_to_dst.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-
-  std::array<VkImageMemoryBarrier, 2> prep_barriers = { target_to_color, swap_to_dst };
-  context.disp.cmdPipelineBarrier(command_buffer,
-    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
-    0,
-    0,
-    nullptr,
-    0,
-    nullptr,
-    static_cast<uint32_t>(prep_barriers.size()),
-    prep_barriers.data());
+  vkexec::image_barrier(command_buffer,
+    {
+      .image = data.color_image->handle(),
+      .old_layout = VK_IMAGE_LAYOUT_UNDEFINED,
+      .new_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+      .src_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+      .dst_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+      .src_access = 0,
+      .dst_access = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+    });
+  vkexec::image_barrier(command_buffer,
+    {
+      .image = context.swapchain->images().at(image_index),
+      .old_layout = VK_IMAGE_LAYOUT_UNDEFINED,
+      .new_layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+      .src_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+      .dst_stage = VK_PIPELINE_STAGE_TRANSFER_BIT,
+      .src_access = 0,
+      .dst_access = VK_ACCESS_TRANSFER_WRITE_BIT,
+    });
 }
 
 void DrawQuiltTile(vulkan::Context const &context,
@@ -235,22 +221,16 @@ void BlitQuiltToSwapchain(vulkan::Context const &context,
 {
   if (!data.color_image.has_value()) { return; }
 
-  VkImageSubresourceRange const color_range = ColorRange();
-
-  auto target_to_src = initializers::ImageMemoryBarrier(
-    VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, data.color_image->handle(), color_range);
-  target_to_src.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-  target_to_src.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-  context.disp.cmdPipelineBarrier(command_buffer,
-    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-    VK_PIPELINE_STAGE_TRANSFER_BIT,
-    0,
-    0,
-    nullptr,
-    0,
-    nullptr,
-    1,
-    &target_to_src);
+  vkexec::image_barrier(command_buffer,
+    {
+      .image = data.color_image->handle(),
+      .old_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+      .new_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+      .src_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+      .dst_stage = VK_PIPELINE_STAGE_TRANSFER_BIT,
+      .src_access = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+      .dst_access = VK_ACCESS_TRANSFER_READ_BIT,
+    });
 
   VkImageBlit const blit = {
     .srcSubresource =

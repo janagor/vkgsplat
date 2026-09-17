@@ -18,6 +18,7 @@
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
 
+#include <vkexec/barrier.hpp>
 #include <vulkan/vulkan_core.h>
 
 namespace vkgsplat::vulkan {
@@ -83,29 +84,17 @@ auto SaveColorTargetPng(Context &context, RenderData &data, std::string_view pat
     return fail(MakeError(std::errc::io_error, "failed to begin screenshot command buffer"));
   }
 
-  VkImageSubresourceRange const color_range{
-    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-    .baseMipLevel = 0,
-    .levelCount = 1,
-    .baseArrayLayer = 0,
-    .layerCount = 1,
-  };
-
   // After a normal frame the color target is already TRANSFER_SRC_OPTIMAL.
-  auto to_src = initializers::ImageMemoryBarrier(
-    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, data.color_image->handle(), color_range);
-  to_src.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-  to_src.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-  context.disp.cmdPipelineBarrier(cmd,
-    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
-    VK_PIPELINE_STAGE_TRANSFER_BIT,
-    0,
-    0,
-    nullptr,
-    0,
-    nullptr,
-    1,
-    &to_src);
+  vkexec::image_barrier(cmd,
+    {
+      .image = data.color_image->handle(),
+      .old_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+      .new_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+      .src_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
+      .dst_stage = VK_PIPELINE_STAGE_TRANSFER_BIT,
+      .src_access = VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+      .dst_access = VK_ACCESS_TRANSFER_READ_BIT,
+    });
 
   VkBufferImageCopy const region{
     .bufferOffset = 0,
