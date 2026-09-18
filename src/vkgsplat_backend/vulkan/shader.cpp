@@ -3,15 +3,8 @@
 #include <cstddef>
 #include <fstream>
 #include <iostream>
-#include <span>
 #include <string>
 #include <vector>
-
-#include "vulkan/initializers.hpp"
-#include "vulkan_context.hpp"
-#include <vkgsplat_utility/types.hpp>
-
-#include <vulkan/vulkan_core.h>
 
 namespace vkgsplat {
 
@@ -33,18 +26,6 @@ auto ReadFile(const std::string &filename) -> std::vector<char>
   file.close();
 
   return buffer;
-}
-
-auto CreateShaderModule(vulkan::Context &context, std::vector<char> const &code) -> VkShaderModule
-{
-  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-  auto const code_span = std::span{ reinterpret_cast<u32 const *>(code.data()), code.size() / sizeof(u32) };
-  auto const create_info = initializers::ShaderModuleCreateInfo(code_span);
-
-  VkShaderModule shader_module = nullptr;
-  if (context.disp.createShaderModule(&create_info, nullptr, &shader_module) != VK_SUCCESS) { return VK_NULL_HANDLE; }
-
-  return shader_module;
 }
 
 }// namespace vkgsplat
