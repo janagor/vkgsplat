@@ -42,6 +42,44 @@ namespace {
     RecordImguiOverlay(context, data, command_buffer, image_index);
   }
 
+  void ResolveGpuPassTimings(vulkan::Context const &context, RenderData &data, size_t frame_slot)
+  {
+    if (!data.gpu_pass_timer.enabled()) { return; }
+    data.gpu_pass_timer.resolve(context, frame_slot);
+    if (data.imgui != nullptr) {
+      UpdateImguiGpuTimings(data);
+      return;
+    }
+    static auto last_print = std::chrono::steady_clock::time_point{};
+    auto const now = std::chrono::steady_clock::now();
+    if (last_print.time_since_epoch().count() == 0 || now - last_print >= std::chrono::seconds{ 1 }) {
+      last_print = now;
+      auto const &pass_ms = data.gpu_pass_timer.last_ms();
+      std::println("GPU: {:.2f} ms (proj {:.2f} bin {:.2f} prep {:.2f} radix {:.2f} raster {:.2f})",
+        data.gpu_pass_timer.total_ms(),
+        pass_ms.at(static_cast<size_t>(GpuPass::kProjection)),
+        pass_ms.at(static_cast<size_t>(GpuPass::kBinning)),
+        pass_ms.at(static_cast<size_t>(GpuPass::kPrepareSort)),
+        pass_ms.at(static_cast<size_t>(GpuPass::kRadixSort)),
+        pass_ms.at(static_cast<size_t>(GpuPass::kRasterize)));
+    }
+  }
+
+  [[nodiscard]] auto PresentSwapchainImage(vulkan::Context &context,
+    RenderData &data,
+    uint32_t image_index,
+    VkSemaphore finished_semaphore) -> std::expected<VkResult, Error>
+  {
+    std::array<VkSwapchainKHR, 1> const swap_chains = { context.swapchain->handle() };
+    std::array<VkSemaphore, 1> present_wait = { finished_semaphore };
+    auto present_info = initializers::PresentInfoKHR(present_wait, swap_chains, std::span{ &image_index, 1 });
+
+    if (data.present_pacer != nullptr) { data.present_pacer->PreparePresent(context, present_info); }
+    VkResult const result = context.disp.queuePresentKHR(data.present_queue, &present_info);
+    if (data.present_pacer != nullptr) { data.present_pacer->AfterPresent(context); }
+    return result;
+  }
+
 }// namespace
 
 RenderThread::~RenderThread() { Stop(); }
@@ -235,26 +273,7 @@ auto RenderThread::DrawFrameVulkan(size_t frame_slot) -> std::expected<void, Err
     return std::unexpected{ MakeError(std::errc::io_error, waited.error().message()) };
   }
 
-  if (data.gpu_pass_timer.enabled()) {
-    data.gpu_pass_timer.resolve(context, frame_slot);
-    if (data.imgui != nullptr) {
-      UpdateImguiGpuTimings(data);
-    } else {
-      static auto last_print = std::chrono::steady_clock::time_point{};
-      auto const now = std::chrono::steady_clock::now();
-      if (last_print.time_since_epoch().count() == 0 || now - last_print >= std::chrono::seconds{ 1 }) {
-        last_print = now;
-        auto const &pass_ms = data.gpu_pass_timer.last_ms();
-        std::println("GPU: {:.2f} ms (proj {:.2f} bin {:.2f} prep {:.2f} radix {:.2f} raster {:.2f})",
-          data.gpu_pass_timer.total_ms(),
-          pass_ms.at(static_cast<size_t>(GpuPass::kProjection)),
-          pass_ms.at(static_cast<size_t>(GpuPass::kBinning)),
-          pass_ms.at(static_cast<size_t>(GpuPass::kPrepareSort)),
-          pass_ms.at(static_cast<size_t>(GpuPass::kRadixSort)),
-          pass_ms.at(static_cast<size_t>(GpuPass::kRasterize)));
-      }
-    }
-  }
+  ResolveGpuPassTimings(context, data, frame_slot);
 
   auto acquire_semaphore = ring.acquire_semaphore(frame_slot);
   if (!acquire_semaphore) {
@@ -317,15 +336,9 @@ auto RenderThread::DrawFrameVulkan(size_t frame_slot) -> std::expected<void, Err
     return std::unexpected{ MakeError(std::errc::io_error, finished_semaphore.error().message()) };
   }
 
-  std::array<VkSwapchainKHR, 1> const swap_chains = { context.swapchain->handle() };
-  std::array<VkSemaphore, 1> present_wait = { *finished_semaphore };
-  auto present_info = initializers::PresentInfoKHR(present_wait, swap_chains, std::span{ &image_index, 1 });
-
-  if (data.present_pacer != nullptr) { data.present_pacer->PreparePresent(context, present_info); }
-
-  result = context.disp.queuePresentKHR(data.present_queue, &present_info);
-
-  if (data.present_pacer != nullptr) { data.present_pacer->AfterPresent(context); }
+  auto presented = PresentSwapchainImage(context, data, image_index, *finished_semaphore);
+  if (!presented) { return std::unexpected{ presented.error() }; }
+  result = *presented;
 
   if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
     if (auto recreated = RecreateSwapchain(context, data); !recreated) { return std::unexpected{ recreated.error() }; }

@@ -1,6 +1,5 @@
 #include "vulkan/renderer.hpp"
 
-#include <cstddef>
 #include <expected>
 #include <functional>
 #include <system_error>
