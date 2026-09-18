@@ -2,7 +2,6 @@
 
 #include "app_state.hpp"
 #include "vulkan/gpu_buffers.hpp"
-#include "vulkan/initializers.hpp"
 #include <vkgsplat_io/write_png.hpp>
 #include "vulkan_context.hpp"
 
@@ -21,6 +20,7 @@
 
 #include <vkexec/barrier.hpp>
 #include <vkexec/gpu_buffer.hpp>
+#include <vkexec/queue_submit.hpp>
 #include <vulkan/vulkan_core.h>
 
 namespace vkgsplat::vulkan {
@@ -50,13 +50,15 @@ auto SaveColorTargetPng(Context &context, RenderData &data, std::string_view pat
   if (context.vkexec_context == nullptr) {
     return std::unexpected{ MakeError(std::errc::state_not_recoverable, "vkexec context missing for screenshot") };
   }
+  if (!data.frame_ring.has_value()) {
+    return std::unexpected{ MakeError(std::errc::state_not_recoverable, "frame_ring missing for screenshot") };
+  }
 
-  if (data.frame_timeline.has_value()) {
-    if (auto waited = data.frame_timeline->wait_value(data.next_timeline_value); !waited) {
-      return std::unexpected{ waited.error() };
+  auto &ring = *data.frame_ring;
+  for (std::size_t slot = 0; slot < ring.slot_count(); ++slot) {
+    if (auto waited = ring.wait_slot(slot); !waited) {
+      return std::unexpected{ MakeError(std::errc::io_error, waited.error().message()) };
     }
-  } else {
-    context.disp.deviceWaitIdle();
   }
 
   constexpr u32 kChannels = 4;
@@ -120,46 +122,25 @@ auto SaveColorTargetPng(Context &context, RenderData &data, std::string_view pat
     return fail(MakeError(std::errc::io_error, "failed to end screenshot command buffer"));
   }
 
-  if (data.frame_timeline.has_value()) {
-    auto const signal_value = data.next_timeline_value + 1U;
-    data.next_timeline_value = signal_value;
-    std::array<VkSemaphore, 1> signal_semaphores{ data.frame_timeline->handle() };
-    std::array<u64, 1> const signal_values{ signal_value };
-    auto timeline_submit = initializers::TimelineSemaphoreSubmitInfo({}, signal_values);
-    VkSubmitInfo const submit_info{
-      .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-      .pNext = &timeline_submit,
-      .waitSemaphoreCount = 0,
-      .pWaitSemaphores = nullptr,
-      .pWaitDstStageMask = nullptr,
-      .commandBufferCount = 1,
-      .pCommandBuffers = &cmd,
-      .signalSemaphoreCount = 1,
-      .pSignalSemaphores = signal_semaphores.data(),
-    };
-    if (context.disp.queueSubmit(data.graphics_queue, 1, &submit_info, VK_NULL_HANDLE) != VK_SUCCESS) {
-      return fail(MakeError(std::errc::io_error, "failed to submit screenshot readback"));
-    }
-    if (auto waited = data.frame_timeline->wait_value(signal_value); !waited) {
-      return fail(waited.error());
-    }
-  } else {
-    VkSubmitInfo const submit_info{
-      .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-      .pNext = nullptr,
-      .waitSemaphoreCount = 0,
-      .pWaitSemaphores = nullptr,
-      .pWaitDstStageMask = nullptr,
-      .commandBufferCount = 1,
-      .pCommandBuffers = &cmd,
-      .signalSemaphoreCount = 0,
-      .pSignalSemaphores = nullptr,
-    };
-    if (context.disp.queueSubmit(data.graphics_queue, 1, &submit_info, VK_NULL_HANDLE) != VK_SUCCESS) {
-      return fail(MakeError(std::errc::io_error, "failed to submit screenshot readback"));
-    }
-    context.disp.deviceWaitIdle();
+  auto const signal_value = ring.allocate_signal_value();
+  std::array<vkexec::semaphore_submit, 1> const signals{ vkexec::semaphore_submit{
+    .semaphore = ring.timeline().handle(),
+    .value = signal_value,
+    .stage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+  } };
+  std::array<VkCommandBuffer, 1> const cmds{ cmd };
+  if (auto submitted = context.vkexec_context->submit(vkexec::queue_submit{
+        .command_buffers = cmds,
+        .signals = signals,
+        .queue = data.graphics_queue,
+      });
+    !submitted) {
+    return fail(MakeError(std::errc::io_error, submitted.error().message()));
   }
+  if (auto waited = ring.timeline().wait(signal_value); !waited) {
+    return fail(MakeError(std::errc::io_error, waited.error().message()));
+  }
+
   FreeCmd(context, data, cmd);
   cmd = VK_NULL_HANDLE;
 
