@@ -39,9 +39,7 @@ template<class ErrorCodeEnum>
 [[nodiscard]] auto MakeError(ErrorCodeEnum code,
   std::string message = "",
   std::source_location source_location = std::source_location::current()) -> Error
-{
-  return MakeError(make_error_code(code), std::move(message), source_location);
-}
+{ return MakeError(make_error_code(code), std::move(message), source_location); }
 
 }// namespace vkgsplat
 

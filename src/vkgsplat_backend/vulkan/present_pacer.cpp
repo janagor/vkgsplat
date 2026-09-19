@@ -95,7 +95,8 @@ PresentPacer::PresentPacer(vulkan::Context &context, FrameRateConfig config)
   active_ = target_period_ns_ != 0U && has_time_domain_;
   if (!active_) {
     std::println(stderr,
-      "[present-timing] could not initialize pacing (hasTimeDomain={}, timeDomainId={}, period={} ns); running uncapped",
+      "[present-timing] could not initialize pacing (hasTimeDomain={}, timeDomainId={}, period={} ns); running "
+      "uncapped",
       has_time_domain_,
       time_domain_id_,
       target_period_ns_);
@@ -146,7 +147,8 @@ void PresentPacer::RefreshTimingProperties(vulkan::Context &context)
     .refreshInterval = 0,
   };
   u64 counter = 0;
-  if (context.get_swapchain_timing_properties(context.device, context.swapchain->handle(), &props, &counter) != VK_SUCCESS) {
+  if (context.get_swapchain_timing_properties(context.device, context.swapchain->handle(), &props, &counter)
+      != VK_SUCCESS) {
     return;
   }
 
@@ -172,8 +174,8 @@ void PresentPacer::RefreshTimeDomain(vulkan::Context &context)
   VkResult count_result =
     context.get_swapchain_time_domain_properties(context.device, context.swapchain->handle(), &props, nullptr);
   if (count_result != VK_SUCCESS && count_result != VK_INCOMPLETE) {
-    std::println(stderr, "[present-timing] GetSwapchainTimeDomainPropertiesEXT count failed ({})",
-      static_cast<int>(count_result));
+    std::println(
+      stderr, "[present-timing] GetSwapchainTimeDomainPropertiesEXT count failed ({})", static_cast<int>(count_result));
     return;
   }
   if (props.timeDomainCount == 0U) {
@@ -190,8 +192,8 @@ void PresentPacer::RefreshTimeDomain(vulkan::Context &context)
   VkResult const fill_result =
     context.get_swapchain_time_domain_properties(context.device, context.swapchain->handle(), &props, &counter);
   if (fill_result != VK_SUCCESS && fill_result != VK_INCOMPLETE) {
-    std::println(stderr, "[present-timing] GetSwapchainTimeDomainPropertiesEXT fill failed ({})",
-      static_cast<int>(fill_result));
+    std::println(
+      stderr, "[present-timing] GetSwapchainTimeDomainPropertiesEXT fill failed ({})", static_cast<int>(fill_result));
     return;
   }
 
@@ -244,8 +246,8 @@ void PresentPacer::UpdateAdaptiveTargetPeriod()
   f64 const needed = frame_duration_ema_ns_ * kAdaptiveSafety;
   if (needed <= 0.0 || refresh_duration_ns_ == 0U) { return; }
 
-  u64 const quanta = refresh_interval_ns_ == 0U || refresh_interval_ns_ == UINT64_MAX ? refresh_duration_ns_
-                                                                                     : refresh_interval_ns_;
+  u64 const quanta =
+    refresh_interval_ns_ == 0U || refresh_interval_ns_ == UINT64_MAX ? refresh_duration_ns_ : refresh_interval_ns_;
   if (quanta == 0U) { return; }
 
   u64 chosen = refresh_duration_ns_;
@@ -299,9 +301,7 @@ void PresentPacer::PreparePresent(vulkan::Context const &context, VkPresentInfoK
   flags |= VK_PRESENT_TIMING_INFO_PRESENT_AT_NEAREST_REFRESH_CYCLE_BIT_EXT;
 
   VkPresentStageFlagsEXT stage_queries = present_stage_queries_;
-  if (stage_queries == 0U) {
-    stage_queries = VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT;
-  }
+  if (stage_queries == 0U) { stage_queries = VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT; }
   VkPresentStageFlagsEXT target_stage = VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT;
   if ((stage_queries & target_stage) == 0U) {
     // Fall back to any reported stage (e.g. Xwayland only exposes REQUEST_DEQUEUED).

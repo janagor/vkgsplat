@@ -1,9 +1,9 @@
 #include "gs/sorting.hpp"
 
 #include "app_state.hpp"
-#include "vulkan/descriptor/descriptor_heap.hpp"
 #include "gs/gaussian_splat.hpp"
 #include "gs/load_heap_pipeline.hpp"
+#include "vulkan/descriptor/descriptor_heap.hpp"
 #include "vulkan/gpu_buffers.hpp"
 #include "vulkan_context.hpp"
 

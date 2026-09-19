@@ -40,10 +40,9 @@ struct LfdGridCell
   std::array<u32, 2> grid) -> std::expected<std::vector<u32>, Error>;
 
 // Map an on-screen quilt cell to the logical camera column/row for MakeQuiltView().
-[[nodiscard]] auto LfdLogicalCellForGridPosition(std::span<u32 const> view_order,
-  std::array<u32, 2> grid,
-  u32 grid_col,
-  u32 grid_row) -> LfdGridCell;
+[[nodiscard]] auto
+  LfdLogicalCellForGridPosition(std::span<u32 const> view_order, std::array<u32, 2> grid, u32 grid_col, u32 grid_row)
+    -> LfdGridCell;
 
 }// namespace vkgsplat
 

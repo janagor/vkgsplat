@@ -43,8 +43,9 @@ namespace vkgsplat {
 
 namespace {
 
-  [[nodiscard]] auto BuildRendererResources(vulkan::Context &context, RenderData &render_data, RendererConfig const &config)
-    -> std::expected<void, Error>
+  [[nodiscard]] auto BuildRendererResources(vulkan::Context &context,
+    RenderData &render_data,
+    RendererConfig const &config) -> std::expected<void, Error>
   {
     auto loaded = LoadSplatsFromPly(config.ply_path);
     if (!loaded) { return std::unexpected(loaded.error()); }
@@ -148,16 +149,13 @@ Renderer::~Renderer() noexcept
 {
   if (impl_.valueless_after_move()) { return; }
   if (impl_->render_thread != nullptr) { impl_->render_thread->Stop(); }
-  if (impl_->engine != nullptr) {
-    Cleanup(AsVulkanDriver(impl_->engine->driver()).context(), impl_->render_data);
-  }
+  if (impl_->engine != nullptr) { Cleanup(AsVulkanDriver(impl_->engine->driver()).context(), impl_->render_data); }
 }
 
 auto Renderer::create(RendererConfig const &config, Platform &platform) -> std::expected<Renderer, Error>
 {
-  auto engine = Engine::create(
-    EngineConfig{ .enable_validation = config.enable_validation,
-      .request_present_timing = config.frame_rate.IsPacingRequested() },
+  auto engine = Engine::create(EngineConfig{ .enable_validation = config.enable_validation,
+                                 .request_present_timing = config.frame_rate.IsPacingRequested() },
     platform);
   if (!engine) { return std::unexpected(engine.error()); }
 

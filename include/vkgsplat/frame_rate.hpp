@@ -5,8 +5,7 @@
 
 namespace vkgsplat {
 
-enum class FrameRateMode : u8
-{
+enum class FrameRateMode : u8 {
   kUncapped = 0,
   kFixed = 1,
   kDisplay = 2,
@@ -19,8 +18,7 @@ struct FrameRateConfig
   FrameRateMode mode = FrameRateMode::kUncapped;
   u32 fixed_fps = 0;// used when mode == kFixed
 
-  [[nodiscard]] constexpr auto IsPacingRequested() const noexcept -> bool
-  { return mode != FrameRateMode::kUncapped; }
+  [[nodiscard]] constexpr auto IsPacingRequested() const noexcept -> bool { return mode != FrameRateMode::kUncapped; }
 };
 
 }// namespace vkgsplat

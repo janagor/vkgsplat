@@ -24,14 +24,10 @@ namespace vkgsplat::vulkan {
 namespace gpu_buffers_detail {
 
   [[nodiscard]] inline auto MakeGpuBufferError(std::string message) -> Error
-  {
-    return MakeError(std::errc::io_error, std::move(message));
-  }
+  { return MakeError(std::errc::io_error, std::move(message)); }
 
   [[nodiscard]] inline auto MakeGpuBufferError(vkexec::error const &err) -> Error
-  {
-    return MakeGpuBufferError(err.message());
-  }
+  { return MakeGpuBufferError(err.message()); }
 
   [[nodiscard]] inline auto CreateGpuBuffer(vkexec::context &ctx,
     VkDeviceSize size,
@@ -53,23 +49,17 @@ namespace gpu_buffers_detail {
 /// Host-visible storage with buffer device address.
 [[nodiscard]] inline auto CreateStorageBuffer(vkexec::context &ctx, VkDeviceSize size)
   -> std::expected<vkexec::gpu_buffer, Error>
-{
-  return gpu_buffers_detail::CreateGpuBuffer(ctx, size, vkexec::gpu_buffer_memory::host_visible, true);
-}
+{ return gpu_buffers_detail::CreateGpuBuffer(ctx, size, vkexec::gpu_buffer_memory::host_visible, true); }
 
 /// Device-local storage (transfer + indirect capable) with buffer device address.
 [[nodiscard]] inline auto CreateDeviceStorageBuffer(vkexec::context &ctx, VkDeviceSize size)
   -> std::expected<vkexec::gpu_buffer, Error>
-{
-  return gpu_buffers_detail::CreateGpuBuffer(ctx, size, vkexec::gpu_buffer_memory::device_local, true);
-}
+{ return gpu_buffers_detail::CreateGpuBuffer(ctx, size, vkexec::gpu_buffer_memory::device_local, true); }
 
 /// Host-visible staging buffer for GPU→CPU readback (no BDA).
 [[nodiscard]] inline auto CreateStagingBuffer(vkexec::context &ctx, VkDeviceSize size)
   -> std::expected<vkexec::gpu_buffer, Error>
-{
-  return gpu_buffers_detail::CreateGpuBuffer(ctx, size, vkexec::gpu_buffer_memory::staging, false);
-}
+{ return gpu_buffers_detail::CreateGpuBuffer(ctx, size, vkexec::gpu_buffer_memory::staging, false); }
 
 [[nodiscard]] inline auto CreateDescriptorHeapBuffer(vkexec::context &ctx, VkDeviceSize size)
   -> std::expected<vkexec::descriptor_heap_buffer, Error>
@@ -91,16 +81,13 @@ namespace gpu_buffers_detail {
   return address ? *address : VkDeviceAddress{ 0 };
 }
 
-[[nodiscard]] inline auto DeviceAddressOrZero(std::optional<vkexec::gpu_buffer> const &buffer) noexcept -> VkDeviceAddress
-{
-  return buffer ? DeviceAddressOrZero(*buffer) : VkDeviceAddress{ 0 };
-}
+[[nodiscard]] inline auto DeviceAddressOrZero(std::optional<vkexec::gpu_buffer> const &buffer) noexcept
+  -> VkDeviceAddress
+{ return buffer ? DeviceAddressOrZero(*buffer) : VkDeviceAddress{ 0 }; }
 
 [[nodiscard]] inline auto DeviceAddressOrZero(std::optional<vkexec::descriptor_heap_buffer> const &buffer) noexcept
   -> VkDeviceAddress
-{
-  return buffer ? DeviceAddressOrZero(*buffer) : VkDeviceAddress{ 0 };
-}
+{ return buffer ? DeviceAddressOrZero(*buffer) : VkDeviceAddress{ 0 }; }
 
 template<TriviallyCopyable T>
 [[nodiscard]] inline auto WriteMapped(vkexec::gpu_buffer const &buffer, std::span<T const> data)

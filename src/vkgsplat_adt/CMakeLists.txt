@@ -6,6 +6,5 @@ target_link_libraries(vkgsplat_adt INTERFACE vkgsplat::vkgsplat_options)
 
 target_compile_features(vkgsplat_adt INTERFACE cxx_std_${CMAKE_CXX_STANDARD})
 
-target_include_directories(
-  vkgsplat_adt ${WARNING_GUARD}
-  INTERFACE $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include> $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>)
+target_include_directories(vkgsplat_adt ${WARNING_GUARD} INTERFACE $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+                                                                   $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>)

@@ -30,8 +30,8 @@ namespace {
   {
     auto graphics = context.device.get_queue_and_index(vkb::QueueType::graphics);
     if (!graphics) {
-      return std::unexpected{ Error{ std::make_error_code(std::errc::function_not_supported),
-        "graphics queue unavailable for vkexec adopt" } };
+      return std::unexpected{ Error{
+        std::make_error_code(std::errc::function_not_supported), "graphics queue unavailable for vkexec adopt" } };
     }
 
     auto present = context.device.get_queue_and_index(vkb::QueueType::present);
@@ -98,9 +98,7 @@ auto VulkanDriver::create(Platform &platform, DriverConfig const &config)
     return std::unexpected(initialized.error());
   }
 
-  if (auto adopted = AdoptVkexecContext(driver->context_); !adopted) {
-    return std::unexpected(adopted.error());
-  }
+  if (auto adopted = AdoptVkexecContext(driver->context_); !adopted) { return std::unexpected(adopted.error()); }
 
   if (auto created = driver->create_swapchain(platform, platform.framebuffer_extent()); !created) {
     return std::unexpected(created.error());
@@ -133,8 +131,7 @@ void VulkanDriver::wait_idle() const noexcept
 
 namespace vkgsplat {
 
-auto CreateVulkanDriver(Platform &platform, DriverConfig const &config)
-  -> std::expected<std::unique_ptr<Driver>, Error>
+auto CreateVulkanDriver(Platform &platform, DriverConfig const &config) -> std::expected<std::unique_ptr<Driver>, Error>
 {
   auto driver = vulkan::VulkanDriver::create(platform, config);
   if (!driver) { return std::unexpected(driver.error()); }

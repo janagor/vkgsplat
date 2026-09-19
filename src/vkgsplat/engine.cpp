@@ -31,8 +31,8 @@ auto Engine::create(EngineConfig const &config, Platform &platform) -> std::expe
   impl->platform = &platform;
 
   auto created_driver = CreateVulkanDriver(platform,
-    DriverConfig{ .enable_validation = config.enable_validation,
-      .request_present_timing = config.request_present_timing });
+    DriverConfig{
+      .enable_validation = config.enable_validation, .request_present_timing = config.request_present_timing });
   if (!created_driver) { return std::unexpected(created_driver.error()); }
   impl->driver = std::move(*created_driver);
 

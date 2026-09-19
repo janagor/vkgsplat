@@ -25,8 +25,7 @@ namespace {
   {
     // Optional as a device extension (often instance-only); still try so CreateDevice
     // dependency checks are satisfied when the ICD advertises it.
-    static_cast<void>(
-      physical_device.enable_extension_if_present(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME));
+    static_cast<void>(physical_device.enable_extension_if_present(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME));
     if (!physical_device.enable_extension_if_present(VK_KHR_CALIBRATED_TIMESTAMPS_EXTENSION_NAME)
         && !physical_device.enable_extension_if_present(VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME)) {
       std::println(stderr, "[present-timing] calibrated timestamps unavailable; --frame-rate ignored");
@@ -34,8 +33,7 @@ namespace {
     }
 
     bool const present_id2_ext = physical_device.enable_extension_if_present(VK_KHR_PRESENT_ID_2_EXTENSION_NAME);
-    bool const present_timing_ext =
-      physical_device.enable_extension_if_present(VK_EXT_PRESENT_TIMING_EXTENSION_NAME);
+    bool const present_timing_ext = physical_device.enable_extension_if_present(VK_EXT_PRESENT_TIMING_EXTENSION_NAME);
     if (!present_timing_ext) {
       std::println(stderr, "[present-timing] VK_EXT_present_timing unavailable; --frame-rate ignored");
       return;
@@ -74,13 +72,13 @@ namespace {
       return;
     }
 
-    bool const abs_ok = supported_timing.presentAtAbsoluteTime == VK_TRUE
-                        && timing_caps.presentAtAbsoluteTimeSupported == VK_TRUE;
-    bool const rel_ok = supported_timing.presentAtRelativeTime == VK_TRUE
-                        && timing_caps.presentAtRelativeTimeSupported == VK_TRUE;
+    bool const abs_ok =
+      supported_timing.presentAtAbsoluteTime == VK_TRUE && timing_caps.presentAtAbsoluteTimeSupported == VK_TRUE;
+    bool const rel_ok =
+      supported_timing.presentAtRelativeTime == VK_TRUE && timing_caps.presentAtRelativeTimeSupported == VK_TRUE;
     bool const timing_surface_ok = timing_caps.presentTimingSupported == VK_TRUE;
-    bool const id2_ok = present_id2_ext && supported_id2.presentId2 == VK_TRUE
-                        && id2_caps.presentId2Supported == VK_TRUE;
+    bool const id2_ok =
+      present_id2_ext && supported_id2.presentId2 == VK_TRUE && id2_caps.presentId2Supported == VK_TRUE;
 
     if (supported_timing.presentTiming != VK_TRUE || !timing_surface_ok || (!abs_ok && !rel_ok)) {
       std::println(stderr,
@@ -122,8 +120,7 @@ namespace {
     context.present_at_relative_time = use_relative;
     context.present_stage_queries = timing_caps.presentStageQueries;
     context.present_timing_enabled = true;
-    std::println(
-      "[present-timing] features enabled (absolute={}, relative={}, presentId2={}, stageQueries={:#x})",
+    std::println("[present-timing] features enabled (absolute={}, relative={}, presentId2={}, stageQueries={:#x})",
       context.present_at_absolute_time,
       context.present_at_relative_time,
       context.present_id2_enabled,
@@ -204,7 +201,8 @@ auto DeviceInitialization(vulkan::Context &context, DriverConfig const &config) 
       // NOLINTEND(cppcoreguidelines-pro-type-reinterpret-cast)
 
       if (context.present_timing_enabled
-          && (context.set_swapchain_present_timing_queue_size == nullptr || context.get_swapchain_timing_properties == nullptr
+          && (context.set_swapchain_present_timing_queue_size == nullptr
+              || context.get_swapchain_timing_properties == nullptr
               || context.get_swapchain_time_domain_properties == nullptr
               || context.get_past_presentation_timing == nullptr)) {
         std::println(stderr, "[present-timing] entry points unavailable; --frame-rate ignored");

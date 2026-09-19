@@ -94,10 +94,10 @@ namespace {
     return true;
   }
 
-  void PushRasterConstants(vulkan::Context const &context, RasterPushConstants const &push_constants, VkCommandBuffer command_buffer)
-  {
-    (void)vkexec::cmd_push_data(*context.vkexec_context, command_buffer, push_constants);
-  }
+  void PushRasterConstants(vulkan::Context const &context,
+    RasterPushConstants const &push_constants,
+    VkCommandBuffer command_buffer)
+  { (void)vkexec::cmd_push_data(*context.vkexec_context, command_buffer, push_constants); }
 
   void DrawIntoColorTarget(vulkan::Context const &context,
     RenderData const &data,
@@ -160,7 +160,8 @@ namespace {
 
 auto InitRasterization(vulkan::Context &context, RenderData &data) -> bool { return CreateColorTarget(context, data); }
 
-auto RecreateRasterizationColorTarget(vulkan::Context &context, RenderData &data) -> bool { return CreateColorTarget(context, data); }
+auto RecreateRasterizationColorTarget(vulkan::Context &context, RenderData &data) -> bool
+{ return CreateColorTarget(context, data); }
 
 void PrepareQuiltPresent(vulkan::Context const &context,
   RenderData const &data,
@@ -201,10 +202,9 @@ void DrawQuiltTile(vulkan::Context const &context,
   vkexec::barrier::compute_to_graphics(command_buffer);
 
   // First tile may clear the full atlas; later tiles LOAD and only write their viewport.
-  VkRect2D const render_area = clear_attachment
-                                 ? VkRect2D{ .offset = { .x = 0, .y = 0 },
-                                     .extent = { .width = data.color_width, .height = data.color_height } }
-                                 : tile;
+  VkRect2D const render_area = clear_attachment ? VkRect2D{ .offset = { .x = 0, .y = 0 },
+    .extent = { .width = data.color_width, .height = data.color_height } }
+                                                : tile;
 
   VkViewport const viewport = {
     .x = static_cast<float>(tile.offset.x),

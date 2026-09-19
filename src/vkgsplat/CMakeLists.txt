@@ -1,6 +1,11 @@
 include(GenerateExportHeader)
 
-add_library(vkgsplat error.cpp engine.cpp renderer.cpp lfd_view_order.cpp)
+add_library(
+  vkgsplat
+  error.cpp
+  engine.cpp
+  renderer.cpp
+  lfd_view_order.cpp)
 
 add_library(vkgsplat::vkgsplat ALIAS vkgsplat)
 

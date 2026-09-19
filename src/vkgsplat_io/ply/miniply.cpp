@@ -780,9 +780,9 @@ PLYReader::PLYReader(const char *filename)
   refill_buffer();
 
   valid_ = keyword("ply") && next_line() && keyword("format") && advance() && typed_which(kPLYFileTypes, &file_type_)
-            && advance() && int_literal(&major_version_) && advance() && match(".") && advance()
-            && int_literal(&minor_version_) && next_line() && parse_elements() && keyword("end_header") && advance()
-            && match("\n") && accept();
+           && advance() && int_literal(&major_version_) && advance() && match(".") && advance()
+           && int_literal(&minor_version_) && next_line() && parse_elements() && keyword("end_header") && advance()
+           && match("\n") && accept();
   if (!valid_) { return; }
   in_data_section_ = true;
   if (file_type_ == PLYFileType::kAscii) { advance(); }
@@ -1409,9 +1409,7 @@ auto PLYReader::refill_buffer() -> bool
 {
   if (file_ == nullptr || at_eof_) { return false; }
 
-  if (pos_ == 0U && end_ == buf_data_end_ && buf_data_end_ == static_cast<size_t>(kPLYReadBufferSize)) {
-    return false;
-  }
+  if (pos_ == 0U && end_ == buf_data_end_ && buf_data_end_ == static_cast<size_t>(kPLYReadBufferSize)) { return false; }
 
   auto const buf_size = static_cast<int64_t>(buf_data_end_);
   if (std::cmp_less(buf_size, static_cast<int64_t>(kPLYReadBufferSize))) {

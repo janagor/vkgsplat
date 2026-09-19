@@ -95,7 +95,9 @@ struct PrepareFrameParams
   f64 aspect_ratio{};
 };
 
-namespace vulkan { struct Context; }
+namespace vulkan {
+  struct Context;
+}
 
 // Main thread: camera + ImGui snapshot (requires GLFW thread).
 void BuildFrameSetupCpu(RenderData &data, size_t frame_slot, PrepareFrameParams const &params);

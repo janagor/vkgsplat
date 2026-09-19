@@ -16,8 +16,7 @@ namespace vkgsplat {
 
 namespace {
 
-  [[nodiscard]] auto GridViewCount(std::array<u32, 2> grid) -> u32
-  { return grid.at(0) * grid.at(1); }
+  [[nodiscard]] auto GridViewCount(std::array<u32, 2> grid) -> u32 { return grid.at(0) * grid.at(1); }
 
 }// namespace
 
@@ -25,9 +24,7 @@ auto ParseLfdViewLayout(std::string_view text) -> std::expected<LfdViewLayout, E
 {
   if (text == "normal") { return LfdViewLayout::kNormal; }
   if (text == "flip-rows") { return LfdViewLayout::kFlipRows; }
-  return std::unexpected{
-    MakeError(std::errc::invalid_argument, "lfd-view-layout must be 'normal' or 'flip-rows'")
-  };
+  return std::unexpected{ MakeError(std::errc::invalid_argument, "lfd-view-layout must be 'normal' or 'flip-rows'") };
 }
 
 auto BuildLfdViewOrder(LfdViewLayout layout, std::array<u32, 2> grid) -> std::vector<u32>
@@ -39,9 +36,7 @@ auto BuildLfdViewOrder(LfdViewLayout layout, std::array<u32, 2> grid) -> std::ve
 
   for (u32 row = 0U; row < rows; ++row) {
     u32 const logical_row = layout == LfdViewLayout::kFlipRows ? (rows - 1U - row) : row;
-    for (u32 col = 0U; col < cols; ++col) {
-      order.push_back((logical_row * cols) + col);
-    }
+    for (u32 col = 0U; col < cols; ++col) { order.push_back((logical_row * cols) + col); }
   }
 
   return order;
@@ -51,15 +46,15 @@ auto ValidateLfdViewOrder(std::span<u32 const> view_order, std::array<u32, 2> gr
 {
   u32 const expected_count = GridViewCount(grid);
   if (view_order.size() != static_cast<size_t>(expected_count)) {
-    return std::unexpected{ MakeError(std::errc::invalid_argument,
-      "lfd-view-order length must equal lfd-grid columns * rows") };
+    return std::unexpected{ MakeError(
+      std::errc::invalid_argument, "lfd-view-order length must equal lfd-grid columns * rows") };
   }
 
   std::vector<bool> seen(expected_count, false);
   for (u32 const view_index : view_order) {
     if (view_index >= expected_count) {
-      return std::unexpected{ MakeError(std::errc::invalid_argument,
-        "lfd-view-order entries must be in [0, columns * rows)") };
+      return std::unexpected{ MakeError(
+        std::errc::invalid_argument, "lfd-view-order entries must be in [0, columns * rows)") };
     }
     if (seen.at(view_index)) {
       return std::unexpected{ MakeError(std::errc::invalid_argument, "lfd-view-order must be a permutation") };
@@ -70,9 +65,8 @@ auto ValidateLfdViewOrder(std::span<u32 const> view_order, std::array<u32, 2> gr
   return {};
 }
 
-auto ResolveLfdViewOrder(std::span<u32 const> explicit_order,
-  LfdViewLayout layout,
-  std::array<u32, 2> grid) -> std::expected<std::vector<u32>, Error>
+auto ResolveLfdViewOrder(std::span<u32 const> explicit_order, LfdViewLayout layout, std::array<u32, 2> grid)
+  -> std::expected<std::vector<u32>, Error>
 {
   if (!explicit_order.empty()) {
     auto const validated = ValidateLfdViewOrder(explicit_order, grid);
@@ -84,10 +78,8 @@ auto ResolveLfdViewOrder(std::span<u32 const> explicit_order,
   return built;
 }
 
-auto LfdLogicalCellForGridPosition(std::span<u32 const> view_order,
-  std::array<u32, 2> grid,
-  u32 grid_col,
-  u32 grid_row) -> LfdGridCell
+auto LfdLogicalCellForGridPosition(std::span<u32 const> view_order, std::array<u32, 2> grid, u32 grid_col, u32 grid_row)
+  -> LfdGridCell
 {
   u32 const cols = std::max(1U, grid.at(0));
   u32 const grid_index = (grid_row * cols) + grid_col;

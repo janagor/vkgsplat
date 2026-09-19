@@ -1,10 +1,10 @@
 #include "gs/operations.hpp"
 
 #include "app_state.hpp"
-#include "vulkan/gpu_buffers.hpp"
-#include "vulkan/gpu_pass_timer.hpp"
 #include "gs/push_constants.hpp"
 #include "gs/rasterization.hpp"
+#include "vulkan/gpu_buffers.hpp"
+#include "vulkan/gpu_pass_timer.hpp"
 #include "vulkan_context.hpp"
 
 #include <vkgsplat_utility/types.hpp>
@@ -28,7 +28,8 @@ namespace {
   {
   public:
     ScopedGpuPass(vulkan::Context const &context, RenderData const &data, VkCommandBuffer command_buffer, GpuPass pass)
-      : context_(context), data_(data), command_buffer_(command_buffer), pass_(pass), active_(data.gpu_pass_timer.enabled())
+      : context_(context), data_(data), command_buffer_(command_buffer), pass_(pass),
+        active_(data.gpu_pass_timer.enabled())
     {
       if (active_) { data_.gpu_pass_timer.write(context_, data_.current_slot, pass_, false, command_buffer_); }
     }
@@ -105,16 +106,12 @@ void RecordProjection(vulkan::Context const &context,
 {
   if (!data.project_algorithm || context.vkexec_context == nullptr) { return; }
 
-  if (time_pass) {
-    data.gpu_pass_timer.write(context, data.current_slot, GpuPass::kProjection, false, command_buffer);
-  }
+  if (time_pass) { data.gpu_pass_timer.write(context, data.current_slot, GpuPass::kProjection, false, command_buffer); }
 
   RecordHeapDispatch(context, command_buffer, *data.project_algorithm, data.project_push, data.splat_count);
   vkexec::barrier::compute_read(command_buffer);
 
-  if (time_pass) {
-    data.gpu_pass_timer.write(context, data.current_slot, GpuPass::kProjection, true, command_buffer);
-  }
+  if (time_pass) { data.gpu_pass_timer.write(context, data.current_slot, GpuPass::kProjection, true, command_buffer); }
 }
 
 void RecordPhaseACompute(vulkan::Context const &context, RenderData const &data, VkCommandBuffer command_buffer)

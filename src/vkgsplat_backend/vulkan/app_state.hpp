@@ -7,13 +7,13 @@
 #include <optional>
 #include <vector>
 
+#include "frame_context.hpp"
+#include "gs/gaussian_splat.hpp"
+#include "gs/push_constants.hpp"
+#include "present_pacer.hpp"
 #include "vulkan/command/buffer.hpp"
 #include "vulkan/command/pool.hpp"
 #include "vulkan/gpu_pass_timer.hpp"
-#include "frame_context.hpp"
-#include "present_pacer.hpp"
-#include "gs/gaussian_splat.hpp"
-#include "gs/push_constants.hpp"
 #include <vkgsplat_utility/types.hpp>
 
 #include <array>

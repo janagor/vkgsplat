@@ -1,10 +1,10 @@
 #ifndef VKGSPLAT_BACKEND_VULKAN_DESCRIPTOR_DESCRIPTOR_HEAP_HPP
 #define VKGSPLAT_BACKEND_VULKAN_DESCRIPTOR_DESCRIPTOR_HEAP_HPP
 
-#include <cstddef>
-#include <cstdint>
 #include "app_state.hpp"
 #include "vulkan_context.hpp"
+#include <cstddef>
+#include <cstdint>
 
 #include <vulkan/vulkan_core.h>
 

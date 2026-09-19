@@ -1,9 +1,9 @@
 #include "frame_context.hpp"
 
 #include "app_state.hpp"
+#include "gs/gaussian_splat.hpp"
 #include "vulkan/gpu_buffers.hpp"
 #include "vulkan/imgui_overlay.hpp"
-#include "gs/gaussian_splat.hpp"
 #include "vulkan_context.hpp"
 
 #include <vkgsplat/camera.hpp>
@@ -32,13 +32,12 @@ namespace {
 
   [[nodiscard]] auto TileExtent(vulkan::Context const &context, RenderData const &data) -> VkExtent2D
   {
-    if (data.quilt_tile_extent.width != 0U && data.quilt_tile_extent.height != 0U) {
-      return data.quilt_tile_extent;
-    }
+    if (data.quilt_tile_extent.width != 0U && data.quilt_tile_extent.height != 0U) { return data.quilt_tile_extent; }
     return context.swapchain->vk_extent();
   }
 
-  [[nodiscard]] auto BuildGsFrameConstants(vulkan::Context const &context, RenderData const &data,
+  [[nodiscard]] auto BuildGsFrameConstants(vulkan::Context const &context,
+    RenderData const &data,
     CameraSnapshot const &camera) -> GsFrameConstants
   {
     glm::vec3 const camera_pos{ camera.position };

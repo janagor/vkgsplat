@@ -1,8 +1,8 @@
 #ifndef VKGSPLAT_BACKEND_VULKAN_RENDER_THREAD_HPP
 #define VKGSPLAT_BACKEND_VULKAN_RENDER_THREAD_HPP
 
-#include <vkgsplat_adt/bounded_queue.hpp>
 #include "app_state.hpp"
+#include <vkgsplat_adt/bounded_queue.hpp>
 
 #include <array>
 #include <condition_variable>
@@ -18,7 +18,9 @@
 
 namespace vkgsplat {
 
-namespace vulkan { struct Context; }
+namespace vulkan {
+  struct Context;
+}
 struct RenderData;
 
 // Dedicated thread for all Vulkan queue / swapchain / command-buffer recording work.
@@ -43,8 +45,7 @@ public:
   void WaitIdle();
 
 private:
-  enum class Command : u8
-  {
+  enum class Command : u8 {
     kNone,
     kWaitIdle,
     kShutdown,
