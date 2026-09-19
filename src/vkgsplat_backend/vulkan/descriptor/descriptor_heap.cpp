@@ -1,6 +1,5 @@
 #include "vulkan/descriptor/descriptor_heap.hpp"
 
-#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -106,8 +105,6 @@ auto RefreshDescriptorHeap(vulkan::Context &context, RenderData &data) -> bool
 {
   if (!QueryDescriptorHeapLayout(context, data)) { return false; }
 
-  DestroyDescriptorHeap(context, data);
-
   if (!data.geometry_buffer || !data.appearance_buffer || !data.projected_buffer || !data.unsorted_keys_buffer
       || !data.unsorted_values_buffer || !data.sorted_keys_buffer || !data.sorted_values_buffer
       || !data.sort_histogram_buffer || !data.tile_ranges_buffer || !data.sorted_indices
@@ -118,15 +115,27 @@ auto RefreshDescriptorHeap(vulkan::Context &context, RenderData &data) -> bool
   auto *vkexec = RequireVkexec(context);
   if (vkexec == nullptr) { return false; }
 
-  auto descriptor_heap_buffer = vulkan::CreateDescriptorHeapBuffer(*vkexec, data.descriptor_heap_size);
-  if (!descriptor_heap_buffer) {
-    std::println("Failed to create shared resource heap buffer!");
-    return false;
-  }
-  auto sampler_heap_buffer = vulkan::CreateDescriptorHeapBuffer(*vkexec, data.sampler_heap_size);
-  if (!sampler_heap_buffer) {
-    std::println("Failed to create shared sampler heap buffer!");
-    return false;
+  bool const needs_reallocation = !data.descriptor_heap_buffer || !data.sampler_heap_buffer
+                                  || data.descriptor_heap_buffer->size() != data.descriptor_heap_size
+                                  || data.sampler_heap_buffer->size() != data.sampler_heap_size;
+  if (needs_reallocation) {
+    // Replacing a bound heap requires all queued frames to be drained first. Once ImGui
+    // shares these allocations, its registered descriptors must be replayed and its
+    // secondary command buffers invalidated after installing the new device addresses.
+    if (data.imgui != nullptr) { context.disp.deviceWaitIdle(); }
+
+    auto resource_heap = vulkan::CreateDescriptorHeapBuffer(*vkexec, data.descriptor_heap_size);
+    if (!resource_heap) {
+      std::println("Failed to create shared resource heap buffer!");
+      return false;
+    }
+    auto sampler_heap = vulkan::CreateDescriptorHeapBuffer(*vkexec, data.sampler_heap_size);
+    if (!sampler_heap) {
+      std::println("Failed to create shared sampler heap buffer!");
+      return false;
+    }
+    data.descriptor_heap_buffer = std::move(*resource_heap);
+    data.sampler_heap_buffer = std::move(*sampler_heap);
   }
 
   auto const geometry_buffer_size = static_cast<VkDeviceSize>(data.splat_count * sizeof(gs::GaussianGeometry));
@@ -155,9 +164,7 @@ auto RefreshDescriptorHeap(vulkan::Context &context, RenderData &data) -> bool
     vkexec::buffer_resource(data.tile_ranges_buffer->handle(), tile_ranges_buffer_size),
     vkexec::buffer_resource(data.sort_histogram_buffer->handle(), sort_histogram_buffer_size));
 
-  auto heap_bytes = descriptor_heap_buffer->mapped();
-  std::ranges::fill(heap_bytes, std::byte{});
-  std::ranges::fill(sampler_heap_buffer->mapped(), std::byte{});
+  auto heap_bytes = data.descriptor_heap_buffer->mapped();
   vkexec::heap_table_lower_env const lower_env{
     .resource_heap_bytes = heap_bytes,
     .sampler_heap_bytes = {},
@@ -181,17 +188,14 @@ auto RefreshDescriptorHeap(vulkan::Context &context, RenderData &data) -> bool
     std::println("Failed to lower GS resource table: {}", lowered.error().message());
     return false;
   }
-  if (auto const flushed = descriptor_heap_buffer->flush(); !flushed) {
+  if (auto const flushed = data.descriptor_heap_buffer->flush(); !flushed) {
     std::println("Failed to flush GS descriptor heap: {}", flushed.error().message());
     return false;
   }
-  if (auto const flushed = sampler_heap_buffer->flush(); !flushed) {
+  if (auto const flushed = data.sampler_heap_buffer->flush(); !flushed) {
     std::println("Failed to flush shared sampler heap: {}", flushed.error().message());
     return false;
   }
-
-  data.descriptor_heap_buffer = std::move(*descriptor_heap_buffer);
-  data.sampler_heap_buffer = std::move(*sampler_heap_buffer);
   return true;
 }
 
