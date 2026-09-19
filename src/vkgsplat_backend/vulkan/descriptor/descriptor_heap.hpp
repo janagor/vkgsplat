@@ -26,6 +26,10 @@ enum class HeapSlot : u8 {
 };
 
 inline constexpr size_t kHeapDescriptorCount = 12;
+inline constexpr uint32_t kImguiImageBase = 12;
+inline constexpr uint32_t kImguiImageSlots = 8;
+inline constexpr size_t kSharedResourceSlots = kImguiImageBase + kImguiImageSlots;
+inline constexpr size_t kSharedSamplerSlots = 2;
 
 [[nodiscard]] constexpr auto AlignUp(VkDeviceSize value, VkDeviceSize alignment) noexcept -> VkDeviceSize
 { return (value + alignment - 1) / alignment * alignment; }
