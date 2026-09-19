@@ -89,12 +89,17 @@ struct RenderData
   std::optional<vkexec::tensor<u32>> sorted_indices;
   std::optional<vkexec::tensor<gs::SortEntry>> sort_entries;
   std::optional<vkexec::descriptor_heap_buffer> descriptor_heap_buffer;
+  std::optional<vkexec::descriptor_heap_buffer> sampler_heap_buffer;
   VkDeviceSize descriptor_heap_size{};
   VkDeviceSize reserved_range_offset{};
   VkDeviceSize reserved_range_size{};
+  VkDeviceSize sampler_heap_size{};
+  VkDeviceSize sampler_reserved_range_offset{};
+  VkDeviceSize sampler_reserved_range_size{};
   size_t descriptor_stride{};
   size_t buffer_descriptor_size{};
   size_t image_descriptor_size{};
+  size_t sampler_descriptor_size{};
 
   std::optional<vkexec::algorithm> project_algorithm;
   std::optional<vkexec::algorithm> bin_algorithm;

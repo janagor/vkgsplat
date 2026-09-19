@@ -80,19 +80,26 @@ auto QueryDescriptorHeapLayout(vulkan::Context const &context, RenderData &data)
 
   data.buffer_descriptor_size = layout->buffer_descriptor_size;
   data.image_descriptor_size = layout->image_descriptor_size;
+  data.sampler_descriptor_size = layout->sampler_descriptor_size;
   data.descriptor_stride = layout->descriptor_stride;
-  data.descriptor_heap_size = vkexec::descriptor_heap_byte_size(*layout, kHeapDescriptorCount);
+  data.descriptor_heap_size = vkexec::descriptor_heap_byte_size(*layout, kSharedResourceSlots);
   auto const descriptor_region =
-    static_cast<VkDeviceSize>(data.descriptor_stride) * static_cast<VkDeviceSize>(kHeapDescriptorCount);
+    static_cast<VkDeviceSize>(data.descriptor_stride) * static_cast<VkDeviceSize>(kSharedResourceSlots);
   data.reserved_range_offset = AlignUp(descriptor_region, layout->resource_heap_alignment);
   data.reserved_range_size = layout->min_resource_heap_reserved_range;
-  return data.descriptor_stride > 0;
+  data.sampler_heap_size = vkexec::sampler_heap_byte_size(*layout, kSharedSamplerSlots);
+  auto const sampler_region =
+    static_cast<VkDeviceSize>(data.sampler_descriptor_size) * static_cast<VkDeviceSize>(kSharedSamplerSlots);
+  data.sampler_reserved_range_offset = AlignUp(sampler_region, layout->sampler_heap_alignment);
+  data.sampler_reserved_range_size = layout->min_sampler_heap_reserved_range;
+  return data.descriptor_stride > 0 && data.sampler_descriptor_size > 0;
 }
 
 void DestroyDescriptorHeap(vulkan::Context &context, RenderData &data)
 {
   (void)context;
   data.descriptor_heap_buffer.reset();
+  data.sampler_heap_buffer.reset();
 }
 
 auto RefreshDescriptorHeap(vulkan::Context &context, RenderData &data) -> bool
@@ -113,7 +120,12 @@ auto RefreshDescriptorHeap(vulkan::Context &context, RenderData &data) -> bool
 
   auto descriptor_heap_buffer = vulkan::CreateDescriptorHeapBuffer(*vkexec, data.descriptor_heap_size);
   if (!descriptor_heap_buffer) {
-    std::println("Failed to create descriptor heap buffer!");
+    std::println("Failed to create shared resource heap buffer!");
+    return false;
+  }
+  auto sampler_heap_buffer = vulkan::CreateDescriptorHeapBuffer(*vkexec, data.sampler_heap_size);
+  if (!sampler_heap_buffer) {
+    std::println("Failed to create shared sampler heap buffer!");
     return false;
   }
 
@@ -145,6 +157,7 @@ auto RefreshDescriptorHeap(vulkan::Context &context, RenderData &data) -> bool
 
   auto heap_bytes = descriptor_heap_buffer->mapped();
   std::ranges::fill(heap_bytes, std::byte{});
+  std::ranges::fill(sampler_heap_buffer->mapped(), std::byte{});
   vkexec::heap_table_lower_env const lower_env{
     .resource_heap_bytes = heap_bytes,
     .sampler_heap_bytes = {},
@@ -172,15 +185,20 @@ auto RefreshDescriptorHeap(vulkan::Context &context, RenderData &data) -> bool
     std::println("Failed to flush GS descriptor heap: {}", flushed.error().message());
     return false;
   }
+  if (auto const flushed = sampler_heap_buffer->flush(); !flushed) {
+    std::println("Failed to flush shared sampler heap: {}", flushed.error().message());
+    return false;
+  }
 
   data.descriptor_heap_buffer = std::move(*descriptor_heap_buffer);
+  data.sampler_heap_buffer = std::move(*sampler_heap_buffer);
   return true;
 }
 
 void BindDescriptorHeap(vulkan::Context const &context, RenderData const &data, VkCommandBuffer command_buffer)
 {
   auto *vkexec = RequireVkexec(context);
-  if (vkexec == nullptr || !data.descriptor_heap_buffer) { return; }
+  if (vkexec == nullptr || !data.descriptor_heap_buffer || !data.sampler_heap_buffer) { return; }
 
   VkDeviceAddress const heap_address = vulkan::DeviceAddressOrZero(*data.descriptor_heap_buffer);
   auto const bound = vkexec::cmd_bind_resource_heap(*vkexec,
@@ -190,6 +208,15 @@ void BindDescriptorHeap(vulkan::Context const &context, RenderData const &data, 
     data.reserved_range_offset,
     data.reserved_range_size);
   if (!bound) { std::println("cmd_bind_resource_heap failed: {}", bound.error().message()); }
+
+  VkDeviceAddress const sampler_heap_address = vulkan::DeviceAddressOrZero(*data.sampler_heap_buffer);
+  auto const sampler_bound = vkexec::cmd_bind_sampler_heap(*vkexec,
+    command_buffer,
+    sampler_heap_address,
+    data.sampler_heap_size,
+    data.sampler_reserved_range_offset,
+    data.sampler_reserved_range_size);
+  if (!sampler_bound) { std::println("cmd_bind_sampler_heap failed: {}", sampler_bound.error().message()); }
 }
 
 auto HeapSlotByteOffset(RenderData const &data, HeapSlot slot) -> uint32_t
