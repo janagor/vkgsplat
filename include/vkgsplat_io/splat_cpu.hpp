@@ -11,7 +11,7 @@
 
 namespace vkgsplat::gs {
 
-// 3DGS SH degree 3: (degree + 1)^2 = 16 coeffs/channel × 3 channels = 48.
+// 3DGS SH degree 3: (degree + 1)^2 = 16 coeffs/channel x 3 channels = 48.
 // Stored as DC (f_dc_0..2) plus higher-order rest (f_rest_0..44).
 inline constexpr u32 kShDegree = 3;// max SH degree stored in appearance; runtime uses project_push.sh_degree
 inline constexpr u32 kViewerShDegree = 3;// full view-dependent SH (0 = SH0 only, faster proj)
@@ -19,7 +19,7 @@ inline constexpr u32 kShDcCoeffs = 3;
 inline constexpr u32 kShRestCoeffs = 45;
 inline constexpr u32 kShTotalCoeffs = kShDcCoeffs + kShRestCoeffs;
 
-// Y_0^0 normalization constant used by 3DGS SH0 → RGB.
+// Y_0^0 normalization constant used by 3DGS SH0 -> RGB.
 inline constexpr f32 kShC0 = 0.28209479177387814F;
 
 inline constexpr u32 kGeometryFloats = 11;
@@ -31,7 +31,7 @@ struct GaussianGeometry
 {
   std::array<f32, 3> position{};
   std::array<f32, 3> scale{};// log-space scales (exp in shaders)
-  // PLY order rot_0..3 → (w, x, y, z).
+  // PLY order rot_0..3 -> (w, x, y, z).
   std::array<f32, 4> rotation{ 1.0F, 0.0F, 0.0F, 0.0F };
   f32 opacity{};// logit opacity (sigmoid in shaders)
 };

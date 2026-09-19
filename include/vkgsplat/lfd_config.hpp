@@ -12,7 +12,7 @@
 
 namespace vkgsplat {
 
-// LFD quilt defaults (Looking Glass–style parallel camera array).
+// LFD quilt defaults (Looking Glass-style parallel camera array).
 inline constexpr f64 kDefaultViewConeDegrees = 40.0;
 inline constexpr f64 kDefaultLfdFocalDistance = 10.0;
 
@@ -27,19 +27,22 @@ struct LfdGridCell
   u32 row{};
 };
 
+/** Parse `normal` or `flip_rows` into an LFD view-layout preset. */
 [[nodiscard]] auto ParseLfdViewLayout(std::string_view text) -> std::expected<LfdViewLayout, Error>;
 
+/** Build the row-major logical view order for a grid. */
 [[nodiscard]] auto BuildLfdViewOrder(LfdViewLayout layout, std::array<u32, 2> grid) -> std::vector<u32>;
 
+/** Validate that `view_order` is a permutation of the grid view indices. */
 [[nodiscard]] auto ValidateLfdViewOrder(std::span<u32 const> view_order, std::array<u32, 2> grid)
   -> std::expected<void, Error>;
 
-// Resolve final row-major view order: explicit permutation wins over layout preset.
+/** Resolve the explicit permutation first, otherwise use the layout preset. */
 [[nodiscard]] auto ResolveLfdViewOrder(std::span<u32 const> explicit_order,
   LfdViewLayout layout,
   std::array<u32, 2> grid) -> std::expected<std::vector<u32>, Error>;
 
-// Map an on-screen quilt cell to the logical camera column/row for MakeQuiltView().
+/** Map an on-screen quilt cell to its logical camera column and row. */
 [[nodiscard]] auto
   LfdLogicalCellForGridPosition(std::span<u32 const> view_order, std::array<u32, 2> grid, u32 grid_col, u32 grid_row)
     -> LfdGridCell;

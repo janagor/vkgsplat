@@ -17,15 +17,21 @@ namespace vkgsplat {
 class Renderer;
 struct RendererConfig;
 
+/** Options used when creating the engine hardware context. */
 struct EngineConfig
 {
   bool enable_validation = false;
-  // Request VK_EXT_present_timing when creating the driver (optional; ignored if unsupported).
+  /// Request VK_EXT_present_timing; ignored when the device does not support it.
   bool request_present_timing = false;
 };
 
-// Main entry point: owns the Driver (hardware context) and tracks user-facing
-// render resources created through it.
+/**
+ * Main library entry point.
+ *
+ * Engine owns the Driver and the hardware context. It borrows the Platform,
+ * which must outlive the Engine. Destroy renderers before destroying the
+ * Engine. Factory and renderer creation errors are returned as `std::expected`.
+ */
 class VKGSPLAT_EXPORT Engine
 {
 public:
@@ -43,8 +49,10 @@ public:
   [[nodiscard]] auto platform() noexcept -> Platform &;
   [[nodiscard]] auto platform() const noexcept -> Platform const &;
 
+  /** Create a renderer that shares this engine's driver. */
   [[nodiscard]] auto create_renderer(RendererConfig const &config) -> std::expected<Renderer, Error>;
 
+  /** Wait until all work submitted through the driver has finished. */
   void wait_idle() const noexcept;
 
 private:

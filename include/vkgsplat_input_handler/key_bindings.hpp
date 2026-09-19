@@ -11,7 +11,7 @@
 
 namespace vkgsplat {
 
-// GLFW key codes for every discrete action the viewer binds.
+/** GLFW key codes for every discrete action supported by the viewer. */
 struct KeyBindings
 {
   int forward = GLFW_KEY_W;
@@ -31,7 +31,7 @@ struct KeyBindings
   int cell_down = GLFW_KEY_DOWN;
 };
 
-// Human-readable names used in config / CLI (defaults match KeyBindings{}).
+/** Human-readable names used by configuration and command-line parsing. */
 struct KeyBindingNames
 {
   std::string forward{ "W" };
@@ -51,8 +51,10 @@ struct KeyBindingNames
   std::string cell_down{ "DOWN" };
 };
 
+/** Parse a GLFW key name such as `W`, `SPACE`, or `LEFT`. */
 [[nodiscard]] auto ParseGlfwKeyName(std::string_view name) -> std::expected<int, Error>;
 
+/** Resolve all configured names into GLFW key codes. */
 [[nodiscard]] auto ResolveKeyBindings(KeyBindingNames const &names) -> std::expected<KeyBindings, Error>;
 
 }// namespace vkgsplat

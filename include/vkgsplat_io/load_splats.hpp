@@ -9,6 +9,7 @@
 
 namespace vkgsplat {
 
+/** Load Gaussian geometry and appearance columns from a 3DGS PLY file. */
 [[nodiscard]] auto LoadSplatsFromPly(std::string_view ply_path) -> std::expected<SplatCpuData, Error>;
 
 }// namespace vkgsplat

@@ -14,6 +14,13 @@ struct GLFWwindow;
 
 namespace vkgsplat {
 
+/**
+ * Polls GLFW input and applies it to a keyboard/mouse-controllable view.
+ *
+ * `update` returns true when the view changed. Discrete actions are exposed as
+ * edge-triggered requests and remain pending until their consume function is
+ * called.
+ */
 class InputHandler
 {
 public:
@@ -27,7 +34,7 @@ public:
 
   template<class View, class CloseTarget>
     requires KeyboardControllable<View> && MouseLookControllable<View> && ScrollZoomable<View> && Closeable<CloseTarget>
-  // Returns true when the view was modified (needs a redraw).
+  /** Poll input; returns true when the view changed and needs redraw. */
   [[nodiscard]] auto update(View &view, CloseTarget &close) -> bool
   {
     if (window_ == nullptr) { return false; }
@@ -110,15 +117,15 @@ public:
     return view_changed;
   }
 
-  // Edge-triggered: true once per screenshot key press until consumed.
+  /** Return and clear one pending screenshot request. */
   [[nodiscard]] auto consume_screenshot_request() noexcept -> bool;
   [[nodiscard]] auto screenshot_requested() const noexcept -> bool { return screenshot_requested_; }
 
-  // Edge-triggered: true once per emulate-toggle key press until consumed.
+  /** Return and clear one pending quilt-emulation toggle request. */
   [[nodiscard]] auto consume_emulate_toggle() noexcept -> bool;
 
   enum class ArrowDir : u8 { kNone, kLeft, kRight, kUp, kDown };
-  // Returns the pending cell-nav direction (if any) and clears it.
+  /** Return and clear one pending quilt-cell navigation direction. */
   [[nodiscard]] auto consume_arrow() noexcept -> ArrowDir;
 
 private:

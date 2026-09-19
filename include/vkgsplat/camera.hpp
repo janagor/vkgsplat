@@ -46,18 +46,18 @@ constexpr float kCameraFarPlane = static_cast<float>(kCameraDefaultFarPlane);
 
 struct CameraConfig
 {
-  // Extrinsics (orientation from look-at: position → target, with `up`).
+  /// Extrinsics from a look-at transform: position -> target, with `up`.
   glm::dvec3 position{ kDefaultCameraPosition };
   glm::dvec3 target{ kDefaultCameraTarget };
   glm::dvec3 up{ kDefaultCameraUp };
 
-  // Intrinsics. Live windowed rendering overrides aspect from the swapchain.
+  /// Intrinsics. Windowed rendering overrides the aspect from the swapchain.
   f64 fov_degrees{ kCameraDefaultFovDegrees };
   f64 aspect_ratio{ kCameraDefaultAspectRatio };
   f64 near_plane{ kCameraDefaultNearPlane };
   f64 far_plane{ kCameraDefaultFarPlane };
 
-  // Interaction
+  /// User interaction parameters.
   f64 movement_speed{ kCameraSpeed };
   f64 mouse_sensitivity{ kCameraSensitivity };
 };
@@ -71,6 +71,7 @@ struct CameraPushConstants
 constexpr auto kCameraPushPositionSize = 128;
 static_assert(sizeof(CameraPushConstants) == kCameraPushPositionSize);
 
+/** Orbit-free first-person camera used by the renderer and input handler. */
 class Camera
 {
 public:
@@ -110,7 +111,7 @@ public:
     return rotate * translate;
   }
 
-  // `aspect` overrides the configured aspect (typical for swapchain frames).
+  /** Build a Vulkan-compatible projection; `aspect` overrides the configured value. */
   [[nodiscard]] auto projection_matrix(f64 aspect) const noexcept -> glm::mat4
   {
     auto const used_aspect = aspect > 0.0 ? aspect : aspect_ratio_;
@@ -124,6 +125,7 @@ public:
 
   [[nodiscard]] auto projection_matrix() const noexcept -> glm::mat4 { return projection_matrix(aspect_ratio_); }
 
+  /** Apply one movement or roll action for the elapsed time in seconds. */
   void process_keyboard(ViewMovement direction, f64 delta_time)
   {
     auto const velocity = movement_speed_ * delta_time;
@@ -149,6 +151,7 @@ public:
     }
   }
 
+  /** Apply mouse-look offsets in screen pixels. */
   void process_mouse_movement(f64 xoffset, f64 yoffset)
   {
     auto const yaw_amount = xoffset * mouse_sensitivity_;
@@ -164,6 +167,7 @@ public:
     update_camera_vectors();
   }
 
+  /** Adjust and clamp the field of view using a scroll offset. */
   void process_mouse_scroll(f64 yoffset)
   {
     fov_degrees_ -= yoffset;
