@@ -56,7 +56,7 @@ namespace gpu_buffers_detail {
   -> std::expected<vkexec::gpu_buffer, Error>
 { return gpu_buffers_detail::CreateGpuBuffer(ctx, size, vkexec::gpu_buffer_memory::device_local, true); }
 
-/// Host-visible staging buffer for GPU→CPU readback (no BDA).
+/// Host-visible staging buffer for GPU -> CPU readback (no BDA).
 [[nodiscard]] inline auto CreateStagingBuffer(vkexec::context &ctx, VkDeviceSize size)
   -> std::expected<vkexec::gpu_buffer, Error>
 { return gpu_buffers_detail::CreateGpuBuffer(ctx, size, vkexec::gpu_buffer_memory::staging, false); }

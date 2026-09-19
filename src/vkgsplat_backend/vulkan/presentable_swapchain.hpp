@@ -18,7 +18,7 @@
 
 namespace vkgsplat::vulkan {
 
-// Abstract Swapchain façade over the concrete Vulkan swapchain RAII type.
+// Abstract Swapchain facade over the concrete Vulkan swapchain RAII type.
 class PresentableSwapchain final : public vkgsplat::Swapchain
 {
 public:

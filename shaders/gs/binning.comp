@@ -59,7 +59,7 @@ void main()
 
 	float depth = projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_DEPTH];
 	uint depth_bits = floatBitsToUint(depth);
-	// Ascending radix + inverted bits → back-to-front (far drawn first).
+	// Ascending radix + inverted bits -> back-to-front (far drawn first).
 	uint packed = ~depth_bits;
 
 	InstanceCountRef instance_count = InstanceCountRef(binning.instance_count_addr);

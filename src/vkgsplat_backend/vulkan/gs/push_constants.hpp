@@ -53,14 +53,14 @@ struct SortPushConstants
 constexpr size_t kSortPushConstantsSize = 40;
 static_assert(sizeof(SortPushConstants) == kSortPushConstantsSize);
 
-// Multi-pass radix sort. Keys are packed uint32 (tile<<16)|(depth>>16); 4× 8-bit passes.
+// Multi-pass radix sort. Keys are packed uint32 (tile<<16)|(depth>>16); 4 x 8-bit passes.
 struct RadixPushConstants
 {
   u64 instance_count_address{};
   u32 capacity{};
   u32 shift{};
   u32 num_blocks_per_workgroup{};
-  u32 ping{};// 0: sorted→unsorted, 1: unsorted→sorted
+  u32 ping{};// 0: sorted -> unsorted, 1: unsorted -> sorted
   u32 pad0{};
   u32 pad1{};
 };

@@ -70,7 +70,7 @@ void main()
 		return;
 	}
 
-	// Invert Σ⁻¹ back to Σ for oriented quad axes.
+	// Invert Sigma inverse back to Sigma for oriented quad axes.
 	float det_c = conic.x * conic.z - conic.y * conic.y;
 	if (det_c <= 1e-10) {
 		gl_Position = vec4(2.0, 2.0, 0.0, 1.0);
@@ -92,7 +92,7 @@ void main()
 
 	float width = max(float(push.viewport.x), 1.0);
 	float height = max(float(push.viewport.y), 1.0);
-	// PlayCanvas gsplatCorner: extent = 2 * sqrt(2λ), capped vs viewport.
+	// PlayCanvas gsplatCorner: extent = 2 * sqrt(2 * lambda), capped vs viewport.
 	float vmin = min(1024.0, min(width, height));
 	float l1 = 2.0 * min(sqrt(2.0 * lambda1), vmin);
 	float l2 = 2.0 * min(sqrt(2.0 * lambda2), vmin);

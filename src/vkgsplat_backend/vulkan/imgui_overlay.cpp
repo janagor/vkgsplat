@@ -61,7 +61,7 @@ struct ImGuiOverlayState
   VkFormat color_format{ VK_FORMAT_UNDEFINED };
 
   // Rebuild ImGui draw data infrequently; reuse per-frame secondary CBs between updates.
-  // frame_draw_data owns per-slot clones — ImGui::GetDrawData() is invalidated by the next
+  // frame_draw_data owns per-slot clones - ImGui::GetDrawData() is invalidated by the next
   // NewFrame() and must not be read from the render thread under pipelined SubmitFrame.
   std::array<VkCommandBuffer, kFrameSlotCount> overlay_secondaries{};
   std::array<uint64_t, kFrameSlotCount> secondary_generation{};

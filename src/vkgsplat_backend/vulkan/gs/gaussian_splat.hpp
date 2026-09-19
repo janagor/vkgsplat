@@ -20,7 +20,7 @@ inline constexpr u32 kProjectedFloats = 11;
 struct GaussianProjected
 {
   std::array<f32, 2> screen_position{};// pixel-space mean
-  std::array<f32, 3> conic{};// inverse Σ₂D as (xx, xy, yy) for EWA fragment eval
+  std::array<f32, 3> conic{};// inverse Sigma2D as (xx, xy, yy) for EWA fragment eval
   f32 depth{};// view-space z
   f32 radius{};// screen-space extent in pixels
   std::array<f32, 3> color{};// view-dependent SH RGB (precomputed once per frame)
@@ -78,7 +78,7 @@ static_assert(sizeof(SortEntry) == kSortEntrySize);
 static_assert(TriviallyCopyable<SortEntry>);
 static_assert(std::is_standard_layout_v<SortEntry>);
 
-// Max tile grid supported for tile_ranges allocation (16px tiles → up to 4096² viewport).
+// Max tile grid supported for tile_ranges allocation (16px tiles -> up to 4096 x 4096 viewport).
 inline constexpr u32 kMaxTileGridDim = 256;
 inline constexpr u32 kMaxTiles = kMaxTileGridDim * kMaxTileGridDim;
 

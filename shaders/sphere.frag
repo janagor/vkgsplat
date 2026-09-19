@@ -15,7 +15,7 @@ void main()
 	// gl_FragCoord is already the pixel center in Vulkan.
 	vec2 delta = fragMean - gl_FragCoord.xy;
 
-	// conic = inverse Σ₂D (xx, xy, yy)
+	// conic = inverse Sigma2D (xx, xy, yy)
 	float power = -0.5 * (fragConic.x * delta.x * delta.x + fragConic.z * delta.y * delta.y)
 		- fragConic.y * delta.x * delta.y;
 	if (power > 0.0) {
@@ -27,6 +27,6 @@ void main()
 		discard;
 	}
 
-	// Premultiplied alpha — matches SuperSplat (ONE / ONE_MINUS_SRC_ALPHA).
+	// Premultiplied alpha - matches SuperSplat (ONE / ONE_MINUS_SRC_ALPHA).
 	outColor = vec4(fragColor * alpha, alpha);
 }

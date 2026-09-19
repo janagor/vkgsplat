@@ -91,7 +91,7 @@ PresentPacer::PresentPacer(vulkan::Context &context, FrameRateConfig config)
   }
 
   // Both absolute and relative PresentTimingInfo need a swapchain timeDomainId
-  // (id 0 is valid — Mesa returns that).
+  // (id 0 is valid - Mesa returns that).
   active_ = target_period_ns_ != 0U && has_time_domain_;
   if (!active_) {
     std::println(stderr,
