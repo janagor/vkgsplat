@@ -21,6 +21,28 @@ below explains *why*, so you can keep it, swap it, or turn it off.
 `PROJECT_IS_TOP_LEVEL` flips defaults: strict when you own the build, quiet
 when you are a dependency.
 
+## Source documentation
+
+The project uses two documentation levels, matching the source tree.
+
+Public headers under `include/` use Doxygen comments for API contracts. A
+public comment should explain the purpose of the type or function, ownership
+and lifetime, input requirements, return and error behavior, and any invariant
+that a caller must preserve. Use `/** ... */` for declarations and `///` for
+short field or constant descriptions. Put code names in backticks.
+
+Implementation files under `src/` use ordinary `//` comments for local
+rationale, algorithms, synchronization, and invariants that are useful while
+maintaining the implementation. These comments should explain why the code
+has a non-obvious shape, not restate what the next line does. Use a short
+section comment when several statements form one phase, and an `Invariant:` or
+`Lifetime:` label when a condition must remain true.
+
+Do not use Unicode math notation or decorative symbols in source comments or
+documentation. Use ASCII spellings such as `->`, `x`, `Sigma2D`, `inverse`,
+and `sqrt`. This keeps comments portable across terminals, compilers, and
+documentation tools.
+
 ## C++ standard
 
 C++23, set only if a parent project has not chosen one. `CMAKE_CXX_EXTENSIONS`
