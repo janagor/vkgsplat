@@ -51,7 +51,7 @@ is off so the standard flag is `-std=c++23`, not `-std=gnu++23`. This avoids
 
 ## Warnings
 
-`cmake/CompilerWarnings.cmake` enables a curated set per compiler — `/W4`
+`cmake/CompilerWarnings.cmake` enables a curated set per compiler - `/W4`
 plus extras on MSVC, and `-Wall -Wextra -Wshadow -Wconversion -Wpedantic ...`
 on GCC/Clang. Top-level builds add `-Werror` / `/WX`. Source:
 [cppbestpractices](https://github.com/lefticus/cppbestpractices/blob/master/02-Use_the_Tools_Available.md).
@@ -59,7 +59,7 @@ on GCC/Clang. Top-level builds add `-Werror` / `/WX`. Source:
 ## Sanitizers
 
 ASan and UBSan are on by default for top-level GCC/Clang builds when a link
-probe shows them working. TSan, LSan, and MSan are off — they conflict with
+probe shows them working. TSan, LSan, and MSan are off - they conflict with
 each other and MSan needs an instrumented standard library. Emscripten and
 MSVC skip the sanitizer pass.
 
@@ -91,10 +91,10 @@ headers. Default set: fmt, spdlog, Catch2, CLI11, FTXUI, lefticus/tools.
 
 ## Testing
 
-* `test/tests.cpp` — Catch2 unit tests.
-* `test/constexpr_tests.cpp` — the same checks at compile time, so bugs
+* `test/tests.cpp` - Catch2 unit tests.
+* `test/constexpr_tests.cpp` - the same checks at compile time, so bugs
   become build errors.
-* `fuzz_test/` — libFuzzer harness, auto-enabled when ASan/TSan/UBSan and
+* `fuzz_test/` - libFuzzer harness, auto-enabled when ASan/TSan/UBSan and
   libFuzzer are all available.
 
 ## Targets and packaging
@@ -106,7 +106,7 @@ short Git SHA, so a binary maps to one build.
 
 ## Defaults for daily use
 
-The default build type is `RelWithDebInfo` — debuggable and fast.
+The default build type is `RelWithDebInfo` - debuggable and fast.
 `compile_commands.json` is always exported, for editors and clang tooling.
 
 ## Changing the defaults

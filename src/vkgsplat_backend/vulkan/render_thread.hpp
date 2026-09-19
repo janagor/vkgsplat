@@ -23,10 +23,10 @@ namespace vulkan {
 }
 struct RenderData;
 
-// Dedicated thread for all Vulkan queue / swapchain / command-buffer recording work.
-// Main enqueues CPU-ready frame slots (ring depth = kFrameSlotCount); the render thread
-// drains them while main prepares the next slot. GPU completion for a slot/image is tracked
-// on frame_ring and waited when that slot or swapchain image is reused.
+// Dedicated thread for all Vulkan queue, swapchain, and command-buffer work.
+// Main enqueues CPU-ready frame slots (ring depth = kFrameSlotCount); the render
+// thread drains them while main prepares the next slot. GPU completion for a
+// slot/image is tracked on frame_ring and waited when that slot or image is reused.
 class RenderThread
 {
 public:

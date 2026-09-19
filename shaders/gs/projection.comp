@@ -225,7 +225,7 @@ void main()
 	t.x = clamp(txtz, -limx, limx) * t.z;
 	t.y = clamp(tytz, -limy, limy) * t.z;
 
-	// PlayCanvas / Inria layout: J stored as Jᵀ columns, W = viewᵀ → Σ' = J W Σ Wᵀ Jᵀ.
+	// PlayCanvas / Inria layout: J stored as JT columns, W = viewT -> SigmaP = J W Sigma WT JT.
 	float tz = t.z;
 	float tz2 = tz * tz;
 	mat3 J = mat3(
@@ -239,7 +239,7 @@ void main()
 	float cov_xx = cov3[0][0] + COV_FILTER;
 	float cov_yy = cov3[1][1] + COV_FILTER;
 	// Vulkan screen Y grows downward (proj[1][1] flipped); Jacobian is OpenGL-style.
-	// Map Σ into Vulkan pixel axes: F=diag(1,-1) → cov_xy flips sign.
+	// Map Sigma into Vulkan pixel axes: F=diag(1,-1) -> cov_xy flips sign.
 	float cov_xy = -cov3[0][1];
 
 	float det = cov_xx * cov_yy - cov_xy * cov_xy;
@@ -248,7 +248,7 @@ void main()
 		return;
 	}
 
-	// Eigenvalues of Σ₂D (PlayCanvas gsplatCorner: extent = 2 * sqrt(2λ)).
+	// Eigenvalues of Sigma2D (PlayCanvas gsplatCorner: extent = 2 * sqrt(2 * lambda)).
 	float mid = 0.5 * (cov_xx + cov_yy);
 	float radius_eig = length(vec2((cov_xx - cov_yy) * 0.5, cov_xy));
 	float lambda1 = mid + radius_eig;
@@ -271,7 +271,7 @@ void main()
 
 	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_MEAN] = screen.x;
 	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_MEAN + 1u] = screen.y;
-	// Store inverse Σ₂D (xx, xy, yy) for per-pixel EWA in the fragment shader.
+	// Store inverse Sigma2D (xx, xy, yy) for per-pixel EWA in the fragment shader.
 	float inv_det = 1.0 / det;
 	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_CONIC] = cov_yy * inv_det;
 	projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_CONIC + 1u] = -cov_xy * inv_det;

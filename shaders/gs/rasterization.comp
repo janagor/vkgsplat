@@ -2,7 +2,7 @@
 #extension GL_EXT_descriptor_heap : require
 #extension GL_EXT_nonuniform_qualifier : enable
 
-// One workgroup per 16×16 tile; each thread evaluates one pixel front-to-back.
+// One workgroup per 16 x 16 tile; each thread evaluates one pixel front-to-back.
 // Splats are collaboratively loaded into shared memory in batches of 256.
 
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
