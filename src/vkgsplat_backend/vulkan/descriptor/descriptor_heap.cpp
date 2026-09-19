@@ -1,12 +1,11 @@
 #include "vulkan/descriptor/descriptor_heap.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <print>
-#include <span>
 #include <utility>
-#include <vector>
 
 #include "app_state.hpp"
 #include "gs/gaussian_splat.hpp"
@@ -16,7 +15,12 @@
 #include <vkgsplat_utility/types.hpp>
 
 #include <vkexec/context.hpp>
+#include <vkexec/descriptor_schema.hpp>
+#include <vkexec/pipeline.hpp>
+#include <vkexec/resource_table.hpp>
 #include <vkexec_extensions/descriptor_heap/descriptor_heap.hpp>
+#include <vkexec_extensions/descriptor_heap/resource_table.hpp>
+#include <vkexec_extensions/descriptor_heap/strategy.hpp>
 #include <vulkan/vulkan_core.h>
 
 namespace vkgsplat {
@@ -31,39 +35,37 @@ namespace {
     return context.vkexec_context.get();
   }
 
+  template<HeapSlot Slot>
+  using GsStorageBuffer = vkexec::storage_buffer<static_cast<u32>(Slot)>;
+
+  using GsHeapSchema = vkexec::descriptor_schema<GsStorageBuffer<HeapSlot::kGeometry>,
+    GsStorageBuffer<HeapSlot::kAppearance>,
+    GsStorageBuffer<HeapSlot::kSortedIndices>,
+    GsStorageBuffer<HeapSlot::kSortEntries>,
+    GsStorageBuffer<HeapSlot::kProjected>,
+    GsStorageBuffer<HeapSlot::kUnsortedKeys>,
+    GsStorageBuffer<HeapSlot::kUnsortedValues>,
+    GsStorageBuffer<HeapSlot::kSortedKeys>,
+    GsStorageBuffer<HeapSlot::kSortedValues>,
+    GsStorageBuffer<HeapSlot::kTileRanges>,
+    GsStorageBuffer<HeapSlot::kSortHistogram>>;
+
+  inline constexpr GsHeapSchema kGsHeapSchema{};
+  inline constexpr std::array<u32, GsHeapSchema::binding_count> kGsPhysicalIndices{
+    static_cast<u32>(HeapSlot::kGeometry),
+    static_cast<u32>(HeapSlot::kAppearance),
+    static_cast<u32>(HeapSlot::kSortedIndices),
+    static_cast<u32>(HeapSlot::kSortEntries),
+    static_cast<u32>(HeapSlot::kProjected),
+    static_cast<u32>(HeapSlot::kUnsortedKeys),
+    static_cast<u32>(HeapSlot::kUnsortedValues),
+    static_cast<u32>(HeapSlot::kSortedKeys),
+    static_cast<u32>(HeapSlot::kSortedValues),
+    static_cast<u32>(HeapSlot::kTileRanges),
+    static_cast<u32>(HeapSlot::kSortHistogram),
+  };
+
 }// namespace
-
-auto WriteStorageBufferDescriptor(vulkan::Context const &context,
-  VkDeviceAddress buffer_address,
-  VkDeviceSize buffer_size,
-  std::span<std::byte> destination) -> bool
-{
-  auto *vkexec = RequireVkexec(context);
-  if (vkexec == nullptr) { return false; }
-
-  auto const wrote = vkexec::write_storage_buffer_descriptor(*vkexec, buffer_address, buffer_size, destination);
-  if (!wrote) {
-    std::println("write_storage_buffer_descriptor failed: {}", wrote.error().message());
-    return false;
-  }
-  return true;
-}
-
-auto WriteStorageImageDescriptor(vulkan::Context const &context,
-  VkImageViewCreateInfo const &view_info,
-  VkImageLayout layout,
-  std::span<std::byte> destination) -> bool
-{
-  auto *vkexec = RequireVkexec(context);
-  if (vkexec == nullptr) { return false; }
-
-  auto const wrote = vkexec::write_storage_image_descriptor(*vkexec, view_info, layout, destination);
-  if (!wrote) {
-    std::println("write_storage_image_descriptor failed: {}", wrote.error().message());
-    return false;
-  }
-  return true;
-}
 
 auto QueryDescriptorHeapLayout(vulkan::Context const &context, RenderData &data) -> bool
 {
@@ -115,7 +117,6 @@ auto RefreshDescriptorHeap(vulkan::Context &context, RenderData &data) -> bool
     return false;
   }
 
-  auto const descriptor_size = data.descriptor_stride;
   auto const geometry_buffer_size = static_cast<VkDeviceSize>(data.splat_count * sizeof(gs::GaussianGeometry));
   auto const appearance_buffer_size = static_cast<VkDeviceSize>(data.splat_count * sizeof(gs::GaussianAppearance));
   auto const projected_buffer_size = static_cast<VkDeviceSize>(data.splat_count * sizeof(gs::GaussianProjected));
@@ -129,80 +130,46 @@ auto RefreshDescriptorHeap(vulkan::Context &context, RenderData &data) -> bool
   auto const sorted_indices_buffer_size = data.sorted_indices->byte_size();
   auto const sort_entries_buffer_size = data.sort_entries->byte_size();
 
-  auto const sorted_indices_address = data.sorted_indices->device().device_address();
-  auto const sort_entries_address = data.sort_entries->device().device_address();
-  if (!sorted_indices_address || !sort_entries_address) {
-    std::println("Failed to query sort tensor device addresses!");
+  auto const resources = vkexec::make_resource_table(kGsHeapSchema,
+    vkexec::buffer_resource(data.geometry_buffer->handle(), geometry_buffer_size),
+    vkexec::buffer_resource(data.appearance_buffer->handle(), appearance_buffer_size),
+    vkexec::buffer_resource(data.sorted_indices->vk_buffer(), sorted_indices_buffer_size),
+    vkexec::buffer_resource(data.sort_entries->vk_buffer(), sort_entries_buffer_size),
+    vkexec::buffer_resource(data.projected_buffer->handle(), projected_buffer_size),
+    vkexec::buffer_resource(data.unsorted_keys_buffer->handle(), unsorted_keys_buffer_size),
+    vkexec::buffer_resource(data.unsorted_values_buffer->handle(), unsorted_values_buffer_size),
+    vkexec::buffer_resource(data.sorted_keys_buffer->handle(), sorted_keys_buffer_size),
+    vkexec::buffer_resource(data.sorted_values_buffer->handle(), sorted_values_buffer_size),
+    vkexec::buffer_resource(data.tile_ranges_buffer->handle(), tile_ranges_buffer_size),
+    vkexec::buffer_resource(data.sort_histogram_buffer->handle(), sort_histogram_buffer_size));
+
+  auto heap_bytes = descriptor_heap_buffer->mapped();
+  std::ranges::fill(heap_bytes, std::byte{});
+  vkexec::heap_table_lower_env const lower_env{
+    .resource_heap_bytes = heap_bytes,
+    .sampler_heap_bytes = {},
+    .buffer_descriptor_size = data.buffer_descriptor_size,
+    .image_descriptor_size = data.image_descriptor_size,
+    .descriptor_stride = data.descriptor_stride,
+    .sampler_descriptor_size = 0,
+    .sampler_descriptor_stride = 0,
+    .indices = kGsPhysicalIndices,
+    .sampler_indices = {},
+    .image_view_infos = {},
+    .sampler_infos = {},
+  };
+
+  // Heap table lowering does not depend on a pipeline; the backend-neutral
+  // interface retains this argument for descriptor-set implementations.
+  vkexec::pipeline_resources const unused_pipeline{};
+  auto const lowered =
+    vkexec::detail::heap_descriptor_backend::lower(*vkexec, unused_pipeline, resources, lower_env);
+  if (!lowered) {
+    std::println("Failed to lower GS resource table: {}", lowered.error().message());
     return false;
   }
-
-  std::vector<std::byte> descriptor_data(data.descriptor_stride * kHeapDescriptorCount);
-  std::array<VkDeviceAddressRangeEXT, kHeapDescriptorCount> address_ranges{};
-  address_ranges.at(static_cast<size_t>(HeapSlot::kGeometry)) = {
-    .address = vulkan::DeviceAddressOrZero(*data.geometry_buffer),
-    .size = geometry_buffer_size,
-  };
-  address_ranges.at(static_cast<size_t>(HeapSlot::kAppearance)) = {
-    .address = vulkan::DeviceAddressOrZero(*data.appearance_buffer),
-    .size = appearance_buffer_size,
-  };
-  address_ranges.at(static_cast<size_t>(HeapSlot::kSortedIndices)) = {
-    .address = *sorted_indices_address,
-    .size = sorted_indices_buffer_size,
-  };
-  address_ranges.at(static_cast<size_t>(HeapSlot::kSortEntries)) = {
-    .address = *sort_entries_address,
-    .size = sort_entries_buffer_size,
-  };
-  address_ranges.at(static_cast<size_t>(HeapSlot::kProjected)) = {
-    .address = vulkan::DeviceAddressOrZero(*data.projected_buffer),
-    .size = projected_buffer_size,
-  };
-  address_ranges.at(static_cast<size_t>(HeapSlot::kUnsortedKeys)) = {
-    .address = vulkan::DeviceAddressOrZero(*data.unsorted_keys_buffer),
-    .size = unsorted_keys_buffer_size,
-  };
-  address_ranges.at(static_cast<size_t>(HeapSlot::kUnsortedValues)) = {
-    .address = vulkan::DeviceAddressOrZero(*data.unsorted_values_buffer),
-    .size = unsorted_values_buffer_size,
-  };
-  address_ranges.at(static_cast<size_t>(HeapSlot::kSortedKeys)) = {
-    .address = vulkan::DeviceAddressOrZero(*data.sorted_keys_buffer),
-    .size = sorted_keys_buffer_size,
-  };
-  address_ranges.at(static_cast<size_t>(HeapSlot::kSortedValues)) = {
-    .address = vulkan::DeviceAddressOrZero(*data.sorted_values_buffer),
-    .size = sorted_values_buffer_size,
-  };
-  address_ranges.at(static_cast<size_t>(HeapSlot::kTileRanges)) = {
-    .address = vulkan::DeviceAddressOrZero(*data.tile_ranges_buffer),
-    .size = tile_ranges_buffer_size,
-  };
-  address_ranges.at(static_cast<size_t>(HeapSlot::kSortHistogram)) = {
-    .address = vulkan::DeviceAddressOrZero(*data.sort_histogram_buffer),
-    .size = sort_histogram_buffer_size,
-  };
-
-  for (size_t i = 0; i < kHeapDescriptorCount; ++i) {
-    auto const slot = static_cast<HeapSlot>(i);
-    auto destination = std::span{ descriptor_data }.subspan(i * data.descriptor_stride, descriptor_size);
-
-    if (slot == HeapSlot::kColorTarget) {
-      // HW path: float color attachment + blit; not a storage image.
-      continue;
-    }
-
-    if (!WriteStorageBufferDescriptor(context,
-          address_ranges.at(i).address,
-          address_ranges.at(i).size,
-          destination.first(data.buffer_descriptor_size))) {
-      std::println("Failed to write descriptor heap slot {}!", i);
-      return false;
-    }
-  }
-
-  if (!vulkan::WriteMapped<std::byte>(*descriptor_heap_buffer, std::span<std::byte const>{ descriptor_data })) {
-    std::println("Failed to upload descriptor heap!");
+  if (auto const flushed = descriptor_heap_buffer->flush(); !flushed) {
+    std::println("Failed to flush GS descriptor heap: {}", flushed.error().message());
     return false;
   }
 

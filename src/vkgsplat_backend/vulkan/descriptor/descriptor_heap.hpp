@@ -3,8 +3,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <span>
-
 #include "app_state.hpp"
 #include "vulkan_context.hpp"
 
@@ -31,16 +29,6 @@ inline constexpr size_t kHeapDescriptorCount = 12;
 
 [[nodiscard]] constexpr auto AlignUp(VkDeviceSize value, VkDeviceSize alignment) noexcept -> VkDeviceSize
 { return (value + alignment - 1) / alignment * alignment; }
-
-[[nodiscard]] auto WriteStorageBufferDescriptor(vulkan::Context const &context,
-  VkDeviceAddress buffer_address,
-  VkDeviceSize buffer_size,
-  std::span<std::byte> destination) -> bool;
-
-[[nodiscard]] auto WriteStorageImageDescriptor(vulkan::Context const &context,
-  VkImageViewCreateInfo const &view_info,
-  VkImageLayout layout,
-  std::span<std::byte> destination) -> bool;
 
 [[nodiscard]] auto QueryDescriptorHeapLayout(vulkan::Context const &context, RenderData &data) -> bool;
 
