@@ -15,6 +15,8 @@
 
 #include <vkexec/sync_wait.hpp>
 #include <vkexec_extensions/descriptor_heap/heap_graphics_pipeline.hpp>
+#include <vkexec_extensions/descriptor_heap/strategy.hpp>
+#include <vkexec_graphics/graphics.hpp>
 #include <vulkan/vulkan_core.h>
 
 #include "vkgsplat/example_config.h"
@@ -66,8 +68,8 @@ auto CreateGraphicsPipeline(vulkan::Context &context, RenderData &data) -> int
   desc.color_formats = { data.color_format };
   desc.depth_format = VK_FORMAT_UNDEFINED;
 
-  auto created = vkexec::try_sync_wait_value(
-    vkexec::heap_graphics_pipeline::create(*context.vkexec_context, *vert_spirv, *frag_spirv, desc));
+  auto created = vkexec::try_sync_wait_value(vkexec::graphics_pipeline::create(
+    vkexec::descriptor_heap, *context.vkexec_context, *vert_spirv, *frag_spirv, desc));
   if (!created) {
     std::println("Failed to create heap graphics pipeline: {}", created.error().message());
     return -1;

@@ -41,7 +41,7 @@ void DispatchProjection(vulkan::Context const &context,
   VkCommandBuffer command_buffer)
 {
   if (!data.project_algorithm || context.vkexec_context == nullptr) { return; }
-  (void)vkexec::record_heap_pass(*context.vkexec_context,
+  (void)vkexec::record_pass(*context.vkexec_context,
     command_buffer,
     data.project_algorithm->bind(),
     std::as_bytes(std::span{ &push_constants, 1 }),
