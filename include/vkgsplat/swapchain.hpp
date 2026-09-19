@@ -9,7 +9,7 @@
 
 namespace vkgsplat {
 
-// Abstract OS-native renderable surface (presentation target).
+/** Abstract renderable presentation target owned by a graphics backend. */
 class VKGSPLAT_EXPORT Swapchain
 {
 public:
@@ -20,6 +20,7 @@ public:
 
   [[nodiscard]] virtual auto extent() const noexcept -> Extent2D = 0;
   [[nodiscard]] virtual auto image_count() const noexcept -> u32 = 0;
+  /** Recreate the target for a new framebuffer extent. */
   [[nodiscard]] virtual auto recreate(Extent2D extent) -> std::expected<void, Error> = 0;
 
 protected:

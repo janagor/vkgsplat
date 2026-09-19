@@ -5,11 +5,16 @@
 
 namespace vkgsplat {
 
-// Opaque OS-native window handle (e.g. GLFWwindow*).
+/** Opaque OS-native window handle, such as `GLFWwindow*`. */
 using NativeWindowHandle = void *;
 
-// Platform abstracts OS windowing. Surface creation is performed by the Driver
-// from a native window handle — platforms never expose graphics-API types.
+/**
+ * OS windowing abstraction used by the renderer.
+ *
+ * Surface creation is performed by the Driver from `native_window()`. This
+ * interface intentionally exposes no graphics API types, so the application
+ * layer can remain independent of Vulkan.
+ */
 class Platform
 {
 public:

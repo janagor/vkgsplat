@@ -20,6 +20,7 @@
 
 namespace vkgsplat {
 
+/** Configuration for a renderer and its optional quilt output. */
 struct RendererConfig
 {
   std::string ply_path;
@@ -27,13 +28,20 @@ struct RendererConfig
   bool enable_imgui = true;
   bool enable_gpu_timers = false;
   FrameRateConfig frame_rate{};
-  // LFD quilt; {1,1} keeps the mono path. [columns, rows]
+  /// Quilt dimensions as {columns, rows}; {1, 1} selects the mono path.
   std::array<u32, 2> lfd_grid{ 1U, 1U };
   f64 view_cone_deg{ kDefaultViewConeDegrees };
   std::vector<u32> lfd_view_order;
 };
 
-// Per-window rendering context: frame latency, command submission, and presentation.
+/**
+ * Per-window rendering context.
+ *
+ * Renderer owns frame resources, command submission, presentation, and the
+ * loaded Gaussian splat data. It borrows the Platform and, when created from
+ * an Engine, the Engine's driver. All operations return `std::expected` for
+ * recoverable failures.
+ */
 class VKGSPLAT_EXPORT Renderer
 {
 public:
@@ -47,12 +55,13 @@ public:
   Renderer(Renderer const &) = delete;
   auto operator=(Renderer const &) -> Renderer & = delete;
 
+  /** Render one frame using the supplied camera. */
   [[nodiscard]] auto draw(Camera const &camera) -> std::expected<void, Error>;
-  // Reads the latest raster color target to PNG (scene only; no ImGui overlay).
+  /** Save the latest scene color target as PNG, excluding the ImGui overlay. */
   [[nodiscard]] auto save_frame_png(std::string_view path) -> std::expected<void, Error>;
   void wait_idle() noexcept;
 
-  // LFD emulate: render a single quilt view full-screen instead of the full atlas.
+  /** Render one quilt cell full-screen instead of the complete atlas. */
   void set_lfd_emulate(bool active);
   [[nodiscard]] auto lfd_emulate_active() const noexcept -> bool;
   void set_lfd_emulate_cell(u32 col, u32 row);

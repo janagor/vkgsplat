@@ -11,7 +11,11 @@
 
 namespace vkgsplat {
 
-// Writes tightly packed 8-bit channels (1=Y, 2=YA, 3=RGB, 4=RGBA), row-major, top-left origin.
+/**
+ * Write tightly packed 8-bit pixels in row-major order with a top-left origin.
+ * `channels` must be 1 (Y), 2 (YA), 3 (RGB), or 4 (RGBA), and `pixels` must
+ * contain `width * height * channels` bytes.
+ */
 [[nodiscard]] auto
   WritePng(std::string_view path, u32 width, u32 height, u32 channels, std::span<std::uint8_t const> pixels)
     -> std::expected<void, Error>;

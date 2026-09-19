@@ -5,6 +5,7 @@
 
 namespace vkgsplat {
 
+/** Present pacing policy used by a Renderer. */
 enum class FrameRateMode : u8 {
   kUncapped = 0,
   kFixed = 1,
@@ -12,7 +13,7 @@ enum class FrameRateMode : u8 {
   kAdaptive = 3,
 };
 
-// Optional present pacing requested via --frame-rate.
+/** Optional present pacing requested by the application configuration. */
 struct FrameRateConfig
 {
   FrameRateMode mode = FrameRateMode::kUncapped;

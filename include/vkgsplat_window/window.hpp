@@ -11,6 +11,7 @@
 
 namespace vkgsplat {
 
+/** Configuration for a GLFW-backed window. */
 struct WindowConfig
 {
   std::string_view title;
@@ -19,7 +20,7 @@ struct WindowConfig
   bool resizable{};
 };
 
-// GLFW-backed Platform. No graphics-API types appear in this public header.
+/** GLFW-backed Platform; no graphics API types appear in this public header. */
 class Window : public Platform
 {
 public:
@@ -33,7 +34,7 @@ public:
   auto operator=(Window const &) -> Window & = delete;
 
   void poll_events() const noexcept override;
-  // Blocks until a window/input event is queued (CPU idle when not redrawing).
+  /** Block until an event is queued; useful while no redraw is required. */
   void wait_events() const noexcept;
   [[nodiscard]] auto should_close() const noexcept -> bool override;
   [[nodiscard]] auto framebuffer_extent() const noexcept -> Extent2D override;
