@@ -53,6 +53,8 @@ struct ImGuiOverlayState
   size_t sampler_descriptor_size{};
   uint64_t resource_freelist{};
   uint64_t sampler_freelist{};
+  std::array<std::optional<VkImageViewCreateInfo>, kImguiImageSlots> registered_images{};
+  std::array<std::optional<VkSamplerCreateInfo>, kSharedSamplerSlots> registered_samplers{};
   vkexec::context *vkexec_context{};
   ImGui_ImplVulkan_DescriptorHeapInfo heap_info{};
   VkPipelineRenderingCreateInfo pipeline_rendering{};
@@ -130,13 +132,17 @@ namespace {
       FreeSlot(overlay->resource_freelist, *index);
       return 0;
     }
+    VkImageViewCreateInfo replay_info = *create_info;
+    replay_info.pNext = nullptr;
+    overlay->registered_images.at(*index - kImguiImageBase) = replay_info;
     return *index;
   }
 
   void UnregisterImage(void *user_context, uint32_t index)
   {
-    if (index == 0) { return; }
+    if (index < kImguiImageBase || index >= kImguiImageBase + kImguiImageSlots) { return; }
     auto *overlay = static_cast<ImGuiOverlayState *>(user_context);
+    overlay->registered_images.at(index - kImguiImageBase).reset();
     FreeSlot(overlay->resource_freelist, index);
   }
 
@@ -161,12 +167,17 @@ namespace {
       FreeSlot(overlay->sampler_freelist, *index);
       return 0;
     }
+    VkSamplerCreateInfo replay_info = *create_info;
+    replay_info.pNext = nullptr;
+    overlay->registered_samplers.at(*index) = replay_info;
     return *index;
   }
 
   void UnregisterSampler(void *user_context, uint32_t index)
   {
+    if (index >= kSharedSamplerSlots) { return; }
     auto *overlay = static_cast<ImGuiOverlayState *>(user_context);
+    overlay->registered_samplers.at(index).reset();
     FreeSlot(overlay->sampler_freelist, index);
   }
 
@@ -415,6 +426,46 @@ namespace {
     return true;
   }
 
+  [[nodiscard]] auto ReplayRegisteredDescriptors(ImGuiOverlayState &overlay) -> bool
+  {
+    if (overlay.vkexec_context == nullptr) { return false; }
+
+    for (size_t offset = 0; offset < overlay.registered_images.size(); ++offset) {
+      auto const &create_info = overlay.registered_images.at(offset);
+      if (!create_info) { continue; }
+      uint32_t const index = kImguiImageBase + static_cast<uint32_t>(offset);
+      auto const destination = HostDescriptorSpan(
+        overlay.resource_mapped, overlay.resource_stride, overlay.resource_descriptor_size, index);
+      auto const wrote = vkexec::write_sampled_image_descriptor(
+        *overlay.vkexec_context, *create_info, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, destination);
+      if (!wrote) {
+        std::println(stderr,
+          "[imgui] failed to replay shared image slot {}: {}",
+          index,
+          wrote.error().message());
+        return false;
+      }
+    }
+
+    for (size_t index = 0; index < overlay.registered_samplers.size(); ++index) {
+      auto const &create_info = overlay.registered_samplers.at(index);
+      if (!create_info) { continue; }
+      auto const destination = HostDescriptorSpan(overlay.sampler_mapped,
+        overlay.sampler_stride,
+        overlay.sampler_descriptor_size,
+        static_cast<uint32_t>(index));
+      auto const wrote = vkexec::write_sampler_descriptor(*overlay.vkexec_context, *create_info, destination);
+      if (!wrote) {
+        std::println(stderr,
+          "[imgui] failed to replay shared sampler slot {}: {}",
+          index,
+          wrote.error().message());
+        return false;
+      }
+    }
+    return true;
+  }
+
   void DetachSharedHeaps(ImGuiOverlayState &overlay)
   {
     overlay.resource_mapped = {};
@@ -555,6 +606,11 @@ void RecreateImguiOverlayPipeline(vulkan::Context const &context, RenderData &da
 {
   if (data.imgui == nullptr || !data.imgui->initialized) { return; }
 
+  if (!AttachSharedHeaps(data, *data.imgui)) {
+    std::println(stderr, "[imgui] shared descriptor heaps unavailable after swapchain recreate");
+    return;
+  }
+
   FillPipelineRenderingInfo(context, *data.imgui);
   ImGui_ImplVulkan_SetMinImageCount(static_cast<uint32_t>(context.swapchain->image_count()));
 
@@ -570,6 +626,27 @@ void RecreateImguiOverlayPipeline(vulkan::Context const &context, RenderData &da
   InvalidateOverlaySecondaries(*data.imgui);
   ClearClonedDrawData(*data.imgui);
   data.imgui->last_extent = {};
+}
+
+auto RefreshImguiSharedHeapBindings(RenderData &data) -> bool
+{
+  if (data.imgui == nullptr) { return true; }
+
+  auto &overlay = *data.imgui;
+  if (!AttachSharedHeaps(data, overlay) || !ReplayRegisteredDescriptors(overlay)) { return false; }
+  if (!data.descriptor_heap_buffer || !data.sampler_heap_buffer) { return false; }
+  if (auto const flushed = data.descriptor_heap_buffer.value().flush(); !flushed) {
+    std::println(stderr, "[imgui] failed to flush replayed resource descriptors: {}", flushed.error().message());
+    return false;
+  }
+  if (auto const flushed = data.sampler_heap_buffer.value().flush(); !flushed) {
+    std::println(stderr, "[imgui] failed to flush replayed sampler descriptors: {}", flushed.error().message());
+    return false;
+  }
+
+  InvalidateOverlaySecondaries(overlay);
+  overlay.last_extent = {};
+  return true;
 }
 
 // cppcheck-suppress constParameterReference -- mutates RenderData via data.imgui owned state
