@@ -6,8 +6,12 @@
 #include <utility>
 
 #include "app_state.hpp"
+#include "gs/pipeline.hpp"
+#include "gs/rasterization.hpp"
+#include "mesh_gpu.hpp"
 #include "vulkan/command/pool.hpp"
 #include "vulkan/descriptor/descriptor_heap.hpp"
+#include "vulkan/gpu_pass_timer.hpp"
 #include "vulkan/graphics_pipeline.hpp"
 #include "vulkan/gs/binning.hpp"
 #include "vulkan/gs/projection.hpp"
@@ -15,10 +19,6 @@
 #include "vulkan/imgui_overlay.hpp"
 #include "vulkan/sphere_setup.hpp"
 #include "vulkan/vulkan_bootstrap.hpp"
-#include "gs/pipeline.hpp"
-#include "vulkan/gpu_pass_timer.hpp"
-#include "gs/rasterization.hpp"
-#include "mesh_gpu.hpp"
 #include "vulkan_context.hpp"
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
@@ -77,9 +77,7 @@ auto CreateSyncObjects(vulkan::Context &context, RenderData &data) -> std::expec
       .slot_count = kFrameSlotCount,
       .image_count = context.swapchain->image_count(),
     }));
-  if (!created) {
-    return std::unexpected{ MakeError(std::errc::io_error, created.error().message()) };
-  }
+  if (!created) { return std::unexpected{ MakeError(std::errc::io_error, created.error().message()) }; }
   data.frame_ring = std::move(*created);
   return {};
 }
@@ -96,7 +94,8 @@ auto RecreateSwapchain(vulkan::Context &context, RenderData &data) -> std::expec
   if (context.swapchain == nullptr) {
     return std::unexpected{ MakeError(std::errc::state_not_recoverable, "swapchain is not initialized") };
   }
-  if (auto recreated = context.swapchain->recreate(context.device, context.platform->framebuffer_extent()); !recreated) {
+  if (auto recreated = context.swapchain->recreate(context.device, context.platform->framebuffer_extent());
+    !recreated) {
     return std::unexpected{ recreated.error() };
   }
 

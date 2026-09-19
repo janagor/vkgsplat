@@ -35,8 +35,7 @@ namespace {
     return context.vkexec_context.get();
   }
 
-  template<HeapSlot Slot>
-  using GsStorageBuffer = vkexec::storage_buffer<static_cast<u32>(Slot)>;
+  template<HeapSlot Slot> using GsStorageBuffer = vkexec::storage_buffer<static_cast<u32>(Slot)>;
 
   using GsHeapSchema = vkexec::descriptor_schema<GsStorageBuffer<HeapSlot::kGeometry>,
     GsStorageBuffer<HeapSlot::kAppearance>,
@@ -187,8 +186,7 @@ auto RefreshDescriptorHeap(vulkan::Context &context, RenderData &data) -> bool
   // Heap table lowering does not depend on a pipeline; the backend-neutral
   // interface retains this argument for descriptor-set implementations.
   vkexec::pipeline_resources const unused_pipeline{};
-  auto const lowered =
-    vkexec::detail::heap_descriptor_backend::lower(*vkexec, unused_pipeline, resources, lower_env);
+  auto const lowered = vkexec::detail::heap_descriptor_backend::lower(*vkexec, unused_pipeline, resources, lower_env);
   if (!lowered) {
     std::println("Failed to lower GS resource table: {}", lowered.error().message());
     return false;

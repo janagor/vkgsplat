@@ -1,8 +1,8 @@
 #include "sphere_setup.hpp"
 
 #include "app_state.hpp"
-#include "vulkan/descriptor/descriptor_heap.hpp"
 #include "gs/gaussian_splat.hpp"
+#include "vulkan/descriptor/descriptor_heap.hpp"
 #include "vulkan_context.hpp"
 #include <vkgsplat_utility/types.hpp>
 

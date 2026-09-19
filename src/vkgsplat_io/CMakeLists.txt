@@ -40,6 +40,7 @@ target_include_directories(
 
 add_executable(ply_load_test ply_load_test.cpp ply/miniply.cpp)
 target_include_directories(ply_load_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(ply_load_test PRIVATE vkgsplat::vkgsplat_options vkgsplat::vkgsplat_warnings vkgsplat::vkgsplat_utility)
+target_link_libraries(ply_load_test PRIVATE vkgsplat::vkgsplat_options vkgsplat::vkgsplat_warnings
+                                            vkgsplat::vkgsplat_utility)
 target_compile_definitions(ply_load_test PRIVATE VKGSPLAT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 vkgsplat_configure_linker(ply_load_test)

@@ -36,8 +36,8 @@ namespace vkgsplat::gs {
   }
 
   // NOLINTBEGIN(cppcoreguidelines-pro-type-reinterpret-cast)
-  auto const spirv = std::span{ reinterpret_cast<uint32_t const *>(comp_code.data()),
-    comp_code.size() / sizeof(uint32_t) };
+  auto const spirv =
+    std::span{ reinterpret_cast<uint32_t const *>(comp_code.data()), comp_code.size() / sizeof(uint32_t) };
   // NOLINTEND(cppcoreguidelines-pro-type-reinterpret-cast)
 
   vkexec::heap_layout_desc desc{};

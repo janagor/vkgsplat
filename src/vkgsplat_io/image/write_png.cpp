@@ -1,7 +1,7 @@
 #include <vkgsplat_io/write_png.hpp>
 
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 #include <expected>
 #include <span>
 #include <string>
@@ -15,11 +15,8 @@
 
 namespace vkgsplat {
 
-auto WritePng(std::string_view path,
-  u32 width,
-  u32 height,
-  u32 channels,
-  std::span<std::uint8_t const> pixels) -> std::expected<void, Error>
+auto WritePng(std::string_view path, u32 width, u32 height, u32 channels, std::span<std::uint8_t const> pixels)
+  -> std::expected<void, Error>
 {
   if (width == 0 || height == 0) {
     return std::unexpected{ MakeError(std::errc::invalid_argument, "PNG width/height must be non-zero") };

@@ -21,7 +21,10 @@ void RecreateImguiOverlayPipeline(vulkan::Context const &context, RenderData &da
 
 void BuildImGuiFrameSnapshot(RenderData &data, size_t frame_slot, ImGuiFrameSnapshot &out_snapshot);
 
-void RecordImguiOverlay(vulkan::Context &context, RenderData const &data, VkCommandBuffer command_buffer, size_t image_index);
+void RecordImguiOverlay(vulkan::Context &context,
+  RenderData const &data,
+  VkCommandBuffer command_buffer,
+  size_t image_index);
 
 void UpdateImguiGpuTimings(RenderData &data);
 

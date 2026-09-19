@@ -120,9 +120,7 @@ namespace {
 auto ParseGlfwKeyName(std::string_view name) -> std::expected<int, Error>
 {
   auto const normalized = NormalizeKeyName(name);
-  if (normalized.empty()) {
-    return std::unexpected{ MakeError(std::errc::invalid_argument, "empty keybind name") };
-  }
+  if (normalized.empty()) { return std::unexpected{ MakeError(std::errc::invalid_argument, "empty keybind name") }; }
 
   if (normalized.size() == 1U) {
     auto const code = static_cast<unsigned char>(normalized.front());

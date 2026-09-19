@@ -1,10 +1,10 @@
 #include "vulkan/imgui_overlay.hpp"
 
 #include "app_state.hpp"
+#include "frame_context.hpp"
 #include "vulkan/descriptor/descriptor_heap.hpp"
 #include "vulkan/gpu_buffers.hpp"
 #include "vulkan/gpu_pass_timer.hpp"
-#include "frame_context.hpp"
 #include "vulkan_context.hpp"
 #include <vkgsplat/platform.hpp>
 #include <vkgsplat_utility/error.hpp>
@@ -104,11 +104,10 @@ namespace {
 
   void FreeSlot(uint64_t &freelist, uint32_t index) { freelist |= (uint64_t{ 1 } << index); }
 
-  [[nodiscard]] auto HostDescriptorSpan(
-    std::span<std::byte> mapped, size_t stride, size_t descriptor_size, uint32_t index) -> std::span<std::byte>
-  {
-    return mapped.subspan(static_cast<size_t>(index) * stride, descriptor_size);
-  }
+  [[nodiscard]] auto
+    HostDescriptorSpan(std::span<std::byte> mapped, size_t stride, size_t descriptor_size, uint32_t index)
+      -> std::span<std::byte>
+  { return mapped.subspan(static_cast<size_t>(index) * stride, descriptor_size); }
 
   auto RegisterImage(void *user_context, VkImageViewCreateInfo const *create_info) -> uint32_t
   {
@@ -121,14 +120,13 @@ namespace {
       return 0;
     }
 
-    auto const destination = HostDescriptorSpan(
-      overlay->resource_mapped, overlay->resource_stride, overlay->resource_descriptor_size, *index);
+    auto const destination =
+      HostDescriptorSpan(overlay->resource_mapped, overlay->resource_stride, overlay->resource_descriptor_size, *index);
     auto const wrote = vkexec::write_sampled_image_descriptor(
       *overlay->vkexec_context, *create_info, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, destination);
     if (!wrote) {
-      std::println(stderr, "[imgui] write_sampled_image_descriptor failed for image slot {}: {}",
-        *index,
-        wrote.error().message());
+      std::println(
+        stderr, "[imgui] write_sampled_image_descriptor failed for image slot {}: {}", *index, wrote.error().message());
       FreeSlot(overlay->resource_freelist, *index);
       return 0;
     }
@@ -156,14 +154,12 @@ namespace {
       std::println(stderr, "[imgui] RegisterSampler: no free heap slots");
       return 0;
     }
-    auto const destination = HostDescriptorSpan(
-      overlay->sampler_mapped, overlay->sampler_stride, overlay->sampler_descriptor_size, *index);
+    auto const destination =
+      HostDescriptorSpan(overlay->sampler_mapped, overlay->sampler_stride, overlay->sampler_descriptor_size, *index);
     auto const wrote = vkexec::write_sampler_descriptor(*overlay->vkexec_context, *create_info, destination);
     if (!wrote) {
-      std::println(stderr,
-        "[imgui] write_sampler_descriptor failed for sampler slot {}: {}",
-        *index,
-        wrote.error().message());
+      std::println(
+        stderr, "[imgui] write_sampler_descriptor failed for sampler slot {}: {}", *index, wrote.error().message());
       FreeSlot(overlay->sampler_freelist, *index);
       return 0;
     }
@@ -383,9 +379,7 @@ namespace {
     context.disp.beginCommandBuffer(secondary, &begin_info);
 
     ImDrawData *draw_data = overlay.frame_draw_data.at(frame_slot);
-    if (draw_data != nullptr) {
-      ImGui_ImplVulkan_RenderDrawData(draw_data, secondary);
-    }
+    if (draw_data != nullptr) { ImGui_ImplVulkan_RenderDrawData(draw_data, secondary); }
 
     context.disp.endCommandBuffer(secondary);
     overlay.secondary_generation.at(frame_slot) = FrameSetupFor(data, frame_slot).imgui.ui_generation;
@@ -434,15 +428,12 @@ namespace {
       auto const &create_info = overlay.registered_images.at(offset);
       if (!create_info) { continue; }
       uint32_t const index = kImguiImageBase + static_cast<uint32_t>(offset);
-      auto const destination = HostDescriptorSpan(
-        overlay.resource_mapped, overlay.resource_stride, overlay.resource_descriptor_size, index);
+      auto const destination =
+        HostDescriptorSpan(overlay.resource_mapped, overlay.resource_stride, overlay.resource_descriptor_size, index);
       auto const wrote = vkexec::write_sampled_image_descriptor(
         *overlay.vkexec_context, *create_info, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, destination);
       if (!wrote) {
-        std::println(stderr,
-          "[imgui] failed to replay shared image slot {}: {}",
-          index,
-          wrote.error().message());
+        std::println(stderr, "[imgui] failed to replay shared image slot {}: {}", index, wrote.error().message());
         return false;
       }
     }
@@ -450,16 +441,11 @@ namespace {
     for (size_t index = 0; index < overlay.registered_samplers.size(); ++index) {
       auto const &create_info = overlay.registered_samplers.at(index);
       if (!create_info) { continue; }
-      auto const destination = HostDescriptorSpan(overlay.sampler_mapped,
-        overlay.sampler_stride,
-        overlay.sampler_descriptor_size,
-        static_cast<uint32_t>(index));
+      auto const destination = HostDescriptorSpan(
+        overlay.sampler_mapped, overlay.sampler_stride, overlay.sampler_descriptor_size, static_cast<uint32_t>(index));
       auto const wrote = vkexec::write_sampler_descriptor(*overlay.vkexec_context, *create_info, destination);
       if (!wrote) {
-        std::println(stderr,
-          "[imgui] failed to replay shared sampler slot {}: {}",
-          index,
-          wrote.error().message());
+        std::println(stderr, "[imgui] failed to replay shared sampler slot {}: {}", index, wrote.error().message());
         return false;
       }
     }
@@ -527,8 +513,7 @@ auto InitImguiOverlay(vulkan::Context &context, RenderData &data) -> std::expect
     return std::unexpected{ MakeError(std::errc::io_error, "shared descriptor heaps are unavailable for ImGui") };
   }
   static_assert(kSharedResourceSlots <= kFreelistBitCount);
-  overlay->resource_freelist =
-    ((uint64_t{ 1 } << kImguiImageSlots) - uint64_t{ 1 }) << kImguiImageBase;
+  overlay->resource_freelist = ((uint64_t{ 1 } << kImguiImageSlots) - uint64_t{ 1 }) << kImguiImageBase;
   overlay->sampler_freelist = (uint64_t{ 1 } << kSharedSamplerSlots) - uint64_t{ 1 };
   overlay->heap_info = {
     .RegisterImage = RegisterImage,
@@ -675,7 +660,10 @@ void BuildImGuiFrameSnapshot(RenderData &data, size_t frame_slot, ImGuiFrameSnap
   overlay.secondary_generation.at(frame_slot) = 0;
 }
 
-void RecordImguiOverlay(vulkan::Context &context, RenderData const &data, VkCommandBuffer command_buffer, size_t image_index)
+void RecordImguiOverlay(vulkan::Context &context,
+  RenderData const &data,
+  VkCommandBuffer command_buffer,
+  size_t image_index)
 {
   VkImage swapchain_image = context.swapchain->images().at(image_index);
 

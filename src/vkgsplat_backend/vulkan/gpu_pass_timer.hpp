@@ -10,7 +10,9 @@
 
 namespace vkgsplat {
 
-namespace vulkan { struct Context; }
+namespace vulkan {
+  struct Context;
+}
 
 enum class GpuPass : u8 {
   kProjection = 0,
@@ -44,7 +46,8 @@ public:
   [[nodiscard]] auto enabled() const noexcept -> bool { return enabled_ && pool_ != VK_NULL_HANDLE; }
 
   void begin_frame(vulkan::Context const &context, size_t slot, VkCommandBuffer command_buffer) const;
-  void write(vulkan::Context const &context, size_t slot, GpuPass pass, bool is_end, VkCommandBuffer command_buffer) const;
+  void
+    write(vulkan::Context const &context, size_t slot, GpuPass pass, bool is_end, VkCommandBuffer command_buffer) const;
   void mark_submitted(size_t slot);
   void resolve(vulkan::Context const &context, size_t slot);
 

@@ -122,7 +122,8 @@ struct PLYElement
   ///
   /// The return value will be true if all properties were found. If it was
   /// not true, you should not use any values from prop_idxs.
-  [[nodiscard]] auto find_properties(std::span<uint32_t> prop_idxs, std::span<const char *const> prop_names) const -> bool;
+  [[nodiscard]] auto find_properties(std::span<uint32_t> prop_idxs, std::span<const char *const> prop_names) const
+    -> bool;
 
   /// Call this on the element at some point before you load its data, when
   /// you know that every row's list will have the same length. It will

@@ -6,7 +6,7 @@
 
 namespace vkgsplat {
 
-enum class ErrorIO: u8 {
+enum class ErrorIO : u8 {
   kFailedOpen,
   kMissingVertexElement,
   kEmptyVertexElement,
@@ -14,7 +14,7 @@ enum class ErrorIO: u8 {
   kExtractPropertyFailed,
   kLoadElementFailed,
 };
- //NOLINTNEXTLINE(readability-identifier-naming)
+// NOLINTNEXTLINE(readability-identifier-naming)
 [[nodiscard]] auto make_error_code(ErrorIO err) -> std::error_code;
 [[nodiscard]] auto ToString(ErrorIO err) -> char const *;
 

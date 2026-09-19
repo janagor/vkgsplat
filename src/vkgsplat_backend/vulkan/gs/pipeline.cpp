@@ -1,13 +1,13 @@
 #include "gs/pipeline.hpp"
 
 #include "app_state.hpp"
-#include "vulkan/frame_context.hpp"
-#include "vulkan/gpu_pass_timer.hpp"
-#include <vkexec/barrier.hpp>
 #include "gs/gaussian_splat.hpp"
 #include "gs/operations.hpp"
 #include "gs/rasterization.hpp"
+#include "vulkan/frame_context.hpp"
+#include "vulkan/gpu_pass_timer.hpp"
 #include "vulkan_context.hpp"
+#include <vkexec/barrier.hpp>
 
 #include <vkgsplat/lfd_config.hpp>
 #include <vkgsplat_utility/types.hpp>
@@ -65,7 +65,8 @@ namespace {
   {
   public:
     ScopedGpuPass(vulkan::Context const &context, RenderData const &data, VkCommandBuffer command_buffer, GpuPass pass)
-      : context_(context), data_(data), command_buffer_(command_buffer), pass_(pass), active_(data.gpu_pass_timer.enabled())
+      : context_(context), data_(data), command_buffer_(command_buffer), pass_(pass),
+        active_(data.gpu_pass_timer.enabled())
     {
       if (active_) { data_.gpu_pass_timer.write(context_, data_.current_slot, pass_, false, command_buffer_); }
     }
@@ -114,10 +115,8 @@ void EvalGsPipeline(vulkan::Context &context, RenderData &data, VkCommandBuffer 
     u32 const tile_h = context.swapchain->vk_extent().height;
     f64 const tile_aspect = static_cast<f64>(tile_w) / static_cast<f64>(std::max(1U, tile_h));
 
-    LfdGridCell const logical = LfdLogicalCellForGridPosition(data.lfd_view_order,
-      data.lfd_grid,
-      data.lfd_emulate_cell.at(0),
-      data.lfd_emulate_cell.at(1));
+    LfdGridCell const logical = LfdLogicalCellForGridPosition(
+      data.lfd_view_order, data.lfd_grid, data.lfd_emulate_cell.at(0), data.lfd_emulate_cell.at(1));
 
     QuiltView const view = MakeQuiltView(QuiltViewRequest{
       .center = &setup.camera,

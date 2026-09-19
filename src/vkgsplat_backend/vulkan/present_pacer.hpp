@@ -13,13 +13,16 @@
 
 namespace vkgsplat {
 
-namespace vulkan { struct Context; }
+namespace vulkan {
+  struct Context;
+}
 
 // Schedules vkQueuePresentKHR via VK_EXT_present_timing when available.
 class PresentPacer
 {
 public:
-  [[nodiscard]] static auto TryCreate(vulkan::Context &context, FrameRateConfig const &config) -> std::unique_ptr<PresentPacer>;
+  [[nodiscard]] static auto TryCreate(vulkan::Context &context, FrameRateConfig const &config)
+    -> std::unique_ptr<PresentPacer>;
 
   PresentPacer(PresentPacer const &) = delete;
   auto operator=(PresentPacer const &) -> PresentPacer & = delete;

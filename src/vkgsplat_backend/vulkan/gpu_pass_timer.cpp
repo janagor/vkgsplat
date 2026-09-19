@@ -107,7 +107,11 @@ void GpuPassTimer::begin_frame(vulkan::Context const &context, size_t slot, VkCo
   context.disp.cmdResetQueryPool(command_buffer, pool_, first, kQueriesPerSlot);
 }
 
-void GpuPassTimer::write(vulkan::Context const &context, size_t slot, GpuPass pass, bool is_end, VkCommandBuffer command_buffer) const
+void GpuPassTimer::write(vulkan::Context const &context,
+  size_t slot,
+  GpuPass pass,
+  bool is_end,
+  VkCommandBuffer command_buffer) const
 {
   if (!enabled()) { return; }
   context.disp.cmdWriteTimestamp(

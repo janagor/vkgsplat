@@ -89,12 +89,11 @@ public:
   [[nodiscard]] auto aspect_ratio() const noexcept -> f64 { return aspect_ratio_; }
 
   explicit Camera(CameraConfig const &config = {})
-    : position_(config.position), movement_speed_(config.movement_speed),
-      mouse_sensitivity_(config.mouse_sensitivity), fov_degrees_(config.fov_degrees),
-      near_plane_(config.near_plane), far_plane_(config.far_plane), aspect_ratio_(config.aspect_ratio)
+    : position_(config.position), movement_speed_(config.movement_speed), mouse_sensitivity_(config.mouse_sensitivity),
+      fov_degrees_(config.fov_degrees), near_plane_(config.near_plane), far_plane_(config.far_plane),
+      aspect_ratio_(config.aspect_ratio)
   {
-    auto const world_up =
-      glm::length(config.up) > 0.0 ? glm::normalize(config.up) : kDefaultCameraUp;
+    auto const world_up = glm::length(config.up) > 0.0 ? glm::normalize(config.up) : kDefaultCameraUp;
     auto const look_at = glm::lookAt(config.position, config.target, world_up);
     orientation_ = glm::conjugate(glm::quat_cast(look_at));
     update_camera_vectors();

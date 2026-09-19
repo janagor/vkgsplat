@@ -40,7 +40,7 @@ namespace {
     }
 
     if (auto const arrow = input.consume_arrow();
-        arrow != InputHandler::ArrowDir::kNone && renderer.lfd_emulate_active()) {
+      arrow != InputHandler::ArrowDir::kNone && renderer.lfd_emulate_active()) {
       auto cell = renderer.lfd_emulate_cell();
       auto const grid = renderer.lfd_grid();
       switch (arrow) {
@@ -56,7 +56,8 @@ namespace {
       case InputHandler::ArrowDir::kDown:
         if (cell.at(1) + 1U < grid.at(1)) { ++cell.at(1); }
         break;
-      case InputHandler::ArrowDir::kNone: break;
+      case InputHandler::ArrowDir::kNone:
+        break;
       }
       renderer.set_lfd_emulate_cell(cell.at(0), cell.at(1));
       changed = true;
@@ -76,10 +77,9 @@ namespace {
     }
   }
 
-  [[nodiscard]] auto RunMainLoop(Window &window,
-    Renderer &renderer,
-    CameraConfig const &camera_config,
-    KeyBindings const &key_bindings) -> std::expected<void, Error>
+  [[nodiscard]] auto
+    RunMainLoop(Window &window, Renderer &renderer, CameraConfig const &camera_config, KeyBindings const &key_bindings)
+      -> std::expected<void, Error>
   {
     Camera camera{ camera_config };
     CloseState close{};

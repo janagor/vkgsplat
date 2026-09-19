@@ -2,8 +2,8 @@
 
 #include "app_state.hpp"
 #include "vulkan/gpu_buffers.hpp"
-#include <vkgsplat_io/write_png.hpp>
 #include "vulkan_context.hpp"
+#include <vkgsplat_io/write_png.hpp>
 
 #include <array>
 #include <cstddef>
@@ -68,9 +68,7 @@ auto SaveColorTargetPng(Context &context, RenderData &data, std::string_view pat
   auto staging = std::optional<vkexec::gpu_buffer>{ std::move(*staging_created) };
 
   auto buffers = data.command_pool->allocate_buffers(1);
-  if (!buffers) {
-    return std::unexpected{ buffers.error() };
-  }
+  if (!buffers) { return std::unexpected{ buffers.error() }; }
   VkCommandBuffer cmd = buffers->front().handle();
 
   auto fail = [&](Error err) -> std::expected<void, Error> {

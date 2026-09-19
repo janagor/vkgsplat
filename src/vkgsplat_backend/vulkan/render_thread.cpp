@@ -15,6 +15,7 @@
 #include <utility>
 
 #include "app_state.hpp"
+#include "gs/pipeline.hpp"
 #include "vulkan/command/command.hpp"
 #include "vulkan/descriptor/descriptor_heap.hpp"
 #include "vulkan/frame_context.hpp"
@@ -22,7 +23,6 @@
 #include "vulkan/imgui_overlay.hpp"
 #include "vulkan/initializers.hpp"
 #include "vulkan/renderer.hpp"
-#include "gs/pipeline.hpp"
 #include "vulkan_context.hpp"
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat_utility/error.hpp>
@@ -172,9 +172,7 @@ void RenderThread::MarkAllSlotsReady()
 
 auto RenderThread::SubmitFrame(Camera const &camera, f64 aspect_ratio) -> std::expected<void, Error>
 {
-  if (auto const prior_error = DrainCompletions(); prior_error.has_value()) {
-    return std::unexpected{ *prior_error };
-  }
+  if (auto const prior_error = DrainCompletions(); prior_error.has_value()) { return std::unexpected{ *prior_error }; }
 
   {
     std::scoped_lock const lock{ control_mutex_ };
@@ -226,9 +224,7 @@ void RenderThread::ThreadMain()
     size_t frame_slot = 0;
     if (!pending_queue_.TryPop(frame_slot)) {
       std::unique_lock lock{ control_mutex_ };
-      control_cv_.wait(lock, [this]() -> bool {
-        return command_ != Command::kNone || !pending_queue_.Empty();
-      });
+      control_cv_.wait(lock, [this]() -> bool { return command_ != Command::kNone || !pending_queue_.Empty(); });
 
       if (command_ == Command::kShutdown) {
         idle_done_ = true;
@@ -304,16 +300,12 @@ auto RenderThread::DrawFrameVulkan(size_t frame_slot) -> std::expected<void, Err
 
   auto recorded = vulkan::WithCommand(std::ref(context.disp),
     data.command_buffers.at(image_index).handle(),
-    [&](vkb::DispatchTable &, VkCommandBuffer cmd) -> void {
-      RecordSphereDraw(context, data, cmd, image_index);
-    });
+    [&](vkb::DispatchTable &, VkCommandBuffer cmd) -> void { RecordSphereDraw(context, data, cmd, image_index); });
   if (!recorded) { return std::unexpected{ recorded.error() }; }
 
   auto const signal_value = ring.allocate_signal_value();
   auto submit_sync = ring.make_submit_sync(frame_slot, image_index, signal_value);
-  if (!submit_sync) {
-    return std::unexpected{ MakeError(std::errc::io_error, submit_sync.error().message()) };
-  }
+  if (!submit_sync) { return std::unexpected{ MakeError(std::errc::io_error, submit_sync.error().message()) }; }
 
   auto *command_buffer = data.command_buffers.at(image_index).handle();
   std::array<VkCommandBuffer, 1> const cmds{ command_buffer };
