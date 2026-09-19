@@ -51,7 +51,7 @@ struct RenderData
   VkQueue graphics_queue{};
   VkQueue present_queue{};
 
-  std::optional<vkexec::heap_graphics_pipeline> graphics_pipeline;
+  std::optional<vkexec::descriptor_graphics_pipeline> graphics_pipeline;
 
   std::optional<vkexec::gpu_buffer> geometry_buffer;
   std::optional<vkexec::gpu_buffer> appearance_buffer;
@@ -96,13 +96,13 @@ struct RenderData
   size_t buffer_descriptor_size{};
   size_t image_descriptor_size{};
 
-  std::optional<vkexec::heap_algorithm> project_algorithm;
-  std::optional<vkexec::heap_algorithm> bin_algorithm;
-  std::optional<vkexec::heap_algorithm> prepare_sort_algorithm;
-  std::optional<vkexec::heap_algorithm> radix_histogram_algorithm;
-  std::optional<vkexec::heap_algorithm> radix_scatter_algorithm;
-  std::optional<vkexec::heap_algorithm> identify_ranges_algorithm;
-  std::optional<vkexec::heap_algorithm> rasterize_algorithm;
+  std::optional<vkexec::algorithm> project_algorithm;
+  std::optional<vkexec::algorithm> bin_algorithm;
+  std::optional<vkexec::algorithm> prepare_sort_algorithm;
+  std::optional<vkexec::algorithm> radix_histogram_algorithm;
+  std::optional<vkexec::algorithm> radix_scatter_algorithm;
+  std::optional<vkexec::algorithm> identify_ranges_algorithm;
+  std::optional<vkexec::algorithm> rasterize_algorithm;
   gs::ProjectPushConstants project_push{};
   gs::BinPushConstants bin_push{};
   gs::SortPushConstants sort_push{};

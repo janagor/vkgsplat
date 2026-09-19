@@ -7,6 +7,7 @@
 #include <vkexec/pipeline.hpp>
 #include <vkexec/sync_wait.hpp>
 #include <vkexec_extensions/descriptor_heap/algorithm.hpp>
+#include <vkexec_extensions/descriptor_heap/strategy.hpp>
 
 #include <array>
 #include <cstdint>
@@ -21,7 +22,7 @@ namespace vkgsplat::gs {
 [[nodiscard]] inline auto LoadHeapAlgorithm(vulkan::Context &context,
   std::string const &shader_path,
   std::span<const uint32_t> specialization_constants = {},
-  std::array<uint32_t, 3> local_size = vkexec::k_default_local_size) -> std::optional<vkexec::heap_algorithm>
+  std::array<uint32_t, 3> local_size = vkexec::k_default_local_size) -> std::optional<vkexec::algorithm>
 {
   if (context.vkexec_context == nullptr) {
     std::println("vkexec context missing for compute pipeline: {}", shader_path);
@@ -43,8 +44,8 @@ namespace vkgsplat::gs {
   desc.local_size = local_size;
   desc.specialization.assign(specialization_constants.begin(), specialization_constants.end());
 
-  auto created =
-    vkexec::try_sync_wait_value(vkexec::heap_algorithm::create(*context.vkexec_context, spirv, desc));
+  auto created = vkexec::try_sync_wait_value(
+    vkexec::algorithm::create(vkexec::descriptor_heap, *context.vkexec_context, spirv, desc));
   if (!created) {
     std::println("Failed to create heap algorithm ({}): {}", shader_path, created.error().message());
     return std::nullopt;

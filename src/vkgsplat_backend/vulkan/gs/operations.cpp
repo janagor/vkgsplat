@@ -54,11 +54,11 @@ namespace {
   template<typename Params>
   void RecordHeapDispatch(vulkan::Context const &context,
     VkCommandBuffer command_buffer,
-    vkexec::heap_algorithm const &algorithm,
+    vkexec::algorithm const &algorithm,
     Params const &params,
     u32 work_count)
   {
-    (void)vkexec::record_heap_pass(*context.vkexec_context,
+    (void)vkexec::record_pass(*context.vkexec_context,
       command_buffer,
       algorithm.bind(),
       std::as_bytes(std::span{ &params, 1 }),
@@ -68,11 +68,11 @@ namespace {
   template<typename Params>
   void RecordHeapIndirect(vulkan::Context const &context,
     VkCommandBuffer command_buffer,
-    vkexec::heap_algorithm const &algorithm,
+    vkexec::algorithm const &algorithm,
     Params const &params,
     VkBuffer indirect_buffer)
   {
-    (void)vkexec::record_heap_pass(*context.vkexec_context,
+    (void)vkexec::record_pass(*context.vkexec_context,
       command_buffer,
       algorithm.bind(),
       std::as_bytes(std::span{ &params, 1 }),
@@ -135,7 +135,7 @@ void RecordPhaseACompute(vulkan::Context const &context, RenderData const &data,
   if (data.prepare_sort_algorithm) {
     ScopedGpuPass const timer{ context, data, command_buffer, GpuPass::kPrepareSort };
     auto const sort_grid = Dispatch2dForThreads(context, data.gaussian_sort_size, kComputeLocalSizeX);
-    (void)vkexec::record_heap_pass(*context.vkexec_context,
+    (void)vkexec::record_pass(*context.vkexec_context,
       command_buffer,
       data.prepare_sort_algorithm->bind(),
       std::as_bytes(std::span{ &data.sort_push, 1 }),
