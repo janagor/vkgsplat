@@ -644,27 +644,6 @@ void RecordImguiOverlay(vulkan::Context &context, RenderData const &data, VkComm
     RecordOverlaySecondary(context, data, frame_slot);
   }
 
-  if (context.vkexec_context != nullptr) {
-    auto const resource_bound = vkexec::cmd_bind_resource_heap(*context.vkexec_context,
-      command_buffer,
-      overlay.resource_bind.heapRange.address,
-      overlay.resource_bind.heapRange.size,
-      overlay.resource_bind.reservedRangeOffset,
-      overlay.resource_bind.reservedRangeSize);
-    if (!resource_bound) {
-      std::println(stderr, "[imgui] cmd_bind_resource_heap failed: {}", resource_bound.error().message());
-    }
-    auto const sampler_bound = vkexec::cmd_bind_sampler_heap(*context.vkexec_context,
-      command_buffer,
-      overlay.sampler_bind.heapRange.address,
-      overlay.sampler_bind.heapRange.size,
-      overlay.sampler_bind.reservedRangeOffset,
-      overlay.sampler_bind.reservedRangeSize);
-    if (!sampler_bound) {
-      std::println(stderr, "[imgui] cmd_bind_sampler_heap failed: {}", sampler_bound.error().message());
-    }
-  }
-
   VkImageView swapchain_view = context.swapchain->image_views().at(image_index);
 
   vkexec::image_barrier(command_buffer,
