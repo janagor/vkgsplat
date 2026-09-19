@@ -1,6 +1,7 @@
 #include "vulkan/imgui_overlay.hpp"
 
 #include "app_state.hpp"
+#include "vulkan/descriptor/descriptor_heap.hpp"
 #include "vulkan/gpu_buffers.hpp"
 #include "vulkan/gpu_pass_timer.hpp"
 #include "frame_context.hpp"
@@ -42,20 +43,14 @@ namespace vkgsplat {
 struct ImGuiOverlayState
 {
   bool initialized = false;
-  std::optional<vkexec::descriptor_heap_buffer> resource_heap;
-  std::optional<vkexec::descriptor_heap_buffer> sampler_heap;
   VkBindHeapInfoEXT resource_bind{};
   VkBindHeapInfoEXT sampler_bind{};
-  void *resource_mapped = nullptr;
-  void *sampler_mapped = nullptr;
-  VkDeviceSize resource_stride{};
-  VkDeviceSize sampler_stride{};
-  VkDeviceSize resource_heap_size{};
-  VkDeviceSize sampler_heap_size{};
-  VkDeviceSize resource_reserved_offset{};
-  VkDeviceSize resource_reserved_size{};
-  VkDeviceSize sampler_reserved_offset{};
-  VkDeviceSize sampler_reserved_size{};
+  std::span<std::byte> resource_mapped;
+  std::span<std::byte> sampler_mapped;
+  size_t resource_stride{};
+  size_t resource_descriptor_size{};
+  size_t sampler_stride{};
+  size_t sampler_descriptor_size{};
   uint64_t resource_freelist{};
   uint64_t sampler_freelist{};
   vkexec::context *vkexec_context{};
@@ -82,8 +77,6 @@ struct ImGuiOverlayState
 
 namespace {
 
-  constexpr uint32_t kImguiImageSlots = IMGUI_IMPL_VULKAN_MINIMUM_SAMPLED_IMAGE_POOL_SIZE;
-  constexpr uint32_t kImguiSamplerSlots = IMGUI_IMPL_VULKAN_MINIMUM_SAMPLER_POOL_SIZE;
   constexpr uint32_t kFreelistBitCount = 64;
   constexpr float kFpsWindowMargin = 12.0F;
   constexpr float kFpsWindowAlpha = 0.45F;
@@ -95,13 +88,7 @@ namespace {
   constexpr float kMaxFrameDeltaForFps = 1.0F / 15.0F;
   constexpr u32 kFpsIgnoreSamplesAfterHitch = 2;
 
-  [[nodiscard]] auto AlignBufferSize(VkDeviceSize size, VkDeviceSize alignment) -> VkDeviceSize
-  {
-    if (alignment == 0) { return size; }
-    return (size + alignment - 1) & ~(alignment - 1);
-  }
-
-  [[nodiscard]] auto AllocateSlot(uint64_t &freelist) -> uint32_t
+  [[nodiscard]] auto AllocateSlot(uint64_t &freelist) -> std::optional<uint32_t>
   {
     for (uint32_t bit_index = 0; bit_index < kFreelistBitCount; ++bit_index) {
       uint64_t const bit = uint64_t{ 1 } << bit_index;
@@ -110,15 +97,15 @@ namespace {
         return bit_index;
       }
     }
-    return 0;
+    return std::nullopt;
   }
 
   void FreeSlot(uint64_t &freelist, uint32_t index) { freelist |= (uint64_t{ 1 } << index); }
 
-  [[nodiscard]] auto HostDescriptorSpan(void *mapped, VkDeviceSize stride, uint32_t index) -> std::span<std::byte>
+  [[nodiscard]] auto HostDescriptorSpan(
+    std::span<std::byte> mapped, size_t stride, size_t descriptor_size, uint32_t index) -> std::span<std::byte>
   {
-    auto const bytes = std::span{ static_cast<std::byte *>(mapped), static_cast<size_t>((index + 1U) * stride) };
-    return bytes.subspan(static_cast<size_t>(index * stride), static_cast<size_t>(stride));
+    return mapped.subspan(static_cast<size_t>(index) * stride, descriptor_size);
   }
 
   auto RegisterImage(void *user_context, VkImageViewCreateInfo const *create_info) -> uint32_t
@@ -126,24 +113,24 @@ namespace {
     auto *overlay = static_cast<ImGuiOverlayState *>(user_context);
     if (overlay->vkexec_context == nullptr || create_info == nullptr) { return 0; }
 
-    uint32_t const index = AllocateSlot(overlay->resource_freelist);
-    // ImTextureID 0 is ImTextureID_Invalid; descriptor-heap mode requires non-zero RegisterImage indices.
-    if (index == 0) {
+    auto const index = AllocateSlot(overlay->resource_freelist);
+    if (!index) {
       std::println(stderr, "[imgui] RegisterImage: no free non-zero heap slots");
       return 0;
     }
 
-    auto const destination = HostDescriptorSpan(overlay->resource_mapped, overlay->resource_stride, index);
+    auto const destination = HostDescriptorSpan(
+      overlay->resource_mapped, overlay->resource_stride, overlay->resource_descriptor_size, *index);
     auto const wrote = vkexec::write_sampled_image_descriptor(
       *overlay->vkexec_context, *create_info, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, destination);
     if (!wrote) {
       std::println(stderr, "[imgui] write_sampled_image_descriptor failed for image slot {}: {}",
-        index,
+        *index,
         wrote.error().message());
-      FreeSlot(overlay->resource_freelist, index);
+      FreeSlot(overlay->resource_freelist, *index);
       return 0;
     }
-    return index;
+    return *index;
   }
 
   void UnregisterImage(void *user_context, uint32_t index)
@@ -158,18 +145,23 @@ namespace {
     auto *overlay = static_cast<ImGuiOverlayState *>(user_context);
     if (overlay->vkexec_context == nullptr || create_info == nullptr) { return 0; }
 
-    uint32_t const index = AllocateSlot(overlay->sampler_freelist);
-    auto const destination = HostDescriptorSpan(overlay->sampler_mapped, overlay->sampler_stride, index);
+    auto const index = AllocateSlot(overlay->sampler_freelist);
+    if (!index) {
+      std::println(stderr, "[imgui] RegisterSampler: no free heap slots");
+      return 0;
+    }
+    auto const destination = HostDescriptorSpan(
+      overlay->sampler_mapped, overlay->sampler_stride, overlay->sampler_descriptor_size, *index);
     auto const wrote = vkexec::write_sampler_descriptor(*overlay->vkexec_context, *create_info, destination);
     if (!wrote) {
       std::println(stderr,
         "[imgui] write_sampler_descriptor failed for sampler slot {}: {}",
-        index,
+        *index,
         wrote.error().message());
-      FreeSlot(overlay->sampler_freelist, index);
+      FreeSlot(overlay->sampler_freelist, *index);
       return 0;
     }
-    return index;
+    return *index;
   }
 
   void UnregisterSampler(void *user_context, uint32_t index)
@@ -388,13 +380,47 @@ namespace {
     overlay.secondary_generation.at(frame_slot) = FrameSetupFor(data, frame_slot).imgui.ui_generation;
   }
 
-  void DestroyImguiHeaps(vulkan::Context &context, ImGuiOverlayState &overlay)
+  [[nodiscard]] auto AttachSharedHeaps(RenderData const &data, ImGuiOverlayState &overlay) -> bool
   {
-    (void)context;
-    overlay.resource_mapped = nullptr;
-    overlay.sampler_mapped = nullptr;
-    overlay.resource_heap.reset();
-    overlay.sampler_heap.reset();
+    if (!data.descriptor_heap_buffer || !data.sampler_heap_buffer) { return false; }
+
+    overlay.resource_mapped = data.descriptor_heap_buffer->mapped();
+    overlay.sampler_mapped = data.sampler_heap_buffer->mapped();
+    if (overlay.resource_mapped.empty() || overlay.sampler_mapped.empty()) { return false; }
+
+    overlay.resource_stride = data.descriptor_stride;
+    overlay.resource_descriptor_size = data.image_descriptor_size;
+    overlay.sampler_stride = data.sampler_descriptor_size;
+    overlay.sampler_descriptor_size = data.sampler_descriptor_size;
+    overlay.resource_bind = {
+      .sType = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
+      .pNext = nullptr,
+      .heapRange = {
+        .address = vulkan::DeviceAddressOrZero(*data.descriptor_heap_buffer),
+        .size = data.descriptor_heap_size,
+      },
+      .reservedRangeOffset = data.reserved_range_offset,
+      .reservedRangeSize = data.reserved_range_size,
+    };
+    overlay.sampler_bind = {
+      .sType = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
+      .pNext = nullptr,
+      .heapRange = {
+        .address = vulkan::DeviceAddressOrZero(*data.sampler_heap_buffer),
+        .size = data.sampler_heap_size,
+      },
+      .reservedRangeOffset = data.sampler_reserved_range_offset,
+      .reservedRangeSize = data.sampler_reserved_range_size,
+    };
+    return true;
+  }
+
+  void DetachSharedHeaps(ImGuiOverlayState &overlay)
+  {
+    overlay.resource_mapped = {};
+    overlay.sampler_mapped = {};
+    overlay.resource_bind = {};
+    overlay.sampler_bind = {};
   }
 
 }// namespace
@@ -446,69 +472,13 @@ auto InitImguiOverlay(vulkan::Context &context, RenderData &data) -> std::expect
   }
   overlay->vkexec_context = context.vkexec_context.get();
 
-  VkPhysicalDeviceDescriptorHeapPropertiesEXT heap_props{};
-  heap_props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_PROPERTIES_EXT;
-  VkPhysicalDeviceProperties2 props2 = {
-    .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
-    .pNext = &heap_props,
-    .properties = {},
-  };
-  context.inst_disp.getPhysicalDeviceProperties2(context.device.physical_device, &props2);
-
-  VkDeviceSize const resource_descriptors_size = heap_props.imageDescriptorSize * kImguiImageSlots;
-  VkDeviceSize const sampler_descriptors_size = heap_props.samplerDescriptorSize * kImguiSamplerSlots;
-  VkDeviceSize const resource_size = AlignBufferSize(
-    resource_descriptors_size + heap_props.minResourceHeapReservedRange, heap_props.resourceHeapAlignment);
-  VkDeviceSize const sampler_size =
-    AlignBufferSize(sampler_descriptors_size + heap_props.minSamplerHeapReservedRange, heap_props.samplerHeapAlignment);
-
-  auto resource_heap = vulkan::CreateDescriptorHeapBuffer(*context.vkexec_context, resource_size);
-  if (!resource_heap) {
-    return std::unexpected{ MakeError(std::errc::not_enough_memory, "failed to create ImGui resource heap") };
+  if (!AttachSharedHeaps(data, *overlay)) {
+    return std::unexpected{ MakeError(std::errc::io_error, "shared descriptor heaps are unavailable for ImGui") };
   }
-  auto sampler_heap = vulkan::CreateDescriptorHeapBuffer(*context.vkexec_context, sampler_size);
-  if (!sampler_heap) {
-    return std::unexpected{ MakeError(std::errc::not_enough_memory, "failed to create ImGui sampler heap") };
-  }
-
-  overlay->resource_heap = std::move(*resource_heap);
-  overlay->sampler_heap = std::move(*sampler_heap);
-  overlay->resource_mapped = overlay->resource_heap->mapped().data();
-  overlay->sampler_mapped = overlay->sampler_heap->mapped().data();
-  if (overlay->resource_mapped == nullptr || overlay->sampler_mapped == nullptr) {
-    DestroyImguiHeaps(context, *overlay);
-    return std::unexpected{ MakeError(std::errc::io_error, "failed to map ImGui heaps") };
-  }
-  overlay->resource_stride = heap_props.imageDescriptorSize;
-  overlay->sampler_stride = heap_props.samplerDescriptorSize;
-  overlay->resource_heap_size = resource_descriptors_size + heap_props.minResourceHeapReservedRange;
-  overlay->sampler_heap_size = sampler_descriptors_size + heap_props.minSamplerHeapReservedRange;
-  overlay->resource_reserved_offset = resource_descriptors_size;
-  overlay->resource_reserved_size = heap_props.minResourceHeapReservedRange;
-  overlay->sampler_reserved_offset = sampler_descriptors_size;
-  overlay->sampler_reserved_size = heap_props.minSamplerHeapReservedRange;
-  overlay->resource_freelist = ((uint64_t{ 1 } << kImguiImageSlots) - uint64_t{ 1 }) & ~uint64_t{ 1 };// slot 0 reserved
-  overlay->sampler_freelist = (uint64_t{ 1 } << kImguiSamplerSlots) - uint64_t{ 1 };
-  overlay->resource_bind = {
-    .sType = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
-    .pNext = nullptr,
-    .heapRange = {
-      .address = vulkan::DeviceAddressOrZero(*overlay->resource_heap),
-      .size = overlay->resource_heap_size,
-    },
-    .reservedRangeOffset = overlay->resource_reserved_offset,
-    .reservedRangeSize = overlay->resource_reserved_size,
-  };
-  overlay->sampler_bind = {
-    .sType = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
-    .pNext = nullptr,
-    .heapRange = {
-      .address = vulkan::DeviceAddressOrZero(*overlay->sampler_heap),
-      .size = overlay->sampler_heap_size,
-    },
-    .reservedRangeOffset = overlay->sampler_reserved_offset,
-    .reservedRangeSize = overlay->sampler_reserved_size,
-  };
+  static_assert(kSharedResourceSlots <= kFreelistBitCount);
+  overlay->resource_freelist =
+    ((uint64_t{ 1 } << kImguiImageSlots) - uint64_t{ 1 }) << kImguiImageBase;
+  overlay->sampler_freelist = (uint64_t{ 1 } << kSharedSamplerSlots) - uint64_t{ 1 };
   overlay->heap_info = {
     .RegisterImage = RegisterImage,
     .UnRegisterImage = UnregisterImage,
@@ -523,7 +493,7 @@ auto InitImguiOverlay(vulkan::Context &context, RenderData &data) -> std::expect
 
   auto *glfw_window = static_cast<GLFWwindow *>(context.platform->native_window());
   if (!ImGui_ImplGlfw_InitForVulkan(glfw_window, true)) {
-    DestroyImguiHeaps(context, *overlay);
+    DetachSharedHeaps(*overlay);
     ImGui::DestroyContext();
     return std::unexpected{ MakeError(std::errc::io_error, "failed to initialize ImGui GLFW backend") };
   }
@@ -547,7 +517,7 @@ auto InitImguiOverlay(vulkan::Context &context, RenderData &data) -> std::expect
 
   if (!ImGui_ImplVulkan_Init(&vulkan_init)) {
     ImGui_ImplGlfw_Shutdown();
-    DestroyImguiHeaps(context, *overlay);
+    DetachSharedHeaps(*overlay);
     ImGui::DestroyContext();
     return std::unexpected{ MakeError(std::errc::io_error, "failed to initialize ImGui Vulkan backend") };
   }
@@ -565,6 +535,7 @@ auto InitImguiOverlay(vulkan::Context &context, RenderData &data) -> std::expect
 
 void ShutdownImguiOverlay(vulkan::Context &context, RenderData &data)
 {
+  (void)context;
   if (data.imgui == nullptr) { return; }
 
   ClearClonedDrawData(*data.imgui);
@@ -576,7 +547,7 @@ void ShutdownImguiOverlay(vulkan::Context &context, RenderData &data)
     data.imgui->initialized = false;
   }
 
-  DestroyImguiHeaps(context, *data.imgui);
+  DetachSharedHeaps(*data.imgui);
   data.imgui.reset();
 }
 
