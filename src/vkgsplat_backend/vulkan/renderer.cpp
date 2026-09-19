@@ -131,6 +131,7 @@ void Cleanup(vulkan::Context &context, RenderData &data)
   data.command_buffers.clear();
   data.command_pool.reset();
 
+  // ImGui callbacks and secondary inheritance borrow the shared heap storage.
   ShutdownImguiOverlay(context, data);
 
   gs::DestroyGsPipeline(data);

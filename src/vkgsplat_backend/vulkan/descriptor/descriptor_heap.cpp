@@ -9,6 +9,7 @@
 #include "app_state.hpp"
 #include "gs/gaussian_splat.hpp"
 #include "vulkan/gpu_buffers.hpp"
+#include "vulkan/imgui_overlay.hpp"
 #include "vulkan_context.hpp"
 #include <vkgsplat_io/splat_cpu.hpp>
 #include <vkgsplat_utility/types.hpp>
@@ -136,6 +137,10 @@ auto RefreshDescriptorHeap(vulkan::Context &context, RenderData &data) -> bool
     }
     data.descriptor_heap_buffer = std::move(*resource_heap);
     data.sampler_heap_buffer = std::move(*sampler_heap);
+    if (!RefreshImguiSharedHeapBindings(data)) {
+      std::println("Failed to replay ImGui descriptors after shared heap reallocation!");
+      return false;
+    }
   }
 
   auto const geometry_buffer_size = static_cast<VkDeviceSize>(data.splat_count * sizeof(gs::GaussianGeometry));
