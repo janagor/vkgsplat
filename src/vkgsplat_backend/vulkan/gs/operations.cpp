@@ -53,12 +53,13 @@ namespace {
   };
 
   template<typename Params>
-  void RecordHeapDispatch(vulkan::Context const &context,
+  auto RecordHeapDispatch(vulkan::Context const &context,
     VkCommandBuffer command_buffer,
     vkexec::algorithm const &algorithm,
     Params const &params,
-    u32 work_count)
+    u32 work_count) -> void
   {
+    if (work_count == 0) { return; }
     (void)vkexec::record_pass(*context.vkexec_context,
       command_buffer,
       algorithm.bind(),
@@ -67,11 +68,11 @@ namespace {
   }
 
   template<typename Params>
-  void RecordHeapIndirect(vulkan::Context const &context,
+  auto RecordHeapIndirect(vulkan::Context const &context,
     VkCommandBuffer command_buffer,
     vkexec::algorithm const &algorithm,
     Params const &params,
-    VkBuffer indirect_buffer)
+    VkBuffer indirect_buffer) -> void
   {
     (void)vkexec::record_pass(*context.vkexec_context,
       command_buffer,
