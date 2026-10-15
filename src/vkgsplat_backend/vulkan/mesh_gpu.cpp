@@ -27,11 +27,11 @@ auto CreateSphereBuffers(vulkan::Context &context, RenderData &data, SplatCpuDat
 {
   DestroySphereBuffers(context, data);
 
-  if (context.vkexec_context == nullptr) {
-    std::println("vkexec context missing for gaussian buffers!");
+  if (context.allocator == nullptr) {
+    std::println("VMA allocator missing for gaussian buffers!");
     return false;
   }
-  auto &vkexec = *context.vkexec_context;
+  auto &allocator = *context.allocator;
 
   if (cpu_data.geometries.size() != cpu_data.appearances.size() || cpu_data.geometries.empty()) {
     std::println("Invalid splat CPU data!");
@@ -43,9 +43,9 @@ auto CreateSphereBuffers(vulkan::Context &context, RenderData &data, SplatCpuDat
   auto const appearance_buffer_size = static_cast<VkDeviceSize>(data.splat_count * sizeof(gs::GaussianAppearance));
   auto const projected_buffer_size = static_cast<VkDeviceSize>(data.splat_count * sizeof(gs::GaussianProjected));
 
-  auto geometry_buffer = vulkan::CreateStorageBuffer(vkexec, geometry_buffer_size);
-  auto appearance_buffer = vulkan::CreateStorageBuffer(vkexec, appearance_buffer_size);
-  auto projected_buffer = vulkan::CreateDeviceStorageBuffer(vkexec, projected_buffer_size);
+  auto geometry_buffer = vulkan::CreateStorageBuffer(allocator, geometry_buffer_size);
+  auto appearance_buffer = vulkan::CreateStorageBuffer(allocator, appearance_buffer_size);
+  auto projected_buffer = vulkan::CreateDeviceStorageBuffer(allocator, projected_buffer_size);
   if (!geometry_buffer || !appearance_buffer || !projected_buffer) {
     std::println("Failed to create gaussian buffers!");
     return false;

@@ -72,8 +72,8 @@ auto CreateSyncObjects(vulkan::Context &context, RenderData &data) -> std::expec
     return std::unexpected{ MakeError(std::errc::state_not_recoverable, "swapchain is not initialized") };
   }
 
-  auto created = vkexec::try_sync_wait_value(vkexec::frame_ring::create(*context.vkexec_context,
-    vkexec::frame_ring::create_info{
+  auto created = vkexec::try_sync_wait_value(vkexec::factory::make_frame_ring(*context.vkexec_context,
+    vkexec::frame_ring_create_info{
       .slot_count = kFrameSlotCount,
       .image_count = context.swapchain->image_count(),
     }));

@@ -2,7 +2,6 @@ include(GenerateExportHeader)
 
 add_library(
   vkgsplat_backend
-  vulkan/vma_usage.cpp
   vulkan/vulkan_platform.cpp
   vulkan/vulkan_driver.cpp
   vulkan/presentable_swapchain.cpp
@@ -61,6 +60,7 @@ target_link_libraries(
          vk-bootstrap::vk-bootstrap
          GPUOpen::VulkanMemoryAllocator
          vkexec::vkexec
+         vkexec::vma
          vkexec::ext_descriptor_heap
          vkexec::ext_timeline_semaphore
          glfw::glfw

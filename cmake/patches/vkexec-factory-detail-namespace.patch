@@ -1,0 +1,17 @@
+diff --git a/include/vkexec/compute_pipeline.hpp b/include/vkexec/compute_pipeline.hpp
+index 10d489b..553ad2f 100644
+--- a/include/vkexec/compute_pipeline.hpp
++++ b/include/vkexec/compute_pipeline.hpp
+@@ -111 +111 @@
+-      return make_sender(detail::make_compute_pipeline_spirv_factory{
++      return make_sender(::vkexec::detail::make_compute_pipeline_spirv_factory{
+@@ -128 +128 @@
+-      return make_sender(detail::make_compute_pipeline_glsl_factory{
++      return make_sender(::vkexec::detail::make_compute_pipeline_glsl_factory{
+diff --git a/include/vkexec_extensions/timeline_semaphore/frame_ring.hpp b/include/vkexec_extensions/timeline_semaphore/frame_ring.hpp
+index 999df15..72c27df 100644
+--- a/include/vkexec_extensions/timeline_semaphore/frame_ring.hpp
++++ b/include/vkexec_extensions/timeline_semaphore/frame_ring.hpp
+@@ -75 +75 @@
+-    { return make_sender(detail::make_frame_ring_factory{ .ctx = &ctx, .info = info }); }
++    { return make_sender(::vkexec::detail::make_frame_ring_factory{ .ctx = &ctx, .info = info }); }
