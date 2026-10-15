@@ -2,6 +2,8 @@
 #define VKGSPLAT_BACKEND_VULKAN_GS_OPERATIONS_HPP
 
 #include <vulkan/vulkan_core.h>
+#include <expected>
+#include <vkgsplat_utility/error.hpp>
 
 namespace vkgsplat {
 
@@ -13,14 +15,16 @@ struct RenderData;
 namespace gs {
 
   // Projection dispatch; `time_pass` writes GpuPass::kProjection timestamps (once per frame only).
-  void RecordProjection(vulkan::Context const &context,
+  [[nodiscard]] auto RecordProjection(vulkan::Context const &context,
     RenderData const &data,
     VkCommandBuffer command_buffer,
-    bool time_pass);
+    bool time_pass) -> std::expected<void, Error>;
 
-  void RecordPhaseACompute(vulkan::Context const &context, RenderData const &data, VkCommandBuffer command_buffer);
+  [[nodiscard]] auto RecordPhaseACompute(vulkan::Context const &context, RenderData const &data,
+    VkCommandBuffer command_buffer) -> std::expected<void, Error>;
 
-  void RecordRasterization(vulkan::Context const &context, RenderData const &data, VkCommandBuffer command_buffer);
+  [[nodiscard]] auto RecordRasterization(vulkan::Context const &context, RenderData const &data,
+    VkCommandBuffer command_buffer) -> std::expected<void, Error>;
 
 }// namespace gs
 
