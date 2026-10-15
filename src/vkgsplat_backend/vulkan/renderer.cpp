@@ -84,7 +84,15 @@ auto CreateSyncObjects(vulkan::Context &context, RenderData &data) -> std::expec
 
 auto RecreateSwapchain(vulkan::Context &context, RenderData &data) -> std::expected<void, Error>
 {
-  context.disp.deviceWaitIdle();
+  auto const extent = context.platform->framebuffer_extent();
+  if (context.disp.deviceWaitIdle() != VK_SUCCESS) {
+    return std::unexpected{ MakeError(std::errc::io_error, "failed to wait for device before swapchain recreation") };
+  }
+  // Submission completion does not cover a pending presentation wait.
+  if (context.disp.queueWaitIdle(data.present_queue) != VK_SUCCESS) {
+    return std::unexpected{ MakeError(std::errc::io_error, "failed to wait for presentation before swapchain recreation") };
+  }
+  if (extent.width == 0 || extent.height == 0) { return CreateSyncObjects(context, data); }
 
   data.command_buffers.clear();
   data.command_pool.reset();
@@ -94,18 +102,12 @@ auto RecreateSwapchain(vulkan::Context &context, RenderData &data) -> std::expec
   if (context.swapchain == nullptr) {
     return std::unexpected{ MakeError(std::errc::state_not_recoverable, "swapchain is not initialized") };
   }
-  if (auto recreated = context.swapchain->recreate(context.device, context.platform->framebuffer_extent());
+  if (auto recreated = context.swapchain->recreate(context.device, extent);
     !recreated) {
     return std::unexpected{ recreated.error() };
   }
 
-  if (!data.frame_ring.has_value()) {
-    return std::unexpected{ MakeError(std::errc::state_not_recoverable, "frame_ring is not initialized") };
-  }
-  if (auto resized = data.frame_ring->resize_images(context.swapchain->image_count()); !resized) {
-    return std::unexpected{ MakeError(std::errc::io_error, resized.error().message()) };
-  }
-  data.frame_ring->reset_completion_tracking();
+  if (auto sync = CreateSyncObjects(context, data); !sync) { return sync; }
 
   if (0 != CreateGraphicsPipeline(context, data)) {
     return std::unexpected{ MakeError(std::errc::io_error, "failed to recreate graphics pipeline") };
@@ -124,6 +126,7 @@ auto RecreateSwapchain(vulkan::Context &context, RenderData &data) -> std::expec
 void Cleanup(vulkan::Context &context, RenderData &data)
 {
   context.disp.deviceWaitIdle();
+  if (data.present_queue != VK_NULL_HANDLE) { context.disp.queueWaitIdle(data.present_queue); }
 
   data.frame_ring.reset();
 

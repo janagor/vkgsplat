@@ -5,6 +5,7 @@
 #include <expected>
 #include <functional>
 #include <system_error>
+#include <type_traits>
 #include <utility>
 
 #include "vulkan/initializers.hpp"
@@ -29,7 +30,16 @@ auto WithCommand(std::reference_wrapper<vkb::DispatchTable> disp,
     return std::unexpected{ Error{ std::make_error_code(std::errc::io_error), "Failed to begin command buffer" } };
   }
 
-  std::forward<RecordFn>(record)(dispatch, command_buffer);
+  if constexpr (std::same_as<std::invoke_result_t<RecordFn, vkb::DispatchTable &, VkCommandBuffer>,
+                  std::expected<void, Error>>) {
+    auto recorded = std::forward<RecordFn>(record)(dispatch, command_buffer);
+    if (!recorded) {
+      static_cast<void>(dispatch.endCommandBuffer(command_buffer));
+      return std::unexpected{ recorded.error() };
+    }
+  } else {
+    std::forward<RecordFn>(record)(dispatch, command_buffer);
+  }
 
   if (dispatch.endCommandBuffer(command_buffer) != VK_SUCCESS) {
     return std::unexpected{ Error{ std::make_error_code(std::errc::io_error), "Failed to end command buffer" } };

@@ -29,17 +29,19 @@
 #include <vkgsplat_utility/types.hpp>
 
 #include <vkexec/queue_submit.hpp>
+#include <vkexec_extensions/timeline_semaphore/frame_ring.hpp>
 #include <vulkan/vulkan_core.h>
 
 namespace vkgsplat {
 
 namespace {
 
-  void RecordSphereDraw(vulkan::Context &context, RenderData &data, VkCommandBuffer command_buffer, size_t image_index)
+  [[nodiscard]] auto RecordSphereDraw(vulkan::Context &context, RenderData &data, VkCommandBuffer command_buffer,
+    size_t image_index) -> std::expected<void, Error>
   {
     BindDescriptorHeap(context, data, command_buffer);
-    gs::EvalGsPipeline(context, data, command_buffer);
-    RecordImguiOverlay(context, data, command_buffer, image_index);
+    if (auto recorded = gs::EvalGsPipeline(context, data, command_buffer); !recorded) { return recorded; }
+    return RecordImguiOverlay(context, data, command_buffer, image_index);
   }
 
   void ResolveGpuPassTimings(vulkan::Context const &context, RenderData &data, size_t frame_slot)
@@ -75,9 +77,80 @@ namespace {
     auto present_info = initializers::PresentInfoKHR(present_wait, swap_chains, std::span{ &image_index, 1 });
 
     if (data.present_pacer != nullptr) { data.present_pacer->PreparePresent(context, present_info); }
+    auto const queue_lock = context.vkexec_context->lock_queue(data.present_queue);
     VkResult const result = context.disp.queuePresentKHR(data.present_queue, &present_info);
     if (data.present_pacer != nullptr) { data.present_pacer->AfterPresent(context); }
     return result;
+  }
+
+  [[nodiscard]] auto RetireAcquiredImage(vulkan::Context &context, RenderData &data, Error error)
+    -> std::expected<void, Error>
+  {
+    if (auto recreated = RecreateSwapchain(context, data); !recreated) { return std::unexpected{ recreated.error() }; }
+    return std::unexpected{ std::move(error) };
+  }
+
+  [[nodiscard]] auto WaitFrameResources(vulkan::Context const &context,
+    RenderData &data,
+    vkexec::owned::frame_ring &ring,
+    size_t frame_slot) -> std::expected<void, Error>
+  {
+    if (auto waited = ring.wait_slot(frame_slot); !waited) {
+      return std::unexpected{ MakeError(std::errc::io_error, waited.error().message()) };
+    }
+    // Gaussian buffers and the color target are shared across frame slots.
+    size_t const previous_slot = (frame_slot + kFrameSlotCount - 1U) % kFrameSlotCount;
+    if (auto waited = ring.wait_slot(previous_slot); !waited) {
+      return std::unexpected{ MakeError(std::errc::io_error, waited.error().message()) };
+    }
+    ResolveGpuPassTimings(context, data, frame_slot);
+    return {};
+  }
+
+  [[nodiscard]] auto RecordAndSubmitFrame(vulkan::Context &context,
+    RenderData &data,
+    vkexec::owned::frame_ring &ring,
+    size_t frame_slot,
+    uint32_t image_index) -> std::expected<void, Error>
+  {
+    if (auto waited = ring.wait_image(image_index); !waited) {
+      return std::unexpected{ MakeError(std::errc::io_error, waited.error().message()) };
+    }
+
+    FrameSetup &setup = data.frames.at(frame_slot).setup;
+    BuildFrameSetupGpu(context, data, setup, image_index);
+    ApplyFrameSetup(data, frame_slot);
+
+    auto *command_buffer = data.command_buffers.at(image_index).handle();
+    auto recorded = vulkan::WithCommand(std::ref(context.disp),
+      command_buffer,
+      [&](vkb::DispatchTable &, VkCommandBuffer cmd) -> std::expected<void, Error> {
+        return RecordSphereDraw(context, data, cmd, image_index);
+      });
+    if (!recorded) { return std::unexpected{ recorded.error() }; }
+
+    auto const signal_value = ring.allocate_signal_value();
+    auto submit_sync = ring.make_submit_sync(frame_slot, image_index, signal_value, VK_PIPELINE_STAGE_2_TRANSFER_BIT);
+    if (!submit_sync) {
+      return std::unexpected{ MakeError(std::errc::io_error, submit_sync.error().message()) };
+    }
+
+    std::array<VkCommandBuffer, 1> const cmds{ command_buffer };
+    if (auto submitted = context.vkexec_context->submit(vkexec::queue_submit{
+          .command_buffers = cmds,
+          .waits = submit_sync->waits,
+          .signals = submit_sync->signals,
+          .queue = data.graphics_queue,
+        });
+      !submitted) {
+      return std::unexpected{ MakeError(std::errc::io_error, submitted.error().message()) };
+    }
+
+    if (auto marked = ring.mark_submitted(frame_slot, image_index, signal_value); !marked) {
+      return std::unexpected{ MakeError(std::errc::io_error, marked.error().message()) };
+    }
+    if (data.gpu_pass_timer.enabled()) { data.gpu_pass_timer.mark_submitted(frame_slot); }
+    return {};
   }
 
 }// namespace
@@ -265,11 +338,10 @@ auto RenderThread::DrawFrameVulkan(size_t frame_slot) -> std::expected<void, Err
   }
   auto &ring = *data.frame_ring;
 
-  if (auto waited = ring.wait_slot(frame_slot); !waited) {
-    return std::unexpected{ MakeError(std::errc::io_error, waited.error().message()) };
-  }
+  if (auto waited = WaitFrameResources(context, data, ring, frame_slot); !waited) { return waited; }
 
-  ResolveGpuPassTimings(context, data, frame_slot);
+  auto const extent = context.platform->framebuffer_extent();
+  if (extent.width == 0 || extent.height == 0) { return {}; }
 
   auto acquire_semaphore = ring.acquire_semaphore(frame_slot);
   if (!acquire_semaphore) {
@@ -285,60 +357,35 @@ auto RenderThread::DrawFrameVulkan(size_t frame_slot) -> std::expected<void, Err
     MarkAllSlotsReady();
     return {};
   }
+  if (result == VK_TIMEOUT || result == VK_NOT_READY) { return {}; }
   if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
     return std::unexpected{ MakeError(
       std::errc::io_error, "failed to acquire swapchain image. VkResult=" + std::to_string(result)) };
   }
+  bool const acquired_suboptimal = result == VK_SUBOPTIMAL_KHR;
 
-  if (auto waited = ring.wait_image(image_index); !waited) {
-    return std::unexpected{ MakeError(std::errc::io_error, waited.error().message()) };
-  }
-
-  FrameSetup &setup = data.frames.at(frame_slot).setup;
-  BuildFrameSetupGpu(context, data, setup, image_index);
-  ApplyFrameSetup(data, frame_slot);
-
-  auto recorded = vulkan::WithCommand(std::ref(context.disp),
-    data.command_buffers.at(image_index).handle(),
-    [&](vkb::DispatchTable &, VkCommandBuffer cmd) -> void { RecordSphereDraw(context, data, cmd, image_index); });
-  if (!recorded) { return std::unexpected{ recorded.error() }; }
-
-  auto const signal_value = ring.allocate_signal_value();
-  auto submit_sync = ring.make_submit_sync(frame_slot, image_index, signal_value);
-  if (!submit_sync) { return std::unexpected{ MakeError(std::errc::io_error, submit_sync.error().message()) }; }
-
-  auto *command_buffer = data.command_buffers.at(image_index).handle();
-  std::array<VkCommandBuffer, 1> const cmds{ command_buffer };
-  if (auto submitted = context.vkexec_context->submit(vkexec::queue_submit{
-        .command_buffers = cmds,
-        .waits = submit_sync->waits,
-        .signals = submit_sync->signals,
-        .queue = data.graphics_queue,
-      });
-    !submitted) {
-    return std::unexpected{ MakeError(std::errc::io_error, submitted.error().message()) };
-  }
-
-  if (auto marked = ring.mark_submitted(frame_slot, image_index, signal_value); !marked) {
-    return std::unexpected{ MakeError(std::errc::io_error, marked.error().message()) };
+  if (auto submitted = RecordAndSubmitFrame(context, data, ring, frame_slot, image_index); !submitted) {
+    return RetireAcquiredImage(context, data, submitted.error());
   }
 
   auto finished_semaphore = ring.render_finished_semaphore(image_index);
   if (!finished_semaphore) {
-    return std::unexpected{ MakeError(std::errc::io_error, finished_semaphore.error().message()) };
+    return RetireAcquiredImage(context, data, MakeError(std::errc::io_error, finished_semaphore.error().message()));
   }
 
   auto presented = PresentSwapchainImage(context, data, image_index, *finished_semaphore);
-  if (!presented) { return std::unexpected{ presented.error() }; }
+  if (!presented) { return RetireAcquiredImage(context, data, presented.error()); }
   result = *presented;
 
-  if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+  if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR ||
+      (result == VK_SUCCESS && acquired_suboptimal)) {
     if (auto recreated = RecreateSwapchain(context, data); !recreated) { return std::unexpected{ recreated.error() }; }
     MarkAllSlotsReady();
     return {};
   }
   if (result != VK_SUCCESS) {
-    return std::unexpected{ MakeError(std::errc::io_error, "failed to present swapchain image") };
+    return RetireAcquiredImage(context, data, MakeError(std::errc::io_error,
+      "failed to present swapchain image. VkResult=" + std::to_string(result)));
   }
 
   return {};

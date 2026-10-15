@@ -660,16 +660,16 @@ void BuildImGuiFrameSnapshot(RenderData &data, size_t frame_slot, ImGuiFrameSnap
   overlay.secondary_generation.at(frame_slot) = 0;
 }
 
-void RecordImguiOverlay(vulkan::Context &context,
+auto RecordImguiOverlay(vulkan::Context &context,
   RenderData const &data,
   VkCommandBuffer command_buffer,
-  size_t image_index)
+  size_t image_index) -> std::expected<void, Error>
 {
   VkImage swapchain_image = context.swapchain->images().at(image_index);
 
   // Raster blits into TRANSFER_DST; always finish with PRESENT.
   if (data.imgui == nullptr || !data.imgui->initialized) {
-    (void)vkexec::image_barrier(*context.vkexec_context,
+    auto barrier = vkexec::image_barrier(*context.vkexec_context,
       command_buffer,
       {
         .image = swapchain_image,
@@ -680,7 +680,8 @@ void RecordImguiOverlay(vulkan::Context &context,
         .src_access = VK_ACCESS_TRANSFER_WRITE_BIT,
         .dst_access = 0,
       });
-    return;
+    if (!barrier) { return std::unexpected{ MakeError(std::errc::io_error, barrier.error().message()) }; }
+    return {};
   }
 
   auto &overlay = *data.imgui;
@@ -693,7 +694,7 @@ void RecordImguiOverlay(vulkan::Context &context,
 
   size_t const frame_slot = data.current_slot;
   if (overlay.overlay_secondaries.at(frame_slot) == VK_NULL_HANDLE) {
-    (void)vkexec::image_barrier(*context.vkexec_context,
+    auto barrier = vkexec::image_barrier(*context.vkexec_context,
       command_buffer,
       {
         .image = swapchain_image,
@@ -704,7 +705,8 @@ void RecordImguiOverlay(vulkan::Context &context,
         .src_access = VK_ACCESS_TRANSFER_WRITE_BIT,
         .dst_access = 0,
       });
-    return;
+    if (!barrier) { return std::unexpected{ MakeError(std::errc::io_error, barrier.error().message()) }; }
+    return {};
   }
 
   if (overlay.secondary_generation.at(frame_slot) != FrameSetupFor(data, frame_slot).imgui.ui_generation) {
@@ -713,7 +715,7 @@ void RecordImguiOverlay(vulkan::Context &context,
 
   VkImageView swapchain_view = context.swapchain->image_views().at(image_index);
 
-  (void)vkexec::image_barrier(*context.vkexec_context,
+  auto color_barrier = vkexec::image_barrier(*context.vkexec_context,
     command_buffer,
     {
       .image = swapchain_image,
@@ -724,6 +726,7 @@ void RecordImguiOverlay(vulkan::Context &context,
       .src_access = VK_ACCESS_TRANSFER_WRITE_BIT,
       .dst_access = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
     });
+  if (!color_barrier) { return std::unexpected{ MakeError(std::errc::io_error, color_barrier.error().message()) }; }
 
   VkRenderingAttachmentInfo const color_attachment = {
     .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
@@ -755,7 +758,7 @@ void RecordImguiOverlay(vulkan::Context &context,
   context.disp.cmdExecuteCommands(command_buffer, 1, &overlay.overlay_secondaries.at(frame_slot));
   context.disp.cmdEndRendering(command_buffer);
 
-  (void)vkexec::image_barrier(*context.vkexec_context,
+  auto present_barrier = vkexec::image_barrier(*context.vkexec_context,
     command_buffer,
     {
       .image = swapchain_image,
@@ -766,6 +769,8 @@ void RecordImguiOverlay(vulkan::Context &context,
       .src_access = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
       .dst_access = 0,
     });
+  if (!present_barrier) { return std::unexpected{ MakeError(std::errc::io_error, present_barrier.error().message()) }; }
+  return {};
 }
 
 }// namespace vkgsplat
