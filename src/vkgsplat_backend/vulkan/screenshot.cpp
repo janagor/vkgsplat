@@ -19,8 +19,8 @@
 #include <vkgsplat_utility/types.hpp>
 
 #include <vkexec/barrier.hpp>
-#include <vkexec_vma/gpu_buffer.hpp>
 #include <vkexec/queue_submit.hpp>
+#include <vkexec_vma/gpu_buffer.hpp>
 #include <vulkan/vulkan_core.h>
 
 namespace vkgsplat::vulkan {
@@ -91,7 +91,8 @@ auto SaveColorTargetPng(Context &context, RenderData &data, std::string_view pat
   }
 
   // After a normal frame the color target is already TRANSFER_SRC_OPTIMAL.
-  (void)vkexec::image_barrier(*context.vkexec_context, cmd,
+  (void)vkexec::image_barrier(*context.vkexec_context,
+    cmd,
     {
       .image = data.color_image->handle(),
       .old_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
