@@ -11,10 +11,10 @@ namespace vkgsplat::gs {
 
 [[nodiscard]] auto InitProjection(vulkan::Context &context, RenderData &data) -> bool;
 
-void DispatchProjection(vulkan::Context const &context,
+[[nodiscard]] auto DispatchProjection(vulkan::Context const &context,
   RenderData const &data,
   ProjectPushConstants const &push_constants,
-  VkCommandBuffer command_buffer);
+  VkCommandBuffer command_buffer) -> std::expected<void, Error>;
 
 void DestroyProjection(vulkan::Context &context, RenderData &data);
 

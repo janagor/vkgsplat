@@ -1,15 +1,14 @@
 #include "sphere_setup.hpp"
 
 #include "app_state.hpp"
-#include "gs/gaussian_splat.hpp"
 #include "vulkan/descriptor/descriptor_heap.hpp"
 #include "vulkan_context.hpp"
-#include <vkgsplat_utility/types.hpp>
 
 #include <vkexec/sync_wait.hpp>
 #include <vkexec/tensor.hpp>
 
 #include <print>
+#include <type_traits>
 #include <utility>
 
 namespace vkgsplat {
@@ -20,15 +19,17 @@ auto InitSphereSetup(vulkan::Context &context, RenderData &data) -> bool
     std::println("Sphere setup requires non-zero splat_count and sort_size!");
     return false;
   }
-  if (context.vkexec_context == nullptr) {
-    std::println("vkexec context missing for sphere sort tensors!");
+  if (context.vkexec_context == nullptr || context.allocator == nullptr) {
+    std::println("vkexec context or VMA allocator missing for sphere sort tensors!");
     return false;
   }
 
+  using SortEntry = std::remove_pointer_t<decltype(data.sort_entries->data())>;
+  using SortedIndex = std::remove_pointer_t<decltype(data.sorted_indices->data())>;
   auto sort_entries =
-    vkexec::try_sync_wait_value(vkexec::tensor<gs::SortEntry>::create(*context.vkexec_context, data.sort_size));
+    vkexec::try_sync_wait_value(vkexec::factory::make_tensor(*context.allocator, data.sort_size, SortEntry{}));
   auto sorted_indices =
-    vkexec::try_sync_wait_value(vkexec::tensor<u32>::create(*context.vkexec_context, data.splat_count, 0U));
+    vkexec::try_sync_wait_value(vkexec::factory::make_tensor(*context.allocator, data.splat_count, SortedIndex{}));
 
   if (!sort_entries || !sorted_indices) {
     std::println("Failed to create sphere sort tensors!");

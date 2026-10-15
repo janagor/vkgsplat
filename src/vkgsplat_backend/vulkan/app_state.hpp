@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "frame_context.hpp"
+#include "gpu_buffers.hpp"
 #include "gs/gaussian_splat.hpp"
 #include "gs/push_constants.hpp"
 #include "present_pacer.hpp"
@@ -22,18 +23,23 @@
 #include <VkBootstrap.h>
 #include <VkBootstrapDispatch.h>
 
-#include <vkexec/gpu_buffer.hpp>
-#include <vkexec/image.hpp>
 #include <vkexec/image_view.hpp>
 #include <vkexec/tensor.hpp>
 #include <vkexec_extensions/descriptor_heap/algorithm.hpp>
 #include <vkexec_extensions/descriptor_heap/buffer.hpp>
 #include <vkexec_extensions/descriptor_heap/heap_graphics_pipeline.hpp>
 #include <vkexec_extensions/timeline_semaphore/frame_ring.hpp>
+#include <vkexec_vma/image.hpp>
 #include <vkgsplat/lfd_config.hpp>
 
 
 namespace vkgsplat {
+
+using GpuBuffer = vulkan::GpuBuffer;
+using DescriptorHeapBuffer = vulkan::DescriptorHeapBuffer;
+using GpuImage = vkexec::vma::image;
+
+template<typename T> using Tensor = vkexec::tensor<T, GpuBuffer>;
 
 // CPU/GPU pipelining depth: ring of frame slots.
 // CPU ring (BoundedQueue + slot_ready) gates FrameSetup reuse after record/submit;
@@ -51,22 +57,22 @@ struct RenderData
   VkQueue graphics_queue{};
   VkQueue present_queue{};
 
-  std::optional<vkexec::descriptor_graphics_pipeline> graphics_pipeline;
+  std::optional<vkexec::owned::descriptor_graphics_pipeline> graphics_pipeline;
 
-  std::optional<vkexec::gpu_buffer> geometry_buffer;
-  std::optional<vkexec::gpu_buffer> appearance_buffer;
-  std::optional<vkexec::gpu_buffer> projected_buffer;
-  std::optional<vkexec::gpu_buffer> unsorted_keys_buffer;
-  std::optional<vkexec::gpu_buffer> unsorted_values_buffer;
-  std::optional<vkexec::gpu_buffer> instance_count_buffer;
-  std::optional<vkexec::gpu_buffer> sorted_keys_buffer;
-  std::optional<vkexec::gpu_buffer> sorted_values_buffer;
-  std::optional<vkexec::gpu_buffer> sort_histogram_buffer;
-  std::optional<vkexec::gpu_buffer> radix_dispatch_buffer;
-  std::optional<vkexec::gpu_buffer> draw_indirect_buffer;
-  std::optional<vkexec::gpu_buffer> tile_ranges_buffer;
-  std::optional<vkexec::image> color_image;
-  std::optional<vkexec::image_view> color_image_view;
+  std::optional<GpuBuffer> geometry_buffer;
+  std::optional<GpuBuffer> appearance_buffer;
+  std::optional<GpuBuffer> projected_buffer;
+  std::optional<GpuBuffer> unsorted_keys_buffer;
+  std::optional<GpuBuffer> unsorted_values_buffer;
+  std::optional<GpuBuffer> instance_count_buffer;
+  std::optional<GpuBuffer> sorted_keys_buffer;
+  std::optional<GpuBuffer> sorted_values_buffer;
+  std::optional<GpuBuffer> sort_histogram_buffer;
+  std::optional<GpuBuffer> radix_dispatch_buffer;
+  std::optional<GpuBuffer> draw_indirect_buffer;
+  std::optional<GpuBuffer> tile_ranges_buffer;
+  std::optional<GpuImage> color_image;
+  std::optional<vkexec::owned::image_view> color_image_view;
   // 3DGS is trained for gamma-space blending (typical WebGL UNORM8). A float RT
   // blends the same gamma-coded SH colors with linear-like precision and shifts hue.
   VkFormat color_format{ VK_FORMAT_R8G8B8A8_UNORM };
@@ -86,14 +92,16 @@ struct RenderData
   VkExtent2D quilt_tile_extent{};
   bool lfd_emulate_active{ false };
   std::array<u32, 2> lfd_emulate_cell{ 0U, 0U };
-  std::optional<vkexec::tensor<u32>> sorted_indices;
-  std::optional<vkexec::tensor<gs::SortEntry>> sort_entries;
-  std::optional<vkexec::descriptor_heap_buffer> descriptor_heap_buffer;
-  std::optional<vkexec::descriptor_heap_buffer> sampler_heap_buffer;
+  std::optional<Tensor<u32>> sorted_indices;
+  std::optional<Tensor<gs::SortEntry>> sort_entries;
+  std::optional<DescriptorHeapBuffer> descriptor_heap_buffer;
+  std::optional<DescriptorHeapBuffer> sampler_heap_buffer;
   VkDeviceSize descriptor_heap_size{};
+  VkDeviceSize descriptor_heap_alignment{};
   VkDeviceSize reserved_range_offset{};
   VkDeviceSize reserved_range_size{};
   VkDeviceSize sampler_heap_size{};
+  VkDeviceSize sampler_heap_alignment{};
   VkDeviceSize sampler_reserved_range_offset{};
   VkDeviceSize sampler_reserved_range_size{};
   size_t descriptor_stride{};
@@ -118,7 +126,7 @@ struct RenderData
   std::vector<vulkan::CommandBuffer> command_buffers;
 
   // Binary WSI acquire/present semaphores + timeline gates for slot/image reuse.
-  std::optional<vkexec::frame_ring> frame_ring;
+  std::optional<vkexec::owned::frame_ring> frame_ring;
   size_t current_slot = {};
   std::array<FrameContext, kFrameSlotCount> frames{};
   GpuPassTimer gpu_pass_timer;

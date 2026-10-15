@@ -8,6 +8,8 @@
 #include <vkgsplat_utility/types.hpp>
 
 #include <vulkan/vulkan_core.h>
+#include <expected>
+#include <vkgsplat_utility/error.hpp>
 
 namespace vkgsplat::gs {
 
@@ -16,29 +18,29 @@ namespace vkgsplat::gs {
 [[nodiscard]] auto RecreateRasterizationColorTarget(vulkan::Context &context, RenderData &data) -> bool;
 
 // Mono path: clear color target, draw full extent, blit to swapchain.
-void DispatchRasterization(vulkan::Context const &context,
+[[nodiscard]] auto DispatchRasterization(vulkan::Context const &context,
   RenderData const &data,
   RasterPushConstants const &push_constants,
   VkCommandBuffer command_buffer,
-  size_t image_index);
+  size_t image_index) -> std::expected<void, Error>;
 
 // Quilt path helpers (atlas RT). Call Prepare once, DrawTile per cell, then Blit.
-void PrepareQuiltPresent(vulkan::Context const &context,
+[[nodiscard]] auto PrepareQuiltPresent(vulkan::Context const &context,
   RenderData const &data,
   VkCommandBuffer command_buffer,
-  size_t image_index);
+  size_t image_index) -> std::expected<void, Error>;
 
-void DrawQuiltTile(vulkan::Context const &context,
+[[nodiscard]] auto DrawQuiltTile(vulkan::Context const &context,
   RenderData const &data,
   RasterPushConstants const &push_constants,
   VkCommandBuffer command_buffer,
   VkRect2D tile,
-  bool clear_attachment);
+  bool clear_attachment) -> std::expected<void, Error>;
 
-void BlitQuiltToSwapchain(vulkan::Context const &context,
+[[nodiscard]] auto BlitQuiltToSwapchain(vulkan::Context const &context,
   RenderData const &data,
   VkCommandBuffer command_buffer,
-  size_t image_index);
+  size_t image_index) -> std::expected<void, Error>;
 
 void DestroyRasterization(vulkan::Context &context, RenderData &data);
 

@@ -7,10 +7,13 @@
 
 #include <array>
 #include <cstdint>
+#include <expected>
 #include <print>
 #include <span>
 #include <string>
 #include <utility>
+#include <system_error>
+#include <vkgsplat_utility/error.hpp>
 
 #include <vkexec/barrier.hpp>
 #include <vkexec_extensions/descriptor_heap/pass.hpp>
@@ -35,18 +38,23 @@ auto InitProjection(vulkan::Context &context, RenderData &data) -> bool
   return true;
 }
 
-void DispatchProjection(vulkan::Context const &context,
+auto DispatchProjection(vulkan::Context const &context,
   RenderData const &data,
   ProjectPushConstants const &push_constants,
-  VkCommandBuffer command_buffer)
+  VkCommandBuffer command_buffer) -> std::expected<void, Error>
 {
-  if (!data.project_algorithm || context.vkexec_context == nullptr) { return; }
-  (void)vkexec::record_pass(*context.vkexec_context,
+  if (!data.project_algorithm || context.vkexec_context == nullptr) {
+    return std::unexpected{ MakeError(std::errc::state_not_recoverable, "projection is not initialized") };
+  }
+  auto recorded = vkexec::record_pass(*context.vkexec_context,
     command_buffer,
     data.project_algorithm->bind(),
     std::as_bytes(std::span{ &push_constants, 1 }),
     data.project_algorithm->groups_for(data.splat_count));
-  vkexec::barrier::compute_read(command_buffer);
+  if (!recorded) { return std::unexpected{ MakeError(std::errc::io_error, recorded.error().message()) }; }
+  auto barrier = vkexec::barrier::compute_read(*context.vkexec_context, command_buffer);
+  if (!barrier) { return std::unexpected{ MakeError(std::errc::io_error, barrier.error().message()) }; }
+  return {};
 }
 
 void DestroyProjection(vulkan::Context &context, RenderData &data)

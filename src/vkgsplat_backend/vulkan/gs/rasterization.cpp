@@ -7,20 +7,23 @@
 #include <vkexec/barrier.hpp>
 
 #include <vkgsplat_utility/types.hpp>
+#include <vkgsplat_utility/error.hpp>
 
 #include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <expected>
 #include <print>
+#include <system_error>
 #include <utility>
 
 #include <glm/gtc/type_ptr.hpp>
-#include <vkexec/image.hpp>
 #include <vkexec/image_view.hpp>
 #include <vkexec/sync_wait.hpp>
 #include <vkexec_extensions/descriptor_heap/push_data.hpp>
+#include <vkexec_vma/image.hpp>
 #include <vulkan/vulkan_core.h>
 
 namespace vkgsplat::gs {
@@ -41,8 +44,8 @@ namespace {
   {
     DestroyColorTarget(context, data);
 
-    if (context.vkexec_context == nullptr) {
-      std::println("vkexec context missing for raster color target");
+    if (context.vkexec_context == nullptr || context.allocator == nullptr) {
+      std::println("vkexec context or VMA allocator missing for raster color target");
       return false;
     }
 
@@ -67,11 +70,11 @@ namespace {
     data.color_width = static_cast<u32>(atlas_w);
     data.color_height = static_cast<u32>(atlas_h);
 
-    auto created_image = vkexec::try_sync_wait_value(vkexec::image::create(*context.vkexec_context,
-      vkexec::image_create_info{
+    auto created_image = vkexec::try_sync_wait_value(vkexec::vma::factory::make_image(*context.allocator,
+      vkexec::vma::image_create_info{
         .width = data.color_width,
         .height = data.color_height,
-        .usage = vkexec::image_usage::color_storage,
+        .usage = vkexec::vma::image_usage::color_storage,
         .format = data.color_format,
       }));
     if (!created_image) {
@@ -82,7 +85,7 @@ namespace {
     data.color_image = std::move(*created_image);
 
     auto created_view =
-      vkexec::try_sync_wait_value(vkexec::image_view::create(*context.vkexec_context, *data.color_image));
+      vkexec::try_sync_wait_value(vkexec::vma::factory::make_image_view(*context.vkexec_context, *data.color_image));
     if (!created_view) {
       std::println("Failed to create raster color target view: {}", created_view.error().message());
       DestroyColorTarget(context, data);
@@ -163,14 +166,17 @@ auto InitRasterization(vulkan::Context &context, RenderData &data) -> bool { ret
 auto RecreateRasterizationColorTarget(vulkan::Context &context, RenderData &data) -> bool
 { return CreateColorTarget(context, data); }
 
-void PrepareQuiltPresent(vulkan::Context const &context,
+auto PrepareQuiltPresent(vulkan::Context const &context,
   RenderData const &data,
   VkCommandBuffer command_buffer,
-  size_t image_index)
+  size_t image_index) -> std::expected<void, Error>
 {
-  if (!data.color_image.has_value()) { return; }
+  if (!data.color_image.has_value()) {
+    return std::unexpected{ MakeError(std::errc::state_not_recoverable, "raster color image is missing") };
+  }
 
-  vkexec::image_barrier(command_buffer,
+  auto color_barrier = vkexec::image_barrier(*context.vkexec_context,
+    command_buffer,
     {
       .image = data.color_image->handle(),
       .old_layout = VK_IMAGE_LAYOUT_UNDEFINED,
@@ -180,7 +186,9 @@ void PrepareQuiltPresent(vulkan::Context const &context,
       .src_access = 0,
       .dst_access = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
     });
-  vkexec::image_barrier(command_buffer,
+  if (!color_barrier) { return std::unexpected{ MakeError(std::errc::io_error, color_barrier.error().message()) }; }
+  auto swapchain_barrier = vkexec::image_barrier(*context.vkexec_context,
+    command_buffer,
     {
       .image = context.swapchain->images().at(image_index),
       .old_layout = VK_IMAGE_LAYOUT_UNDEFINED,
@@ -190,16 +198,19 @@ void PrepareQuiltPresent(vulkan::Context const &context,
       .src_access = 0,
       .dst_access = VK_ACCESS_TRANSFER_WRITE_BIT,
     });
+  if (!swapchain_barrier) { return std::unexpected{ MakeError(std::errc::io_error, swapchain_barrier.error().message()) }; }
+  return {};
 }
 
-void DrawQuiltTile(vulkan::Context const &context,
+auto DrawQuiltTile(vulkan::Context const &context,
   RenderData const &data,
   RasterPushConstants const &push_constants,
   VkCommandBuffer command_buffer,
   VkRect2D tile,
-  bool clear_attachment)
+  bool clear_attachment) -> std::expected<void, Error>
 {
-  vkexec::barrier::compute_to_graphics(command_buffer);
+  auto barrier = vkexec::barrier::compute_to_graphics(*context.vkexec_context, command_buffer);
+  if (!barrier) { return std::unexpected{ MakeError(std::errc::io_error, barrier.error().message()) }; }
 
   // First tile may clear the full atlas; later tiles LOAD and only write their viewport.
   VkRect2D const render_area = clear_attachment ? VkRect2D{ .offset = { .x = 0, .y = 0 },
@@ -216,16 +227,20 @@ void DrawQuiltTile(vulkan::Context const &context,
   };
 
   DrawIntoColorTarget(context, data, push_constants, command_buffer, render_area, viewport, tile, clear_attachment);
+  return {};
 }
 
-void BlitQuiltToSwapchain(vulkan::Context const &context,
+auto BlitQuiltToSwapchain(vulkan::Context const &context,
   RenderData const &data,
   VkCommandBuffer command_buffer,
-  size_t image_index)
+  size_t image_index) -> std::expected<void, Error>
 {
-  if (!data.color_image.has_value()) { return; }
+  if (!data.color_image.has_value()) {
+    return std::unexpected{ MakeError(std::errc::state_not_recoverable, "raster color image is missing") };
+  }
 
-  vkexec::image_barrier(command_buffer,
+  auto barrier = vkexec::image_barrier(*context.vkexec_context,
+    command_buffer,
     {
       .image = data.color_image->handle(),
       .old_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -235,6 +250,7 @@ void BlitQuiltToSwapchain(vulkan::Context const &context,
       .src_access = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
       .dst_access = VK_ACCESS_TRANSFER_READ_BIT,
     });
+  if (!barrier) { return std::unexpected{ MakeError(std::errc::io_error, barrier.error().message()) }; }
 
   VkImageBlit const blit = {
     .srcSubresource =
@@ -274,24 +290,25 @@ void BlitQuiltToSwapchain(vulkan::Context const &context,
     VK_FILTER_NEAREST);
 
   // Leave swapchain in TRANSFER_DST_OPTIMAL for ImGui / present.
+  return {};
 }
 
-void DispatchRasterization(vulkan::Context const &context,
+auto DispatchRasterization(vulkan::Context const &context,
   RenderData const &data,
   RasterPushConstants const &push_constants,
   VkCommandBuffer command_buffer,
-  size_t image_index)
+  size_t image_index) -> std::expected<void, Error>
 {
-  PrepareQuiltPresent(context, data, command_buffer, image_index);
+  if (auto recorded = PrepareQuiltPresent(context, data, command_buffer, image_index); !recorded) { return recorded; }
 
   VkExtent2D const extent = { .width = data.color_width, .height = data.color_height };
   VkRect2D const full_tile = {
     .offset = { .x = 0, .y = 0 },
     .extent = extent,
   };
-  DrawQuiltTile(context, data, push_constants, command_buffer, full_tile, true);
+  if (auto recorded = DrawQuiltTile(context, data, push_constants, command_buffer, full_tile, true); !recorded) { return recorded; }
 
-  BlitQuiltToSwapchain(context, data, command_buffer, image_index);
+  return BlitQuiltToSwapchain(context, data, command_buffer, image_index);
 }
 
 void DestroyRasterization(vulkan::Context &context, RenderData &data)
