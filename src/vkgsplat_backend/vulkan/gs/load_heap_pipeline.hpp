@@ -44,8 +44,8 @@ namespace vkgsplat::gs {
   desc.local_size = local_size;
   desc.specialization.assign(specialization_constants.begin(), specialization_constants.end());
 
-  auto created = vkexec::try_sync_wait_value(vkexec::factory::make_compute_pipeline(
-    vkexec::descriptor_heap, *context.vkexec_context, spirv, desc));
+  auto created = vkexec::try_sync_wait_value(
+    vkexec::factory::make_compute_pipeline(vkexec::descriptor_heap, *context.vkexec_context, spirv, desc));
   if (!created) {
     std::println("Failed to create heap algorithm ({}): {}", shader_path, created.error().message());
     return std::nullopt;

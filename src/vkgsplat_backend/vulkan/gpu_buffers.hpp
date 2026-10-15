@@ -6,8 +6,8 @@
 
 #include <vkexec/error.hpp>
 #include <vkexec/sync_wait.hpp>
-#include <vkexec_vma/gpu_buffer.hpp>
 #include <vkexec_extensions/descriptor_heap/buffer.hpp>
+#include <vkexec_vma/gpu_buffer.hpp>
 #include <vulkan/vulkan_core.h>
 
 #include <cstddef>
@@ -68,8 +68,7 @@ namespace gpu_buffers_detail {
   VkDeviceSize size,
   VkDeviceSize alignment) -> std::expected<DescriptorHeapBuffer, Error>
 {
-  auto created = vkexec::try_sync_wait_value(
-    vkexec::factory::make_descriptor_heap_buffer(allocator, size, alignment));
+  auto created = vkexec::try_sync_wait_value(vkexec::factory::make_descriptor_heap_buffer(allocator, size, alignment));
   if (!created) { return std::unexpected(gpu_buffers_detail::MakeGpuBufferError(created.error())); }
   return std::move(*created);
 }

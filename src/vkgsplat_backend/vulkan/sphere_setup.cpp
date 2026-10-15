@@ -26,10 +26,10 @@ auto InitSphereSetup(vulkan::Context &context, RenderData &data) -> bool
 
   using SortEntry = std::remove_pointer_t<decltype(data.sort_entries->data())>;
   using SortedIndex = std::remove_pointer_t<decltype(data.sorted_indices->data())>;
-  auto sort_entries = vkexec::try_sync_wait_value(
-    vkexec::factory::make_tensor(*context.allocator, data.sort_size, SortEntry{}));
-  auto sorted_indices = vkexec::try_sync_wait_value(
-    vkexec::factory::make_tensor(*context.allocator, data.splat_count, SortedIndex{}));
+  auto sort_entries =
+    vkexec::try_sync_wait_value(vkexec::factory::make_tensor(*context.allocator, data.sort_size, SortEntry{}));
+  auto sorted_indices =
+    vkexec::try_sync_wait_value(vkexec::factory::make_tensor(*context.allocator, data.splat_count, SortedIndex{}));
 
   if (!sort_entries || !sorted_indices) {
     std::println("Failed to create sphere sort tensors!");

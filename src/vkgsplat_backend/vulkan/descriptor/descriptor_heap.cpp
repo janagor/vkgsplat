@@ -125,14 +125,14 @@ auto RefreshDescriptorHeap(vulkan::Context &context, RenderData &data) -> bool
     // secondary command buffers invalidated after installing the new device addresses.
     if (data.imgui != nullptr) { context.disp.deviceWaitIdle(); }
 
-    auto resource_heap = vulkan::CreateDescriptorHeapBuffer(
-      *context.allocator, data.descriptor_heap_size, data.descriptor_heap_alignment);
+    auto resource_heap =
+      vulkan::CreateDescriptorHeapBuffer(*context.allocator, data.descriptor_heap_size, data.descriptor_heap_alignment);
     if (!resource_heap) {
       std::println("Failed to create shared resource heap buffer!");
       return false;
     }
-    auto sampler_heap = vulkan::CreateDescriptorHeapBuffer(
-      *context.allocator, data.sampler_heap_size, data.sampler_heap_alignment);
+    auto sampler_heap =
+      vulkan::CreateDescriptorHeapBuffer(*context.allocator, data.sampler_heap_size, data.sampler_heap_alignment);
     if (!sampler_heap) {
       std::println("Failed to create shared sampler heap buffer!");
       return false;
@@ -190,8 +190,7 @@ auto RefreshDescriptorHeap(vulkan::Context &context, RenderData &data) -> bool
   for (auto const &entry : entries) {
     auto const descriptor_index = static_cast<std::size_t>(kGsPhysicalIndices.at(entry_index));
     auto const descriptor_offset = descriptor_index * data.descriptor_stride;
-    if (descriptor_offset > heap_bytes.size()
-        || data.buffer_descriptor_size > heap_bytes.size() - descriptor_offset) {
+    if (descriptor_offset > heap_bytes.size() || data.buffer_descriptor_size > heap_bytes.size() - descriptor_offset) {
       std::println("GS resource descriptor is outside the mapped heap");
       return false;
     }

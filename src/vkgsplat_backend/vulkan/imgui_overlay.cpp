@@ -669,7 +669,8 @@ void RecordImguiOverlay(vulkan::Context &context,
 
   // Raster blits into TRANSFER_DST; always finish with PRESENT.
   if (data.imgui == nullptr || !data.imgui->initialized) {
-    (void)vkexec::image_barrier(*context.vkexec_context, command_buffer,
+    (void)vkexec::image_barrier(*context.vkexec_context,
+      command_buffer,
       {
         .image = swapchain_image,
         .old_layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -692,7 +693,8 @@ void RecordImguiOverlay(vulkan::Context &context,
 
   size_t const frame_slot = data.current_slot;
   if (overlay.overlay_secondaries.at(frame_slot) == VK_NULL_HANDLE) {
-    (void)vkexec::image_barrier(*context.vkexec_context, command_buffer,
+    (void)vkexec::image_barrier(*context.vkexec_context,
+      command_buffer,
       {
         .image = swapchain_image,
         .old_layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -711,7 +713,8 @@ void RecordImguiOverlay(vulkan::Context &context,
 
   VkImageView swapchain_view = context.swapchain->image_views().at(image_index);
 
-  (void)vkexec::image_barrier(*context.vkexec_context, command_buffer,
+  (void)vkexec::image_barrier(*context.vkexec_context,
+    command_buffer,
     {
       .image = swapchain_image,
       .old_layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -752,7 +755,8 @@ void RecordImguiOverlay(vulkan::Context &context,
   context.disp.cmdExecuteCommands(command_buffer, 1, &overlay.overlay_secondaries.at(frame_slot));
   context.disp.cmdEndRendering(command_buffer);
 
-  (void)vkexec::image_barrier(*context.vkexec_context, command_buffer,
+  (void)vkexec::image_barrier(*context.vkexec_context,
+    command_buffer,
     {
       .image = swapchain_image,
       .old_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,

@@ -87,26 +87,45 @@ function(vkgsplat_setup_dependencies)
     file(READ "${vkexec_SOURCE_DIR}/include/vkexec_extensions/timeline_semaphore/frame_ring.hpp"
          _vkexec_frame_ring_header)
     string(FIND "${_vkexec_compute_pipeline_header}" "make_sender(detail::make_compute_pipeline_spirv_factory"
-           _vkexec_bad_spirv)
+                _vkexec_bad_spirv)
     string(FIND "${_vkexec_compute_pipeline_header}" "make_sender(detail::make_compute_pipeline_glsl_factory"
-           _vkexec_bad_glsl)
+                _vkexec_bad_glsl)
     string(FIND "${_vkexec_frame_ring_header}" "make_sender(detail::make_frame_ring_factory" _vkexec_bad_frame_ring)
     string(FIND "${_vkexec_compute_pipeline_header}" "::vkexec::detail::make_compute_pipeline_spirv_factory"
-           _vkexec_fixed_spirv)
+                _vkexec_fixed_spirv)
     string(FIND "${_vkexec_compute_pipeline_header}" "::vkexec::detail::make_compute_pipeline_glsl_factory"
-           _vkexec_fixed_glsl)
+                _vkexec_fixed_glsl)
     string(FIND "${_vkexec_frame_ring_header}" "::vkexec::detail::make_frame_ring_factory" _vkexec_fixed_frame_ring)
-    if(NOT _vkexec_bad_spirv EQUAL -1 AND NOT _vkexec_bad_glsl EQUAL -1 AND NOT _vkexec_bad_frame_ring EQUAL -1
-       AND _vkexec_fixed_spirv EQUAL -1 AND _vkexec_fixed_glsl EQUAL -1 AND _vkexec_fixed_frame_ring EQUAL -1)
+    if(NOT
+       _vkexec_bad_spirv
+       EQUAL
+       -1
+       AND NOT
+           _vkexec_bad_glsl
+           EQUAL
+           -1
+       AND NOT
+           _vkexec_bad_frame_ring
+           EQUAL
+           -1
+       AND _vkexec_fixed_spirv EQUAL -1
+       AND _vkexec_fixed_glsl EQUAL -1
+       AND _vkexec_fixed_frame_ring EQUAL -1)
       find_package(Git REQUIRED)
       execute_process(
         COMMAND "${GIT_EXECUTABLE}" apply "${_vkexec_factory_patch}"
         WORKING_DIRECTORY "${vkexec_SOURCE_DIR}"
         RESULT_VARIABLE _vkexec_patch_result)
-      if(NOT _vkexec_patch_result EQUAL 0)
+      if(NOT
+         _vkexec_patch_result
+         EQUAL
+         0)
         message(FATAL_ERROR "Failed to apply vkexec factory namespace compatibility patch")
       endif()
-    elseif(_vkexec_fixed_spirv EQUAL -1 OR _vkexec_fixed_glsl EQUAL -1 OR _vkexec_fixed_frame_ring EQUAL -1)
+    elseif(
+      _vkexec_fixed_spirv EQUAL -1
+      OR _vkexec_fixed_glsl EQUAL -1
+      OR _vkexec_fixed_frame_ring EQUAL -1)
       message(FATAL_ERROR "Pinned vkexec factory headers differ from the expected compatibility patch")
     endif()
   endif()

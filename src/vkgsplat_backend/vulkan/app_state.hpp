@@ -8,9 +8,9 @@
 #include <vector>
 
 #include "frame_context.hpp"
+#include "gpu_buffers.hpp"
 #include "gs/gaussian_splat.hpp"
 #include "gs/push_constants.hpp"
-#include "gpu_buffers.hpp"
 #include "present_pacer.hpp"
 #include "vulkan/command/buffer.hpp"
 #include "vulkan/command/pool.hpp"
@@ -23,13 +23,13 @@
 #include <VkBootstrap.h>
 #include <VkBootstrapDispatch.h>
 
-#include <vkexec_vma/image.hpp>
 #include <vkexec/image_view.hpp>
 #include <vkexec/tensor.hpp>
 #include <vkexec_extensions/descriptor_heap/algorithm.hpp>
 #include <vkexec_extensions/descriptor_heap/buffer.hpp>
 #include <vkexec_extensions/descriptor_heap/heap_graphics_pipeline.hpp>
 #include <vkexec_extensions/timeline_semaphore/frame_ring.hpp>
+#include <vkexec_vma/image.hpp>
 #include <vkgsplat/lfd_config.hpp>
 
 
