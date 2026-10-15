@@ -83,8 +83,8 @@ namespace {
     }
     if (!needs_reallocation) { return true; }
 
-    auto resource_heap = vulkan::CreateDescriptorHeapBuffer(
-      *context.allocator, data.descriptor_heap_size, data.descriptor_heap_alignment);
+    auto resource_heap =
+      vulkan::CreateDescriptorHeapBuffer(*context.allocator, data.descriptor_heap_size, data.descriptor_heap_alignment);
     if (!resource_heap) {
       std::println("Failed to create shared resource heap buffer!");
       return false;
@@ -117,8 +117,7 @@ namespace {
       return false;
     }
     if (device_address == 0 || resource.byte_size == 0) {
-      std::println("GS resource descriptor has an invalid device address or empty range at slot {}",
-        descriptor_index);
+      std::println("GS resource descriptor has an invalid device address or empty range at slot {}", descriptor_index);
       return false;
     }
     if (resource.byte_size > context.device.physical_device.properties.limits.maxStorageBufferRange
@@ -132,7 +131,8 @@ namespace {
       return false;
     }
     auto const destination = heap_bytes.subspan(descriptor_offset, data.buffer_descriptor_size);
-    auto const written = vkexec::write_storage_buffer_descriptor(vkexec, device_address, resource.byte_size, destination);
+    auto const written =
+      vkexec::write_storage_buffer_descriptor(vkexec, device_address, resource.byte_size, destination);
     if (!written) {
       std::println("Failed to write GS resource descriptor: {}", written.error().message());
       return false;
@@ -140,9 +140,8 @@ namespace {
     return true;
   }
 
-  [[nodiscard]] auto WriteGsDescriptors(vulkan::Context const &context,
-    vkexec::context const &vkexec,
-    RenderData &data) -> bool
+  [[nodiscard]] auto WriteGsDescriptors(vulkan::Context const &context, vkexec::context const &vkexec, RenderData &data)
+    -> bool
   {
     // NOLINTBEGIN(bugprone-unchecked-optional-access)
     auto const geometry_buffer_size = static_cast<VkDeviceSize>(data.splat_count * sizeof(gs::GaussianGeometry));
@@ -240,8 +239,7 @@ auto QueryDescriptorHeapLayout(vulkan::Context const &context, RenderData &data)
   data.sampler_descriptor_size = layout->sampler_descriptor_size;
   data.descriptor_stride = layout->descriptor_stride;
   if (layout->resource_heap_alignment == 0 || layout->sampler_heap_alignment == 0
-      || layout->descriptor_stride < layout->buffer_descriptor_size
-      || layout->sampler_descriptor_size == 0) {
+      || layout->descriptor_stride < layout->buffer_descriptor_size || layout->sampler_descriptor_size == 0) {
     std::println("query_descriptor_heap_layout returned invalid descriptor sizes or alignments");
     return false;
   }

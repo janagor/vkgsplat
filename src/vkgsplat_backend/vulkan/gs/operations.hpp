@@ -1,9 +1,9 @@
 #ifndef VKGSPLAT_BACKEND_VULKAN_GS_OPERATIONS_HPP
 #define VKGSPLAT_BACKEND_VULKAN_GS_OPERATIONS_HPP
 
-#include <vulkan/vulkan_core.h>
 #include <expected>
 #include <vkgsplat_utility/error.hpp>
+#include <vulkan/vulkan_core.h>
 
 namespace vkgsplat {
 
@@ -20,10 +20,12 @@ namespace gs {
     VkCommandBuffer command_buffer,
     bool time_pass) -> std::expected<void, Error>;
 
-  [[nodiscard]] auto RecordPhaseACompute(vulkan::Context const &context, RenderData const &data,
+  [[nodiscard]] auto RecordPhaseACompute(vulkan::Context const &context,
+    RenderData const &data,
     VkCommandBuffer command_buffer) -> std::expected<void, Error>;
 
-  [[nodiscard]] auto RecordRasterization(vulkan::Context const &context, RenderData const &data,
+  [[nodiscard]] auto RecordRasterization(vulkan::Context const &context,
+    RenderData const &data,
     VkCommandBuffer command_buffer) -> std::expected<void, Error>;
 
 }// namespace gs

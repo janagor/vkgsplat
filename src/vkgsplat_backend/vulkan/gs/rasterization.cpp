@@ -6,8 +6,8 @@
 
 #include <vkexec/barrier.hpp>
 
-#include <vkgsplat_utility/types.hpp>
 #include <vkgsplat_utility/error.hpp>
+#include <vkgsplat_utility/types.hpp>
 
 #include <algorithm>
 #include <array>
@@ -198,7 +198,9 @@ auto PrepareQuiltPresent(vulkan::Context const &context,
       .src_access = 0,
       .dst_access = VK_ACCESS_TRANSFER_WRITE_BIT,
     });
-  if (!swapchain_barrier) { return std::unexpected{ MakeError(std::errc::io_error, swapchain_barrier.error().message()) }; }
+  if (!swapchain_barrier) {
+    return std::unexpected{ MakeError(std::errc::io_error, swapchain_barrier.error().message()) };
+  }
   return {};
 }
 
@@ -306,7 +308,9 @@ auto DispatchRasterization(vulkan::Context const &context,
     .offset = { .x = 0, .y = 0 },
     .extent = extent,
   };
-  if (auto recorded = DrawQuiltTile(context, data, push_constants, command_buffer, full_tile, true); !recorded) { return recorded; }
+  if (auto recorded = DrawQuiltTile(context, data, push_constants, command_buffer, full_tile, true); !recorded) {
+    return recorded;
+  }
 
   return BlitQuiltToSwapchain(context, data, command_buffer, image_index);
 }

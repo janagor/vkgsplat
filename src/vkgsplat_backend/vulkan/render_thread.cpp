@@ -36,8 +36,9 @@ namespace vkgsplat {
 
 namespace {
 
-  [[nodiscard]] auto RecordSphereDraw(vulkan::Context &context, RenderData &data, VkCommandBuffer command_buffer,
-    size_t image_index) -> std::expected<void, Error>
+  [[nodiscard]] auto
+    RecordSphereDraw(vulkan::Context &context, RenderData &data, VkCommandBuffer command_buffer, size_t image_index)
+      -> std::expected<void, Error>
   {
     BindDescriptorHeap(context, data, command_buffer);
     if (auto recorded = gs::EvalGsPipeline(context, data, command_buffer); !recorded) { return recorded; }
@@ -132,9 +133,7 @@ namespace {
 
     auto const signal_value = ring.allocate_signal_value();
     auto submit_sync = ring.make_submit_sync(frame_slot, image_index, signal_value, VK_PIPELINE_STAGE_2_TRANSFER_BIT);
-    if (!submit_sync) {
-      return std::unexpected{ MakeError(std::errc::io_error, submit_sync.error().message()) };
-    }
+    if (!submit_sync) { return std::unexpected{ MakeError(std::errc::io_error, submit_sync.error().message()) }; }
 
     std::array<VkCommandBuffer, 1> const cmds{ command_buffer };
     if (auto submitted = context.vkexec_context->submit(vkexec::queue_submit{
@@ -379,15 +378,16 @@ auto RenderThread::DrawFrameVulkan(size_t frame_slot) -> std::expected<void, Err
   if (!presented) { return RetireAcquiredImage(context, data, presented.error()); }
   result = *presented;
 
-  if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR ||
-      (result == VK_SUCCESS && acquired_suboptimal)) {
+  if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR
+      || (result == VK_SUCCESS && acquired_suboptimal)) {
     if (auto recreated = RecreateSwapchain(context, data); !recreated) { return std::unexpected{ recreated.error() }; }
     MarkAllSlotsReady();
     return {};
   }
   if (result != VK_SUCCESS) {
-    return RetireAcquiredImage(context, data, MakeError(std::errc::io_error,
-      "failed to present swapchain image. VkResult=" + std::to_string(result)));
+    return RetireAcquiredImage(context,
+      data,
+      MakeError(std::errc::io_error, "failed to present swapchain image. VkResult=" + std::to_string(result)));
   }
 
   return {};

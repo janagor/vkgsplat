@@ -7,9 +7,9 @@
 
 #include <vkgsplat_utility/types.hpp>
 
-#include <vulkan/vulkan_core.h>
 #include <expected>
 #include <vkgsplat_utility/error.hpp>
+#include <vulkan/vulkan_core.h>
 
 namespace vkgsplat::gs {
 

@@ -9,9 +9,9 @@
 
 #include <vkgsplat_utility/types.hpp>
 
+#include <expected>
 #include <print>
 #include <span>
-#include <expected>
 #include <system_error>
 #include <vkgsplat_utility/error.hpp>
 
@@ -105,13 +105,15 @@ namespace {
     return vkexec::dispatch{ .x = group_count_x, .y = group_count_y, .z = 1U };
   }
 
-  [[nodiscard]] auto RecordBinning(vulkan::Context const &context, RenderData const &data,
+  [[nodiscard]] auto RecordBinning(vulkan::Context const &context,
+    RenderData const &data,
     VkCommandBuffer command_buffer) -> std::expected<void, Error>
   {
     if (!data.bin_algorithm) { return {}; }
     ScopedGpuPass const timer{ context, data, command_buffer, GpuPass::kBinning };
-    if (auto recorded = RecordHeapDispatch(
-          context, command_buffer, *data.bin_algorithm, data.bin_push, data.splat_count); !recorded) {
+    if (auto recorded =
+          RecordHeapDispatch(context, command_buffer, *data.bin_algorithm, data.bin_push, data.splat_count);
+      !recorded) {
       return recorded;
     }
     auto barrier = vkexec::barrier::compute_read(*context.vkexec_context, command_buffer);
@@ -119,7 +121,8 @@ namespace {
     return {};
   }
 
-  [[nodiscard]] auto RecordSortPreparation(vulkan::Context const &context, RenderData const &data,
+  [[nodiscard]] auto RecordSortPreparation(vulkan::Context const &context,
+    RenderData const &data,
     VkCommandBuffer command_buffer) -> std::expected<void, Error>
   {
     if (!data.prepare_sort_algorithm) { return {}; }
@@ -136,9 +139,11 @@ namespace {
     return {};
   }
 
-  [[nodiscard]] auto RecordRadixStep(vulkan::Context const &context, VkCommandBuffer command_buffer,
-    vkexec::algorithm const &algorithm, RadixPushConstants const &push, VkBuffer indirect_buffer)
-    -> std::expected<void, Error>
+  [[nodiscard]] auto RecordRadixStep(vulkan::Context const &context,
+    VkCommandBuffer command_buffer,
+    vkexec::algorithm const &algorithm,
+    RadixPushConstants const &push,
+    VkBuffer indirect_buffer) -> std::expected<void, Error>
   {
     if (auto recorded = RecordHeapIndirect(context, command_buffer, algorithm, push, indirect_buffer); !recorded) {
       return recorded;
@@ -148,12 +153,11 @@ namespace {
     return {};
   }
 
-  [[nodiscard]] auto RecordRadixSort(vulkan::Context const &context, RenderData const &data,
+  [[nodiscard]] auto RecordRadixSort(vulkan::Context const &context,
+    RenderData const &data,
     VkCommandBuffer command_buffer) -> std::expected<void, Error>
   {
-    if (!data.radix_histogram_algorithm || !data.radix_scatter_algorithm || !data.radix_dispatch_buffer) {
-      return {};
-    }
+    if (!data.radix_histogram_algorithm || !data.radix_scatter_algorithm || !data.radix_dispatch_buffer) { return {}; }
     ScopedGpuPass const timer{ context, data, command_buffer, GpuPass::kRadixSort };
     constexpr u32 kRadixPasses = 4U;
     constexpr u32 kRadixBitsPerPass = 8U;
@@ -171,12 +175,14 @@ namespace {
         .pad0 = 0U,
         .pad1 = 0U,
       };
-      if (auto recorded = RecordRadixStep(
-            context, command_buffer, *data.radix_histogram_algorithm, radix_push, indirect_buffer); !recorded) {
+      if (auto recorded =
+            RecordRadixStep(context, command_buffer, *data.radix_histogram_algorithm, radix_push, indirect_buffer);
+        !recorded) {
         return recorded;
       }
-      if (auto recorded = RecordRadixStep(
-            context, command_buffer, *data.radix_scatter_algorithm, radix_push, indirect_buffer); !recorded) {
+      if (auto recorded =
+            RecordRadixStep(context, command_buffer, *data.radix_scatter_algorithm, radix_push, indirect_buffer);
+        !recorded) {
         return recorded;
       }
     }
@@ -196,7 +202,9 @@ auto RecordProjection(vulkan::Context const &context,
 
   if (time_pass) { data.gpu_pass_timer.write(context, data.current_slot, GpuPass::kProjection, false, command_buffer); }
 
-  if (auto recorded = RecordHeapDispatch(context, command_buffer, *data.project_algorithm, data.project_push, data.splat_count); !recorded) {
+  if (auto recorded =
+        RecordHeapDispatch(context, command_buffer, *data.project_algorithm, data.project_push, data.splat_count);
+    !recorded) {
     return recorded;
   }
   auto barrier = vkexec::barrier::compute_read(*context.vkexec_context, command_buffer);

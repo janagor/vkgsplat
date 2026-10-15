@@ -90,7 +90,8 @@ auto RecreateSwapchain(vulkan::Context &context, RenderData &data) -> std::expec
   }
   // Submission completion does not cover a pending presentation wait.
   if (context.disp.queueWaitIdle(data.present_queue) != VK_SUCCESS) {
-    return std::unexpected{ MakeError(std::errc::io_error, "failed to wait for presentation before swapchain recreation") };
+    return std::unexpected{ MakeError(
+      std::errc::io_error, "failed to wait for presentation before swapchain recreation") };
   }
   if (extent.width == 0 || extent.height == 0) { return CreateSyncObjects(context, data); }
 
@@ -102,8 +103,7 @@ auto RecreateSwapchain(vulkan::Context &context, RenderData &data) -> std::expec
   if (context.swapchain == nullptr) {
     return std::unexpected{ MakeError(std::errc::state_not_recoverable, "swapchain is not initialized") };
   }
-  if (auto recreated = context.swapchain->recreate(context.device, extent);
-    !recreated) {
+  if (auto recreated = context.swapchain->recreate(context.device, extent); !recreated) {
     return std::unexpected{ recreated.error() };
   }
 
