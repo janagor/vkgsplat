@@ -16,8 +16,10 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <deque>
 #include <expected>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <print>
 #include <span>
@@ -70,10 +72,8 @@ struct ImGuiOverlayState
   std::array<char, kImGuiFpsLabelCapacity> fps_label{ "FPS: --" };
   std::array<char, kImGuiGpuLabelCapacity> gpu_label{};
   std::chrono::steady_clock::time_point last_fps_update;
-  std::chrono::steady_clock::time_point last_frame_time;
-  float fps_ema = 0.0F;
-  // After an idle gap, skip the next interval(s) while submit cadence restabilizes.
-  u32 fps_ignore_samples = 0;
+  std::mutex present_times_mutex;
+  std::deque<std::chrono::steady_clock::time_point> present_times;
   VkExtent2D last_extent{};
 };
 
@@ -84,11 +84,7 @@ namespace {
   constexpr float kFpsWindowAlpha = 0.45F;
   constexpr double kMsPerSecond = 1000.0;
   constexpr auto kFpsUpdateInterval = std::chrono::milliseconds{ 100 };
-  constexpr float kFpsEmaAlpha = 0.1F;
-  // Accept only plausible inter-submit periods (reject idle gaps and near-instant refill submits).
-  constexpr float kMinFrameDeltaForFps = 1.0F / 240.0F;
-  constexpr float kMaxFrameDeltaForFps = 1.0F / 15.0F;
-  constexpr u32 kFpsIgnoreSamplesAfterHitch = 2;
+  constexpr auto kFpsWindowDuration = std::chrono::seconds{ 1 };
 
   [[nodiscard]] auto AllocateSlot(uint64_t &freelist) -> std::optional<uint32_t>
   {
@@ -302,35 +298,32 @@ namespace {
     return true;
   }
 
-  void SampleFrameTime(ImGuiOverlayState &overlay)
+  void UpdateFpsLabel(ImGuiOverlayState &overlay)
   {
     auto const now = std::chrono::steady_clock::now();
-    if (overlay.last_frame_time.time_since_epoch().count() != 0) {
-      float const frame_delta = std::chrono::duration<float>(now - overlay.last_frame_time).count();
+    if (overlay.last_fps_update.time_since_epoch().count() != 0
+        && now - overlay.last_fps_update < kFpsUpdateInterval) { return; }
+    overlay.last_fps_update = now;
 
-      if (overlay.fps_ignore_samples > 0U) {
-        --overlay.fps_ignore_samples;
-      } else if (frame_delta >= kMinFrameDeltaForFps && frame_delta <= kMaxFrameDeltaForFps) {
-        float const fps = 1.0F / frame_delta;
-        overlay.fps_ema =
-          overlay.fps_ema > 0.0F ? ((1.0F - kFpsEmaAlpha) * overlay.fps_ema) + (kFpsEmaAlpha * fps) : fps;
-      } else if (frame_delta > kMaxFrameDeltaForFps) {
-        // Idle wait or hitch: don't poison EMA, and ignore the next refill intervals.
-        overlay.fps_ignore_samples = kFpsIgnoreSamplesAfterHitch;
+    size_t interval_count = 0;
+    double elapsed_seconds = 0.0;
+    {
+      std::scoped_lock const lock{ overlay.present_times_mutex };
+      if (overlay.present_times.size() > 1) {
+        interval_count = overlay.present_times.size() - 1;
+        elapsed_seconds =
+          std::chrono::duration<double>(overlay.present_times.back() - overlay.present_times.front()).count();
       }
     }
-    overlay.last_frame_time = now;
-
-    bool const first_sample = overlay.last_fps_update.time_since_epoch().count() == 0;
-    if (first_sample || now - overlay.last_fps_update >= kFpsUpdateInterval) {
-      overlay.last_fps_update = now;
-      float const fps = overlay.fps_ema > 0.0F ? overlay.fps_ema : 0.0F;
-      double const frame_ms = fps > 0.0F ? kMsPerSecond / static_cast<double>(fps) : 0.0;
+    if (interval_count > 0 && elapsed_seconds > 0.0) {
+      double const fps = static_cast<double>(interval_count) / elapsed_seconds;
+      double const frame_ms = kMsPerSecond * elapsed_seconds / static_cast<double>(interval_count);
       // NOLINTNEXTLINE(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
-      (void)std::snprintf(
-        overlay.fps_label.data(), overlay.fps_label.size(), "FPS: %.1f (%.2f ms)", static_cast<double>(fps), frame_ms);
-      InvalidateOverlaySecondaries(overlay);
+      (void)std::snprintf(overlay.fps_label.data(), overlay.fps_label.size(), "FPS: %.1f (%.2f ms)", fps, frame_ms);
+    } else {
+      overlay.fps_label = { "FPS: --" };
     }
+    InvalidateOverlaySecondaries(overlay);
   }
 
   void RecordOverlaySecondary(vulkan::Context &context, RenderData const &data, size_t frame_slot)
@@ -642,7 +635,7 @@ void BuildImGuiFrameSnapshot(RenderData &data, size_t frame_slot, ImGuiFrameSnap
   if (data.imgui == nullptr || !data.imgui->initialized) { return; }
 
   auto &overlay = *data.imgui;
-  SampleFrameTime(overlay);
+  UpdateFpsLabel(overlay);
 
   out_snapshot.ui_generation = overlay.ui_generation;
   std::memcpy(out_snapshot.fps_label.data(), overlay.fps_label.data(), overlay.fps_label.size());
@@ -658,6 +651,33 @@ void BuildImGuiFrameSnapshot(RenderData &data, size_t frame_slot, ImGuiFrameSnap
   overlay.frame_draw_data.at(frame_slot) = CloneImDrawData(ImGui::GetDrawData());
   // Ensure the matching secondary is re-recorded against this slot's clone.
   overlay.secondary_generation.at(frame_slot) = 0;
+}
+
+void RecordImguiPresentedFrame(RenderData const &data)
+{
+  if (data.imgui == nullptr) { return; }
+
+  auto &overlay = *data.imgui;
+  auto const now = std::chrono::steady_clock::now();
+  std::scoped_lock const lock{ overlay.present_times_mutex };
+  overlay.present_times.push_back(now);
+  while (overlay.present_times.size() > 2 && now - overlay.present_times.at(1) >= kFpsWindowDuration) {
+    overlay.present_times.pop_front();
+  }
+}
+
+void ResetImguiFpsSamples(RenderData const &data)
+{
+  if (data.imgui == nullptr) { return; }
+
+  auto &overlay = *data.imgui;
+  {
+    std::scoped_lock const lock{ overlay.present_times_mutex };
+    overlay.present_times.clear();
+  }
+  overlay.last_fps_update = {};
+  overlay.fps_label = { "FPS: --" };
+  InvalidateOverlaySecondaries(overlay);
 }
 
 auto RecordImguiOverlay(vulkan::Context &context,

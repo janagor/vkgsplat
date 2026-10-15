@@ -105,6 +105,7 @@ namespace {
         redraw_needed = false;
       } else if (!input.screenshot_requested()) {
         // CPU sleep until the next window/input event; next iteration polls + may draw.
+        renderer.wait_idle();
         window.wait_events();
       }
 
