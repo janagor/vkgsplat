@@ -54,11 +54,11 @@ namespace {
   {
     DestroySortBuffers(context, data);
 
-    if (context.vkexec_context == nullptr) {
-      std::println("vkexec context missing for sort buffers!");
+    if (context.allocator == nullptr) {
+      std::println("VMA allocator missing for sort buffers!");
       return false;
     }
-    auto &vkexec = *context.vkexec_context;
+    auto &allocator = *context.allocator;
 
     if (data.max_bin_instances == 0) {
       std::println("Sort gaussians requires binning buffers first!");
@@ -79,12 +79,12 @@ namespace {
     auto const dispatch_size = static_cast<VkDeviceSize>(sizeof(VkDispatchIndirectCommand));
     auto const draw_indirect_size = static_cast<VkDeviceSize>(sizeof(VkDrawIndirectCommand));
 
-    auto keys = vulkan::CreateDeviceStorageBuffer(vkexec, keys_size);
-    auto values = vulkan::CreateDeviceStorageBuffer(vkexec, values_size);
-    auto histogram = vulkan::CreateDeviceStorageBuffer(vkexec, histogram_size);
-    auto dispatch = vulkan::CreateDeviceStorageBuffer(vkexec, dispatch_size);
-    auto draw_indirect = vulkan::CreateDeviceStorageBuffer(vkexec, draw_indirect_size);
-    auto ranges = vulkan::CreateDeviceStorageBuffer(vkexec, ranges_size);
+    auto keys = vulkan::CreateDeviceStorageBuffer(allocator, keys_size);
+    auto values = vulkan::CreateDeviceStorageBuffer(allocator, values_size);
+    auto histogram = vulkan::CreateDeviceStorageBuffer(allocator, histogram_size);
+    auto dispatch = vulkan::CreateDeviceStorageBuffer(allocator, dispatch_size);
+    auto draw_indirect = vulkan::CreateDeviceStorageBuffer(allocator, draw_indirect_size);
+    auto ranges = vulkan::CreateDeviceStorageBuffer(allocator, ranges_size);
     if (!keys || !values || !histogram || !dispatch || !draw_indirect || !ranges) {
       std::println("Failed to create sort buffers!");
       DestroySortBuffers(context, data);

@@ -161,7 +161,7 @@ void EvalGsPipeline(vulkan::Context &context, RenderData &data, VkCommandBuffer 
     bool first_tile = true;
     for (u32 row = 0U; row < rows; ++row) {
       for (u32 col = 0U; col < cols; ++col) {
-        if (!first_tile) { vkexec::barrier::graphics_to_compute(command_buffer); }
+        if (!first_tile) { (void)vkexec::barrier::graphics_to_compute(*context.vkexec_context, command_buffer); }
 
         LfdGridCell const logical = LfdLogicalCellForGridPosition(data.lfd_view_order, data.lfd_grid, col, row);
 

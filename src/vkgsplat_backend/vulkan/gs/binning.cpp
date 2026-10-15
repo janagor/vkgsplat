@@ -36,11 +36,11 @@ namespace {
   {
     DestroyBinBuffers(context, data);
 
-    if (context.vkexec_context == nullptr) {
-      std::println("vkexec context missing for binning buffers!");
+    if (context.allocator == nullptr) {
+      std::println("VMA allocator missing for binning buffers!");
       return false;
     }
-    auto &vkexec = *context.vkexec_context;
+    auto &allocator = *context.allocator;
 
     data.max_bin_instances = data.splat_count;
     if (data.max_bin_instances == 0) {
@@ -52,9 +52,9 @@ namespace {
     auto const values_size = static_cast<VkDeviceSize>(data.max_bin_instances * sizeof(u32));
     auto const count_size = static_cast<VkDeviceSize>(sizeof(u32));
 
-    auto keys = vulkan::CreateDeviceStorageBuffer(vkexec, keys_size);
-    auto values = vulkan::CreateDeviceStorageBuffer(vkexec, values_size);
-    auto count = vulkan::CreateDeviceStorageBuffer(vkexec, count_size);
+    auto keys = vulkan::CreateDeviceStorageBuffer(allocator, keys_size);
+    auto values = vulkan::CreateDeviceStorageBuffer(allocator, values_size);
+    auto count = vulkan::CreateDeviceStorageBuffer(allocator, count_size);
     if (!keys || !values || !count) {
       std::println("Failed to create binning buffers!");
       DestroyBinBuffers(context, data);

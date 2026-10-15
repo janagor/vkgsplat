@@ -46,7 +46,7 @@ void DispatchProjection(vulkan::Context const &context,
     data.project_algorithm->bind(),
     std::as_bytes(std::span{ &push_constants, 1 }),
     data.project_algorithm->groups_for(data.splat_count));
-  vkexec::barrier::compute_read(command_buffer);
+  (void)vkexec::barrier::compute_read(*context.vkexec_context, command_buffer);
 }
 
 void DestroyProjection(vulkan::Context &context, RenderData &data)

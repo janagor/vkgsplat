@@ -160,10 +160,33 @@ auto DeviceInitialization(vulkan::Context &context, DriverConfig const &config) 
 
       vkb::PhysicalDeviceSelector phys_device_selector(context.instance);
       phys_device_selector.set_surface(context.surface);
+      phys_device_selector.set_minimum_version(requirements.api_version_major, requirements.api_version_minor);
       for (char const *extension : requirements.device_extensions) {
         phys_device_selector.add_required_extension(extension);
       }
-      for (auto const &feature : requirements.required_extension_features) { feature.require(phys_device_selector); }
+      VkPhysicalDeviceDescriptorHeapFeaturesEXT descriptor_heap_features{};
+      descriptor_heap_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_FEATURES_EXT;
+      descriptor_heap_features.descriptorHeap = VK_TRUE;
+      phys_device_selector.add_required_extension_features(descriptor_heap_features);
+
+      VkPhysicalDeviceShaderUntypedPointersFeaturesKHR untyped_pointers_features{};
+      untyped_pointers_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_UNTYPED_POINTERS_FEATURES_KHR;
+      untyped_pointers_features.shaderUntypedPointers = VK_TRUE;
+      phys_device_selector.add_required_extension_features(untyped_pointers_features);
+
+      VkPhysicalDeviceVulkan12Features features_12{};
+      features_12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+      features_12.bufferDeviceAddress = VK_TRUE;
+      features_12.timelineSemaphore = VK_TRUE;
+      phys_device_selector.add_required_extension_features(features_12);
+
+      VkPhysicalDeviceVulkan13Features features_13{};
+      features_13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+      features_13.synchronization2 = VK_TRUE;
+      features_13.dynamicRendering = VK_TRUE;
+      features_13.shaderDemoteToHelperInvocation = VK_TRUE;
+      features_13.maintenance4 = VK_TRUE;
+      phys_device_selector.add_required_extension_features(features_13);
 
       return VKBResultToExpected(phys_device_selector.select());
     })

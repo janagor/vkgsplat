@@ -19,8 +19,6 @@
 #include <vkexec/pipeline.hpp>
 #include <vkexec/resource_table.hpp>
 #include <vkexec_extensions/descriptor_heap/descriptor_heap.hpp>
-#include <vkexec_extensions/descriptor_heap/resource_table.hpp>
-#include <vkexec_extensions/descriptor_heap/strategy.hpp>
 #include <vulkan/vulkan_core.h>
 
 namespace vkgsplat {
@@ -69,7 +67,7 @@ namespace {
 auto QueryDescriptorHeapLayout(vulkan::Context const &context, RenderData &data) -> bool
 {
   auto *vkexec = RequireVkexec(context);
-  if (vkexec == nullptr) { return false; }
+  if (vkexec == nullptr || context.allocator == nullptr) { return false; }
 
   auto const layout = vkexec::query_descriptor_heap_layout(*vkexec);
   if (!layout) {
@@ -81,12 +79,14 @@ auto QueryDescriptorHeapLayout(vulkan::Context const &context, RenderData &data)
   data.image_descriptor_size = layout->image_descriptor_size;
   data.sampler_descriptor_size = layout->sampler_descriptor_size;
   data.descriptor_stride = layout->descriptor_stride;
+  data.descriptor_heap_alignment = layout->resource_heap_alignment;
   data.descriptor_heap_size = vkexec::descriptor_heap_byte_size(*layout, kSharedResourceSlots);
   auto const descriptor_region =
     static_cast<VkDeviceSize>(data.descriptor_stride) * static_cast<VkDeviceSize>(kSharedResourceSlots);
   data.reserved_range_offset = AlignUp(descriptor_region, layout->resource_heap_alignment);
   data.reserved_range_size = layout->min_resource_heap_reserved_range;
   data.sampler_heap_size = vkexec::sampler_heap_byte_size(*layout, kSharedSamplerSlots);
+  data.sampler_heap_alignment = layout->sampler_heap_alignment;
   auto const sampler_region =
     static_cast<VkDeviceSize>(data.sampler_descriptor_size) * static_cast<VkDeviceSize>(kSharedSamplerSlots);
   data.sampler_reserved_range_offset = AlignUp(sampler_region, layout->sampler_heap_alignment);
@@ -103,6 +103,7 @@ void DestroyDescriptorHeap(vulkan::Context &context, RenderData &data)
 
 auto RefreshDescriptorHeap(vulkan::Context &context, RenderData &data) -> bool
 {
+  if (context.allocator == nullptr) { return false; }
   if (!QueryDescriptorHeapLayout(context, data)) { return false; }
 
   if (!data.geometry_buffer || !data.appearance_buffer || !data.projected_buffer || !data.unsorted_keys_buffer
@@ -124,12 +125,14 @@ auto RefreshDescriptorHeap(vulkan::Context &context, RenderData &data) -> bool
     // secondary command buffers invalidated after installing the new device addresses.
     if (data.imgui != nullptr) { context.disp.deviceWaitIdle(); }
 
-    auto resource_heap = vulkan::CreateDescriptorHeapBuffer(*vkexec, data.descriptor_heap_size);
+    auto resource_heap = vulkan::CreateDescriptorHeapBuffer(
+      *context.allocator, data.descriptor_heap_size, data.descriptor_heap_alignment);
     if (!resource_heap) {
       std::println("Failed to create shared resource heap buffer!");
       return false;
     }
-    auto sampler_heap = vulkan::CreateDescriptorHeapBuffer(*vkexec, data.sampler_heap_size);
+    auto sampler_heap = vulkan::CreateDescriptorHeapBuffer(
+      *context.allocator, data.sampler_heap_size, data.sampler_heap_alignment);
     if (!sampler_heap) {
       std::println("Failed to create shared sampler heap buffer!");
       return false;
@@ -169,27 +172,38 @@ auto RefreshDescriptorHeap(vulkan::Context &context, RenderData &data) -> bool
     vkexec::buffer_resource(data.sort_histogram_buffer->handle(), sort_histogram_buffer_size));
 
   auto heap_bytes = data.descriptor_heap_buffer->mapped();
-  vkexec::heap_table_lower_env const lower_env{
-    .resource_heap_bytes = heap_bytes,
-    .sampler_heap_bytes = {},
-    .buffer_descriptor_size = data.buffer_descriptor_size,
-    .image_descriptor_size = data.image_descriptor_size,
-    .descriptor_stride = data.descriptor_stride,
-    .sampler_descriptor_size = 0,
-    .sampler_descriptor_stride = 0,
-    .indices = kGsPhysicalIndices,
-    .sampler_indices = {},
-    .image_view_infos = {},
-    .sampler_infos = {},
+  std::array<VkDeviceAddress, GsHeapSchema::binding_count> const device_addresses{
+    vulkan::DeviceAddressOrZero(*data.geometry_buffer),
+    vulkan::DeviceAddressOrZero(*data.appearance_buffer),
+    vulkan::DeviceAddressOrZero(data.sorted_indices->device()),
+    vulkan::DeviceAddressOrZero(data.sort_entries->device()),
+    vulkan::DeviceAddressOrZero(*data.projected_buffer),
+    vulkan::DeviceAddressOrZero(*data.unsorted_keys_buffer),
+    vulkan::DeviceAddressOrZero(*data.unsorted_values_buffer),
+    vulkan::DeviceAddressOrZero(*data.sorted_keys_buffer),
+    vulkan::DeviceAddressOrZero(*data.sorted_values_buffer),
+    vulkan::DeviceAddressOrZero(*data.tile_ranges_buffer),
+    vulkan::DeviceAddressOrZero(*data.sort_histogram_buffer),
   };
-
-  // Heap table lowering does not depend on a pipeline; the backend-neutral
-  // interface retains this argument for descriptor-set implementations.
-  vkexec::pipeline_resources const unused_pipeline{};
-  auto const lowered = vkexec::detail::heap_descriptor_backend::lower(*vkexec, unused_pipeline, resources, lower_env);
-  if (!lowered) {
-    std::println("Failed to lower GS resource table: {}", lowered.error().message());
-    return false;
+  auto const entries = resources.entries();
+  std::size_t entry_index{};
+  for (auto const &entry : entries) {
+    auto const descriptor_index = static_cast<std::size_t>(kGsPhysicalIndices.at(entry_index));
+    auto const descriptor_offset = descriptor_index * data.descriptor_stride;
+    if (descriptor_offset > heap_bytes.size()
+        || data.buffer_descriptor_size > heap_bytes.size() - descriptor_offset) {
+      std::println("GS resource descriptor is outside the mapped heap");
+      return false;
+    }
+    auto const destination = heap_bytes.subspan(descriptor_offset, data.buffer_descriptor_size);
+    auto const &resource = entry.resource;
+    auto const written = vkexec::write_storage_buffer_descriptor(
+      *vkexec, device_addresses.at(entry_index), resource.byte_size, destination);
+    if (!written) {
+      std::println("Failed to write GS resource descriptor: {}", written.error().message());
+      return false;
+    }
+    ++entry_index;
   }
   if (auto const flushed = data.descriptor_heap_buffer->flush(); !flushed) {
     std::println("Failed to flush GS descriptor heap: {}", flushed.error().message());

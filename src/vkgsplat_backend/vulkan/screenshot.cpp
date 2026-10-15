@@ -19,7 +19,7 @@
 #include <vkgsplat_utility/types.hpp>
 
 #include <vkexec/barrier.hpp>
-#include <vkexec/gpu_buffer.hpp>
+#include <vkexec_vma/gpu_buffer.hpp>
 #include <vkexec/queue_submit.hpp>
 #include <vulkan/vulkan_core.h>
 
@@ -50,6 +50,9 @@ auto SaveColorTargetPng(Context &context, RenderData &data, std::string_view pat
   if (context.vkexec_context == nullptr) {
     return std::unexpected{ MakeError(std::errc::state_not_recoverable, "vkexec context missing for screenshot") };
   }
+  if (context.allocator == nullptr) {
+    return std::unexpected{ MakeError(std::errc::state_not_recoverable, "VMA allocator missing for screenshot") };
+  }
   if (!data.frame_ring.has_value()) {
     return std::unexpected{ MakeError(std::errc::state_not_recoverable, "frame_ring missing for screenshot") };
   }
@@ -63,9 +66,9 @@ auto SaveColorTargetPng(Context &context, RenderData &data, std::string_view pat
 
   constexpr u32 kChannels = 4;
   auto const byte_size = static_cast<VkDeviceSize>(data.color_width) * data.color_height * kChannels;
-  auto staging_created = CreateStagingBuffer(*context.vkexec_context, byte_size);
+  auto staging_created = CreateStagingBuffer(*context.allocator, byte_size);
   if (!staging_created) { return std::unexpected{ staging_created.error() }; }
-  auto staging = std::optional<vkexec::gpu_buffer>{ std::move(*staging_created) };
+  auto staging = std::optional<vulkan::GpuBuffer>{ std::move(*staging_created) };
 
   auto buffers = data.command_pool->allocate_buffers(1);
   if (!buffers) { return std::unexpected{ buffers.error() }; }
@@ -88,7 +91,7 @@ auto SaveColorTargetPng(Context &context, RenderData &data, std::string_view pat
   }
 
   // After a normal frame the color target is already TRANSFER_SRC_OPTIMAL.
-  vkexec::image_barrier(cmd,
+  (void)vkexec::image_barrier(*context.vkexec_context, cmd,
     {
       .image = data.color_image->handle(),
       .old_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
@@ -145,6 +148,9 @@ auto SaveColorTargetPng(Context &context, RenderData &data, std::string_view pat
   auto const mapped = staging->mapped();
   if (mapped.empty()) {
     return std::unexpected{ MakeError(std::errc::io_error, "failed to map screenshot staging buffer") };
+  }
+  if (auto invalidated = staging->invalidate(); !invalidated) {
+    return std::unexpected{ MakeError(std::errc::io_error, invalidated.error().message()) };
   }
 
   auto const pixels = std::span<std::uint8_t const>{

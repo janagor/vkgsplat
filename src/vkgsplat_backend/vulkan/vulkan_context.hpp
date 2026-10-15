@@ -8,6 +8,7 @@
 #include <VkBootstrap.h>
 #include <VkBootstrapDispatch.h>
 #include <vkexec/context.hpp>
+#include <vkexec_vma/allocator.hpp>
 
 #include "presentable_swapchain.hpp"
 #include <vkgsplat/platform.hpp>
@@ -23,8 +24,9 @@ struct Context
   VkSurfaceKHR surface{};
   vkb::Device device{};
   vkb::DispatchTable disp;
-  /// Adopted vkexec context: owns VMA; does not own instance/device. Destroy before device.
+  /// Adopted vkexec context borrows instance/device; destroy after dependent resources.
   std::unique_ptr<vkexec::context> vkexec_context;
+  std::unique_ptr<vkexec::vma::allocator> allocator;
   std::unique_ptr<PresentableSwapchain> swapchain;
 
   bool present_timing_enabled = false;

@@ -62,6 +62,9 @@ function(vkgsplat_setup_dependencies)
   set(vkexec_BUILD_EXAMPLES
       OFF
       CACHE BOOL "Build vkexec example executables" FORCE)
+  set(vkexec_BUILD_VMA
+      ON
+      CACHE BOOL "Build vkexec VMA resource module" FORCE)
   if(NOT TARGET vkexec::vkexec)
     cpmaddpackage(
       NAME
@@ -69,16 +72,51 @@ function(vkgsplat_setup_dependencies)
       GITHUB_REPOSITORY
       "janagor/vkexec"
       GIT_TAG
-      "73176a3e6a3df3ec45f42bb0a955e8317517de25"
+      "fa5e8e59923d2a1ba45747bf7d0ffca83dc414cd"
       SYSTEM
       YES
       OPTIONS
       "vkexec_BUILD_EXAMPLES OFF")
   endif()
+  # The selected vkexec revision has three factory lookups that resolve to
+  # vkexec::factory::detail instead of the declared vkexec::detail namespace.
+  # Keep this narrow compatibility patch until the dependency fixes those headers.
+  set(_vkexec_factory_patch "${PROJECT_SOURCE_DIR}/cmake/patches/vkexec-factory-detail-namespace.patch")
+  if(DEFINED vkexec_SOURCE_DIR AND EXISTS "${vkexec_SOURCE_DIR}/include/vkexec/compute_pipeline.hpp")
+    file(READ "${vkexec_SOURCE_DIR}/include/vkexec/compute_pipeline.hpp" _vkexec_compute_pipeline_header)
+    file(READ "${vkexec_SOURCE_DIR}/include/vkexec_extensions/timeline_semaphore/frame_ring.hpp"
+         _vkexec_frame_ring_header)
+    string(FIND "${_vkexec_compute_pipeline_header}" "make_sender(detail::make_compute_pipeline_spirv_factory"
+           _vkexec_bad_spirv)
+    string(FIND "${_vkexec_compute_pipeline_header}" "make_sender(detail::make_compute_pipeline_glsl_factory"
+           _vkexec_bad_glsl)
+    string(FIND "${_vkexec_frame_ring_header}" "make_sender(detail::make_frame_ring_factory" _vkexec_bad_frame_ring)
+    string(FIND "${_vkexec_compute_pipeline_header}" "::vkexec::detail::make_compute_pipeline_spirv_factory"
+           _vkexec_fixed_spirv)
+    string(FIND "${_vkexec_compute_pipeline_header}" "::vkexec::detail::make_compute_pipeline_glsl_factory"
+           _vkexec_fixed_glsl)
+    string(FIND "${_vkexec_frame_ring_header}" "::vkexec::detail::make_frame_ring_factory" _vkexec_fixed_frame_ring)
+    if(NOT _vkexec_bad_spirv EQUAL -1 AND NOT _vkexec_bad_glsl EQUAL -1 AND NOT _vkexec_bad_frame_ring EQUAL -1
+       AND _vkexec_fixed_spirv EQUAL -1 AND _vkexec_fixed_glsl EQUAL -1 AND _vkexec_fixed_frame_ring EQUAL -1)
+      find_package(Git REQUIRED)
+      execute_process(
+        COMMAND "${GIT_EXECUTABLE}" apply "${_vkexec_factory_patch}"
+        WORKING_DIRECTORY "${vkexec_SOURCE_DIR}"
+        RESULT_VARIABLE _vkexec_patch_result)
+      if(NOT _vkexec_patch_result EQUAL 0)
+        message(FATAL_ERROR "Failed to apply vkexec factory namespace compatibility patch")
+      endif()
+    elseif(_vkexec_fixed_spirv EQUAL -1 OR _vkexec_fixed_glsl EQUAL -1 OR _vkexec_fixed_frame_ring EQUAL -1)
+      message(FATAL_ERROR "Pinned vkexec factory headers differ from the expected compatibility patch")
+    endif()
+  endif()
   # Nested vkexec includes <vulkan/...> but does not link Vulkan::Headers; attach the
   # parent CPM Vulkan-Headers target so the build does not rely on system headers.
   if(TARGET vkexec AND TARGET Vulkan::Headers)
     target_link_libraries(vkexec PUBLIC Vulkan::Headers)
+  endif()
+  if(TARGET vkexec_vma AND TARGET Vulkan::Headers)
+    target_link_libraries(vkexec_vma PUBLIC Vulkan::Headers)
   endif()
 
   if(NOT TARGET glfw AND NOT TARGET glfw::glfw)

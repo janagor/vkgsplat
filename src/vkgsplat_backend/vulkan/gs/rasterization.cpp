@@ -17,9 +17,9 @@
 #include <utility>
 
 #include <glm/gtc/type_ptr.hpp>
-#include <vkexec/image.hpp>
 #include <vkexec/image_view.hpp>
 #include <vkexec/sync_wait.hpp>
+#include <vkexec_vma/image.hpp>
 #include <vkexec_extensions/descriptor_heap/push_data.hpp>
 #include <vulkan/vulkan_core.h>
 
@@ -41,8 +41,8 @@ namespace {
   {
     DestroyColorTarget(context, data);
 
-    if (context.vkexec_context == nullptr) {
-      std::println("vkexec context missing for raster color target");
+    if (context.vkexec_context == nullptr || context.allocator == nullptr) {
+      std::println("vkexec context or VMA allocator missing for raster color target");
       return false;
     }
 
@@ -67,11 +67,11 @@ namespace {
     data.color_width = static_cast<u32>(atlas_w);
     data.color_height = static_cast<u32>(atlas_h);
 
-    auto created_image = vkexec::try_sync_wait_value(vkexec::image::create(*context.vkexec_context,
-      vkexec::image_create_info{
+    auto created_image = vkexec::try_sync_wait_value(vkexec::vma::factory::make_image(*context.allocator,
+      vkexec::vma::image_create_info{
         .width = data.color_width,
         .height = data.color_height,
-        .usage = vkexec::image_usage::color_storage,
+        .usage = vkexec::vma::image_usage::color_storage,
         .format = data.color_format,
       }));
     if (!created_image) {
@@ -81,8 +81,8 @@ namespace {
     }
     data.color_image = std::move(*created_image);
 
-    auto created_view =
-      vkexec::try_sync_wait_value(vkexec::image_view::create(*context.vkexec_context, *data.color_image));
+    auto created_view = vkexec::try_sync_wait_value(
+      vkexec::vma::factory::make_image_view(*context.vkexec_context, *data.color_image));
     if (!created_view) {
       std::println("Failed to create raster color target view: {}", created_view.error().message());
       DestroyColorTarget(context, data);
@@ -170,7 +170,7 @@ void PrepareQuiltPresent(vulkan::Context const &context,
 {
   if (!data.color_image.has_value()) { return; }
 
-  vkexec::image_barrier(command_buffer,
+  (void)vkexec::image_barrier(*context.vkexec_context, command_buffer,
     {
       .image = data.color_image->handle(),
       .old_layout = VK_IMAGE_LAYOUT_UNDEFINED,
@@ -180,7 +180,7 @@ void PrepareQuiltPresent(vulkan::Context const &context,
       .src_access = 0,
       .dst_access = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
     });
-  vkexec::image_barrier(command_buffer,
+  (void)vkexec::image_barrier(*context.vkexec_context, command_buffer,
     {
       .image = context.swapchain->images().at(image_index),
       .old_layout = VK_IMAGE_LAYOUT_UNDEFINED,
@@ -199,7 +199,7 @@ void DrawQuiltTile(vulkan::Context const &context,
   VkRect2D tile,
   bool clear_attachment)
 {
-  vkexec::barrier::compute_to_graphics(command_buffer);
+  (void)vkexec::barrier::compute_to_graphics(*context.vkexec_context, command_buffer);
 
   // First tile may clear the full atlas; later tiles LOAD and only write their viewport.
   VkRect2D const render_area = clear_attachment ? VkRect2D{ .offset = { .x = 0, .y = 0 },
@@ -225,7 +225,7 @@ void BlitQuiltToSwapchain(vulkan::Context const &context,
 {
   if (!data.color_image.has_value()) { return; }
 
-  vkexec::image_barrier(command_buffer,
+  (void)vkexec::image_barrier(*context.vkexec_context, command_buffer,
     {
       .image = data.color_image->handle(),
       .old_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,

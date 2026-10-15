@@ -20,7 +20,9 @@
 
 #include <VkBootstrap.h>
 #include <vkexec/context.hpp>
+#include <vkexec/device_capabilities.hpp>
 #include <vkexec/sync_wait.hpp>
+#include <vkexec_vma/allocator.hpp>
 #include <vulkan/vulkan_core.h>
 
 namespace vkgsplat::vulkan {
@@ -46,12 +48,19 @@ namespace {
       compute_family = compute->second;
     }
 
-    // Null allocator: vkexec creates and owns VMA (BUFFER_DEVICE_ADDRESS).
-    auto adopted = vkexec::try_sync_wait_value(vkexec::context::adopt({
+    auto adopted = vkexec::try_sync_wait_value(vkexec::factory::adopt_context({
       .instance = context.instance.instance,
       .physical_device = context.device.physical_device,
       .device = context.device.device,
-      .allocator = VK_NULL_HANDLE,
+      .capabilities = vkexec::device_capabilities{
+        .api_version = context.instance.instance_version,
+        .synchronization2 = true,
+        .timeline_semaphore = true,
+        .buffer_device_address = true,
+        .dynamic_rendering = true,
+        .shader_demote_to_helper_invocation = true,
+        .shader_untyped_pointers = true,
+      },
       .compute_queue = compute_queue,
       .compute_queue_family = compute_family,
       .graphics_queue = graphics->first,
@@ -63,6 +72,16 @@ namespace {
       return std::unexpected{ Error{ std::make_error_code(std::errc::invalid_argument), adopted.error().message() } };
     }
     context.vkexec_context = std::move(*adopted);
+    if (context.vkexec_context->owns_instance() || context.vkexec_context->owns_device()) {
+      return std::unexpected{ Error{ std::make_error_code(std::errc::state_not_recoverable),
+        "vkexec adopted context unexpectedly owns Vulkan handles" } };
+    }
+
+    auto allocator = vkexec::try_sync_wait_value(vkexec::vma::factory::make_allocator(*context.vkexec_context));
+    if (!allocator) {
+      return std::unexpected{ Error{ std::make_error_code(std::errc::io_error), allocator.error().message() } };
+    }
+    context.allocator = std::make_unique<vkexec::vma::allocator>(std::move(*allocator));
     return {};
   }
 
@@ -72,11 +91,12 @@ VulkanDriver::VulkanDriver(Platform &platform) noexcept { context_.platform = &p
 
 VulkanDriver::~VulkanDriver()
 {
+  if (context_.device.device != VK_NULL_HANDLE) { context_.disp.deviceWaitIdle(); }
   context_.swapchain.reset();
-  // vkexec owns VMA, command pool, and pipeline cache; drop before device.
+  // Context-owned GPU resources are released by renderer cleanup before driver teardown.
+  context_.allocator.reset();
   context_.vkexec_context.reset();
   if (context_.device.device != VK_NULL_HANDLE) {
-    context_.disp.deviceWaitIdle();
     vkb::destroy_device(context_.device);
     context_.device = {};
   }
