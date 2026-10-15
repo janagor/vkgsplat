@@ -79,6 +79,7 @@ namespace {
     if (data.present_pacer != nullptr) { data.present_pacer->PreparePresent(context, present_info); }
     auto const queue_lock = context.vkexec_context->lock_queue(data.present_queue);
     VkResult const result = context.disp.queuePresentKHR(data.present_queue, &present_info);
+    if (result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR) { RecordImguiPresentedFrame(data); }
     if (data.present_pacer != nullptr) { data.present_pacer->AfterPresent(context); }
     return result;
   }
@@ -289,6 +290,7 @@ void RenderThread::WaitIdle()
   control_cv_.wait(lock, [this]() -> bool { return idle_done_; });
 
   completion_queue_.Clear();
+  ResetImguiFpsSamples(*data_);
 }
 
 void RenderThread::ThreadMain()
