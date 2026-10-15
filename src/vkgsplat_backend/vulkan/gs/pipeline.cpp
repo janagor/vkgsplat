@@ -127,7 +127,7 @@ namespace {
     VkCommandBuffer command_buffer,
     FrameSetup const &setup,
     QuiltTileRect const &tile,
-    f64 tile_aspect, // NOLINT(bugprone-easily-swappable-parameters)
+    f64 tile_aspect,// NOLINT(bugprone-easily-swappable-parameters)
     u32 col,
     u32 row,
     bool first_tile) -> std::expected<void, Error>
@@ -176,10 +176,12 @@ namespace {
     bool first_tile = true;
     for (u32 row = 0U; row < rows; ++row) {
       for (u32 col = 0U; col < cols; ++col) {
-        QuiltTileRect const tile{ .origin_x = col * tile_w, .origin_y = row * tile_h,
-          .width = tile_w, .height = tile_h };
-        if (auto recorded = RecordQuiltCell(
-              context, data, command_buffer, setup, tile, tile_aspect, col, row, first_tile); !recorded) {
+        QuiltTileRect const tile{
+          .origin_x = col * tile_w, .origin_y = row * tile_h, .width = tile_w, .height = tile_h
+        };
+        if (auto recorded =
+              RecordQuiltCell(context, data, command_buffer, setup, tile, tile_aspect, col, row, first_tile);
+          !recorded) {
           return recorded;
         }
         first_tile = false;

@@ -11,8 +11,8 @@
 #include <print>
 #include <span>
 #include <string>
-#include <utility>
 #include <system_error>
+#include <utility>
 #include <vkgsplat_utility/error.hpp>
 
 #include <vkexec/barrier.hpp>

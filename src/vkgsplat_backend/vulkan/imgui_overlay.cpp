@@ -301,8 +301,9 @@ namespace {
   void UpdateFpsLabel(ImGuiOverlayState &overlay)
   {
     auto const now = std::chrono::steady_clock::now();
-    if (overlay.last_fps_update.time_since_epoch().count() != 0
-        && now - overlay.last_fps_update < kFpsUpdateInterval) { return; }
+    if (overlay.last_fps_update.time_since_epoch().count() != 0 && now - overlay.last_fps_update < kFpsUpdateInterval) {
+      return;
+    }
     overlay.last_fps_update = now;
 
     size_t interval_count = 0;
