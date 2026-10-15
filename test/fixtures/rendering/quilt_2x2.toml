@@ -1,0 +1,16 @@
+ply_path = "resources/scene.ply"
+validation = false
+imgui = false
+gpu-timers = true
+
+camera-position = [0.0, 1.5, 10.0]
+camera-target = [0.0, 1.0, 0.0]
+camera-up = [0.0, -1.0, 0.0]
+camera-fov = 45.0
+camera-near = 0.1
+camera-far = 100.0
+camera-aspect = 1.0
+
+lfd-grid = [2, 2]
+lfd-view-layout = "normal"
+view-cone = 4.0
