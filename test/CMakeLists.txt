@@ -38,7 +38,11 @@ if(TARGET vkgsplat::vkgsplat_utility)
 
   add_executable(vkgsplat_window_worker_wakeup_test window_worker_wakeup.cpp)
   target_link_libraries(vkgsplat_window_worker_wakeup_test PRIVATE Catch2::Catch2WithMain vkgsplat::vkgsplat_window)
-  catch_discover_tests(vkgsplat_window_worker_wakeup_test PROPERTIES TIMEOUT 5)
+  catch_discover_tests(
+    vkgsplat_window_worker_wakeup_test
+    PROPERTIES
+    TIMEOUT
+    5)
 endif()
 
 # CMake-script regression tests for cmake/Sanitizers.cmake (issue #141).

@@ -96,9 +96,12 @@ namespace {
     bool redraw_needed{ true };
   };
 
-  auto UpdateRenderDemand(
-    Window const &window, Renderer const &renderer, InputHandler &input, Camera &camera, CloseState &close, MainLoopSchedule &schedule)
-    -> void
+  auto UpdateRenderDemand(Window const &window,
+    Renderer const &renderer,
+    InputHandler &input,
+    Camera &camera,
+    CloseState &close,
+    MainLoopSchedule &schedule) -> void
   {
     window.poll_events();
     if (input.update(camera, close)) { schedule.redraw_needed = true; }
@@ -122,12 +125,12 @@ namespace {
     }
   }
 
-  [[nodiscard]] auto SubmitDueFrame(
-    Window const &window, Renderer &renderer, Camera const &camera, MainLoopSchedule &schedule) -> std::expected<void, Error>
+  [[nodiscard]] auto
+    SubmitDueFrame(Window const &window, Renderer &renderer, Camera const &camera, MainLoopSchedule &schedule)
+      -> std::expected<void, Error>
   {
     auto const now = window.time_seconds();
-    if (!schedule.redraw_needed
-        || (schedule.cpu_render_interval.has_value() && now < schedule.next_render_time)) {
+    if (!schedule.redraw_needed || (schedule.cpu_render_interval.has_value() && now < schedule.next_render_time)) {
       return {};
     }
     if (auto drawn = renderer.draw(camera); !drawn) { return std::unexpected{ drawn.error() }; }
@@ -143,9 +146,7 @@ namespace {
     auto const wait_start = window.time_seconds();
     if (input.movement_active() && schedule.next_input_time <= wait_start) {
       schedule.next_input_time += schedule.input_interval;
-      if (schedule.next_input_time <= wait_start) {
-        schedule.next_input_time = wait_start + schedule.input_interval;
-      }
+      if (schedule.next_input_time <= wait_start) { schedule.next_input_time = wait_start + schedule.input_interval; }
     }
     if (!input.movement_active() && !schedule.redraw_needed && !input.screenshot_requested()) {
       window.wait_events();
@@ -154,26 +155,22 @@ namespace {
 
     f64 deadline = schedule.next_input_time;
     if (schedule.redraw_needed && schedule.cpu_render_interval.has_value()) {
-      deadline = input.movement_active()
-                   ? std::min(schedule.next_input_time, schedule.next_render_time)
-                   : schedule.next_render_time;
+      deadline = input.movement_active() ? std::min(schedule.next_input_time, schedule.next_render_time)
+                                         : schedule.next_render_time;
     }
     if (deadline > wait_start) { window.wait_events_timeout(deadline - wait_start); }
   }
 
-  [[nodiscard]] auto
-    RunMainLoop(Window &window,
-      Renderer &renderer,
-      CameraConfig const &camera_config,
-      KeyBindings const &key_bindings,
-      FrameRateConfig const &frame_rate,
-      u32 configured_input_rate_hz)
-      -> std::expected<void, Error>
+  [[nodiscard]] auto RunMainLoop(Window &window,
+    Renderer &renderer,
+    CameraConfig const &camera_config,
+    KeyBindings const &key_bindings,
+    FrameRateConfig const &frame_rate,
+    u32 configured_input_rate_hz) -> std::expected<void, Error>
   {
     constexpr u32 kMinimumInputRateHz = 120U;
-    auto const input_rate_hz = configured_input_rate_hz > 0U
-                                 ? configured_input_rate_hz
-                                 : std::max(kMinimumInputRateHz, window.refresh_rate_hz());
+    auto const input_rate_hz = configured_input_rate_hz > 0U ? configured_input_rate_hz
+                                                             : std::max(kMinimumInputRateHz, window.refresh_rate_hz());
     auto const input_interval = 1.0 / static_cast<f64>(input_rate_hz);
     std::optional<f64> cpu_render_interval{};
     if (frame_rate.mode == FrameRateMode::kFixed && frame_rate.fixed_fps > 0U) {

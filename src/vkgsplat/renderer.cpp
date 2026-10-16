@@ -196,9 +196,8 @@ auto Renderer::create(RendererConfig const &config, Engine &engine) -> std::expe
 auto Renderer::draw(Camera const &camera) -> std::expected<void, Error>
 {
   auto const extent = impl_->engine->platform().framebuffer_extent();
-  auto const aspect_ratio = extent.height > 0U
-                              ? static_cast<f64>(extent.width) / static_cast<f64>(extent.height)
-                              : camera.aspect_ratio();
+  auto const aspect_ratio =
+    extent.height > 0U ? static_cast<f64>(extent.width) / static_cast<f64>(extent.height) : camera.aspect_ratio();
   return impl_->render_thread->SubmitFrame(camera, aspect_ratio);
 }
 

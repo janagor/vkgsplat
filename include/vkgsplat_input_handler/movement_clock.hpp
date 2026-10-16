@@ -62,7 +62,9 @@ public:
   }
 
   [[nodiscard]] auto active() const noexcept -> bool
-  { return std::ranges::any_of(pressed_, [](bool pressed) -> bool { return pressed; }); }
+  {
+    return std::ranges::any_of(pressed_, [](bool pressed) -> bool { return pressed; });
+  }
 
 private:
   f64 last_time_{};

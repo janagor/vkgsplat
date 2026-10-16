@@ -34,12 +34,12 @@ auto InputHandler::key_callback(GLFWwindow *window, int key, int scancode, int a
       handler->bindings_.roll_left,
       handler->bindings_.roll_right };
     for (size_t index = 0; index < keys.size(); ++index) {
-      if (key == keys.at(index)) {
-        handler->movement_clock_.set_pressed(index, action == GLFW_PRESS, glfwGetTime());
-      }
+      if (key == keys.at(index)) { handler->movement_clock_.set_pressed(index, action == GLFW_PRESS, glfwGetTime()); }
     }
   }
-  if (handler->previous_key_callback_ != nullptr) { handler->previous_key_callback_(window, key, scancode, action, mods); }
+  if (handler->previous_key_callback_ != nullptr) {
+    handler->previous_key_callback_(window, key, scancode, action, mods);
+  }
 }
 
 auto InputHandler::focus_callback(GLFWwindow *window, int focused) -> void
@@ -52,10 +52,7 @@ auto InputHandler::focus_callback(GLFWwindow *window, int focused) -> void
   if (handler->previous_focus_callback_ != nullptr) { handler->previous_focus_callback_(window, focused); }
 }
 
-auto InputHandler::movement_active() const noexcept -> bool
-{
-  return movement_clock_.active();
-}
+auto InputHandler::movement_active() const noexcept -> bool { return movement_clock_.active(); }
 
 InputHandler::InputHandler(Window &window, KeyBindings bindings)
   : window_(static_cast<GLFWwindow *>(window.native_handle())), bindings_(bindings)

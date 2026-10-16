@@ -147,11 +147,8 @@ auto ConsumeInterleaved(InterleavedState &state) -> void
 
 }// namespace
 
-TEST_CASE("latest pending frame replaces stale camera state", "[render]")
-{ REQUIRE(VerifyLatestFrameReplacement()); }
+TEST_CASE("latest pending frame replaces stale camera state", "[render]") { REQUIRE(VerifyLatestFrameReplacement()); }
 
-TEST_CASE("worker-owned frame survives concurrent replacement", "[render]")
-{ REQUIRE(VerifyConcurrentReplacement()); }
+TEST_CASE("worker-owned frame survives concurrent replacement", "[render]") { REQUIRE(VerifyConcurrentReplacement()); }
 
-TEST_CASE("producer and worker interleave slot ownership", "[render]")
-{ REQUIRE(VerifyInterleavedOwnership()); }
+TEST_CASE("producer and worker interleave slot ownership", "[render]") { REQUIRE(VerifyInterleavedOwnership()); }

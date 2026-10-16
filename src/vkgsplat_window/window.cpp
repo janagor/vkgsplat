@@ -4,10 +4,10 @@
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
 
-#include <expected>
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <expected>
 #include <span>
 #include <string>
 #include <system_error>
@@ -123,10 +123,10 @@ auto Window::refresh_rate_hz() const noexcept -> u32
         int monitor_x = 0;
         int monitor_y = 0;
         glfwGetMonitorPos(candidate, &monitor_x, &monitor_y);
-        auto const overlap_width = std::max(0,
-          std::min(window_x + window_width, monitor_x + candidate_mode->width) - std::max(window_x, monitor_x));
-        auto const overlap_height = std::max(0,
-          std::min(window_y + window_height, monitor_y + candidate_mode->height) - std::max(window_y, monitor_y));
+        auto const overlap_width = std::max(
+          0, std::min(window_x + window_width, monitor_x + candidate_mode->width) - std::max(window_x, monitor_x));
+        auto const overlap_height = std::max(
+          0, std::min(window_y + window_height, monitor_y + candidate_mode->height) - std::max(window_y, monitor_y));
         auto const overlap = static_cast<std::int64_t>(overlap_width) * overlap_height;
         if (overlap > greatest_overlap) {
           greatest_overlap = overlap;

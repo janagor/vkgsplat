@@ -37,8 +37,7 @@ TEST_CASE("movement distance survives slow updates", "[input]")
   clock.set_pressed(vkgsplat::MovementClock::kForwardIndex, true, kStartTimeSeconds);
 
   double duration = kStartTimeSeconds;
-  for (double const now :
-    { kFirstSlowUpdateSeconds, kSecondSlowUpdateSeconds, kThirdSlowUpdateSeconds, kOneSecond }) {
+  for (double const now : { kFirstSlowUpdateSeconds, kSecondSlowUpdateSeconds, kThirdSlowUpdateSeconds, kOneSecond }) {
     clock.advance(now);
     auto const step = clock.consume_duration(vkgsplat::MovementClock::kForwardIndex);
     duration += step;

@@ -1,5 +1,5 @@
-#include <vkgsplat_window/window.hpp>
 #include <vkgsplat_utility/types.hpp>
+#include <vkgsplat_window/window.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 

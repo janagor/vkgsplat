@@ -309,8 +309,7 @@ auto RenderThread::ThreadMain() -> void
         lock.lock();
         bool const failed = result != VK_SUCCESS && !first_error_.has_value();
         if (failed) {
-          first_error_ = MakeError(
-            std::errc::io_error, "device wait idle failed. VkResult=" + std::to_string(result));
+          first_error_ = MakeError(std::errc::io_error, "device wait idle failed. VkResult=" + std::to_string(result));
         }
         idle_done_ = true;
         command_ = Command::kNone;
@@ -383,8 +382,8 @@ auto RenderThread::DrawFrameVulkan(size_t frame_slot) const -> std::expected<Fra
 
   auto finished_semaphore = ring.render_finished_semaphore(image_index);
   if (!finished_semaphore) {
-    auto const retired = RetireAcquiredImage(
-      context, data, MakeError(std::errc::io_error, finished_semaphore.error().message()));
+    auto const retired =
+      RetireAcquiredImage(context, data, MakeError(std::errc::io_error, finished_semaphore.error().message()));
     return std::unexpected{ retired.error() };
   }
 

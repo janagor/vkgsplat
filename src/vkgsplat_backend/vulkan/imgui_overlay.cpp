@@ -280,10 +280,7 @@ namespace {
     return dst;
   }
 
-  void InvalidateOverlaySecondaries(ImGuiOverlayState &overlay)
-  {
-    ++overlay.ui_generation;
-  }
+  void InvalidateOverlaySecondaries(ImGuiOverlayState &overlay) { ++overlay.ui_generation; }
 
   [[nodiscard]] auto AllocateOverlaySecondaries(RenderData &data) -> bool
   {
