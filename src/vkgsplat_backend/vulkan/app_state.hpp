@@ -42,8 +42,7 @@ using GpuImage = vkexec::vma::image;
 template<typename T> using Tensor = vkexec::tensor<T, GpuBuffer>;
 
 // CPU/GPU pipelining depth: ring of frame slots.
-// CPU ring (BoundedQueue + slot_ready) gates FrameSetup reuse after record/submit;
-// frame_ring timeline + per-slot/image values gate GPU resource reuse.
+// RenderThread tracks CPU slot ownership; frame_ring gates GPU resource reuse.
 constexpr size_t kFrameSlotCount = 2;
 
 constexpr u32 kVertsPerSphere = 6;

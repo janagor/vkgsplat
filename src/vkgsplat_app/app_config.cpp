@@ -27,6 +27,7 @@ namespace vkgsplat::app {
 namespace {
 
   constexpr f64 kMaxFovDegreesExclusive = 180.0;
+  constexpr u32 kMaxInputUpdateRateHz = 1000U;
 
   [[nodiscard]] auto ParseFrameRateOption(std::string const &value) -> std::expected<vkgsplat::FrameRateConfig, Error>
   {
@@ -98,6 +99,8 @@ auto ParseAppConfig(std::span<char *const> args) -> std::expected<AppConfig, vkg
       "Preferred aspect ratio (windowed mode still uses the swapchain aspect)")
     ->capture_default_str();
   app.add_option("--camera-speed", config.camera.movement_speed, "Camera movement speed")->capture_default_str();
+  app.add_option("--input-update-rate", config.input_update_hz, "Active input updates per second (0 = display based)")
+    ->capture_default_str();
   app.add_option("--camera-sensitivity", config.camera.mouse_sensitivity, "Mouse look sensitivity")
     ->capture_default_str();
   app.add_option("--lfd-grid", lfd_grid, "LFD quilt columns and rows (default 1 1 = mono)")->capture_default_str();
@@ -161,6 +164,9 @@ auto ParseAppConfig(std::span<char *const> args) -> std::expected<AppConfig, vkg
   }
   if (!(config.camera.aspect_ratio > 0.0) || !std::isfinite(config.camera.aspect_ratio)) {
     return std::unexpected{ MakeError(std::errc::invalid_argument, "camera-aspect must be a positive finite value") };
+  }
+  if (config.input_update_hz > kMaxInputUpdateRateHz) {
+    return std::unexpected{ MakeError(std::errc::invalid_argument, "input-update-rate must be at most 1000 Hz") };
   }
   if (config.lfd_grid.at(0) == 0U || config.lfd_grid.at(1) == 0U) {
     return std::unexpected{ MakeError(std::errc::invalid_argument, "lfd-grid columns and rows must be >= 1") };

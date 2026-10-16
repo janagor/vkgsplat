@@ -7,6 +7,7 @@ validation = true
 imgui = true
 gpu-timers = true
 # frame-rate = "display"   # or "adaptive", or a positive integer like 60
+# input-update-rate = 240    # optional active input rate; omitted uses display refresh (at least 120 Hz)
 
 # Camera extrinsics: orientation from look-at (position → target) with world-up.
 camera-position = [0.0, 1.5, 10.0]

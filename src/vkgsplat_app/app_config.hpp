@@ -23,6 +23,7 @@ struct AppConfig
   bool enable_imgui = true;
   bool enable_gpu_timers = false;
   vkgsplat::FrameRateConfig frame_rate{};
+  u32 input_update_hz = 0U;
   vkgsplat::CameraConfig camera{};
   // LFD quilt grid; {1,1} is standard mono rendering. [columns, rows]
   std::array<u32, 2> lfd_grid{ 1U, 1U };

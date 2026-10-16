@@ -34,8 +34,12 @@ public:
   auto operator=(Window const &) -> Window & = delete;
 
   void poll_events() const noexcept override;
+  auto post_empty_event() const noexcept -> void override;
   /** Block until an event is queued; useful while no redraw is required. */
   void wait_events() const noexcept;
+  auto wait_events_timeout(f64 seconds) const noexcept -> void;
+  [[nodiscard]] auto time_seconds() const noexcept -> f64;
+  [[nodiscard]] auto refresh_rate_hz() const noexcept -> u32;
   [[nodiscard]] auto should_close() const noexcept -> bool override;
   [[nodiscard]] auto framebuffer_extent() const noexcept -> Extent2D override;
   [[nodiscard]] auto native_window() const noexcept -> NativeWindowHandle override;

@@ -4,6 +4,7 @@
 #include <array>
 #include <expected>
 #include <memory>
+#include <optional>
 #include <print>
 #include <string_view>
 #include <system_error>
@@ -194,38 +195,50 @@ auto Renderer::create(RendererConfig const &config, Engine &engine) -> std::expe
 
 auto Renderer::draw(Camera const &camera) -> std::expected<void, Error>
 {
-  auto const &context = AsVulkanDriver(impl_->engine->driver()).context();
-  auto const aspect_ratio =
-    static_cast<f64>(context.swapchain->extent().width) / static_cast<f64>(context.swapchain->extent().height);
+  auto const extent = impl_->engine->platform().framebuffer_extent();
+  auto const aspect_ratio = extent.height > 0U
+                              ? static_cast<f64>(extent.width) / static_cast<f64>(extent.height)
+                              : camera.aspect_ratio();
   return impl_->render_thread->SubmitFrame(camera, aspect_ratio);
 }
 
+auto Renderer::poll_error() const -> std::optional<Error> { return impl_->render_thread->PollError(); }
+
+auto Renderer::completed_frame_count() const -> u64 { return impl_->render_thread->CompletedFrameCount(); }
+
+auto Renderer::recreated_frame_count() const -> u64 { return impl_->render_thread->RecreatedFrameCount(); }
+
 auto Renderer::save_frame_png(std::string_view path) -> std::expected<void, Error>
 {
-  wait_idle();
+  if (auto idle = wait_idle(); !idle) { return std::unexpected{ idle.error() }; }
   auto &context = AsVulkanDriver(impl_->engine->driver()).context();
   return vulkan::SaveColorTargetPng(context, impl_->render_data, path);
 }
 
-void Renderer::wait_idle() noexcept { impl_->render_thread->WaitIdle(); }
+auto Renderer::wait_idle() -> std::expected<void, Error> { return impl_->render_thread->WaitIdle(); }
 
-void Renderer::set_lfd_emulate(bool active)
+auto Renderer::set_lfd_emulate(bool active) -> std::expected<void, Error>
 {
-  wait_idle();
+  if (auto idle = wait_idle(); !idle) { return std::unexpected{ idle.error() }; }
   impl_->render_data.lfd_emulate_active = active;
   if (active) { impl_->render_data.lfd_emulate_cell = { 0U, 0U }; }
 
   auto &context = AsVulkanDriver(impl_->engine->driver()).context();
-  static_cast<void>(gs::RecreateRasterizationColorTarget(context, impl_->render_data));
+  if (!gs::RecreateRasterizationColorTarget(context, impl_->render_data)) {
+    return std::unexpected{ MakeError(std::errc::io_error, "failed to recreate rasterization color target") };
+  }
+  return {};
 }
 
 auto Renderer::lfd_emulate_active() const noexcept -> bool { return impl_->render_data.lfd_emulate_active; }
 
-void Renderer::set_lfd_emulate_cell(u32 col, u32 row)
+auto Renderer::set_lfd_emulate_cell(u32 col, u32 row) -> std::expected<void, Error>
 {
+  if (auto idle = wait_idle(); !idle) { return std::unexpected{ idle.error() }; }
   auto const cols = std::max(1U, impl_->render_data.lfd_grid.at(0));
   auto const rows = std::max(1U, impl_->render_data.lfd_grid.at(1));
   impl_->render_data.lfd_emulate_cell = { std::min(col, cols - 1U), std::min(row, rows - 1U) };
+  return {};
 }
 
 auto Renderer::lfd_emulate_cell() const noexcept -> std::array<u32, 2> { return impl_->render_data.lfd_emulate_cell; }

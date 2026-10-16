@@ -44,6 +44,7 @@ namespace vkgsplat {
 
 struct ImGuiOverlayState
 {
+  std::mutex state_mutex;
   bool initialized = false;
   VkBindHeapInfoEXT resource_bind{};
   VkBindHeapInfoEXT sampler_bind{};
@@ -71,6 +72,8 @@ struct ImGuiOverlayState
   uint64_t ui_generation = 1;
   std::array<char, kImGuiFpsLabelCapacity> fps_label{ "FPS: --" };
   std::array<char, kImGuiGpuLabelCapacity> gpu_label{};
+  std::array<char, kImGuiGpuLabelCapacity> pending_gpu_label{};
+  bool gpu_label_pending = false;
   std::chrono::steady_clock::time_point last_fps_update;
   std::mutex present_times_mutex;
   std::deque<std::chrono::steady_clock::time_point> present_times;
@@ -280,7 +283,6 @@ namespace {
   void InvalidateOverlaySecondaries(ImGuiOverlayState &overlay)
   {
     ++overlay.ui_generation;
-    overlay.secondary_generation.fill(0);
   }
 
   [[nodiscard]] auto AllocateOverlaySecondaries(RenderData &data) -> bool
@@ -464,6 +466,7 @@ auto RenderData::operator=(RenderData &&) noexcept -> RenderData & = default;
 void UpdateImguiGpuTimings(RenderData &data)
 {
   if (data.imgui == nullptr || !data.gpu_pass_timer.enabled()) { return; }
+  std::scoped_lock const lock{ data.imgui->state_mutex };
 
   static auto last_update = std::chrono::steady_clock::time_point{};
   auto const now = std::chrono::steady_clock::now();
@@ -473,8 +476,8 @@ void UpdateImguiGpuTimings(RenderData &data)
 
   auto const &pass_ms = data.gpu_pass_timer.last_ms();
   // NOLINTNEXTLINE(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
-  (void)std::snprintf(data.imgui->gpu_label.data(),
-    data.imgui->gpu_label.size(),
+  (void)std::snprintf(data.imgui->pending_gpu_label.data(),
+    data.imgui->pending_gpu_label.size(),
     "GPU: %.2f ms\n  %s %.2f  %s %.2f  %s %.2f\n  %s %.2f  %s %.2f",
     static_cast<double>(data.gpu_pass_timer.total_ms()),
     GpuPassName(GpuPass::kProjection),
@@ -487,8 +490,7 @@ void UpdateImguiGpuTimings(RenderData &data)
     static_cast<double>(pass_ms.at(static_cast<size_t>(GpuPass::kRadixSort))),
     GpuPassName(GpuPass::kRasterize),
     static_cast<double>(pass_ms.at(static_cast<size_t>(GpuPass::kRasterize))));
-  ++data.imgui->ui_generation;
-  data.imgui->secondary_generation.fill(0);
+  data.imgui->gpu_label_pending = true;
 }
 
 auto InitImguiOverlay(vulkan::Context &context, RenderData &data) -> std::expected<void, Error>
@@ -584,6 +586,7 @@ void ShutdownImguiOverlay(vulkan::Context &context, RenderData &data)
 void RecreateImguiOverlayPipeline(vulkan::Context const &context, RenderData &data)
 {
   if (data.imgui == nullptr || !data.imgui->initialized) { return; }
+  std::scoped_lock const lock{ data.imgui->state_mutex };
 
   if (!AttachSharedHeaps(data, *data.imgui)) {
     std::println(stderr, "[imgui] shared descriptor heaps unavailable after swapchain recreate");
@@ -603,7 +606,6 @@ void RecreateImguiOverlayPipeline(vulkan::Context const &context, RenderData &da
     std::println(stderr, "[imgui] failed to reallocate overlay command buffers after swapchain recreate");
   }
   InvalidateOverlaySecondaries(*data.imgui);
-  ClearClonedDrawData(*data.imgui);
   data.imgui->last_extent = {};
 }
 
@@ -612,6 +614,7 @@ auto RefreshImguiSharedHeapBindings(RenderData &data) -> bool
   if (data.imgui == nullptr) { return true; }
 
   auto &overlay = *data.imgui;
+  std::scoped_lock const lock{ overlay.state_mutex };
   if (!AttachSharedHeaps(data, overlay) || !ReplayRegisteredDescriptors(overlay)) { return false; }
   if (!data.descriptor_heap_buffer || !data.sampler_heap_buffer) { return false; }
   if (auto const flushed = data.descriptor_heap_buffer.value().flush(); !flushed) {
@@ -636,6 +639,12 @@ void BuildImGuiFrameSnapshot(RenderData &data, size_t frame_slot, ImGuiFrameSnap
   if (data.imgui == nullptr || !data.imgui->initialized) { return; }
 
   auto &overlay = *data.imgui;
+  std::scoped_lock const lock{ overlay.state_mutex };
+  if (overlay.gpu_label_pending) {
+    overlay.gpu_label = overlay.pending_gpu_label;
+    overlay.gpu_label_pending = false;
+    InvalidateOverlaySecondaries(overlay);
+  }
   UpdateFpsLabel(overlay);
 
   out_snapshot.ui_generation = overlay.ui_generation;
@@ -672,6 +681,7 @@ void ResetImguiFpsSamples(RenderData const &data)
   if (data.imgui == nullptr) { return; }
 
   auto &overlay = *data.imgui;
+  std::scoped_lock const state_lock{ overlay.state_mutex };
   {
     std::scoped_lock const lock{ overlay.present_times_mutex };
     overlay.present_times.clear();
@@ -706,6 +716,7 @@ auto RecordImguiOverlay(vulkan::Context &context,
   }
 
   auto &overlay = *data.imgui;
+  std::scoped_lock const lock{ overlay.state_mutex };
 
   VkExtent2D const extent = context.swapchain->vk_extent();
   if (extent.width != overlay.last_extent.width || extent.height != overlay.last_extent.height) {

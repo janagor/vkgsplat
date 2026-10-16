@@ -2,9 +2,8 @@
 #define VKGSPLAT_BACKEND_VULKAN_RENDER_THREAD_HPP
 
 #include "app_state.hpp"
-#include <vkgsplat_adt/bounded_queue.hpp>
+#include <vkgsplat_adt/latest_frame_mailbox.hpp>
 
-#include <array>
 #include <condition_variable>
 #include <cstddef>
 #include <expected>
@@ -24,9 +23,8 @@ namespace vulkan {
 struct RenderData;
 
 // Dedicated thread for all Vulkan queue, swapchain, and command-buffer work.
-// Main enqueues CPU-ready frame slots (ring depth = kFrameSlotCount); the render
-// thread drains them while main prepares the next slot. GPU completion for a
-// slot/image is tracked on frame_ring and waited when that slot or image is reused.
+// Main publishes one replaceable camera and UI snapshot while the worker owns a slot.
+// GPU completion for a slot/image is tracked on frame_ring and waited on the worker.
 class RenderThread
 {
 public:
@@ -42,7 +40,10 @@ public:
   void Stop();
 
   [[nodiscard]] auto SubmitFrame(Camera const &camera, f64 aspect_ratio) -> std::expected<void, Error>;
-  void WaitIdle();
+  [[nodiscard]] auto PollError() const -> std::optional<Error>;
+  [[nodiscard]] auto CompletedFrameCount() const -> u64;
+  [[nodiscard]] auto RecreatedFrameCount() const -> u64;
+  [[nodiscard]] auto WaitIdle() -> std::expected<void, Error>;
 
 private:
   enum class Command : u8 {
@@ -51,43 +52,39 @@ private:
     kShutdown,
   };
 
-  struct FrameCompletion
-  {
-    std::optional<Error> error;
+  enum class FrameOutcome : u8 {
+    kSubmitted,
+    kSkipped,
+    kSwapchainRecreated,
   };
 
-  using PendingQueue = adt::BoundedQueue<size_t, kFrameSlotCount>;
-  using CompletionQueue = adt::BoundedQueue<FrameCompletion, PendingQueue::kCapacity>;
+  struct PendingFrame
+  {
+    f64 aspect_ratio{};
+    CameraSnapshot camera{};
+    ImGuiFrameSnapshot imgui{};
+  };
 
-  void ThreadMain();
-  [[nodiscard]] auto DrawFrameVulkan(size_t frame_slot) -> std::expected<void, Error>;
-  [[nodiscard]] auto DrainCompletions() -> std::optional<Error>;
-
-  void WaitSlotReady(size_t slot);
-  void MarkSlotReady(size_t slot);
-  void MarkAllSlotsReady();
-  void EnqueueCompletion(FrameCompletion const &completion);
+  auto ThreadMain() -> void;
+  auto FinishFrame(size_t frame_slot, std::expected<FrameOutcome, Error> const &drawn) -> void;
+  [[nodiscard]] auto DrawFrameVulkan(size_t frame_slot) const -> std::expected<FrameOutcome, Error>;
 
   vulkan::Context *context_{ nullptr };
   RenderData *data_{ nullptr };
   std::jthread thread_;
 
-  PendingQueue pending_queue_;
-  CompletionQueue completion_queue_;
-
-  // CPU ownership of FrameSetup: ready after record+submit for that slot (not GPU done).
-  mutable std::mutex slot_mutex_;
-  mutable std::condition_variable slot_ready_cv_;
-  std::array<bool, PendingQueue::kCapacity> slot_ready_{};
-
   mutable std::mutex control_mutex_;
   mutable std::condition_variable control_cv_;
 
   Command command_{ Command::kNone };
+  adt::LatestFrameMailbox<PendingFrame, kFrameSlotCount> mailbox_;
+  // Worker failures are terminal and stay visible to every caller until Start().
+  std::optional<Error> first_error_;
+  u64 completed_frame_count_{ 0U };
+  u64 recreated_frame_count_{ 0U };
+  bool worker_busy_{ false };
   bool thread_running_{ false };
   bool idle_done_{ true };
-
-  size_t submit_serial_{ 0 };
 };
 
 }// namespace vkgsplat

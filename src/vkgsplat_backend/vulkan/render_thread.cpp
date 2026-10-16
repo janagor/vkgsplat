@@ -164,16 +164,16 @@ void RenderThread::Start(vulkan::Context *context, RenderData *data)
   context_ = context;
   data_ = data;
 
-  pending_queue_.Clear();
-  completion_queue_.Clear();
-  MarkAllSlotsReady();
-
   {
     std::scoped_lock const lock{ control_mutex_ };
     thread_running_ = true;
     idle_done_ = true;
     command_ = Command::kNone;
-    submit_serial_ = 0;
+    mailbox_.Reset();
+    first_error_.reset();
+    completed_frame_count_ = 0U;
+    recreated_frame_count_ = 0U;
+    worker_busy_ = false;
   }
 
   thread_ = std::jthread{ [this]() -> void { ThreadMain(); } };
@@ -204,101 +204,98 @@ void RenderThread::Stop()
   thread_running_ = false;
 }
 
-auto RenderThread::DrainCompletions() -> std::optional<Error>
-{
-  std::optional<Error> first_error{};
-  while (auto const completion = completion_queue_.TryPop()) {
-    if (completion->error.has_value() && !first_error.has_value()) { first_error = completion->error; }
-  }
-  return first_error;
-}
-
-void RenderThread::EnqueueCompletion(FrameCompletion const &completion)
-{
-  FrameCompletion pending = completion;
-  while (!completion_queue_.TryPush(std::move(pending))) {
-    static_cast<void>(completion_queue_.TryPop());
-    pending = completion;
-  }
-}
-
-void RenderThread::WaitSlotReady(size_t slot)
-{
-  std::unique_lock lock{ slot_mutex_ };
-  slot_ready_cv_.wait(lock, [this, slot]() -> bool { return slot_ready_.at(slot); });
-  slot_ready_.at(slot) = false;
-}
-
-void RenderThread::MarkSlotReady(size_t slot)
-{
-  std::scoped_lock const lock{ slot_mutex_ };
-  slot_ready_.at(slot) = true;
-  slot_ready_cv_.notify_all();
-}
-
-void RenderThread::MarkAllSlotsReady()
-{
-  std::scoped_lock const lock{ slot_mutex_ };
-  slot_ready_.fill(true);
-  slot_ready_cv_.notify_all();
-}
-
 auto RenderThread::SubmitFrame(Camera const &camera, f64 aspect_ratio) -> std::expected<void, Error>
 {
-  if (auto const prior_error = DrainCompletions(); prior_error.has_value()) { return std::unexpected{ *prior_error }; }
-
   {
     std::scoped_lock const lock{ control_mutex_ };
+    if (first_error_.has_value()) { return std::unexpected{ first_error_.value() }; }
     if (!thread_running_) {
       return std::unexpected{ MakeError(std::errc::operation_not_permitted, "render thread is not running") };
     }
+    auto const frame_slot = mailbox_.PrepareSlot();
+    if (!frame_slot.has_value()) {
+      return std::unexpected{ MakeError(std::errc::state_not_recoverable, "no CPU frame slot is available") };
+    }
+    PendingFrame frame{ .aspect_ratio = aspect_ratio, .camera = SnapshotCamera(camera, aspect_ratio) };
+    BuildImGuiFrameSnapshot(*data_, frame_slot.value(), frame.imgui);
+    mailbox_.Publish(frame_slot.value(), frame);
   }
-
-  pending_queue_.WaitNotFull();
-
-  size_t const frame_slot = submit_serial_ % PendingQueue::kCapacity;
-  ++submit_serial_;
-
-  WaitSlotReady(frame_slot);
-
-  BuildFrameSetupCpu(*data_, frame_slot, PrepareFrameParams{ .camera = &camera, .aspect_ratio = aspect_ratio });
-
-  pending_queue_.Push(frame_slot);
   control_cv_.notify_one();
 
   return {};
 }
 
-void RenderThread::WaitIdle()
+auto RenderThread::PollError() const -> std::optional<Error>
 {
-  if (!thread_.joinable()) { return; }
+  std::scoped_lock const lock{ control_mutex_ };
+  return first_error_;
+}
 
-  static_cast<void>(DrainCompletions());
+auto RenderThread::CompletedFrameCount() const -> u64
+{
+  std::scoped_lock const lock{ control_mutex_ };
+  return completed_frame_count_;
+}
 
-  pending_queue_.WaitEmpty();
+auto RenderThread::RecreatedFrameCount() const -> u64
+{
+  std::scoped_lock const lock{ control_mutex_ };
+  return recreated_frame_count_;
+}
+
+auto RenderThread::WaitIdle() -> std::expected<void, Error>
+{
+  if (!thread_.joinable()) { return {}; }
 
   {
-    std::scoped_lock const lock{ control_mutex_ };
-    if (!thread_running_) { return; }
+    std::unique_lock lock{ control_mutex_ };
+    control_cv_.wait(lock, [this]() -> bool { return mailbox_.Empty() && !worker_busy_; });
+    if (!thread_running_) { return {}; }
     command_ = Command::kWaitIdle;
     idle_done_ = false;
   }
   control_cv_.notify_one();
 
-  std::unique_lock lock{ control_mutex_ };
-  control_cv_.wait(lock, [this]() -> bool { return idle_done_; });
+  {
+    std::unique_lock lock{ control_mutex_ };
+    control_cv_.wait(lock, [this]() -> bool { return idle_done_; });
+  }
 
-  completion_queue_.Clear();
   ResetImguiFpsSamples(*data_);
+  {
+    std::scoped_lock const lock{ control_mutex_ };
+    if (first_error_.has_value()) { return std::unexpected{ first_error_.value() }; }
+  }
+  return {};
 }
 
-void RenderThread::ThreadMain()
+auto RenderThread::FinishFrame(size_t frame_slot, std::expected<FrameOutcome, Error> const &drawn) -> void
+{
+  {
+    std::scoped_lock const lock{ control_mutex_ };
+    if (!drawn && !first_error_.has_value()) {
+      first_error_ = drawn.error();
+      mailbox_.DiscardPending();
+    }
+    if (drawn) {
+      if (drawn.value() == FrameOutcome::kSubmitted) { ++completed_frame_count_; }
+      if (drawn.value() == FrameOutcome::kSwapchainRecreated) { ++recreated_frame_count_; }
+    }
+    mailbox_.Complete(frame_slot);
+    worker_busy_ = false;
+  }
+  control_cv_.notify_all();
+  context_->platform->post_empty_event();
+}
+
+auto RenderThread::ThreadMain() -> void
 {
   for (;;) {
+    PendingFrame frame{};
     size_t frame_slot = 0;
-    if (!pending_queue_.TryPop(frame_slot)) {
+    {
       std::unique_lock lock{ control_mutex_ };
-      control_cv_.wait(lock, [this]() -> bool { return command_ != Command::kNone || !pending_queue_.Empty(); });
+      control_cv_.wait(lock, [this]() -> bool { return command_ != Command::kNone || !mailbox_.Empty(); });
 
       if (command_ == Command::kShutdown) {
         idle_done_ = true;
@@ -308,27 +305,40 @@ void RenderThread::ThreadMain()
 
       if (command_ == Command::kWaitIdle) {
         lock.unlock();
-        context_->disp.deviceWaitIdle();
-        MarkAllSlotsReady();
+        auto const result = context_->disp.deviceWaitIdle();
         lock.lock();
+        bool const failed = result != VK_SUCCESS && !first_error_.has_value();
+        if (failed) {
+          first_error_ = MakeError(
+            std::errc::io_error, "device wait idle failed. VkResult=" + std::to_string(result));
+        }
         idle_done_ = true;
         command_ = Command::kNone;
         control_cv_.notify_one();
+        lock.unlock();
+        if (failed) { context_->platform->post_empty_event(); }
+        continue;
       }
 
-      continue;
+      auto pending = mailbox_.Consume();
+      if (!pending.has_value()) { continue; }
+      frame_slot = pending.value().slot;
+      frame = pending.value().value;
+      worker_busy_ = true;
     }
 
-    std::optional<Error> frame_error{};
-    if (auto drawn = DrawFrameVulkan(frame_slot); !drawn) { frame_error = drawn.error(); }
+    data_->frames.at(frame_slot).setup = FrameSetup{
+      .aspect_ratio = frame.aspect_ratio,
+      .camera = frame.camera,
+      .imgui = frame.imgui,
+    };
+    auto drawn = DrawFrameVulkan(frame_slot);
 
-    // FrameSetup / per-slot CPU state may be rebuilt once recording+submit finished.
-    MarkSlotReady(frame_slot);
-    EnqueueCompletion(FrameCompletion{ .error = std::move(frame_error) });
+    FinishFrame(frame_slot, drawn);
   }
 }
 
-auto RenderThread::DrawFrameVulkan(size_t frame_slot) -> std::expected<void, Error>
+auto RenderThread::DrawFrameVulkan(size_t frame_slot) const -> std::expected<FrameOutcome, Error>
 {
   vulkan::Context &context = *context_;
   RenderData &data = *data_;
@@ -339,10 +349,12 @@ auto RenderThread::DrawFrameVulkan(size_t frame_slot) -> std::expected<void, Err
   }
   auto &ring = *data.frame_ring;
 
-  if (auto waited = WaitFrameResources(context, data, ring, frame_slot); !waited) { return waited; }
+  if (auto waited = WaitFrameResources(context, data, ring, frame_slot); !waited) {
+    return std::unexpected{ waited.error() };
+  }
 
   auto const extent = context.platform->framebuffer_extent();
-  if (extent.width == 0 || extent.height == 0) { return {}; }
+  if (extent.width == 0 || extent.height == 0) { return FrameOutcome::kSkipped; }
 
   auto acquire_semaphore = ring.acquire_semaphore(frame_slot);
   if (!acquire_semaphore) {
@@ -355,10 +367,9 @@ auto RenderThread::DrawFrameVulkan(size_t frame_slot) -> std::expected<void, Err
 
   if (result == VK_ERROR_OUT_OF_DATE_KHR) {
     if (auto recreated = RecreateSwapchain(context, data); !recreated) { return std::unexpected{ recreated.error() }; }
-    MarkAllSlotsReady();
-    return {};
+    return FrameOutcome::kSwapchainRecreated;
   }
-  if (result == VK_TIMEOUT || result == VK_NOT_READY) { return {}; }
+  if (result == VK_TIMEOUT || result == VK_NOT_READY) { return FrameOutcome::kSkipped; }
   if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
     return std::unexpected{ MakeError(
       std::errc::io_error, "failed to acquire swapchain image. VkResult=" + std::to_string(result)) };
@@ -366,31 +377,37 @@ auto RenderThread::DrawFrameVulkan(size_t frame_slot) -> std::expected<void, Err
   bool const acquired_suboptimal = result == VK_SUBOPTIMAL_KHR;
 
   if (auto submitted = RecordAndSubmitFrame(context, data, ring, frame_slot, image_index); !submitted) {
-    return RetireAcquiredImage(context, data, submitted.error());
+    auto const retired = RetireAcquiredImage(context, data, submitted.error());
+    return std::unexpected{ retired.error() };
   }
 
   auto finished_semaphore = ring.render_finished_semaphore(image_index);
   if (!finished_semaphore) {
-    return RetireAcquiredImage(context, data, MakeError(std::errc::io_error, finished_semaphore.error().message()));
+    auto const retired = RetireAcquiredImage(
+      context, data, MakeError(std::errc::io_error, finished_semaphore.error().message()));
+    return std::unexpected{ retired.error() };
   }
 
   auto presented = PresentSwapchainImage(context, data, image_index, *finished_semaphore);
-  if (!presented) { return RetireAcquiredImage(context, data, presented.error()); }
+  if (!presented) {
+    auto const retired = RetireAcquiredImage(context, data, presented.error());
+    return std::unexpected{ retired.error() };
+  }
   result = *presented;
 
   if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR
       || (result == VK_SUCCESS && acquired_suboptimal)) {
     if (auto recreated = RecreateSwapchain(context, data); !recreated) { return std::unexpected{ recreated.error() }; }
-    MarkAllSlotsReady();
-    return {};
+    return FrameOutcome::kSwapchainRecreated;
   }
   if (result != VK_SUCCESS) {
-    return RetireAcquiredImage(context,
+    auto const retired = RetireAcquiredImage(context,
       data,
       MakeError(std::errc::io_error, "failed to present swapchain image. VkResult=" + std::to_string(result)));
+    return std::unexpected{ retired.error() };
   }
 
-  return {};
+  return FrameOutcome::kSubmitted;
 }
 
 }// namespace vkgsplat

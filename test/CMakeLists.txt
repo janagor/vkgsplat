@@ -27,6 +27,20 @@ endif()
 
 include(${Catch2_SOURCE_DIR}/extras/Catch.cmake)
 
+if(TARGET vkgsplat::vkgsplat_utility)
+  add_executable(vkgsplat_movement_clock_test movement_clock.cpp)
+  target_link_libraries(vkgsplat_movement_clock_test PRIVATE Catch2::Catch2WithMain vkgsplat::vkgsplat_utility glm::glm)
+  catch_discover_tests(vkgsplat_movement_clock_test)
+
+  add_executable(vkgsplat_latest_frame_mailbox_test latest_frame_mailbox.cpp)
+  target_link_libraries(vkgsplat_latest_frame_mailbox_test PRIVATE Catch2::Catch2WithMain vkgsplat::vkgsplat_utility)
+  catch_discover_tests(vkgsplat_latest_frame_mailbox_test)
+
+  add_executable(vkgsplat_window_worker_wakeup_test window_worker_wakeup.cpp)
+  target_link_libraries(vkgsplat_window_worker_wakeup_test PRIVATE Catch2::Catch2WithMain vkgsplat::vkgsplat_window)
+  catch_discover_tests(vkgsplat_window_worker_wakeup_test PROPERTIES TIMEOUT 5)
+endif()
+
 # CMake-script regression tests for cmake/Sanitizers.cmake (issue #141).
 add_test(NAME cmake.sanitizers.apple_excludes_leak
          COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/test_sanitizers_apple_excludes_leak.cmake)

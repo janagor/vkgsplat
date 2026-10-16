@@ -89,18 +89,9 @@ struct FrameContext
   FrameSetup setup{};
 };
 
-struct PrepareFrameParams
-{
-  Camera const *camera{};
-  f64 aspect_ratio{};
-};
-
 namespace vulkan {
   struct Context;
 }
-
-// Main thread: camera + ImGui snapshot (requires GLFW thread).
-void BuildFrameSetupCpu(RenderData &data, size_t frame_slot, PrepareFrameParams const &params);
 
 // Render thread: finalize setup after swapchain acquire.
 void BuildFrameSetupGpu(vulkan::Context const &context, RenderData const &data, FrameSetup &setup, size_t image_index);

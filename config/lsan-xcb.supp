@@ -1,0 +1,3 @@
+# Optional workaround for libxcb allocations reported during Vulkan swapchain creation.
+# Keep this opt-in so other leak reports remain visible by default.
+leak:^_xcb_in_read$

@@ -2,6 +2,7 @@
 #define VKGSPLAT_RENDERER_HPP
 
 #include <expected>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -57,14 +58,17 @@ public:
 
   /** Render one frame using the supplied camera. */
   [[nodiscard]] auto draw(Camera const &camera) -> std::expected<void, Error>;
+  [[nodiscard]] auto poll_error() const -> std::optional<Error>;
+  [[nodiscard]] auto completed_frame_count() const -> u64;
+  [[nodiscard]] auto recreated_frame_count() const -> u64;
   /** Save the latest scene color target as PNG, excluding the ImGui overlay. */
   [[nodiscard]] auto save_frame_png(std::string_view path) -> std::expected<void, Error>;
-  void wait_idle() noexcept;
+  [[nodiscard]] auto wait_idle() -> std::expected<void, Error>;
 
   /** Render one quilt cell full-screen instead of the complete atlas. */
-  void set_lfd_emulate(bool active);
+  [[nodiscard]] auto set_lfd_emulate(bool active) -> std::expected<void, Error>;
   [[nodiscard]] auto lfd_emulate_active() const noexcept -> bool;
-  void set_lfd_emulate_cell(u32 col, u32 row);
+  [[nodiscard]] auto set_lfd_emulate_cell(u32 col, u32 row) -> std::expected<void, Error>;
   [[nodiscard]] auto lfd_emulate_cell() const noexcept -> std::array<u32, 2>;
   [[nodiscard]] auto lfd_grid() const noexcept -> std::array<u32, 2>;
 

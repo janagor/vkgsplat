@@ -1,15 +1,18 @@
 #include "application.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <exception>
 #include <expected>
 #include <format>
+#include <optional>
 #include <print>
 #include <span>
 #include <string>
 #include <system_error>
 
 #include <vkgsplat/camera.hpp>
+#include <vkgsplat/frame_rate.hpp>
 #include <vkgsplat/renderer.hpp>
 #include <vkgsplat_input_handler/input_handler.hpp>
 #include <vkgsplat_input_handler/key_bindings.hpp>
@@ -30,12 +33,14 @@ namespace {
     return std::format("screenshot_{:%Y%m%d_%H%M%S}.png", now);
   }
 
-  auto HandleLfdEmulateInput(Renderer &renderer, InputHandler &input) -> bool
+  auto HandleLfdEmulateInput(Renderer &renderer, InputHandler &input) -> std::expected<bool, Error>
   {
     bool changed = false;
 
     if (input.consume_emulate_toggle()) {
-      renderer.set_lfd_emulate(!renderer.lfd_emulate_active());
+      if (auto toggled = renderer.set_lfd_emulate(!renderer.lfd_emulate_active()); !toggled) {
+        return std::unexpected{ toggled.error() };
+      }
       changed = true;
     }
 
@@ -59,7 +64,9 @@ namespace {
       case InputHandler::ArrowDir::kNone:
         break;
       }
-      renderer.set_lfd_emulate_cell(cell.at(0), cell.at(1));
+      if (auto selected = renderer.set_lfd_emulate_cell(cell.at(0), cell.at(1)); !selected) {
+        return std::unexpected{ selected.error() };
+      }
       changed = true;
     }
 
@@ -77,44 +84,137 @@ namespace {
     }
   }
 
+  struct MainLoopSchedule
+  {
+    f64 input_interval{};
+    std::optional<f64> cpu_render_interval;
+    f64 next_input_time{};
+    f64 next_render_time{};
+    u64 last_completed_frame_count{};
+    u64 last_recreated_frame_count{};
+    Extent2D last_extent{};
+    bool redraw_needed{ true };
+  };
+
+  auto UpdateRenderDemand(
+    Window const &window, Renderer const &renderer, InputHandler &input, Camera &camera, CloseState &close, MainLoopSchedule &schedule)
+    -> void
+  {
+    window.poll_events();
+    if (input.update(camera, close)) { schedule.redraw_needed = true; }
+
+    auto const completed_frame_count = renderer.completed_frame_count();
+    if (completed_frame_count != schedule.last_completed_frame_count) {
+      schedule.last_completed_frame_count = completed_frame_count;
+      if (input.movement_active() && !schedule.cpu_render_interval.has_value()) { schedule.redraw_needed = true; }
+    }
+
+    auto const recreated_frame_count = renderer.recreated_frame_count();
+    if (recreated_frame_count != schedule.last_recreated_frame_count) {
+      schedule.last_recreated_frame_count = recreated_frame_count;
+      schedule.redraw_needed = true;
+    }
+
+    auto const extent = window.framebuffer_extent();
+    if (extent.width != schedule.last_extent.width || extent.height != schedule.last_extent.height) {
+      schedule.last_extent = extent;
+      schedule.redraw_needed = true;
+    }
+  }
+
+  [[nodiscard]] auto SubmitDueFrame(
+    Window const &window, Renderer &renderer, Camera const &camera, MainLoopSchedule &schedule) -> std::expected<void, Error>
+  {
+    auto const now = window.time_seconds();
+    if (!schedule.redraw_needed
+        || (schedule.cpu_render_interval.has_value() && now < schedule.next_render_time)) {
+      return {};
+    }
+    if (auto drawn = renderer.draw(camera); !drawn) { return std::unexpected{ drawn.error() }; }
+    schedule.redraw_needed = false;
+    if (schedule.cpu_render_interval.has_value()) {
+      schedule.next_render_time = now + schedule.cpu_render_interval.value();
+    }
+    return {};
+  }
+
+  auto WaitForNextWork(Window const &window, InputHandler const &input, MainLoopSchedule &schedule) -> void
+  {
+    auto const wait_start = window.time_seconds();
+    if (input.movement_active() && schedule.next_input_time <= wait_start) {
+      schedule.next_input_time += schedule.input_interval;
+      if (schedule.next_input_time <= wait_start) {
+        schedule.next_input_time = wait_start + schedule.input_interval;
+      }
+    }
+    if (!input.movement_active() && !schedule.redraw_needed && !input.screenshot_requested()) {
+      window.wait_events();
+      return;
+    }
+
+    f64 deadline = schedule.next_input_time;
+    if (schedule.redraw_needed && schedule.cpu_render_interval.has_value()) {
+      deadline = input.movement_active()
+                   ? std::min(schedule.next_input_time, schedule.next_render_time)
+                   : schedule.next_render_time;
+    }
+    if (deadline > wait_start) { window.wait_events_timeout(deadline - wait_start); }
+  }
+
   [[nodiscard]] auto
-    RunMainLoop(Window &window, Renderer &renderer, CameraConfig const &camera_config, KeyBindings const &key_bindings)
+    RunMainLoop(Window &window,
+      Renderer &renderer,
+      CameraConfig const &camera_config,
+      KeyBindings const &key_bindings,
+      FrameRateConfig const &frame_rate,
+      u32 configured_input_rate_hz)
       -> std::expected<void, Error>
   {
+    constexpr u32 kMinimumInputRateHz = 120U;
+    auto const input_rate_hz = configured_input_rate_hz > 0U
+                                 ? configured_input_rate_hz
+                                 : std::max(kMinimumInputRateHz, window.refresh_rate_hz());
+    auto const input_interval = 1.0 / static_cast<f64>(input_rate_hz);
+    std::optional<f64> cpu_render_interval{};
+    if (frame_rate.mode == FrameRateMode::kFixed && frame_rate.fixed_fps > 0U) {
+      cpu_render_interval = 1.0 / static_cast<f64>(frame_rate.fixed_fps);
+    }
     Camera camera{ camera_config };
     CloseState close{};
     InputHandler input{ window, key_bindings };
 
-    bool redraw_needed = true;
-    Extent2D last_extent = window.framebuffer_extent();
+    MainLoopSchedule schedule{
+      .input_interval = input_interval,
+      .cpu_render_interval = cpu_render_interval,
+      .next_input_time = window.time_seconds() + input_interval,
+      .next_render_time = window.time_seconds(),
+      .last_completed_frame_count = renderer.completed_frame_count(),
+      .last_recreated_frame_count = renderer.recreated_frame_count(),
+      .last_extent = window.framebuffer_extent(),
+    };
 
     while (!window.should_close() && !close.close_requested()) {
       // Poll first so held keys are visible; only block when nothing needs a frame.
-      window.poll_events();
-
-      if (input.update(camera, close)) { redraw_needed = true; }
-
-      auto const extent = window.framebuffer_extent();
-      if (extent.width != last_extent.width || extent.height != last_extent.height) {
-        last_extent = extent;
-        redraw_needed = true;
+      UpdateRenderDemand(window, renderer, input, camera, close, schedule);
+      if (auto worker_error = renderer.poll_error(); worker_error.has_value()) {
+        return std::unexpected{ worker_error.value() };
       }
-
-      if (redraw_needed) {
-        if (auto draw_result = renderer.draw(camera); !draw_result) { return std::unexpected{ draw_result.error() }; }
-        redraw_needed = false;
-      } else if (!input.screenshot_requested()) {
-        // CPU sleep until the next window/input event; next iteration polls + may draw.
-        renderer.wait_idle();
-        window.wait_events();
+      if (auto drawn = SubmitDueFrame(window, renderer, camera, schedule); !drawn) {
+        return std::unexpected{ drawn.error() };
       }
 
       MaybeSaveScreenshot(renderer, input);
 
-      if (HandleLfdEmulateInput(renderer, input)) { redraw_needed = true; }
+      auto lfd_input = HandleLfdEmulateInput(renderer, input);
+      if (!lfd_input) { return std::unexpected{ lfd_input.error() }; }
+      if (*lfd_input) { schedule.redraw_needed = true; }
+      WaitForNextWork(window, input, schedule);
+      if (auto worker_error = renderer.poll_error(); worker_error.has_value()) {
+        return std::unexpected{ worker_error.value() };
+      }
     }
 
-    renderer.wait_idle();
+    if (auto idle = renderer.wait_idle(); !idle) { return std::unexpected{ idle.error() }; }
     return {};
   }
 
@@ -161,7 +261,9 @@ auto Run(std::span<char *const> args) noexcept -> int
       return -1;
     }
 
-    if (auto loop = RunMainLoop(*window, *renderer, config->camera, config->key_bindings); !loop) {
+    if (auto loop = RunMainLoop(
+          *window, *renderer, config->camera, config->key_bindings, config->frame_rate, config->input_update_hz);
+      !loop) {
       std::println(stderr, "failed to draw frame: {}", loop.error().message());
       return -1;
     }

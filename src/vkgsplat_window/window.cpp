@@ -5,6 +5,10 @@
 #include <vkgsplat_utility/types.hpp>
 
 #include <expected>
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <span>
 #include <string>
 #include <system_error>
 #include <utility>
@@ -75,10 +79,67 @@ void Window::poll_events() const noexcept
   glfwPollEvents();
 }
 
+auto Window::post_empty_event() const noexcept -> void
+{
+  (void)impl_;
+  glfwPostEmptyEvent();
+}
+
 void Window::wait_events() const noexcept
 {
   (void)impl_;
   glfwWaitEvents();
+}
+
+auto Window::wait_events_timeout(f64 seconds) const noexcept -> void
+{
+  (void)impl_;
+  glfwWaitEventsTimeout(seconds);
+}
+
+// Keep the window clock in the instance API used by the event loop.
+// cppcheck-suppress functionStatic
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
+auto Window::time_seconds() const noexcept -> f64 { return glfwGetTime(); }
+
+auto Window::refresh_rate_hz() const noexcept -> u32
+{
+  GLFWmonitor *monitor = glfwGetWindowMonitor(impl_->handle);
+  if (monitor == nullptr) {
+    int window_x = 0;
+    int window_y = 0;
+    int window_width = 0;
+    int window_height = 0;
+    glfwGetWindowPos(impl_->handle, &window_x, &window_y);
+    glfwGetWindowSize(impl_->handle, &window_width, &window_height);
+
+    int monitor_count = 0;
+    GLFWmonitor **const monitors = glfwGetMonitors(&monitor_count);
+    std::int64_t greatest_overlap = 0;
+    if (monitors != nullptr && monitor_count > 0) {
+      for (GLFWmonitor *candidate : std::span{ monitors, static_cast<size_t>(monitor_count) }) {
+        GLFWvidmode const *const candidate_mode = glfwGetVideoMode(candidate);
+        if (candidate_mode == nullptr) { continue; }
+        int monitor_x = 0;
+        int monitor_y = 0;
+        glfwGetMonitorPos(candidate, &monitor_x, &monitor_y);
+        auto const overlap_width = std::max(0,
+          std::min(window_x + window_width, monitor_x + candidate_mode->width) - std::max(window_x, monitor_x));
+        auto const overlap_height = std::max(0,
+          std::min(window_y + window_height, monitor_y + candidate_mode->height) - std::max(window_y, monitor_y));
+        auto const overlap = static_cast<std::int64_t>(overlap_width) * overlap_height;
+        if (overlap > greatest_overlap) {
+          greatest_overlap = overlap;
+          monitor = candidate;
+        }
+      }
+    }
+    if (monitor == nullptr) { monitor = glfwGetPrimaryMonitor(); }
+  }
+  if (monitor == nullptr) { return 0U; }
+  GLFWvidmode const *const mode = glfwGetVideoMode(monitor);
+  if (mode == nullptr || mode->refreshRate <= 0) { return 0U; }
+  return static_cast<u32>(mode->refreshRate);
 }
 
 auto Window::should_close() const noexcept -> bool { return glfwWindowShouldClose(impl_->handle) != 0; }

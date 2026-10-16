@@ -2,11 +2,12 @@
 #define VKGSPLAT_INPUT_HANDLER_INPUT_HANDLER_HPP
 
 #include <vkgsplat_input_handler/key_bindings.hpp>
+#include <vkgsplat_input_handler/movement_clock.hpp>
 #include <vkgsplat_utility/input_control.hpp>
 #include <vkgsplat_utility/types.hpp>
 #include <vkgsplat_window/window.hpp>
 
-#include <algorithm>
+#include <cstddef>
 
 #include <GLFW/glfw3.h>
 
@@ -39,40 +40,34 @@ public:
   {
     if (window_ == nullptr) { return false; }
 
-    // After idle wait_events(), wall time can be huge; don't apply that as motion dt.
-    constexpr f64 kMaxInputDeltaTime = 1.0 / 30.0;
-
     auto const now = glfwGetTime();
-    auto const raw_delta_time = static_cast<f64>(now - last_time_);
-    last_time_ = now;
-    auto const delta_time = std::min(raw_delta_time, kMaxInputDeltaTime);
-    auto const after_hitch = raw_delta_time > kMaxInputDeltaTime;
+    movement_clock_.advance(now);
 
     auto const key_pressed = [this](int key) -> bool { return glfwGetKey(window_, key) == GLFW_PRESS; };
 
     bool view_changed = false;
 
-    auto const apply_move = [&](int key, ViewMovement direction) -> void {
-      if (!key_pressed(key)) { return; }
-      view.process_keyboard(direction, delta_time);
+    auto const apply_move = [&](size_t index, ViewMovement direction) -> void {
+      auto const duration = movement_clock_.consume_duration(index);
+      if (duration <= 0.0) { return; }
+      view.process_keyboard(direction, duration);
       view_changed = true;
     };
 
-    apply_move(bindings_.forward, ViewMovement::kForward);
-    apply_move(bindings_.backward, ViewMovement::kBackward);
-    apply_move(bindings_.left, ViewMovement::kLeft);
-    apply_move(bindings_.right, ViewMovement::kRight);
-    apply_move(bindings_.up, ViewMovement::kUp);
-    apply_move(bindings_.down, ViewMovement::kDown);
-    apply_move(bindings_.roll_left, ViewMovement::kRollLeft);
-    apply_move(bindings_.roll_right, ViewMovement::kRollRight);
+    apply_move(MovementClock::kForwardIndex, ViewMovement::kForward);
+    apply_move(MovementClock::kBackwardIndex, ViewMovement::kBackward);
+    apply_move(MovementClock::kLeftIndex, ViewMovement::kLeft);
+    apply_move(MovementClock::kRightIndex, ViewMovement::kRight);
+    apply_move(MovementClock::kUpIndex, ViewMovement::kUp);
+    apply_move(MovementClock::kDownIndex, ViewMovement::kDown);
+    apply_move(MovementClock::kRollLeftIndex, ViewMovement::kRollLeft);
+    apply_move(MovementClock::kRollRightIndex, ViewMovement::kRollRight);
 
     f64 cursor_x = 0.0;
     f64 cursor_y = 0.0;
     glfwGetCursorPos(window_, &cursor_x, &cursor_y);
 
-    if (first_mouse_ || after_hitch) {
-      // Re-baseline after startup or idle so accumulated cursor deltas aren't one huge look.
+    if (first_mouse_) {
       last_cursor_x_ = cursor_x;
       last_cursor_y_ = cursor_y;
       first_mouse_ = false;
@@ -127,16 +122,21 @@ public:
   enum class ArrowDir : u8 { kNone, kLeft, kRight, kUp, kDown };
   /** Return and clear one pending quilt-cell navigation direction. */
   [[nodiscard]] auto consume_arrow() noexcept -> ArrowDir;
+  [[nodiscard]] auto movement_active() const noexcept -> bool;
 
 private:
   static void scroll_callback(GLFWwindow *window, f64 /*x_offset*/, f64 y_offset);
+  static auto key_callback(GLFWwindow *window, int key, int scancode, int action, int mods) -> void;
+  static auto focus_callback(GLFWwindow *window, int focused) -> void;
 
   GLFWwindow *window_ = nullptr;
   KeyBindings bindings_{};
-  f64 last_time_ = 0.0;
+  MovementClock movement_clock_{};
   f64 last_cursor_x_ = 0.0;
   f64 last_cursor_y_ = 0.0;
   f64 scroll_y_ = 0.0;
+  GLFWkeyfun previous_key_callback_ = nullptr;
+  GLFWwindowfocusfun previous_focus_callback_ = nullptr;
   bool first_mouse_ = true;
   bool screenshot_was_pressed_ = false;
   bool screenshot_requested_ = false;

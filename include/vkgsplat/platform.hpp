@@ -28,6 +28,8 @@ public:
   [[nodiscard]] virtual auto native_window() const noexcept -> NativeWindowHandle = 0;
   [[nodiscard]] virtual auto framebuffer_extent() const noexcept -> Extent2D = 0;
   virtual void poll_events() const noexcept = 0;
+  /** Wake an event wait when a worker reports a failure. */
+  virtual auto post_empty_event() const noexcept -> void {}
   [[nodiscard]] virtual auto should_close() const noexcept -> bool = 0;
 };
 

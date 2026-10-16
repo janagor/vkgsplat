@@ -3,7 +3,6 @@
 #include "app_state.hpp"
 #include "gs/gaussian_splat.hpp"
 #include "vulkan/gpu_buffers.hpp"
-#include "vulkan/imgui_overlay.hpp"
 #include "vulkan_context.hpp"
 
 #include <vkgsplat/camera.hpp>
@@ -141,21 +140,6 @@ auto MakeQuiltView(QuiltViewRequest const &request) -> QuiltView
     .projection = proj,
     .position = glm::vec3{ eye },
   };
-}
-
-void BuildFrameSetupCpu(RenderData &data, size_t frame_slot, PrepareFrameParams const &params)
-{
-  FrameSetup setup{
-    .aspect_ratio = params.aspect_ratio,
-    .image_index = 0,
-    .camera = SnapshotCamera(*params.camera, params.aspect_ratio),
-    .gs = {},
-    .imgui = {},
-  };
-
-  BuildImGuiFrameSnapshot(data, frame_slot, setup.imgui);
-
-  data.frames.at(frame_slot).setup = setup;
 }
 
 void BuildFrameSetupGpu(vulkan::Context const &context, RenderData const &data, FrameSetup &setup, size_t image_index)

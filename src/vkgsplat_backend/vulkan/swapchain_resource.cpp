@@ -29,11 +29,11 @@ namespace {
       .set_desired_format({ .format = VK_FORMAT_B8G8R8A8_UNORM, .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR })
       .add_fallback_format({ .format = VK_FORMAT_R8G8B8A8_UNORM, .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR })
       .set_image_usage_flags(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT)
+      .set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR)
       .set_old_swapchain(old_swapchain);
 
     if (options.enable_present_timing) {
       // Scheduled presents require FIFO (or FIFO_RELAXED / FIFO_LATEST_READY).
-      swapchain_builder.set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR);
       VkFlags create_flags = VK_SWAPCHAIN_CREATE_PRESENT_TIMING_BIT_EXT;
       if (options.enable_present_id2) { create_flags |= VK_SWAPCHAIN_CREATE_PRESENT_ID_2_BIT_KHR; }
       // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)

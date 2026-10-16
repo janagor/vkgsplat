@@ -189,4 +189,13 @@ ctest -C Debug
 cd ../
 ```
 
+### LeakSanitizer and XCB
+
+Some Vulkan drivers report a small libxcb allocation from `_xcb_in_read` during swapchain creation at process exit. If this is the only reported leak, an optional suppression is available:
+
+```shell
+LSAN_OPTIONS="${LSAN_OPTIONS:+${LSAN_OPTIONS}:}suppressions=${PWD}/config/lsan-xcb.supp" ./out/build/unixlike-clang-release/src/vkgsplat_app/vkgsplat_app
+```
+
+Run this command from the repository root and add the usual application arguments. The suppression matches only reports whose stack contains `_xcb_in_read`; it does not free the allocation. Run without the suppression when investigating XCB or driver leaks.
 
