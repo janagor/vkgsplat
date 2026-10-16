@@ -60,6 +60,15 @@ namespace {
   [[nodiscard]] auto FromArray(std::array<f64, 3> const &components) -> glm::dvec3
   { return { components.at(0), components.at(1), components.at(2) }; }
 
+  [[nodiscard]] auto IsValidQuiltSize(AppConfig const &config) -> bool
+  {
+    if (config.quilt_size == std::array<u32, 2>{ 0U, 0U }) { return true; }
+    if (config.lfd_grid == std::array<u32, 2>{ 1U, 1U }) { return false; }
+    if (config.quilt_size.at(0) == 0U || config.quilt_size.at(1) == 0U) { return false; }
+    return config.quilt_size.at(0) % config.lfd_grid.at(0) == 0U
+           && config.quilt_size.at(1) % config.lfd_grid.at(1) == 0U;
+  }
+
 }// namespace
 
 auto ParseAppConfig(std::span<char *const> args) -> std::expected<AppConfig, vkgsplat::Error>
@@ -71,6 +80,7 @@ auto ParseAppConfig(std::span<char *const> args) -> std::expected<AppConfig, vkg
   auto target = ToArray(config.camera.target);
   auto world_up = ToArray(config.camera.up);
   std::array<u32, 2> lfd_grid{ config.lfd_grid };
+  std::array<u32, 2> quilt_size{ config.quilt_size };
   std::vector<u32> lfd_view_order_input{};
   std::string lfd_view_layout_text{ "normal" };
   KeyBindingNames key_names{};
@@ -104,6 +114,8 @@ auto ParseAppConfig(std::span<char *const> args) -> std::expected<AppConfig, vkg
   app.add_option("--camera-sensitivity", config.camera.mouse_sensitivity, "Mouse look sensitivity")
     ->capture_default_str();
   app.add_option("--lfd-grid", lfd_grid, "LFD quilt columns and rows (default 1 1 = mono)")->capture_default_str();
+  app.add_option("--quilt-size", quilt_size, "Quilt atlas width and height in pixels (0 0 = window-sized tiles)")
+    ->capture_default_str();
   app.add_option("--lfd-view-layout",
     lfd_view_layout_text,
     "LFD view placement preset: normal or flip-rows (ignored when --lfd-view-order is set)");
@@ -144,6 +156,7 @@ auto ParseAppConfig(std::span<char *const> args) -> std::expected<AppConfig, vkg
   config.camera.target = FromArray(target);
   config.camera.up = FromArray(world_up);
   config.lfd_grid = lfd_grid;
+  config.quilt_size = quilt_size;
 
   if (config.ply_path.empty()) {
     return std::unexpected{ MakeError(std::errc::invalid_argument,
@@ -170,6 +183,10 @@ auto ParseAppConfig(std::span<char *const> args) -> std::expected<AppConfig, vkg
   }
   if (config.lfd_grid.at(0) == 0U || config.lfd_grid.at(1) == 0U) {
     return std::unexpected{ MakeError(std::errc::invalid_argument, "lfd-grid columns and rows must be >= 1") };
+  }
+  if (!IsValidQuiltSize(config)) {
+    return std::unexpected{ MakeError(std::errc::invalid_argument,
+      "quilt-size requires a multiview lfd-grid and positive atlas dimensions divisible by that grid") };
   }
   if (!(config.view_cone_deg > 0.0) || !(config.view_cone_deg < kMaxFovDegreesExclusive)
       || !std::isfinite(config.view_cone_deg)) {

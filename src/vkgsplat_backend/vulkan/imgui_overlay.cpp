@@ -475,10 +475,12 @@ void UpdateImguiGpuTimings(RenderData &data)
   // NOLINTNEXTLINE(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
   (void)std::snprintf(data.imgui->pending_gpu_label.data(),
     data.imgui->pending_gpu_label.size(),
-    "GPU: %.2f ms\n  %s %.2f  %s %.2f  %s %.2f\n  %s %.2f  %s %.2f",
+    "GPU measured: %.2f ms\n  %s %.2f  %s %.2f  %s %.2f\n  %s %.2f  %s %.2f  %s %.2f",
     static_cast<double>(data.gpu_pass_timer.total_ms()),
     GpuPassName(GpuPass::kProjection),
     static_cast<double>(pass_ms.at(static_cast<size_t>(GpuPass::kProjection))),
+    GpuPassName(GpuPass::kMultiviewProjection),
+    static_cast<double>(pass_ms.at(static_cast<size_t>(GpuPass::kMultiviewProjection))),
     GpuPassName(GpuPass::kBinning),
     static_cast<double>(pass_ms.at(static_cast<size_t>(GpuPass::kBinning))),
     GpuPassName(GpuPass::kPrepareSort),

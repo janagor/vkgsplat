@@ -49,15 +49,16 @@ namespace {
       return false;
     }
 
-    u32 const tile_w = context.swapchain->vk_extent().width;
-    u32 const tile_h = context.swapchain->vk_extent().height;
+    u32 const cols = data.lfd_emulate_active ? 1U : std::max(1U, data.lfd_grid.at(0));
+    u32 const rows = data.lfd_emulate_active ? 1U : std::max(1U, data.lfd_grid.at(1));
+    bool const use_quilt_size = !data.lfd_emulate_active && data.quilt_size.at(0) != 0U;
+    u32 const tile_w = use_quilt_size ? data.quilt_size.at(0) / cols : context.swapchain->vk_extent().width;
+    u32 const tile_h = use_quilt_size ? data.quilt_size.at(1) / rows : context.swapchain->vk_extent().height;
     if (tile_w == 0 || tile_h == 0) {
-      std::println("Rasterize requires a non-zero swapchain extent!");
+      std::println("Rasterize requires a non-zero quilt tile extent!");
       return false;
     }
 
-    u32 const cols = data.lfd_emulate_active ? 1U : std::max(1U, data.lfd_grid.at(0));
-    u32 const rows = data.lfd_emulate_active ? 1U : std::max(1U, data.lfd_grid.at(1));
     u64 const atlas_w = static_cast<u64>(tile_w) * static_cast<u64>(cols);
     u64 const atlas_h = static_cast<u64>(tile_h) * static_cast<u64>(rows);
     u32 const max_dim = context.device.physical_device.properties.limits.maxImageDimension2D;

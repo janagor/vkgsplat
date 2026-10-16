@@ -5,6 +5,7 @@
 
 #include <array>
 #include <cstddef>
+#include <vector>
 
 #include <vulkan/vulkan_core.h>
 
@@ -20,6 +21,7 @@ enum class GpuPass : u8 {
   kPrepareSort,
   kRadixSort,
   kRasterize,
+  kMultiviewProjection,
   kCount,
 };
 
@@ -39,15 +41,22 @@ public:
   GpuPassTimer(GpuPassTimer const &) = delete;
   auto operator=(GpuPassTimer const &) -> GpuPassTimer & = delete;
 
-  [[nodiscard]] auto create(vulkan::Context &context) -> bool;
+  [[nodiscard]] auto create(vulkan::Context &context, u32 view_count) -> bool;
   void destroy(vulkan::Context &context);
 
   void set_enabled(bool enabled) noexcept { enabled_ = enabled; }
   [[nodiscard]] auto enabled() const noexcept -> bool { return enabled_ && pool_ != VK_NULL_HANDLE; }
 
-  void begin_frame(vulkan::Context const &context, size_t slot, VkCommandBuffer command_buffer) const;
-  void
-    write(vulkan::Context const &context, size_t slot, GpuPass pass, bool is_end, VkCommandBuffer command_buffer) const;
+  auto begin_frame(vulkan::Context const &context, size_t slot, VkCommandBuffer command_buffer) -> void;
+  auto
+    write(vulkan::Context const &context, size_t slot, GpuPass pass, bool is_end, VkCommandBuffer command_buffer) const
+    -> void;
+  auto write_view(vulkan::Context const &context,
+    size_t slot,
+    u32 view_index,
+    GpuPass pass,
+    bool is_end,
+    VkCommandBuffer command_buffer) -> void;
   void mark_submitted(size_t slot);
   void resolve(vulkan::Context const &context, size_t slot);
 
@@ -55,7 +64,7 @@ public:
   [[nodiscard]] auto total_ms() const noexcept -> float;
 
 private:
-  [[nodiscard]] static auto query_index(size_t slot, GpuPass pass, bool is_end) noexcept -> u32;
+  [[nodiscard]] auto query_index(size_t slot, GpuPass pass, bool is_end) const noexcept -> u32;
 
 
   VkQueryPool pool_ = VK_NULL_HANDLE;
@@ -63,6 +72,12 @@ private:
   bool enabled_ = false;
   std::array<bool, 2> pending_{};
   std::array<float, kGpuPassCount> last_ms_{};
+  u32 view_count_ = 0U;
+  u32 queries_per_slot_ = 0U;
+  mutable std::array<std::array<bool, kGpuPassCount>, 2> recorded_base_passes_{};
+  std::array<u32, 2> recorded_view_projections_{};
+  std::array<u32, 2> recorded_view_rasters_{};
+  std::array<std::vector<u64>, 2> query_results_{};
 };
 
 }// namespace vkgsplat

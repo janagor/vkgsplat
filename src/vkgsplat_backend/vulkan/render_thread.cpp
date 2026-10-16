@@ -58,9 +58,11 @@ namespace {
     if (last_print.time_since_epoch().count() == 0 || now - last_print >= std::chrono::seconds{ 1 }) {
       last_print = now;
       auto const &pass_ms = data.gpu_pass_timer.last_ms();
-      std::println("GPU: {:.2f} ms (proj {:.2f} bin {:.2f} prep {:.2f} radix {:.2f} raster {:.2f})",
+      std::println(
+        "GPU measured: {:.2f} ms (proj {:.2f} view proj {:.2f} bin {:.2f} prep {:.2f} radix {:.2f} raster {:.2f})",
         data.gpu_pass_timer.total_ms(),
         pass_ms.at(static_cast<size_t>(GpuPass::kProjection)),
+        pass_ms.at(static_cast<size_t>(GpuPass::kMultiviewProjection)),
         pass_ms.at(static_cast<size_t>(GpuPass::kBinning)),
         pass_ms.at(static_cast<size_t>(GpuPass::kPrepareSort)),
         pass_ms.at(static_cast<size_t>(GpuPass::kRadixSort)),

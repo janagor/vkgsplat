@@ -27,6 +27,8 @@ struct AppConfig
   vkgsplat::CameraConfig camera{};
   // LFD quilt grid; {1,1} is standard mono rendering. [columns, rows]
   std::array<u32, 2> lfd_grid{ 1U, 1U };
+  // Atlas width and height; {0,0} derives each quilt tile from the window.
+  std::array<u32, 2> quilt_size{ 0U, 0U };
   // Horizontal view cone (degrees) across quilt columns; rows use aspect-scaled cone.
   vkgsplat::f64 view_cone_deg{ vkgsplat::kDefaultViewConeDegrees };
   // Row-major view index per quilt cell (resolved from layout preset or explicit order).

@@ -63,34 +63,6 @@ namespace {
     data.raster_push.tile_offset = { tile.origin_x, tile.origin_y };
   }
 
-  class ScopedGpuPass
-  {
-  public:
-    ScopedGpuPass(vulkan::Context const &context, RenderData const &data, VkCommandBuffer command_buffer, GpuPass pass)
-      : context_(context), data_(data), command_buffer_(command_buffer), pass_(pass),
-        active_(data.gpu_pass_timer.enabled())
-    {
-      if (active_) { data_.gpu_pass_timer.write(context_, data_.current_slot, pass_, false, command_buffer_); }
-    }
-
-    ScopedGpuPass(ScopedGpuPass const &) = delete;
-    auto operator=(ScopedGpuPass const &) -> ScopedGpuPass & = delete;
-    ScopedGpuPass(ScopedGpuPass &&) = delete;
-    auto operator=(ScopedGpuPass &&) -> ScopedGpuPass & = delete;
-
-    ~ScopedGpuPass()
-    {
-      if (active_) { data_.gpu_pass_timer.write(context_, data_.current_slot, pass_, true, command_buffer_); }
-    }
-
-  private:
-    vulkan::Context const &context_;
-    RenderData const &data_;
-    VkCommandBuffer command_buffer_;
-    GpuPass pass_;
-    bool active_;
-  };
-
   [[nodiscard]] auto RecordEmulatedView(vulkan::Context &context, RenderData &data, VkCommandBuffer command_buffer)
     -> std::expected<void, Error>
   {
@@ -118,7 +90,10 @@ namespace {
     ApplyQuiltTilePush(data, view, tile_rect);
 
     // Phase A projected the center view; rasterization needs this off-axis view.
+    data.gpu_pass_timer.write_view(
+      context, data.current_slot, 0U, GpuPass::kMultiviewProjection, false, command_buffer);
     if (auto recorded = RecordProjection(context, data, command_buffer, false); !recorded) { return recorded; }
+    data.gpu_pass_timer.write_view(context, data.current_slot, 0U, GpuPass::kMultiviewProjection, true, command_buffer);
     return RecordRasterization(context, data, command_buffer);
   }
 
@@ -148,19 +123,27 @@ namespace {
       .tile_aspect = tile_aspect,
     });
     ApplyQuiltTilePush(data, view, tile);
+    u32 const view_index = (row * data.lfd_grid.at(0)) + col;
 
+    data.gpu_pass_timer.write_view(
+      context, data.current_slot, view_index, GpuPass::kMultiviewProjection, false, command_buffer);
     if (auto recorded = RecordProjection(context, data, command_buffer, false); !recorded) { return recorded; }
+    data.gpu_pass_timer.write_view(
+      context, data.current_slot, view_index, GpuPass::kMultiviewProjection, true, command_buffer);
     VkRect2D const draw_tile = {
       .offset = { .x = static_cast<int32_t>(tile.origin_x), .y = static_cast<int32_t>(tile.origin_y) },
       .extent = { .width = tile.width, .height = tile.height },
     };
-    return DrawQuiltTile(context, data, data.raster_push, command_buffer, draw_tile, first_tile);
+    data.gpu_pass_timer.write_view(context, data.current_slot, view_index, GpuPass::kRasterize, false, command_buffer);
+    auto recorded = DrawQuiltTile(context, data, data.raster_push, command_buffer, draw_tile, first_tile);
+    if (!recorded) { return recorded; }
+    data.gpu_pass_timer.write_view(context, data.current_slot, view_index, GpuPass::kRasterize, true, command_buffer);
+    return {};
   }
 
   [[nodiscard]] auto RecordQuilt(vulkan::Context &context, RenderData &data, VkCommandBuffer command_buffer)
     -> std::expected<void, Error>
   {
-    ScopedGpuPass const raster_timer{ context, data, command_buffer, GpuPass::kRasterize };
     FrameSetup const &setup = FrameSetupFor(data, data.current_slot);
     u32 const cols = std::max(1U, data.lfd_grid.at(0));
     u32 const rows = std::max(1U, data.lfd_grid.at(1));

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <expected>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <print>
@@ -44,6 +45,26 @@ namespace vkgsplat {
 
 namespace {
 
+  [[nodiscard]] auto IsValidQuiltSize(RenderData const &data) -> bool
+  {
+    if (data.quilt_size == std::array<u32, 2>{ 0U, 0U }) { return true; }
+    if (data.lfd_grid == std::array<u32, 2>{ 1U, 1U }) { return false; }
+    if (data.quilt_size.at(0) == 0U || data.quilt_size.at(1) == 0U) { return false; }
+    return data.quilt_size.at(0) % data.lfd_grid.at(0) == 0U && data.quilt_size.at(1) % data.lfd_grid.at(1) == 0U;
+  }
+
+  [[nodiscard]] auto CreateGpuPassTimer(vulkan::Context &context, RenderData &data) -> std::expected<void, Error>
+  {
+    u64 const view_count_wide = static_cast<u64>(data.lfd_grid.at(0)) * data.lfd_grid.at(1);
+    if (view_count_wide > std::numeric_limits<u32>::max()) {
+      return std::unexpected(MakeError(std::errc::invalid_argument, "lfd_grid contains too many views"));
+    }
+    if (!data.gpu_pass_timer.create(context, static_cast<u32>(view_count_wide))) {
+      return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to create GPU pass timestamp query pool"));
+    }
+    return {};
+  }
+
   [[nodiscard]] auto BuildRendererResources(vulkan::Context &context,
     RenderData &render_data,
     RendererConfig const &config) -> std::expected<void, Error>
@@ -67,10 +88,15 @@ namespace {
     }
 
     render_data.lfd_grid = config.lfd_grid;
+    render_data.quilt_size = config.quilt_size;
     render_data.view_cone_deg = config.view_cone_deg;
     render_data.lfd_view_order = config.lfd_view_order;
     if (render_data.lfd_grid.at(0) == 0U || render_data.lfd_grid.at(1) == 0U) {
       return std::unexpected(MakeError(std::errc::invalid_argument, "lfd_grid columns and rows must be >= 1"));
+    }
+    if (!IsValidQuiltSize(render_data)) {
+      return std::unexpected(MakeError(std::errc::invalid_argument,
+        "quilt_size requires a multiview lfd_grid and positive atlas dimensions divisible by that grid"));
     }
     if (render_data.lfd_view_order.empty()) {
       render_data.lfd_view_order = BuildLfdViewOrder(LfdViewLayout::kNormal, render_data.lfd_grid);
@@ -106,10 +132,7 @@ namespace {
       return std::unexpected(sync_objects.error());
     }
     if (config.enable_gpu_timers) {
-      if (!render_data.gpu_pass_timer.create(context)) {
-        return std::unexpected(
-          MakeError(std::errc::invalid_argument, "Failed to create GPU pass timestamp query pool"));
-      }
+      if (auto timer = CreateGpuPassTimer(context, render_data); !timer) { return std::unexpected(timer.error()); }
     }
     if (config.enable_imgui) {
       if (auto imgui = InitImguiOverlay(context, render_data); !imgui) { return std::unexpected(imgui.error()); }

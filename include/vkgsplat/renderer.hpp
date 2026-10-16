@@ -31,6 +31,8 @@ struct RendererConfig
   FrameRateConfig frame_rate{};
   /// Quilt dimensions as {columns, rows}; {1, 1} selects the mono path.
   std::array<u32, 2> lfd_grid{ 1U, 1U };
+  /// Atlas width and height; {0,0} uses the swapchain size for each tile.
+  std::array<u32, 2> quilt_size{ 0U, 0U };
   f64 view_cone_deg{ kDefaultViewConeDegrees };
   std::vector<u32> lfd_view_order;
 };

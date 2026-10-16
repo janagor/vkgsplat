@@ -25,6 +25,9 @@ camera-sensitivity = 0.1
 
 # LFD quilt: columns rows. {1,1} is standard mono rendering.
 lfd-grid = [3, 3]
+# Optional atlas resolution, independent of the preview window; dimensions must divide by lfd-grid.
+# quilt-size = [3840, 2160]
+# LFD emulation renders one view at the preview window resolution, regardless of quilt-size.
 # View placement in the quilt atlas (row-major cell order):
 #   normal    -> 0,1 / 2,3
 #   flip-rows -> 2,3 / 0,1  (for 2x2; generalizes to 3x3 as 6,7,8 / 3,4,5 / 0,1,2)

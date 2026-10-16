@@ -248,6 +248,7 @@ auto Run(std::span<char *const> args) noexcept -> int
       .enable_gpu_timers = config->enable_gpu_timers,
       .frame_rate = config->frame_rate,
       .lfd_grid = config->lfd_grid,
+      .quilt_size = config->quilt_size,
       .view_cone_deg = config->view_cone_deg,
       .lfd_view_order = config->lfd_view_order,
     };
