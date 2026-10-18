@@ -2,6 +2,7 @@ include(GenerateExportHeader)
 
 add_library(
   vkgsplat_io
+  error.cpp
   ply/miniply.cpp
   ply/load_splats.cpp
   image/write_png.cpp
@@ -14,7 +15,10 @@ set_source_files_properties(image/stb_image_write_impl.cpp PROPERTIES SKIP_LINTI
 
 target_link_libraries(
   vkgsplat_io
-  PRIVATE vkgsplat::vkgsplat_options vkgsplat::vkgsplat_warnings stb::stb
+  PRIVATE vkgsplat::vkgsplat_options
+          vkgsplat::vkgsplat_warnings
+          stb::stb
+          magic_enum::magic_enum
   PUBLIC vkgsplat::vkgsplat_utility)
 
 target_compile_features(vkgsplat_io PUBLIC cxx_std_${CMAKE_CXX_STANDARD})

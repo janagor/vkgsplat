@@ -123,8 +123,8 @@ auto VulkanDriver::create(Platform &platform, DriverConfig const &config)
 
   if (auto created = driver->create_swapchain(platform, platform.framebuffer_extent()); !created) {
     if (platform.surface_mode() == SurfaceMode::kHeadless) {
-      return std::unexpected(MakeError(created.error().code(),
-        "Failed to create headless swapchain: " + created.error().message()));
+      return std::unexpected(
+        MakeError(created.error().code(), "Failed to create headless swapchain: " + created.error().message()));
     }
     return std::unexpected(created.error());
   }
@@ -133,8 +133,8 @@ auto VulkanDriver::create(Platform &platform, DriverConfig const &config)
     auto const requested = platform.framebuffer_extent();
     auto const actual = driver->context_.swapchain->extent();
     if (actual.width != requested.width || actual.height != requested.height) {
-      return std::unexpected{ MakeError(std::errc::invalid_argument,
-        "Headless swapchain extent differs from the requested dimensions") };
+      return std::unexpected{ MakeError(
+        std::errc::invalid_argument, "Headless swapchain extent differs from the requested dimensions") };
     }
   }
 

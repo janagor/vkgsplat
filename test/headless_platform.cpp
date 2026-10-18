@@ -1,5 +1,5 @@
-#include <vkgsplat_headless/headless_platform.hpp>
 #include <vkgsplat/platform.hpp>
+#include <vkgsplat_headless/headless_platform.hpp>
 #include <vkgsplat_utility/types.hpp>
 
 #include <catch2/catch_test_macros.hpp>
@@ -37,7 +37,8 @@ TEST_CASE("headless platform rejects zero dimensions", "[headless]")
 
 TEST_CASE("platform defaults to windowed mode", "[headless]")
 {
-  struct DefaultPlatform final : vkgsplat::Platform {
+  struct DefaultPlatform final : vkgsplat::Platform
+  {
     [[nodiscard]] auto native_window() const noexcept -> vkgsplat::NativeWindowHandle override { return nullptr; }
     [[nodiscard]] auto framebuffer_extent() const noexcept -> vkgsplat::Extent2D override { return {}; }
     void poll_events() const noexcept override {}

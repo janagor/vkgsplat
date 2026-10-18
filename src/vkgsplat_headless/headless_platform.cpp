@@ -1,5 +1,5 @@
-#include <vkgsplat_headless/headless_platform.hpp>
 #include <vkgsplat/platform.hpp>
+#include <vkgsplat_headless/headless_platform.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
 
@@ -11,7 +11,8 @@ namespace vkgsplat {
 auto HeadlessPlatform::create(HeadlessPlatformConfig const &config) -> std::expected<HeadlessPlatform, Error>
 {
   if (config.width == 0 || config.height == 0) {
-    return std::unexpected{ MakeError(std::errc::invalid_argument, "Headless extent must have positive width and height") };
+    return std::unexpected{ MakeError(
+      std::errc::invalid_argument, "Headless extent must have positive width and height") };
   }
   return HeadlessPlatform{ Extent2D{ .width = config.width, .height = config.height } };
 }

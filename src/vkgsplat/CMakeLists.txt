@@ -1,17 +1,12 @@
 include(GenerateExportHeader)
 
-add_library(
-  vkgsplat
-  error.cpp
-  engine.cpp
-  renderer.cpp
-  lfd_view_order.cpp)
+add_library(vkgsplat engine.cpp renderer.cpp lfd_view_order.cpp)
 
 add_library(vkgsplat::vkgsplat ALIAS vkgsplat)
 
 target_link_libraries(
   vkgsplat
-  PRIVATE vkgsplat::vkgsplat_options vkgsplat::vkgsplat_warnings magic_enum::magic_enum
+  PRIVATE vkgsplat::vkgsplat_options vkgsplat::vkgsplat_warnings
   PUBLIC vkgsplat::vkgsplat_backend
          vkgsplat::vkgsplat_utility
          vkgsplat::vkgsplat_window

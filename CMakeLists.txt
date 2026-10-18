@@ -62,6 +62,9 @@ add_subdirectory(configured_files)
 
 # Adding the src:
 add_subdirectory(src)
+if(PROJECT_IS_TOP_LEVEL AND NOT EMSCRIPTEN)
+  add_subdirectory(benchmark)
+endif()
 
 # Create unified web deployment directory (for WASM builds)
 if(EMSCRIPTEN)

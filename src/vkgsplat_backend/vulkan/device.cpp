@@ -45,12 +45,12 @@ namespace {
       break;
     }
     if (!enumerated) {
-      return std::unexpected{
-        MakeError(std::errc::io_error, "Vulkan instance extension enumeration remained incomplete") };
+      return std::unexpected{ MakeError(
+        std::errc::io_error, "Vulkan instance extension enumeration remained incomplete") };
     }
     bool const found = std::ranges::any_of(extensions, [](VkExtensionProperties const &extension) -> bool {
       return std::string_view{ static_cast<char const *>(extension.extensionName) }
-        == VK_EXT_HEADLESS_SURFACE_EXTENSION_NAME;
+             == VK_EXT_HEADLESS_SURFACE_EXTENSION_NAME;
     });
     if (found) { return {}; }
     return std::unexpected{ MakeError(std::errc::function_not_supported,
