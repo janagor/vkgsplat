@@ -2,6 +2,7 @@
 #define VKGSPLAT_BACKEND_VULKAN_RENDER_THREAD_HPP
 
 #include "app_state.hpp"
+#include "gpu_timing_samples.hpp"
 #include <vkgsplat_adt/latest_frame_mailbox.hpp>
 
 #include <condition_variable>
@@ -11,8 +12,10 @@
 #include <mutex>
 #include <optional>
 #include <thread>
+#include <vector>
 
 #include <vkgsplat/camera.hpp>
+#include <vkgsplat/gpu_timings.hpp>
 #include <vkgsplat/renderer.hpp>
 #include <vkgsplat_backend/vkgsplat_backend_export.hpp>
 #include <vkgsplat_utility/error.hpp>
@@ -39,7 +42,10 @@ public:
   RenderThread(RenderThread &&) = delete;
   auto operator=(RenderThread &&) -> RenderThread & = delete;
 
-  auto Start(vulkan::Context *context, RenderData *data, FrameSubmissionPolicy policy) -> void;
+  auto Start(vulkan::Context *context,
+    RenderData *data,
+    FrameSubmissionPolicy policy,
+    bool capture_gpu_timing_samples = false) -> void;
   // Runs the production admission and worker loop with a CPU-only frame callback.
   auto StartForTest(FrameSubmissionPolicy policy,
     std::function<std::expected<void, Error>()> draw_frame,
@@ -53,6 +59,8 @@ public:
   [[nodiscard]] auto CompletedFrameCount() const -> u64;
   [[nodiscard]] auto RecreatedFrameCount() const -> u64;
   [[nodiscard]] auto WaitIdle() -> std::expected<void, Error>;
+  [[nodiscard]] auto TakeGpuTimings() -> std::expected<std::vector<GpuFrameTimings>, Error>;
+  [[nodiscard]] auto ReserveGpuTimingSamples(size_t count) -> std::expected<void, Error>;
 
 private:
   enum class Command : u8 {
@@ -82,7 +90,8 @@ private:
     std::function<std::expected<void, Error>()> draw_frame,
     std::function<void()> wait_idle) -> void;
   auto FinishFrame(size_t frame_slot, std::expected<FrameOutcome, Error> const &drawn) -> void;
-  [[nodiscard]] auto DrawFrameVulkan(size_t frame_slot) const -> std::expected<FrameOutcome, Error>;
+  [[nodiscard]] auto DrawFrameVulkan(size_t frame_slot) -> std::expected<FrameOutcome, Error>;
+  auto PublishGpuTiming(std::optional<GpuFrameTimings> sample) -> void;
 
   vulkan::Context *context_{ nullptr };
   RenderData *data_{ nullptr };
@@ -104,6 +113,8 @@ private:
   bool idle_done_{ true };
   size_t blocked_producer_count_{ 0U };
   bool test_mode_{ false };
+  bool capture_gpu_timing_samples_{ false };
+  GpuTimingSamples gpu_timing_samples_;
   FrameSubmissionPolicy submission_policy_{ FrameSubmissionPolicy::kLatest };
 };
 

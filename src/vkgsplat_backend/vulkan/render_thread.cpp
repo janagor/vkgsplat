@@ -13,6 +13,7 @@
 #include <string>
 #include <system_error>
 #include <utility>
+#include <vector>
 
 #include "app_state.hpp"
 #include "gs/pipeline.hpp"
@@ -25,6 +26,7 @@
 #include "vulkan/renderer.hpp"
 #include "vulkan_context.hpp"
 #include <vkgsplat/camera.hpp>
+#include <vkgsplat/gpu_timings.hpp>
 #include <vkgsplat/renderer.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
@@ -43,17 +45,19 @@ namespace {
   {
     BindDescriptorHeap(context, data, command_buffer);
     if (auto recorded = gs::EvalGsPipeline(context, data, command_buffer); !recorded) { return recorded; }
+    data.gpu_pass_timer.end_frame(context, data.current_slot, command_buffer);
     return RecordImguiOverlay(context, data, command_buffer, image_index);
   }
 
-  void ResolveGpuPassTimings(vulkan::Context const &context, RenderData &data, size_t frame_slot)
+  [[nodiscard]] auto
+    ResolveGpuPassTimings(vulkan::Context const &context, RenderData &data, size_t frame_slot, bool capture_samples)
+      -> std::expected<std::optional<GpuFrameTimings>, Error>
   {
-    if (!data.gpu_pass_timer.enabled()) { return; }
-    data.gpu_pass_timer.resolve(context, frame_slot);
-    if (data.imgui != nullptr) {
-      UpdateImguiGpuTimings(data);
-      return;
-    }
+    if (!data.gpu_pass_timer.enabled()) { return std::nullopt; }
+    auto resolved = data.gpu_pass_timer.resolve(context, frame_slot);
+    if (!resolved || !resolved->has_value()) { return resolved; }
+    if (data.imgui != nullptr) { UpdateImguiGpuTimings(data); }
+    if (capture_samples || data.imgui != nullptr) { return resolved; }
     static auto last_print = std::chrono::steady_clock::time_point{};
     auto const now = std::chrono::steady_clock::now();
     if (last_print.time_since_epoch().count() == 0 || now - last_print >= std::chrono::seconds{ 1 }) {
@@ -69,6 +73,7 @@ namespace {
         pass_ms.at(static_cast<size_t>(GpuPass::kRadixSort)),
         pass_ms.at(static_cast<size_t>(GpuPass::kRasterize)));
     }
+    return resolved;
   }
 
   [[nodiscard]] auto PresentSwapchainImage(vulkan::Context &context,
@@ -98,7 +103,8 @@ namespace {
   [[nodiscard]] auto WaitFrameResources(vulkan::Context const &context,
     RenderData &data,
     vkexec::owned::frame_ring &ring,
-    size_t frame_slot) -> std::expected<void, Error>
+    size_t frame_slot,
+    bool capture_samples) -> std::expected<std::optional<GpuFrameTimings>, Error>
   {
     if (auto waited = ring.wait_slot(frame_slot); !waited) {
       return std::unexpected{ MakeError(std::errc::io_error, waited.error().message()) };
@@ -108,8 +114,7 @@ namespace {
     if (auto waited = ring.wait_slot(previous_slot); !waited) {
       return std::unexpected{ MakeError(std::errc::io_error, waited.error().message()) };
     }
-    ResolveGpuPassTimings(context, data, frame_slot);
-    return {};
+    return ResolveGpuPassTimings(context, data, frame_slot, capture_samples);
   }
 
   [[nodiscard]] auto RecordAndSubmitFrame(vulkan::Context &context,
@@ -160,13 +165,22 @@ namespace {
 
 RenderThread::~RenderThread() { Stop(); }
 
-auto RenderThread::Start(vulkan::Context *context, RenderData *data, FrameSubmissionPolicy policy) -> void
-{ StartWorker(context, data, policy, {}, {}); }
+auto RenderThread::Start(vulkan::Context *context,
+  RenderData *data,
+  FrameSubmissionPolicy policy,
+  bool capture_gpu_timing_samples) -> void
+{
+  capture_gpu_timing_samples_ = capture_gpu_timing_samples;
+  StartWorker(context, data, policy, {}, {});
+}
 
 auto RenderThread::StartForTest(FrameSubmissionPolicy policy,
   std::function<std::expected<void, Error>()> draw_frame,
   std::function<void()> wait_idle) -> void
-{ StartWorker(nullptr, nullptr, policy, std::move(draw_frame), std::move(wait_idle)); }
+{
+  capture_gpu_timing_samples_ = false;
+  StartWorker(nullptr, nullptr, policy, std::move(draw_frame), std::move(wait_idle));
+}
 
 auto RenderThread::WaitForShutdownForTest() -> void
 {
@@ -203,6 +217,7 @@ auto RenderThread::StartWorker(vulkan::Context *context,
     first_error_.reset();
     completed_frame_count_ = 0U;
     recreated_frame_count_ = 0U;
+    gpu_timing_samples_.reset();
     worker_busy_ = false;
     blocked_producer_count_ = 0U;
     test_mode_ = static_cast<bool>(draw_frame_override_);
@@ -342,15 +357,53 @@ auto RenderThread::FinishFrame(size_t frame_slot, std::expected<FrameOutcome, Er
   if (context_ != nullptr) { context_->platform->post_empty_event(); }
 }
 
+auto RenderThread::PublishGpuTiming(std::optional<GpuFrameTimings> sample) -> void
+{
+  if (!capture_gpu_timing_samples_ || !sample) { return; }
+  std::scoped_lock const lock{ control_mutex_ };
+  gpu_timing_samples_.publish(*sample);
+}
+
+auto RenderThread::ReserveGpuTimingSamples(size_t count) -> std::expected<void, Error>
+{
+  std::scoped_lock const lock{ control_mutex_ };
+  if (!capture_gpu_timing_samples_) {
+    return std::unexpected{ MakeError(std::errc::operation_not_permitted, "GPU timing collection is disabled") };
+  }
+  gpu_timing_samples_.reserve(count);
+  return {};
+}
+
+auto RenderThread::TakeGpuTimings() -> std::expected<std::vector<GpuFrameTimings>, Error>
+{
+  std::scoped_lock const lock{ control_mutex_ };
+  if (!capture_gpu_timing_samples_) {
+    return std::unexpected{ MakeError(std::errc::operation_not_permitted, "GPU timing collection is disabled") };
+  }
+  return gpu_timing_samples_.take();
+}
+
 auto RenderThread::ProcessWaitIdle(std::unique_lock<std::mutex> &lock) -> void
 {
   lock.unlock();
   if (wait_idle_override_) { wait_idle_override_(); }
   auto const result = context_ != nullptr ? context_->disp.deviceWaitIdle() : VK_SUCCESS;
+  std::optional<Error> timing_error;
+  if (result == VK_SUCCESS && context_ != nullptr && data_ != nullptr && data_->gpu_pass_timer.enabled()) {
+    for (size_t slot = 0U; slot < kFrameSlotCount; ++slot) {
+      auto sample = ResolveGpuPassTimings(*context_, *data_, slot, capture_gpu_timing_samples_);
+      if (!sample) {
+        timing_error = sample.error();
+        break;
+      }
+      PublishGpuTiming(*sample);
+    }
+  }
   lock.lock();
-  bool const failed = result != VK_SUCCESS && !first_error_.has_value();
-  if (failed) {
-    first_error_ = MakeError(std::errc::io_error, "device wait idle failed. VkResult=" + std::to_string(result));
+  bool const failed = result != VK_SUCCESS || timing_error.has_value();
+  if (failed && !first_error_.has_value()) {
+    first_error_ = timing_error.value_or(
+      MakeError(std::errc::io_error, "device wait idle failed. VkResult=" + std::to_string(result)));
   }
   idle_done_ = true;
   if (command_ == Command::kWaitIdle) { command_ = Command::kNone; }
@@ -402,7 +455,7 @@ auto RenderThread::ThreadMain() -> void
   }
 }
 
-auto RenderThread::DrawFrameVulkan(size_t frame_slot) const -> std::expected<FrameOutcome, Error>
+auto RenderThread::DrawFrameVulkan(size_t frame_slot) -> std::expected<FrameOutcome, Error>
 {
   vulkan::Context &context = *context_;
   RenderData &data = *data_;
@@ -413,9 +466,9 @@ auto RenderThread::DrawFrameVulkan(size_t frame_slot) const -> std::expected<Fra
   }
   auto &ring = *data.frame_ring;
 
-  if (auto waited = WaitFrameResources(context, data, ring, frame_slot); !waited) {
-    return std::unexpected{ waited.error() };
-  }
+  auto waited = WaitFrameResources(context, data, ring, frame_slot, capture_gpu_timing_samples_);
+  if (!waited) { return std::unexpected{ waited.error() }; }
+  PublishGpuTiming(*waited);
 
   auto const extent = context.platform->framebuffer_extent();
   if (extent.width == 0 || extent.height == 0) { return FrameOutcome::kSkipped; }

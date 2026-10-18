@@ -25,6 +25,15 @@ TEST_CASE("renderer adapter uses the benchmark profile", "[fixture]")
   REQUIRE(renderer.lfd_grid == mono_grid);
 }
 
+TEST_CASE("GPU profiling adapter enables timestamp sample collection", "[fixture]")
+{
+  auto const profile = vkgsplat::benchmark::BaselineProfile();
+  auto const renderer = vkgsplat::benchmark::MakeGpuProfilingRendererConfig(profile, "baseline-v1.ply");
+  REQUIRE(renderer.enable_gpu_timers);
+  REQUIRE(renderer.capture_gpu_timing_samples);
+  REQUIRE(renderer.submission_policy == vkgsplat::FrameSubmissionPolicy::kLossless);
+}
+
 TEST_CASE("benchmark accounting rejects missing and recreated frames", "[fixture]")
 {
   constexpr vkgsplat::u64 kRequested = 64U;

@@ -7,6 +7,7 @@
 #include "vulkan/gpu_pass_timer.hpp"
 #include "vulkan_context.hpp"
 
+#include <vkgsplat/gpu_timings.hpp>
 #include <vkgsplat_utility/types.hpp>
 
 #include <expected>

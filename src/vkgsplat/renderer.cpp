@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <expected>
 #include <limits>
 #include <memory>
@@ -12,12 +13,15 @@
 #include <string_view>
 #include <system_error>
 #include <utility>
+#include <vector>
 
+#include <VkBootstrap.h>
 #include <beman/indirect/indirect.hpp>
 
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat/driver.hpp>
 #include <vkgsplat/engine.hpp>
+#include <vkgsplat/gpu_timings.hpp>
 #include <vkgsplat/lfd_config.hpp>
 #include <vkgsplat/platform.hpp>
 #include <vkgsplat_utility/error.hpp>
@@ -61,8 +65,24 @@ namespace {
     if (view_count_wide > std::numeric_limits<u32>::max()) {
       return std::unexpected(MakeError(std::errc::invalid_argument, "lfd_grid contains too many views"));
     }
+    auto const queue_index = context.device.get_queue_index(vkb::QueueType::graphics);
+    auto const families = context.device.physical_device.get_queue_families();
+    if (!queue_index || queue_index.value() >= families.size()
+        || families.at(queue_index.value()).timestampValidBits == 0U) {
+      return std::unexpected{ MakeError(
+        std::errc::function_not_supported, "graphics queue does not support GPU timestamp queries") };
+    }
     if (!data.gpu_pass_timer.create(context, static_cast<u32>(view_count_wide))) {
-      return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to create GPU pass timestamp query pool"));
+      return std::unexpected(MakeError(std::errc::invalid_argument,
+        "Failed to create GPU pass timestamp query pool (graphics queue timestamps must be supported)"));
+    }
+    return {};
+  }
+
+  [[nodiscard]] auto ValidateGpuTimingConfig(RendererConfig const &config) -> std::expected<void, Error>
+  {
+    if (config.capture_gpu_timing_samples && !config.enable_gpu_timers) {
+      return std::unexpected{ MakeError(std::errc::invalid_argument, "GPU timing collection requires GPU timers") };
     }
     return {};
   }
@@ -180,6 +200,7 @@ Renderer::~Renderer() noexcept
 
 auto Renderer::create(RendererConfig const &config, Platform &platform) -> std::expected<Renderer, Error>
 {
+  if (auto validated = ValidateGpuTimingConfig(config); !validated) { return std::unexpected{ validated.error() }; }
   auto engine = Engine::create(EngineConfig{ .enable_validation = config.enable_validation,
                                  .request_present_timing = config.frame_rate.IsPacingRequested() },
     platform);
@@ -196,13 +217,14 @@ auto Renderer::create(RendererConfig const &config, Platform &platform) -> std::
   }
 
   impl->render_thread = std::make_unique<RenderThread>();
-  impl->render_thread->Start(&context, &impl->render_data, config.submission_policy);
+  impl->render_thread->Start(&context, &impl->render_data, config.submission_policy, config.capture_gpu_timing_samples);
 
   return Renderer{ std::move(impl) };
 }
 
 auto Renderer::create(RendererConfig const &config, Engine &engine) -> std::expected<Renderer, Error>
 {
+  if (auto validated = ValidateGpuTimingConfig(config); !validated) { return std::unexpected{ validated.error() }; }
   beman::indirect::indirect<Impl> impl;
   impl->engine = &engine;
 
@@ -213,7 +235,7 @@ auto Renderer::create(RendererConfig const &config, Engine &engine) -> std::expe
   }
 
   impl->render_thread = std::make_unique<RenderThread>();
-  impl->render_thread->Start(&context, &impl->render_data, config.submission_policy);
+  impl->render_thread->Start(&context, &impl->render_data, config.submission_policy, config.capture_gpu_timing_samples);
 
   return Renderer{ std::move(impl) };
 }
@@ -253,6 +275,28 @@ auto Renderer::save_frame_png(std::string_view path) -> std::expected<void, Erro
 }
 
 auto Renderer::wait_idle() -> std::expected<void, Error> { return impl_->render_thread->WaitIdle(); }
+
+auto Renderer::take_gpu_timings() -> std::expected<std::vector<GpuFrameTimings>, Error>
+{ return impl_->render_thread->TakeGpuTimings(); }
+
+auto Renderer::reserve_gpu_timing_samples(size_t count) -> std::expected<void, Error>
+{ return impl_->render_thread->ReserveGpuTimingSamples(count); }
+
+auto Renderer::gpu_timestamp_period_ns() const -> double
+{
+  auto const &context = AsVulkanDriver(impl_->engine->driver()).context();
+  return static_cast<double>(context.device.physical_device.properties.limits.timestampPeriod);
+}
+
+auto Renderer::gpu_timestamp_valid_bits() const -> u32
+{
+  auto const &context = AsVulkanDriver(impl_->engine->driver()).context();
+  auto const queue_index = context.device.get_queue_index(vkb::QueueType::graphics);
+  if (!queue_index) { return 0U; }
+  auto const families = context.device.physical_device.get_queue_families();
+  if (queue_index.value() >= families.size()) { return 0U; }
+  return families.at(queue_index.value()).timestampValidBits;
+}
 
 auto Renderer::set_lfd_emulate(bool active) -> std::expected<void, Error>
 {

@@ -1,6 +1,7 @@
 #include "benchmark/render_throughput.hpp"
 #include "benchmark/batch_accounting.hpp"
 #include "benchmark/fixture/profile.hpp"
+#include "benchmark/fixture/renderer_adapter.hpp"
 
 #include <benchmark/benchmark.h>
 
@@ -27,13 +28,23 @@ auto RenderBatch(Renderer &renderer, Camera const &camera, u64 frame_count) -> s
     renderer.recreated_frame_count());
 }
 
-auto RegisterRenderThroughput(Renderer &renderer, Camera const &camera, std::atomic_bool &failed) -> void
+auto RegisterRenderThroughput(Platform &platform,
+  BenchmarkProfile const &profile,
+  std::filesystem::path const &scene_path,
+  Camera const &camera,
+  std::atomic_bool &failed) -> void
 {
   auto const name = std::format("BM_RenderThroughput/{}/{}x{}", kBaselineCount, kBaselineWidth, kBaselineHeight);
-  auto *registered =
-    ::benchmark::RegisterBenchmark(name.c_str(), [&renderer, &camera, &failed](::benchmark::State &state) -> void {
+  auto *registered = ::benchmark::RegisterBenchmark(
+    name.c_str(), [&platform, &profile, &scene_path, &camera, &failed](::benchmark::State &state) -> void {
+      auto renderer = Renderer::create(MakeRendererConfig(profile, scene_path), platform);
+      if (!renderer) {
+        failed.store(true);
+        state.SkipWithError(renderer.error().message().c_str());
+        return;
+      }
       auto const batch_frames = static_cast<u64>(state.range(0));
-      if (auto warmup = RenderBatch(renderer, camera, kWarmupFrames); !warmup) {
+      if (auto warmup = RenderBatch(*renderer, camera, kWarmupFrames); !warmup) {
         failed.store(true);
         state.SkipWithError(warmup.error().message().c_str());
         return;
@@ -42,13 +53,14 @@ auto RegisterRenderThroughput(Renderer &renderer, Camera const &camera, std::ato
       u64 frames = 0U;
       for (auto _ : state) {
         static_cast<void>(_);
-        if (auto batch = RenderBatch(renderer, camera, batch_frames); !batch) {
+        if (auto batch = RenderBatch(*renderer, camera, batch_frames); !batch) {
           failed.store(true);
           state.SkipWithError(batch.error().message().c_str());
           return;
         }
         frames += batch_frames;
       }
+      state.counters["gpu_timing_enabled"] = 0.0;
       state.SetItemsProcessed(static_cast<std::int64_t>(frames));
       state.counters["fps"] = ::benchmark::Counter(static_cast<double>(frames), ::benchmark::Counter::kIsRate);
     });

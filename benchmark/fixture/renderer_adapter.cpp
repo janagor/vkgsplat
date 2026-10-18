@@ -21,4 +21,13 @@ auto MakeRendererConfig(BenchmarkProfile const &profile, std::filesystem::path c
   };
 }
 
+auto MakeGpuProfilingRendererConfig(BenchmarkProfile const &profile, std::filesystem::path const &scene_path)
+  -> RendererConfig
+{
+  auto config = MakeRendererConfig(profile, scene_path);
+  config.enable_gpu_timers = true;
+  config.capture_gpu_timing_samples = true;
+  return config;
+}
+
 }// namespace vkgsplat::benchmark

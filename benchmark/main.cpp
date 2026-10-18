@@ -1,6 +1,7 @@
 #include "benchmark/fixture/manifest.hpp"
 #include "benchmark/fixture/profile.hpp"
 #include "benchmark/fixture/renderer_adapter.hpp"
+#include "benchmark/gpu_pass_timings.hpp"
 #include "benchmark/render_throughput.hpp"
 
 #include <vkgsplat/camera.hpp>
@@ -39,36 +40,45 @@ auto RunBenchmark(int argc, char **argv) -> int
     std::println(stderr, "{}", platform.error().message());
     return 1;
   }
-  auto renderer = vkgsplat::Renderer::create(vkgsplat::benchmark::MakeRendererConfig(profile, scene_path), *platform);
-  if (!renderer) {
-    std::println(stderr, "{}", renderer.error().message());
-    return 1;
-  }
   auto const camera = vkgsplat::Camera{ profile.camera };
-  auto const device = renderer->device_info();
-  ::benchmark::AddCustomContext("gpu_name", device.name);
-  ::benchmark::AddCustomContext("gpu_vendor_id", std::to_string(device.vendor_id));
-  ::benchmark::AddCustomContext("gpu_device_id", std::to_string(device.device_id));
-  ::benchmark::AddCustomContext("gpu_driver_version", std::to_string(device.driver_version));
-  ::benchmark::AddCustomContext("vulkan_api_version", std::to_string(device.vulkan_api_version));
-  ::benchmark::AddCustomContext("git_commit", VKGSPLAT_BENCHMARK_GIT_SHA);
-  ::benchmark::AddCustomContext("git_dirty", VKGSPLAT_BENCHMARK_GIT_DIRTY);
-  ::benchmark::AddCustomContext("build_type", VKGSPLAT_BENCHMARK_BUILD_TYPE);
-  ::benchmark::AddCustomContext("ipo_enabled", VKGSPLAT_BENCHMARK_IPO);
-  ::benchmark::AddCustomContext("scene_profile", std::string{ profile.id });
-  ::benchmark::AddCustomContext("scene_checksum_fnv1a64", std::format("{:016x}", verified->hash));
-  ::benchmark::AddCustomContext("scene_seed", std::to_string(profile.scene.seed));
-  ::benchmark::AddCustomContext("gaussian_count", std::to_string(profile.scene.gaussian_count));
-  ::benchmark::AddCustomContext("resolution", std::format("{}x{}", profile.width, profile.height));
-  ::benchmark::AddCustomContext("fov_degrees", std::to_string(profile.camera.fov_degrees));
-  ::benchmark::AddCustomContext("submission_policy", "lossless");
-  ::benchmark::AddCustomContext("render_mode", "mono");
-  ::benchmark::AddCustomContext("warmup_frames", std::to_string(vkgsplat::benchmark::kWarmupFrames));
-  ::benchmark::AddCustomContext("frame_pacing", "uncapped");
-  ::benchmark::AddCustomContext("vulkan_validation", "disabled");
+  {
+    auto renderer = vkgsplat::Renderer::create(vkgsplat::benchmark::MakeRendererConfig(profile, scene_path), *platform);
+    if (!renderer) {
+      std::println(stderr, "{}", renderer.error().message());
+      return 1;
+    }
+    auto const device = renderer->device_info();
+    ::benchmark::AddCustomContext("gpu_name", device.name);
+    ::benchmark::AddCustomContext("gpu_vendor_id", std::to_string(device.vendor_id));
+    ::benchmark::AddCustomContext("gpu_device_id", std::to_string(device.device_id));
+    ::benchmark::AddCustomContext("gpu_driver_version", std::to_string(device.driver_version));
+    ::benchmark::AddCustomContext("vulkan_api_version", std::to_string(device.vulkan_api_version));
+    ::benchmark::AddCustomContext("git_commit", VKGSPLAT_BENCHMARK_GIT_SHA);
+    ::benchmark::AddCustomContext("git_dirty", VKGSPLAT_BENCHMARK_GIT_DIRTY);
+    ::benchmark::AddCustomContext("build_type", VKGSPLAT_BENCHMARK_BUILD_TYPE);
+    ::benchmark::AddCustomContext("ipo_enabled", VKGSPLAT_BENCHMARK_IPO);
+    ::benchmark::AddCustomContext("scene_profile", std::string{ profile.id });
+    ::benchmark::AddCustomContext("scene_checksum_fnv1a64", std::format("{:016x}", verified->hash));
+    ::benchmark::AddCustomContext("scene_seed", std::to_string(profile.scene.seed));
+    ::benchmark::AddCustomContext("gaussian_count", std::to_string(profile.scene.gaussian_count));
+    ::benchmark::AddCustomContext("resolution", std::format("{}x{}", profile.width, profile.height));
+    ::benchmark::AddCustomContext("fov_degrees", std::to_string(profile.camera.fov_degrees));
+    ::benchmark::AddCustomContext("submission_policy", "lossless");
+    ::benchmark::AddCustomContext("render_mode", "mono");
+    ::benchmark::AddCustomContext("warmup_frames", std::to_string(vkgsplat::benchmark::kWarmupFrames));
+    ::benchmark::AddCustomContext("frame_pacing", "uncapped");
+    ::benchmark::AddCustomContext("vulkan_validation", "disabled");
+
+    ::benchmark::AddCustomContext("gpu_timing_enabled", "throughput=false;gpu_pass_timings=true");
+    ::benchmark::AddCustomContext("gpu_timing_schema_version", std::to_string(vkgsplat::kGpuTimingSchemaVersion));
+    ::benchmark::AddCustomContext("gpu_timing_scope", "gs_pipeline");
+    ::benchmark::AddCustomContext("gpu_timestamp_period_ns", std::to_string(renderer->gpu_timestamp_period_ns()));
+    ::benchmark::AddCustomContext("gpu_timestamp_valid_bits", std::to_string(renderer->gpu_timestamp_valid_bits()));
+  }
 
   std::atomic_bool failed{ false };
-  vkgsplat::benchmark::RegisterRenderThroughput(*renderer, camera, failed);
+  vkgsplat::benchmark::RegisterRenderThroughput(*platform, profile, scene_path, camera, failed);
+  vkgsplat::benchmark::RegisterGpuPassTimings(*platform, profile, scene_path, camera, failed);
   ::benchmark::RunSpecifiedBenchmarks();
   ::benchmark::Shutdown();
   return failed.load() ? EXIT_FAILURE : EXIT_SUCCESS;

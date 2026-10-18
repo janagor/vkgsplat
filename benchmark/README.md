@@ -35,3 +35,20 @@ The JSON context records the GPU name, Vulkan vendor/device IDs, raw driver and 
 This FPS includes CPU command recording, GPU rendering, synchronization, and headless presentation. It is not a GPU pass time or a GPU-only kernel throughput result. A skipped or recreated frame, render error, or failed fixture verification invalidates the run.
 
 The CPU-only tests cover mailbox replacement and ownership, plus the production rendering thread's concurrent producers, error propagation, shutdown wakeup, and idle wait. The opt-in `benchmark.fixture.gpu.smoke` test checks a full headless batch with validation disabled, matching benchmark settings. Before accepting a performance baseline, separately run the validation-enabled `headless.gpu.smoke` test with the generated `benchmark/baseline-v1.ply` as `vkgsplat_HEADLESS_TEST_PLY`; see [headless rendering](../docs/headless.md) for its CMake options. GPU tests require compatible Vulkan hardware and validation layers.
+
+## GPU pass timings
+
+`BM_GpuPassTimings` uses Vulkan timestamps on the graphics queue. It creates a separate renderer with GPU timers and sample collection enabled, runs 64 warmup frames, waits for idle, and discards those warmup samples. Each measured iteration submits a lossless batch of 64, 128, or 256 frames. After `wait_idle()`, it checks that every completed frame has one unique sample. The benchmark's manual time is the sum of GPU frame spans in that batch. Renderer setup, teardown, CPU recording, presentation, and batch idle time are outside this manual time.
+
+```sh
+./out/build/benchmark/benchmark/vkgsplat_bench \
+  --benchmark_filter='BM_GpuPassTimings/.*/batch:64' \
+  --benchmark_min_time=5s \
+  --benchmark_repetitions=5 \
+  --benchmark_out=gpu_results.json \
+  --benchmark_out_format=json
+```
+
+The JSON result has `gpu.frame.*` and `gpu.<pass>.*` counters in milliseconds, plus `gpu.samples`. It does not report `items_per_second`: manual GPU time is the sum of frame spans, so a rate based on it would not represent application FPS. Each applicable pass reports mean, median, p95, population standard deviation, minimum, maximum, and sample count. p95 uses nearest rank. The mono baseline omits multiview projection counters because that pass does not execute. The GPU frame span brackets the GS pipeline before the ImGui overlay; it includes work outside named pass timers, so it is measured independently rather than computed by summing them. The JSON context records the timestamp period, valid bit count, timing schema version, and scope.
+
+`BM_RenderThroughput` remains the uninstrumented wall-clock FPS measurement. Timestamp writes add GPU work, so compare GPU pass timings with other profiled runs. The renderer's `take_gpu_timings()` transfers collected samples and clears the collection; call `wait_idle()` first to obtain a complete batch. The opt-in `benchmark.gpu.timing.smoke` test runs the canonical scene with validation and checks batches of 1, 2, 3, and 64 frames, including repeated drains.

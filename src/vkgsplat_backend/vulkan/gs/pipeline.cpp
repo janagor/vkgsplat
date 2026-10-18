@@ -10,6 +10,7 @@
 #include "vulkan_context.hpp"
 #include <vkexec/barrier.hpp>
 
+#include <vkgsplat/gpu_timings.hpp>
 #include <vkgsplat/lfd_config.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>

@@ -40,7 +40,12 @@ if(vkgsplat_BUILD_BENCHMARKS)
     VERBATIM)
   add_custom_target(vkgsplat_benchmark_scene DEPENDS "${benchmark_scene}" "${benchmark_scene}.json")
 
-  add_executable(vkgsplat_bench main.cpp render_throughput.cpp)
+  add_executable(
+    vkgsplat_bench
+    main.cpp
+    render_throughput.cpp
+    gpu_pass_timings.cpp
+    gpu_statistics.cpp)
   add_dependencies(vkgsplat_bench vkgsplat_benchmark_scene)
   target_link_libraries(
     vkgsplat_bench

@@ -10,6 +10,7 @@
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat/engine.hpp>
 #include <vkgsplat/frame_rate.hpp>
+#include <vkgsplat/gpu_timings.hpp>
 #include <vkgsplat/lfd_config.hpp>
 #include <vkgsplat/platform.hpp>
 #include <vkgsplat/vkgsplat_export.hpp>
@@ -17,6 +18,7 @@
 #include <vkgsplat_utility/types.hpp>
 
 #include <array>
+#include <cstddef>
 #include <vector>
 
 namespace vkgsplat {
@@ -39,6 +41,7 @@ struct RendererConfig
   bool enable_validation = false;
   bool enable_imgui = true;
   bool enable_gpu_timers = false;
+  bool capture_gpu_timing_samples = false;
   FrameSubmissionPolicy submission_policy = FrameSubmissionPolicy::kLatest;
   FrameRateConfig frame_rate{};
   /// Quilt dimensions as {columns, rows}; {1, 1} selects the mono path.
@@ -79,6 +82,15 @@ public:
   /** Save the latest scene color target as PNG, excluding the ImGui overlay. */
   [[nodiscard]] auto save_frame_png(std::string_view path) -> std::expected<void, Error>;
   [[nodiscard]] auto wait_idle() -> std::expected<void, Error>;
+  /**
+   * Drain collected samples in frame-ID order and clear the collection.
+   * This is thread-safe and does not synchronize the GPU; call wait_idle() first
+   * for a complete batch. Returns an error when collection is disabled.
+   */
+  [[nodiscard]] auto take_gpu_timings() -> std::expected<std::vector<GpuFrameTimings>, Error>;
+  [[nodiscard]] auto reserve_gpu_timing_samples(size_t count) -> std::expected<void, Error>;
+  [[nodiscard]] auto gpu_timestamp_period_ns() const -> double;
+  [[nodiscard]] auto gpu_timestamp_valid_bits() const -> u32;
 
   /** Render one quilt cell full-screen instead of the complete atlas. */
   [[nodiscard]] auto set_lfd_emulate(bool active) -> std::expected<void, Error>;

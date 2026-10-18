@@ -6,6 +6,7 @@
 #include "vulkan/gpu_buffers.hpp"
 #include "vulkan/gpu_pass_timer.hpp"
 #include "vulkan_context.hpp"
+#include <vkgsplat/gpu_timings.hpp>
 #include <vkgsplat/platform.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
@@ -476,19 +477,19 @@ void UpdateImguiGpuTimings(RenderData &data)
   (void)std::snprintf(data.imgui->pending_gpu_label.data(),
     data.imgui->pending_gpu_label.size(),
     "GPU measured: %.2f ms\n  %s %.2f  %s %.2f  %s %.2f\n  %s %.2f  %s %.2f  %s %.2f",
-    static_cast<double>(data.gpu_pass_timer.total_ms()),
+    data.gpu_pass_timer.total_ms(),
     GpuPassName(GpuPass::kProjection),
-    static_cast<double>(pass_ms.at(static_cast<size_t>(GpuPass::kProjection))),
+    pass_ms.at(static_cast<size_t>(GpuPass::kProjection)),
     GpuPassName(GpuPass::kMultiviewProjection),
-    static_cast<double>(pass_ms.at(static_cast<size_t>(GpuPass::kMultiviewProjection))),
+    pass_ms.at(static_cast<size_t>(GpuPass::kMultiviewProjection)),
     GpuPassName(GpuPass::kBinning),
-    static_cast<double>(pass_ms.at(static_cast<size_t>(GpuPass::kBinning))),
+    pass_ms.at(static_cast<size_t>(GpuPass::kBinning)),
     GpuPassName(GpuPass::kPrepareSort),
-    static_cast<double>(pass_ms.at(static_cast<size_t>(GpuPass::kPrepareSort))),
+    pass_ms.at(static_cast<size_t>(GpuPass::kPrepareSort)),
     GpuPassName(GpuPass::kRadixSort),
-    static_cast<double>(pass_ms.at(static_cast<size_t>(GpuPass::kRadixSort))),
+    pass_ms.at(static_cast<size_t>(GpuPass::kRadixSort)),
     GpuPassName(GpuPass::kRasterize),
-    static_cast<double>(pass_ms.at(static_cast<size_t>(GpuPass::kRasterize))));
+    pass_ms.at(static_cast<size_t>(GpuPass::kRasterize)));
   data.imgui->gpu_label_pending = true;
 }
 

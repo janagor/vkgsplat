@@ -1,23 +1,31 @@
 #include "vulkan/gpu_pass_timer.hpp"
 
 #include "app_state.hpp"
+#include "gpu_timestamp_math.hpp"
 #include "vulkan_context.hpp"
 
-#include <algorithm>
+#include <vkgsplat/gpu_timings.hpp>
+#include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cassert>
 #include <cstddef>
+#include <expected>
 #include <functional>
 #include <limits>
 #include <optional>
+#include <string>
+#include <system_error>
 #include <utility>
-#include <vector>
 
+#include <VkBootstrap.h>
 #include <vulkan/vulkan_core.h>
 
 namespace vkgsplat {
+
+static_assert(kGpuTimerSlotCount == kFrameSlotCount);
 
 namespace {
 
@@ -27,20 +35,7 @@ namespace {
   constexpr u32 kBaseQueriesPerSlot = kBasePassCount * kQueriesPerPass;
   constexpr u32 kQueriesPerView = kViewPassCount * kQueriesPerPass;
   constexpr u32 kResultValuesPerQuery = 2U;
-  constexpr float kNsToMs = 1.0e-6F;
-
-  [[nodiscard]] auto ReadRange(std::vector<u64> const &results,
-    size_t begin_query,// NOLINT(bugprone-easily-swappable-parameters)
-    float scale) -> std::optional<float>
-  {
-    size_t const begin_offset = begin_query * kResultValuesPerQuery;
-    size_t const end_offset = (begin_query + 1U) * kResultValuesPerQuery;
-    if (results.at(begin_offset + 1U) == 0U || results.at(end_offset + 1U) == 0U) { return std::nullopt; }
-    u64 const begin_ticks = results.at(begin_offset);
-    u64 const end_ticks = results.at(end_offset);
-    if (end_ticks < begin_ticks) { return 0.0F; }
-    return static_cast<float>(end_ticks - begin_ticks) * scale;
-  }
+  constexpr u32 kFrameQueriesPerSlot = 2U;
 
 }// namespace
 
@@ -67,10 +62,12 @@ auto GpuPassName(GpuPass pass) -> char const *
 
 GpuPassTimer::GpuPassTimer(GpuPassTimer &&other) noexcept
   : pool_(std::exchange(other.pool_, VK_NULL_HANDLE)), timestamp_period_ns_(other.timestamp_period_ns_),
-    enabled_(other.enabled_), pending_(other.pending_), last_ms_(other.last_ms_), view_count_(other.view_count_),
-    queries_per_slot_(other.queries_per_slot_), recorded_base_passes_(other.recorded_base_passes_),
-    recorded_view_projections_(other.recorded_view_projections_), recorded_view_rasters_(other.recorded_view_rasters_),
-    query_results_(std::move(other.query_results_))
+    timestamp_valid_bits_(other.timestamp_valid_bits_), next_frame_id_(other.next_frame_id_),
+    pending_frame_ids_(other.pending_frame_ids_), enabled_(other.enabled_), pending_(other.pending_),
+    last_ms_(other.last_ms_), view_count_(other.view_count_), queries_per_slot_(other.queries_per_slot_),
+    recorded_base_passes_(other.recorded_base_passes_),
+    recorded_view_projections_(std::move(other.recorded_view_projections_)),
+    recorded_view_rasters_(std::move(other.recorded_view_rasters_))
 {}
 
 auto GpuPassTimer::operator=(GpuPassTimer &&other) noexcept -> GpuPassTimer &
@@ -79,15 +76,17 @@ auto GpuPassTimer::operator=(GpuPassTimer &&other) noexcept -> GpuPassTimer &
   // Caller must destroy an existing pool before move-assigning over a live timer.
   pool_ = std::exchange(other.pool_, VK_NULL_HANDLE);
   timestamp_period_ns_ = other.timestamp_period_ns_;
+  timestamp_valid_bits_ = other.timestamp_valid_bits_;
+  next_frame_id_ = other.next_frame_id_;
+  pending_frame_ids_ = other.pending_frame_ids_;
   enabled_ = other.enabled_;
   pending_ = other.pending_;
   last_ms_ = other.last_ms_;
   view_count_ = other.view_count_;
   queries_per_slot_ = other.queries_per_slot_;
   recorded_base_passes_ = other.recorded_base_passes_;
-  recorded_view_projections_ = other.recorded_view_projections_;
-  recorded_view_rasters_ = other.recorded_view_rasters_;
-  query_results_ = std::move(other.query_results_);
+  recorded_view_projections_ = std::move(other.recorded_view_projections_);
+  recorded_view_rasters_ = std::move(other.recorded_view_rasters_);
   return *this;
 }
 
@@ -98,14 +97,21 @@ auto GpuPassTimer::create(vulkan::Context &context, u32 view_count) -> bool
 {
   destroy(context);
 
-  constexpr u32 kMaxViewCount =
-    ((std::numeric_limits<u32>::max() / static_cast<u32>(kFrameSlotCount)) - kBaseQueriesPerSlot) / kQueriesPerView;
+  constexpr u32 kMaxViewCount = ((std::numeric_limits<u32>::max() / static_cast<u32>(kFrameSlotCount))
+                                  - (kBaseQueriesPerSlot + kFrameQueriesPerSlot))
+                                / kQueriesPerView;
   if (view_count > kMaxViewCount) { return false; }
   view_count_ = view_count;
-  queries_per_slot_ = kBaseQueriesPerSlot + (view_count_ * kQueriesPerView);
+  queries_per_slot_ = kBaseQueriesPerSlot + (view_count_ * kQueriesPerView) + kFrameQueriesPerSlot;
 
-  timestamp_period_ns_ = context.device.physical_device.properties.limits.timestampPeriod;
-  if (timestamp_period_ns_ <= 0.0F) { return false; }
+  timestamp_period_ns_ = static_cast<double>(context.device.physical_device.properties.limits.timestampPeriod);
+  if (timestamp_period_ns_ <= 0.0) { return false; }
+  auto const queue_index = context.device.get_queue_index(vkb::QueueType::graphics);
+  if (!queue_index) { return false; }
+  auto const queue_properties = context.device.physical_device.get_queue_families();
+  if (queue_index.value() >= queue_properties.size()) { return false; }
+  timestamp_valid_bits_ = queue_properties.at(queue_index.value()).timestampValidBits;
+  if (timestamp_valid_bits_ == 0U) { return false; }
 
   VkQueryPoolCreateInfo const create_info{
     .sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
@@ -122,13 +128,11 @@ auto GpuPassTimer::create(vulkan::Context &context, u32 view_count) -> bool
   }
 
   pending_.fill(false);
+  next_frame_id_ = 0U;
   recorded_base_passes_.fill({});
-  recorded_view_projections_.fill(0U);
-  recorded_view_rasters_.fill(0U);
-  for (auto &results : query_results_) {
-    results.resize(static_cast<size_t>(queries_per_slot_) * kResultValuesPerQuery);
-  }
-  last_ms_.fill(0.0F);
+  for (auto &recorded : recorded_view_projections_) { recorded.assign(view_count_, false); }
+  for (auto &recorded : recorded_view_rasters_) { recorded.assign(view_count_, false); }
+  last_ms_.fill(0.0);
   enabled_ = true;
   return true;
 }
@@ -142,20 +146,23 @@ void GpuPassTimer::destroy(vulkan::Context &context)
   enabled_ = false;
   pending_.fill(false);
   recorded_base_passes_.fill({});
-  recorded_view_projections_.fill(0U);
-  recorded_view_rasters_.fill(0U);
-  for (auto &results : query_results_) { results.clear(); }
-  last_ms_.fill(0.0F);
+  for (auto &recorded : recorded_view_projections_) { recorded.clear(); }
+  for (auto &recorded : recorded_view_rasters_) { recorded.clear(); }
+  last_ms_.fill(0.0);
 }
 
 auto GpuPassTimer::begin_frame(vulkan::Context const &context, size_t slot, VkCommandBuffer command_buffer) -> void
 {
   if (!enabled()) { return; }
   recorded_base_passes_.at(slot).fill(false);
-  recorded_view_projections_.at(slot) = 0U;
-  recorded_view_rasters_.at(slot) = 0U;
+  auto &projections = recorded_view_projections_.at(slot);
+  auto &rasters = recorded_view_rasters_.at(slot);
+  projections.assign(view_count_, false);
+  rasters.assign(view_count_, false);
   u32 const first = static_cast<u32>(slot) * queries_per_slot_;
   context.disp.cmdResetQueryPool(command_buffer, pool_, first, queries_per_slot_);
+  context.disp.cmdWriteTimestamp(
+    command_buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, pool_, first + queries_per_slot_ - kFrameQueriesPerSlot);
 }
 
 auto GpuPassTimer::write(vulkan::Context const &context,
@@ -186,55 +193,86 @@ auto GpuPassTimer::write_view(vulkan::Context const &context,
   u32 const index = (static_cast<u32>(slot) * queries_per_slot_) + kBaseQueriesPerSlot + (view_index * kQueriesPerView)
                     + pass_offset + (is_end ? 1U : 0U);
   context.disp.cmdWriteTimestamp(command_buffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, pool_, index);
-  if (is_end && pass == GpuPass::kMultiviewProjection) { recorded_view_projections_.at(slot) = view_index + 1U; }
-  if (is_end && pass == GpuPass::kRasterize) { recorded_view_rasters_.at(slot) = view_index + 1U; }
+  if (is_end && pass == GpuPass::kMultiviewProjection) { recorded_view_projections_.at(slot).at(view_index) = true; }
+  if (is_end && pass == GpuPass::kRasterize) { recorded_view_rasters_.at(slot).at(view_index) = true; }
+}
+
+auto GpuPassTimer::end_frame(vulkan::Context const &context, size_t slot, VkCommandBuffer command_buffer) const -> void
+{
+  if (!enabled()) { return; }
+  context.disp.cmdWriteTimestamp(command_buffer,
+    VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+    pool_,
+    (static_cast<u32>(slot) * queries_per_slot_) + queries_per_slot_ - 1U);
 }
 
 void GpuPassTimer::mark_submitted(size_t slot)
 {
   if (!enabled()) { return; }
-  if (slot < pending_.size()) { pending_.at(slot) = true; }
+  if (slot < pending_.size()) {
+    pending_.at(slot) = true;
+    pending_frame_ids_.at(slot) = next_frame_id_++;
+  }
 }
 
-void GpuPassTimer::resolve(vulkan::Context const &context, size_t slot)
+auto GpuPassTimer::resolve(vulkan::Context const &context, size_t slot)
+  -> std::expected<std::optional<GpuFrameTimings>, Error>
 {
-  if (!enabled() || slot >= pending_.size() || !pending_.at(slot)) { return; }
+  if (!enabled() || slot >= pending_.size() || !pending_.at(slot)) { return std::nullopt; }
 
-  auto &results = query_results_.at(slot);
-  u32 const first = static_cast<u32>(slot) * queries_per_slot_;
-  VkResult const result = context.disp.getQueryPoolResults(pool_,
-    first,
-    queries_per_slot_,
-    results.size() * sizeof(u64),
-    results.data(),
-    kResultValuesPerQuery * sizeof(u64),
-    VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WITH_AVAILABILITY_BIT);
-  if (result != VK_SUCCESS && result != VK_NOT_READY) { return; }
+  auto read_pair = [&](size_t begin_query) -> std::expected<double, Error> {
+    u32 const first = (static_cast<u32>(slot) * queries_per_slot_) + static_cast<u32>(begin_query);
+    std::array<u64, kTimestampPairValueCount> values{};
+    VkResult const result = context.disp.getQueryPoolResults(pool_,
+      first,
+      kQueriesPerPass,
+      sizeof(values),
+      values.data(),
+      kResultValuesPerQuery * sizeof(u64),
+      VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WITH_AVAILABILITY_BIT);
+    if (result != VK_SUCCESS) {
+      return std::unexpected{ MakeError(
+        std::errc::io_error, "GPU timestamp query unavailable or failed. VkResult=" + std::to_string(result)) };
+    }
+    auto const duration = AvailableTimestampPairMs(values, timestamp_valid_bits_, timestamp_period_ns_);
+    if (!duration) {
+      return std::unexpected{ MakeError(
+        std::errc::io_error, "GPU timestamp query unavailable or invalid after completion") };
+    }
+    return *duration;
+  };
 
-  std::array<float, kGpuPassCount> next_ms{};
-  float const scale = timestamp_period_ns_ * kNsToMs;
-  for (u32 pass_index = 0; pass_index < kBasePassCount; ++pass_index) {
+  GpuFrameTimings sample{ .frame_id = pending_frame_ids_.at(slot) };
+  for (u32 pass_index = 0U; pass_index < kBasePassCount; ++pass_index) {
     if (!recorded_base_passes_.at(slot).at(pass_index)) { continue; }
-    auto const pass_ms = ReadRange(results, static_cast<size_t>(pass_index) * kQueriesPerPass, scale);
-    if (!pass_ms) { return; }
-    next_ms.at(pass_index) = *pass_ms;
+    auto duration = read_pair(static_cast<size_t>(pass_index) * kQueriesPerPass);
+    if (!duration) { return std::unexpected{ duration.error() }; }
+    sample.pass_ms.at(pass_index) = *duration;
   }
-  for (u32 view = 0U; view < recorded_view_projections_.at(slot); ++view) {
-    size_t const begin_query = kBaseQueriesPerSlot + (static_cast<size_t>(view) * kQueriesPerView);
-    auto const pass_ms = ReadRange(results, begin_query, scale);
-    if (!pass_ms) { return; }
-    next_ms.at(static_cast<size_t>(GpuPass::kMultiviewProjection)) += *pass_ms;
+  for (u32 view = 0U; view < view_count_; ++view) {
+    if (!recorded_view_projections_.at(slot).at(view)) { continue; }
+    auto duration = read_pair(kBaseQueriesPerSlot + (static_cast<size_t>(view) * kQueriesPerView));
+    if (!duration) { return std::unexpected{ duration.error() }; }
+    auto &total = sample.pass_ms.at(static_cast<size_t>(GpuPass::kMultiviewProjection));
+    total = total.value_or(0.0) + *duration;
   }
-  for (u32 view = 0U; view < recorded_view_rasters_.at(slot); ++view) {
-    size_t const begin_query = kBaseQueriesPerSlot + (static_cast<size_t>(view) * kQueriesPerView) + kQueriesPerPass;
-    auto const pass_ms = ReadRange(results, begin_query, scale);
-    if (!pass_ms) { return; }
-    next_ms.at(static_cast<size_t>(GpuPass::kRasterize)) += *pass_ms;
+  for (u32 view = 0U; view < view_count_; ++view) {
+    if (!recorded_view_rasters_.at(slot).at(view)) { continue; }
+    auto duration = read_pair(kBaseQueriesPerSlot + (static_cast<size_t>(view) * kQueriesPerView) + kQueriesPerPass);
+    if (!duration) { return std::unexpected{ duration.error() }; }
+    auto &total = sample.pass_ms.at(static_cast<size_t>(GpuPass::kRasterize));
+    total = total.value_or(0.0) + *duration;
   }
-  last_ms_ = next_ms;
+  auto frame_duration = read_pair(queries_per_slot_ - kFrameQueriesPerSlot);
+  if (!frame_duration) { return std::unexpected{ frame_duration.error() }; }
+  sample.frame_ms = *frame_duration;
+  for (size_t index = 0U; index < kGpuPassCount; ++index) {
+    last_ms_.at(index) = sample.pass_ms.at(index).value_or(0.0);
+  }
   pending_.at(slot) = false;
+  return std::optional<GpuFrameTimings>{ sample };
 }
 
-auto GpuPassTimer::total_ms() const noexcept -> float { return std::ranges::fold_left(last_ms_, 0.0F, std::plus<>{}); }
+auto GpuPassTimer::total_ms() const noexcept -> double { return std::ranges::fold_left(last_ms_, 0.0, std::plus<>{}); }
 
 }// namespace vkgsplat

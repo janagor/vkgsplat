@@ -28,6 +28,11 @@ endif()
 include(${Catch2_SOURCE_DIR}/extras/Catch.cmake)
 
 if(TARGET vkgsplat::vkgsplat_utility)
+  add_executable(vkgsplat_gpu_timing_statistics_test gpu_timing_statistics.cpp ../benchmark/gpu_statistics.cpp)
+  target_link_libraries(vkgsplat_gpu_timing_statistics_test PRIVATE Catch2::Catch2WithMain vkgsplat::vkgsplat_utility)
+  target_include_directories(vkgsplat_gpu_timing_statistics_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/..")
+  catch_discover_tests(vkgsplat_gpu_timing_statistics_test)
+
   if(TARGET vkgsplat::vkgsplat_benchmark_fixture)
     add_executable(vkgsplat_fixture_test fixture.cpp)
     target_link_libraries(vkgsplat_fixture_test PRIVATE Catch2::Catch2WithMain vkgsplat::vkgsplat_benchmark_fixture)
@@ -104,6 +109,9 @@ if(vkgsplat_ENABLE_HEADLESS_GPU_TESTS)
                TIMEOUT
                120)
   if(TARGET vkgsplat_fixture_gen)
+    add_executable(vkgsplat_gpu_timing_smoke gpu_timing_smoke.cpp)
+    target_link_libraries(vkgsplat_gpu_timing_smoke PRIVATE vkgsplat::vkgsplat_benchmark_renderer_adapter
+                                                            vkgsplat::vkgsplat_headless_platform)
     add_executable(vkgsplat_fixture_gpu_smoke fixture_gpu_smoke.cpp)
     target_link_libraries(vkgsplat_fixture_gpu_smoke PRIVATE vkgsplat::vkgsplat_benchmark_renderer_adapter
                                                              vkgsplat::vkgsplat_headless_platform stb::stb)
@@ -123,6 +131,17 @@ if(vkgsplat_ENABLE_HEADLESS_GPU_TESTS)
                  benchmark_fixture
                  TIMEOUT
                  30)
+    add_test(NAME benchmark.gpu.timing.smoke COMMAND $<TARGET_FILE:vkgsplat_gpu_timing_smoke> ${benchmark_scene})
+    set_tests_properties(
+      benchmark.gpu.timing.smoke
+      PROPERTIES FIXTURES_REQUIRED
+                 benchmark_fixture
+                 SKIP_RETURN_CODE
+                 77
+                 ENVIRONMENT
+                 "DISPLAY=;WAYLAND_DISPLAY="
+                 TIMEOUT
+                 180)
     add_test(NAME benchmark.fixture.gpu.smoke COMMAND $<TARGET_FILE:vkgsplat_fixture_gpu_smoke> ${benchmark_scene}
                                                       ${CMAKE_CURRENT_BINARY_DIR}/benchmark-baseline-v1.png)
     set_tests_properties(
