@@ -5,9 +5,12 @@
 #include "benchmark/render_throughput.hpp"
 
 #include <vkgsplat/camera.hpp>
+#include <vkgsplat/gpu_timings.hpp>
 #include <vkgsplat/renderer.hpp>
 #include <vkgsplat_headless/headless_platform.hpp>
 
+// clang-tidy does not associate Google Benchmark's declarations with this umbrella header.
+// NOLINTBEGIN(misc-include-cleaner)
 #include <benchmark/benchmark.h>
 
 #include <atomic>
@@ -83,6 +86,7 @@ auto RunBenchmark(int argc, char **argv) -> int
   ::benchmark::Shutdown();
   return failed.load() ? EXIT_FAILURE : EXIT_SUCCESS;
 }
+// NOLINTEND(misc-include-cleaner)
 
 }// namespace
 
@@ -91,7 +95,13 @@ auto main(int argc, char **argv) -> int
   try {
     return RunBenchmark(argc, argv);
   } catch (std::exception const &error) {
-    std::println(stderr, "Benchmark failed: {}", error.what());
-    return 1;
+    try {
+      std::println(stderr, "Benchmark failed: {}", error.what());
+    } catch (...) {
+      return EXIT_FAILURE;
+    }
+    return EXIT_FAILURE;
+  } catch (...) {
+    return EXIT_FAILURE;
   }
 }

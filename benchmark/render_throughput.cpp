@@ -3,11 +3,18 @@
 #include "benchmark/fixture/profile.hpp"
 #include "benchmark/fixture/renderer_adapter.hpp"
 
-#include <benchmark/benchmark.h>
+#include <vkgsplat/camera.hpp>
+#include <vkgsplat/platform.hpp>
+#include <vkgsplat/renderer.hpp>
+#include <vkgsplat_utility/error.hpp>
+#include <vkgsplat_utility/types.hpp>
+
+#include <benchmark/benchmark.h> // NOLINT(misc-include-cleaner)
 
 #include <atomic>
 #include <cstdint>
 #include <expected>
+#include <filesystem>
 #include <format>
 #include <string>
 
@@ -28,6 +35,8 @@ auto RenderBatch(Renderer &renderer, Camera const &camera, u64 frame_count) -> s
     renderer.recreated_frame_count());
 }
 
+// Google Benchmark's umbrella header provides these declarations, but include-cleaner does not associate them with it.
+// NOLINTBEGIN(misc-include-cleaner)
 auto RegisterRenderThroughput(Platform &platform,
   BenchmarkProfile const &profile,
   std::filesystem::path const &scene_path,
@@ -36,26 +45,26 @@ auto RegisterRenderThroughput(Platform &platform,
 {
   auto const name = std::format("BM_RenderThroughput/{}/{}x{}", kBaselineCount, kBaselineWidth, kBaselineHeight);
   auto *registered = ::benchmark::RegisterBenchmark(
-    name.c_str(), [&platform, &profile, &scene_path, &camera, &failed](::benchmark::State &state) -> void {
+    name, [&platform, &profile, &scene_path, &camera, &failed](::benchmark::State &state) -> void {
       auto renderer = Renderer::create(MakeRendererConfig(profile, scene_path), platform);
       if (!renderer) {
         failed.store(true);
-        state.SkipWithError(renderer.error().message().c_str());
+        state.SkipWithError(renderer.error().message());
         return;
       }
       auto const batch_frames = static_cast<u64>(state.range(0));
       if (auto warmup = RenderBatch(*renderer, camera, kWarmupFrames); !warmup) {
         failed.store(true);
-        state.SkipWithError(warmup.error().message().c_str());
+        state.SkipWithError(warmup.error().message());
         return;
       }
 
       u64 frames = 0U;
-      for (auto _ : state) {
-        static_cast<void>(_);
+      for (auto iteration : state) {
+        static_cast<void>(iteration);
         if (auto batch = RenderBatch(*renderer, camera, batch_frames); !batch) {
           failed.store(true);
-          state.SkipWithError(batch.error().message().c_str());
+          state.SkipWithError(batch.error().message());
           return;
         }
         frames += batch_frames;
@@ -71,5 +80,6 @@ auto RegisterRenderThroughput(Platform &platform,
     ->UseRealTime()
     ->Unit(::benchmark::kMillisecond);
 }
+// NOLINTEND(misc-include-cleaner)
 
 }// namespace vkgsplat::benchmark
