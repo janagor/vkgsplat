@@ -25,6 +25,7 @@
 #include "vulkan/renderer.hpp"
 #include "vulkan_context.hpp"
 #include <vkgsplat/camera.hpp>
+#include <vkgsplat/renderer.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
 
@@ -159,16 +160,43 @@ namespace {
 
 RenderThread::~RenderThread() { Stop(); }
 
-void RenderThread::Start(vulkan::Context *context, RenderData *data)
+auto RenderThread::Start(vulkan::Context *context, RenderData *data, FrameSubmissionPolicy policy) -> void
+{ StartWorker(context, data, policy, {}, {}); }
+
+auto RenderThread::StartForTest(FrameSubmissionPolicy policy,
+  std::function<std::expected<void, Error>()> draw_frame,
+  std::function<void()> wait_idle) -> void
+{ StartWorker(nullptr, nullptr, policy, std::move(draw_frame), std::move(wait_idle)); }
+
+auto RenderThread::WaitForShutdownForTest() -> void
+{
+  std::unique_lock lock{ control_mutex_ };
+  control_cv_.wait(lock, [this]() -> bool { return !thread_running_; });
+}
+
+auto RenderThread::WaitForBlockedProducerCountForTest(size_t count) -> void
+{
+  std::unique_lock lock{ control_mutex_ };
+  control_cv_.wait(lock, [this, count]() -> bool { return blocked_producer_count_ >= count; });
+}
+
+auto RenderThread::StartWorker(vulkan::Context *context,
+  RenderData *data,
+  FrameSubmissionPolicy policy,
+  std::function<std::expected<void, Error>()> draw_frame,
+  std::function<void()> wait_idle) -> void
 {
   Stop();
 
   context_ = context;
   data_ = data;
+  draw_frame_override_ = std::move(draw_frame);
+  wait_idle_override_ = std::move(wait_idle);
 
   {
     std::scoped_lock const lock{ control_mutex_ };
     thread_running_ = true;
+    submission_policy_ = policy;
     idle_done_ = true;
     command_ = Command::kNone;
     mailbox_.Reset();
@@ -176,6 +204,8 @@ void RenderThread::Start(vulkan::Context *context, RenderData *data)
     completed_frame_count_ = 0U;
     recreated_frame_count_ = 0U;
     worker_busy_ = false;
+    blocked_producer_count_ = 0U;
+    test_mode_ = static_cast<bool>(draw_frame_override_);
   }
 
   thread_ = std::jthread{ [this]() -> void { ThreadMain(); } };
@@ -184,8 +214,11 @@ void RenderThread::Start(vulkan::Context *context, RenderData *data)
 void RenderThread::Stop()
 {
   if (!thread_.joinable()) {
+    std::scoped_lock const lock{ control_mutex_ };
     context_ = nullptr;
     data_ = nullptr;
+    draw_frame_override_ = {};
+    wait_idle_override_ = {};
     thread_running_ = false;
     return;
   }
@@ -194,22 +227,36 @@ void RenderThread::Stop()
     std::scoped_lock const lock{ control_mutex_ };
     command_ = Command::kShutdown;
     idle_done_ = false;
+    thread_running_ = false;
   }
-  control_cv_.notify_one();
+  control_cv_.notify_all();
 
-  std::unique_lock lock{ control_mutex_ };
-  control_cv_.wait(lock, [this]() -> bool { return idle_done_; });
   thread_.join();
 
   context_ = nullptr;
   data_ = nullptr;
-  thread_running_ = false;
+  draw_frame_override_ = {};
+  wait_idle_override_ = {};
 }
 
 auto RenderThread::SubmitFrame(Camera const &camera, f64 aspect_ratio) -> std::expected<void, Error>
 {
   {
-    std::scoped_lock const lock{ control_mutex_ };
+    std::unique_lock lock{ control_mutex_ };
+    if (submission_policy_ == FrameSubmissionPolicy::kLossless) {
+      auto const can_continue = [this]() -> bool {
+        return first_error_.has_value() || !thread_running_
+               || (command_ == Command::kNone && mailbox_.CanPublishLossless());
+      };
+      if (!can_continue()) {
+        if (test_mode_) {
+          ++blocked_producer_count_;
+          control_cv_.notify_all();
+        }
+        control_cv_.wait(lock, can_continue);
+        if (test_mode_) { --blocked_producer_count_; }
+      }
+    }
     if (first_error_.has_value()) { return std::unexpected{ first_error_.value() }; }
     if (!thread_running_) {
       return std::unexpected{ MakeError(std::errc::operation_not_permitted, "render thread is not running") };
@@ -219,10 +266,10 @@ auto RenderThread::SubmitFrame(Camera const &camera, f64 aspect_ratio) -> std::e
       return std::unexpected{ MakeError(std::errc::state_not_recoverable, "no CPU frame slot is available") };
     }
     PendingFrame frame{ .aspect_ratio = aspect_ratio, .camera = SnapshotCamera(camera, aspect_ratio) };
-    BuildImGuiFrameSnapshot(*data_, frame_slot.value(), frame.imgui);
+    if (data_ != nullptr) { BuildImGuiFrameSnapshot(*data_, frame_slot.value(), frame.imgui); }
     mailbox_.Publish(frame_slot.value(), frame);
   }
-  control_cv_.notify_one();
+  control_cv_.notify_all();
 
   return {};
 }
@@ -251,22 +298,27 @@ auto RenderThread::WaitIdle() -> std::expected<void, Error>
 
   {
     std::unique_lock lock{ control_mutex_ };
-    control_cv_.wait(lock, [this]() -> bool { return mailbox_.Empty() && !worker_busy_; });
-    if (!thread_running_) { return {}; }
+    control_cv_.wait(lock, [this]() -> bool {
+      return first_error_.has_value() || !thread_running_
+             || (command_ == Command::kNone && mailbox_.Empty() && !worker_busy_);
+    });
+    if (first_error_.has_value()) { return std::unexpected{ first_error_.value() }; }
+    if (!thread_running_) {
+      return std::unexpected{ MakeError(std::errc::operation_not_permitted, "render thread is not running") };
+    }
     command_ = Command::kWaitIdle;
     idle_done_ = false;
   }
-  control_cv_.notify_one();
+  control_cv_.notify_all();
 
   {
     std::unique_lock lock{ control_mutex_ };
-    control_cv_.wait(lock, [this]() -> bool { return idle_done_; });
-  }
-
-  ResetImguiFpsSamples(*data_);
-  {
-    std::scoped_lock const lock{ control_mutex_ };
+    control_cv_.wait(lock, [this]() -> bool { return idle_done_ || !thread_running_ || first_error_.has_value(); });
     if (first_error_.has_value()) { return std::unexpected{ first_error_.value() }; }
+    if (!thread_running_) {
+      return std::unexpected{ MakeError(std::errc::operation_not_permitted, "render thread is not running") };
+    }
+    if (data_ != nullptr) { ResetImguiFpsSamples(*data_); }
   }
   return {};
 }
@@ -287,7 +339,24 @@ auto RenderThread::FinishFrame(size_t frame_slot, std::expected<FrameOutcome, Er
     worker_busy_ = false;
   }
   control_cv_.notify_all();
-  context_->platform->post_empty_event();
+  if (context_ != nullptr) { context_->platform->post_empty_event(); }
+}
+
+auto RenderThread::ProcessWaitIdle(std::unique_lock<std::mutex> &lock) -> void
+{
+  lock.unlock();
+  if (wait_idle_override_) { wait_idle_override_(); }
+  auto const result = context_ != nullptr ? context_->disp.deviceWaitIdle() : VK_SUCCESS;
+  lock.lock();
+  bool const failed = result != VK_SUCCESS && !first_error_.has_value();
+  if (failed) {
+    first_error_ = MakeError(std::errc::io_error, "device wait idle failed. VkResult=" + std::to_string(result));
+  }
+  idle_done_ = true;
+  if (command_ == Command::kWaitIdle) { command_ = Command::kNone; }
+  control_cv_.notify_all();
+  lock.unlock();
+  if (failed && context_ != nullptr) { context_->platform->post_empty_event(); }
 }
 
 auto RenderThread::ThreadMain() -> void
@@ -301,23 +370,12 @@ auto RenderThread::ThreadMain() -> void
 
       if (command_ == Command::kShutdown) {
         idle_done_ = true;
-        control_cv_.notify_one();
+        control_cv_.notify_all();
         return;
       }
 
       if (command_ == Command::kWaitIdle) {
-        lock.unlock();
-        auto const result = context_->disp.deviceWaitIdle();
-        lock.lock();
-        bool const failed = result != VK_SUCCESS && !first_error_.has_value();
-        if (failed) {
-          first_error_ = MakeError(std::errc::io_error, "device wait idle failed. VkResult=" + std::to_string(result));
-        }
-        idle_done_ = true;
-        command_ = Command::kNone;
-        control_cv_.notify_one();
-        lock.unlock();
-        if (failed) { context_->platform->post_empty_event(); }
+        ProcessWaitIdle(lock);
         continue;
       }
 
@@ -326,14 +384,19 @@ auto RenderThread::ThreadMain() -> void
       frame_slot = pending.value().slot;
       frame = pending.value().value;
       worker_busy_ = true;
+      control_cv_.notify_all();
     }
 
-    data_->frames.at(frame_slot).setup = FrameSetup{
-      .aspect_ratio = frame.aspect_ratio,
-      .camera = frame.camera,
-      .imgui = frame.imgui,
-    };
-    auto drawn = DrawFrameVulkan(frame_slot);
+    if (data_ != nullptr) {
+      data_->frames.at(frame_slot).setup = FrameSetup{
+        .aspect_ratio = frame.aspect_ratio,
+        .camera = frame.camera,
+        .imgui = frame.imgui,
+      };
+    }
+    auto drawn = draw_frame_override_
+                   ? draw_frame_override_().transform([]() -> FrameOutcome { return FrameOutcome::kSubmitted; })
+                   : DrawFrameVulkan(frame_slot);
 
     FinishFrame(frame_slot, drawn);
   }

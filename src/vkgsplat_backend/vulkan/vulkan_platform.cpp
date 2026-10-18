@@ -17,8 +17,8 @@ namespace vkgsplat::vulkan {
 namespace {
   auto CreateHeadlessSurface(VkInstance instance) -> std::expected<VkSurfaceKHR, Error>
   {
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
     auto const create_surface =
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
       reinterpret_cast<PFN_vkCreateHeadlessSurfaceEXT>(vkGetInstanceProcAddr(instance, "vkCreateHeadlessSurfaceEXT"));
     if (create_surface == nullptr) {
       return std::unexpected{ MakeError(std::errc::function_not_supported,

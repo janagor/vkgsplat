@@ -1,3 +1,4 @@
+// NOLINTBEGIN(readability-function-cognitive-complexity)
 #include <vkgsplat_adt/latest_frame_mailbox.hpp>
 
 #include <catch2/catch_test_macros.hpp>
@@ -152,3 +153,122 @@ TEST_CASE("latest pending frame replaces stale camera state", "[render]") { REQU
 TEST_CASE("worker-owned frame survives concurrent replacement", "[render]") { REQUIRE(VerifyConcurrentReplacement()); }
 
 TEST_CASE("producer and worker interleave slot ownership", "[render]") { REQUIRE(VerifyInterleavedOwnership()); }
+
+TEST_CASE("lossless admission preserves every frame and worker slot", "[render]")
+{
+  vkgsplat::adt::LatestFrameMailbox<int, 2U> mailbox;
+  mailbox.Reset();
+  std::mutex mutex;
+  std::condition_variable condition;
+  bool producer_done = false;
+  bool worker_holds_first = false;
+  bool release_first = false;
+  bool slots_safe = true;
+  int consumed = 0;
+  std::jthread worker{ [&]() -> void {
+    for (;;) {
+      std::unique_lock lock{ mutex };
+      condition.wait(lock, [&]() -> bool { return producer_done || !mailbox.Empty(); });
+      if (producer_done && mailbox.Empty()) { return; }
+      auto frame = mailbox.Consume();
+      if (!frame) { continue; }
+      condition.notify_all();
+      if (frame->value == 0) {
+        worker_holds_first = true;
+        condition.notify_all();
+        condition.wait(lock, [&]() -> bool { return release_first; });
+      }
+      slots_safe = slots_safe && frame->value == consumed;
+      ++consumed;
+      mailbox.Complete(frame->slot);
+      condition.notify_all();
+    }
+  } };
+
+  {
+    std::scoped_lock const lock{ mutex };
+    auto const slot = mailbox.PrepareSlot();
+    REQUIRE(slot.has_value());
+    // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
+    mailbox.Publish(*slot, 0);
+  }
+  condition.notify_all();
+  {
+    std::unique_lock lock{ mutex };
+    condition.wait(lock, [&]() -> bool { return worker_holds_first; });
+    auto const slot = mailbox.PrepareSlot();
+    REQUIRE(slot.has_value());
+    // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
+    mailbox.Publish(*slot, 1);
+    REQUIRE_FALSE(mailbox.CanPublishLossless());
+    release_first = true;
+  }
+  condition.notify_all();
+
+  for (int snapshot = 2; snapshot < kSnapshotCount; ++snapshot) {
+    std::unique_lock lock{ mutex };
+    condition.wait(lock, [&]() -> bool { return mailbox.CanPublishLossless(); });
+    // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
+    mailbox.Publish(*mailbox.PrepareSlot(), snapshot);
+    lock.unlock();
+    condition.notify_all();
+  }
+  {
+    std::scoped_lock const lock{ mutex };
+    producer_done = true;
+  }
+  condition.notify_all();
+  worker.join();
+  REQUIRE(slots_safe);
+  REQUIRE(consumed == kSnapshotCount);
+  REQUIRE(mailbox.Empty());
+}
+
+TEST_CASE("lossless admission wakes on failure and shutdown", "[render]")
+{
+  vkgsplat::adt::LatestFrameMailbox<int, 2U> mailbox;
+  mailbox.Reset();
+  // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
+  mailbox.Publish(*mailbox.PrepareSlot(), 0);
+  std::mutex mutex;
+  std::condition_variable condition;
+  bool waiting = false;
+  bool failed = false;
+  bool running = true;
+  bool accepted = false;
+  std::jthread producer{ [&]() -> void {
+    std::unique_lock lock{ mutex };
+    waiting = true;
+    condition.notify_all();
+    condition.wait(lock, [&]() -> bool { return failed || !running || mailbox.CanPublishLossless(); });
+    accepted = running && !failed && mailbox.CanPublishLossless();
+  } };
+  {
+    std::unique_lock lock{ mutex };
+    condition.wait(lock, [&]() -> bool { return waiting; });
+    REQUIRE_FALSE(mailbox.CanPublishLossless());
+    failed = true;
+  }
+  condition.notify_all();
+  producer.join();
+  REQUIRE_FALSE(accepted);
+
+  failed = false;
+  waiting = false;
+  producer = std::jthread{ [&]() -> void {
+    std::unique_lock lock{ mutex };
+    waiting = true;
+    condition.notify_all();
+    condition.wait(lock, [&]() -> bool { return failed || !running || mailbox.CanPublishLossless(); });
+    accepted = running && !failed && mailbox.CanPublishLossless();
+  } };
+  {
+    std::unique_lock lock{ mutex };
+    condition.wait(lock, [&]() -> bool { return waiting; });
+    running = false;
+  }
+  condition.notify_all();
+  producer.join();
+  REQUIRE_FALSE(accepted);
+}
+// NOLINTEND(readability-function-cognitive-complexity)

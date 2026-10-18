@@ -5,6 +5,24 @@ include(cmake/CPM.cmake)
 # targets
 function(vkgsplat_setup_dependencies)
 
+  if(vkgsplat_BUILD_BENCHMARKS
+     AND NOT EMSCRIPTEN
+     AND NOT TARGET benchmark::benchmark)
+    cpmaddpackage(
+      NAME
+      benchmark
+      GITHUB_REPOSITORY
+      google/benchmark
+      GIT_TAG
+      v1.10.0
+      SYSTEM
+      YES
+      OPTIONS
+      "BENCHMARK_ENABLE_TESTING OFF"
+      "BENCHMARK_ENABLE_GTEST_TESTS OFF"
+      "BENCHMARK_ENABLE_INSTALL OFF")
+  endif()
+
   # For each dependency, see if it's
   # already been provided to us by a parent project
 

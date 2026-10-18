@@ -1,3 +1,5 @@
+// NOLINTBEGIN(readability-function-cognitive-complexity)
+#include "benchmark/batch_accounting.hpp"
 #include "benchmark/fixture/profile.hpp"
 #include "benchmark/fixture/renderer_adapter.hpp"
 
@@ -27,6 +29,7 @@ inline constexpr size_t kGreenChannel = 1U;
 inline constexpr size_t kBlueChannel = 2U;
 inline constexpr int kColorTolerance = 4;
 inline constexpr size_t kMinimumColoredPixels = 1'000U;
+inline constexpr vkgsplat::u64 kSmokeFrames = 64U;
 
 auto Run(std::filesystem::path const &scene_path, std::filesystem::path const &image_path) -> int
 {
@@ -46,16 +49,22 @@ auto Run(std::filesystem::path const &scene_path, std::filesystem::path const &i
     return EXIT_FAILURE;
   }
   vkgsplat::Camera const camera{ profile.camera };
-  if (auto result = renderer->draw(camera); !result) {
-    std::cerr << result.error().message() << '\n';
-    return EXIT_FAILURE;
+  auto const before = renderer->completed_frame_count();
+  auto const recreated_before = renderer->recreated_frame_count();
+  for (vkgsplat::u64 frame = 0U; frame < kSmokeFrames; ++frame) {
+    if (auto result = renderer->draw(camera); !result) {
+      std::cerr << result.error().message() << '\n';
+      return EXIT_FAILURE;
+    }
   }
   if (auto result = renderer->wait_idle(); !result) {
     std::cerr << result.error().message() << '\n';
     return EXIT_FAILURE;
   }
-  if (renderer->completed_frame_count() != 1U) {
-    std::cerr << "Expected one completed frame\n";
+  if (auto accounted = vkgsplat::benchmark::ValidateBatchAccounting(
+        kSmokeFrames, before, renderer->completed_frame_count(), recreated_before, renderer->recreated_frame_count());
+    !accounted) {
+    std::cerr << accounted.error().message() << '\n';
     return EXIT_FAILURE;
   }
   if (auto result = renderer->save_frame_png(image_path.string()); !result) {
@@ -105,3 +114,4 @@ auto main(int argc, char **argv) -> int
     return EXIT_FAILURE;
   }
 }
+// NOLINTEND(readability-function-cognitive-complexity)

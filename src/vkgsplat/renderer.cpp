@@ -7,6 +7,8 @@
 #include <memory>
 #include <optional>
 #include <print>
+#include <span>
+#include <string>
 #include <string_view>
 #include <system_error>
 #include <utility>
@@ -194,7 +196,7 @@ auto Renderer::create(RendererConfig const &config, Platform &platform) -> std::
   }
 
   impl->render_thread = std::make_unique<RenderThread>();
-  impl->render_thread->Start(&context, &impl->render_data);
+  impl->render_thread->Start(&context, &impl->render_data, config.submission_policy);
 
   return Renderer{ std::move(impl) };
 }
@@ -211,7 +213,7 @@ auto Renderer::create(RendererConfig const &config, Engine &engine) -> std::expe
   }
 
   impl->render_thread = std::make_unique<RenderThread>();
-  impl->render_thread->Start(&context, &impl->render_data);
+  impl->render_thread->Start(&context, &impl->render_data, config.submission_policy);
 
   return Renderer{ std::move(impl) };
 }
@@ -229,6 +231,19 @@ auto Renderer::poll_error() const -> std::optional<Error> { return impl_->render
 auto Renderer::completed_frame_count() const -> u64 { return impl_->render_thread->CompletedFrameCount(); }
 
 auto Renderer::recreated_frame_count() const -> u64 { return impl_->render_thread->RecreatedFrameCount(); }
+
+auto Renderer::device_info() const -> RenderDeviceInfo
+{
+  auto const &properties = AsVulkanDriver(impl_->engine->driver()).context().device.physical_device.properties;
+  auto const device_name = std::span{ properties.deviceName };
+  return RenderDeviceInfo{
+    .name = std::string{ device_name.begin(), std::ranges::find(device_name, '\0') },
+    .vendor_id = properties.vendorID,
+    .device_id = properties.deviceID,
+    .driver_version = properties.driverVersion,
+    .vulkan_api_version = properties.apiVersion,
+  };
+}
 
 auto Renderer::save_frame_png(std::string_view path) -> std::expected<void, Error>
 {

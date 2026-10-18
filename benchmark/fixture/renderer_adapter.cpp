@@ -14,6 +14,7 @@ auto MakeRendererConfig(BenchmarkProfile const &profile, std::filesystem::path c
     .enable_validation = profile.enable_validation,
     .enable_imgui = profile.enable_imgui,
     .enable_gpu_timers = profile.enable_gpu_timers,
+    .submission_policy = FrameSubmissionPolicy::kLossless,
     .frame_rate = { .mode = profile.frame_rate_mode },
     .lfd_grid = { kMonoGridSize, kMonoGridSize },
     .lfd_view_order = {},

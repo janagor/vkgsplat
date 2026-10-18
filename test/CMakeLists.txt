@@ -62,6 +62,15 @@ if(TARGET vkgsplat::vkgsplat_utility)
   endif()
 
   if(TARGET vkgsplat::vkgsplat_backend)
+    add_executable(vkgsplat_render_thread_test render_thread.cpp)
+    target_link_libraries(vkgsplat_render_thread_test PRIVATE Catch2::Catch2WithMain vkgsplat::vkgsplat_backend
+                                                              vkgsplat::vkgsplat)
+    catch_discover_tests(
+      vkgsplat_render_thread_test
+      PROPERTIES
+      TIMEOUT
+      10)
+
     add_executable(vkgsplat_vulkan_surface_test vulkan_surface.cpp)
     target_link_libraries(vkgsplat_vulkan_surface_test PRIVATE Catch2::Catch2WithMain vkgsplat::vkgsplat_backend)
     catch_discover_tests(vkgsplat_vulkan_surface_test)

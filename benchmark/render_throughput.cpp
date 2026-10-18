@@ -1,0 +1,63 @@
+#include "benchmark/render_throughput.hpp"
+#include "benchmark/batch_accounting.hpp"
+#include "benchmark/fixture/profile.hpp"
+
+#include <benchmark/benchmark.h>
+
+#include <atomic>
+#include <cstdint>
+#include <expected>
+#include <format>
+#include <string>
+
+namespace vkgsplat::benchmark {
+
+auto RenderBatch(Renderer &renderer, Camera const &camera, u64 frame_count) -> std::expected<void, Error>
+{
+  auto const completed_before = renderer.completed_frame_count();
+  auto const recreated_before = renderer.recreated_frame_count();
+  for (u64 frame = 0U; frame < frame_count; ++frame) {
+    if (auto drawn = renderer.draw(camera); !drawn) { return std::unexpected{ drawn.error() }; }
+  }
+  if (auto idle = renderer.wait_idle(); !idle) { return std::unexpected{ idle.error() }; }
+  return ValidateBatchAccounting(frame_count,
+    completed_before,
+    renderer.completed_frame_count(),
+    recreated_before,
+    renderer.recreated_frame_count());
+}
+
+auto RegisterRenderThroughput(Renderer &renderer, Camera const &camera, std::atomic_bool &failed) -> void
+{
+  auto const name = std::format("BM_RenderThroughput/{}/{}x{}", kBaselineCount, kBaselineWidth, kBaselineHeight);
+  auto *registered =
+    ::benchmark::RegisterBenchmark(name.c_str(), [&renderer, &camera, &failed](::benchmark::State &state) -> void {
+      auto const batch_frames = static_cast<u64>(state.range(0));
+      if (auto warmup = RenderBatch(renderer, camera, kWarmupFrames); !warmup) {
+        failed.store(true);
+        state.SkipWithError(warmup.error().message().c_str());
+        return;
+      }
+
+      u64 frames = 0U;
+      for (auto _ : state) {
+        static_cast<void>(_);
+        if (auto batch = RenderBatch(renderer, camera, batch_frames); !batch) {
+          failed.store(true);
+          state.SkipWithError(batch.error().message().c_str());
+          return;
+        }
+        frames += batch_frames;
+      }
+      state.SetItemsProcessed(static_cast<std::int64_t>(frames));
+      state.counters["fps"] = ::benchmark::Counter(static_cast<double>(frames), ::benchmark::Counter::kIsRate);
+    });
+  registered->ArgName("batch")
+    ->Arg(static_cast<std::int64_t>(kBatchFrames))
+    ->Arg(static_cast<std::int64_t>(kBatchFrames * 2U))
+    ->Arg(static_cast<std::int64_t>(kBatchFrames * 4U))
+    ->UseRealTime()
+    ->Unit(::benchmark::kMillisecond);
+}
+
+}// namespace vkgsplat::benchmark

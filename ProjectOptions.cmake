@@ -56,6 +56,7 @@ macro(vkgsplat_supports_sanitizers)
 endmacro()
 
 macro(vkgsplat_setup_options)
+  option(vkgsplat_BUILD_BENCHMARKS "Build vkgsplat performance benchmarks" OFF)
   option(vkgsplat_ENABLE_HARDENING "Enable hardening" ON)
   option(vkgsplat_ENABLE_COVERAGE "Enable coverage reporting" OFF)
   cmake_dependent_option(

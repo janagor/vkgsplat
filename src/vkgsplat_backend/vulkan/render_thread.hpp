@@ -7,11 +7,14 @@
 #include <condition_variable>
 #include <cstddef>
 #include <expected>
+#include <functional>
 #include <mutex>
 #include <optional>
 #include <thread>
 
 #include <vkgsplat/camera.hpp>
+#include <vkgsplat/renderer.hpp>
+#include <vkgsplat_backend/vkgsplat_backend_export.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
 
@@ -25,7 +28,7 @@ struct RenderData;
 // Dedicated thread for all Vulkan queue, swapchain, and command-buffer work.
 // Main publishes one replaceable camera and UI snapshot while the worker owns a slot.
 // GPU completion for a slot/image is tracked on frame_ring and waited on the worker.
-class RenderThread
+class VKGSPLAT_BACKEND_EXPORT RenderThread
 {
 public:
   RenderThread() = default;
@@ -36,7 +39,13 @@ public:
   RenderThread(RenderThread &&) = delete;
   auto operator=(RenderThread &&) -> RenderThread & = delete;
 
-  void Start(vulkan::Context *context, RenderData *data);
+  auto Start(vulkan::Context *context, RenderData *data, FrameSubmissionPolicy policy) -> void;
+  // Runs the production admission and worker loop with a CPU-only frame callback.
+  auto StartForTest(FrameSubmissionPolicy policy,
+    std::function<std::expected<void, Error>()> draw_frame,
+    std::function<void()> wait_idle = {}) -> void;
+  auto WaitForShutdownForTest() -> void;
+  auto WaitForBlockedProducerCountForTest(size_t count) -> void;
   void Stop();
 
   [[nodiscard]] auto SubmitFrame(Camera const &camera, f64 aspect_ratio) -> std::expected<void, Error>;
@@ -66,12 +75,20 @@ private:
   };
 
   auto ThreadMain() -> void;
+  auto ProcessWaitIdle(std::unique_lock<std::mutex> &lock) -> void;
+  auto StartWorker(vulkan::Context *context,
+    RenderData *data,
+    FrameSubmissionPolicy policy,
+    std::function<std::expected<void, Error>()> draw_frame,
+    std::function<void()> wait_idle) -> void;
   auto FinishFrame(size_t frame_slot, std::expected<FrameOutcome, Error> const &drawn) -> void;
   [[nodiscard]] auto DrawFrameVulkan(size_t frame_slot) const -> std::expected<FrameOutcome, Error>;
 
   vulkan::Context *context_{ nullptr };
   RenderData *data_{ nullptr };
   std::jthread thread_;
+  std::function<std::expected<void, Error>()> draw_frame_override_;
+  std::function<void()> wait_idle_override_;
 
   mutable std::mutex control_mutex_;
   mutable std::condition_variable control_cv_;
@@ -85,6 +102,9 @@ private:
   bool worker_busy_{ false };
   bool thread_running_{ false };
   bool idle_done_{ true };
+  size_t blocked_producer_count_{ 0U };
+  bool test_mode_{ false };
+  FrameSubmissionPolicy submission_policy_{ FrameSubmissionPolicy::kLatest };
 };
 
 }// namespace vkgsplat

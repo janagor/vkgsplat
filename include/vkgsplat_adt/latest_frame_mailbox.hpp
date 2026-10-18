@@ -62,6 +62,8 @@ public:
 
   [[nodiscard]] auto Empty() const noexcept -> bool { return !pending_.has_value(); }
 
+  [[nodiscard]] auto CanPublishLossless() const -> bool { return Empty() && PrepareSlot().has_value(); }
+
 private:
   enum class Owner : std::uint8_t { kFree, kPending, kWorker };
   std::array<Owner, Capacity> owners_{};

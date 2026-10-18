@@ -21,6 +21,17 @@
 
 namespace vkgsplat {
 
+enum class FrameSubmissionPolicy : u8 { kLatest, kLossless };
+
+struct RenderDeviceInfo
+{
+  std::string name;
+  u32 vendor_id{};
+  u32 device_id{};
+  u32 driver_version{};
+  u32 vulkan_api_version{};
+};
+
 /** Configuration for a renderer and its optional quilt output. */
 struct RendererConfig
 {
@@ -28,6 +39,7 @@ struct RendererConfig
   bool enable_validation = false;
   bool enable_imgui = true;
   bool enable_gpu_timers = false;
+  FrameSubmissionPolicy submission_policy = FrameSubmissionPolicy::kLatest;
   FrameRateConfig frame_rate{};
   /// Quilt dimensions as {columns, rows}; {1, 1} selects the mono path.
   std::array<u32, 2> lfd_grid{ 1U, 1U };
@@ -63,6 +75,7 @@ public:
   [[nodiscard]] auto poll_error() const -> std::optional<Error>;
   [[nodiscard]] auto completed_frame_count() const -> u64;
   [[nodiscard]] auto recreated_frame_count() const -> u64;
+  [[nodiscard]] auto device_info() const -> RenderDeviceInfo;
   /** Save the latest scene color target as PNG, excluding the ImGui overlay. */
   [[nodiscard]] auto save_frame_png(std::string_view path) -> std::expected<void, Error>;
   [[nodiscard]] auto wait_idle() -> std::expected<void, Error>;
