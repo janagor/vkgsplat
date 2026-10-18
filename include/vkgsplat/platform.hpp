@@ -8,12 +8,14 @@ namespace vkgsplat {
 /** Opaque OS-native window handle, such as `GLFWwindow*`. */
 using NativeWindowHandle = void *;
 
+enum class SurfaceMode : u8 { kWindowed, kHeadless };
+
 /**
  * OS windowing abstraction used by the renderer.
  *
- * Surface creation is performed by the Driver from `native_window()`. This
- * interface intentionally exposes no graphics API types, so the application
- * layer can remain independent of Vulkan.
+ * Surface creation is performed by the Driver according to `surface_mode()`.
+ * This interface intentionally exposes no graphics API types, so the
+ * application layer can remain independent of Vulkan.
  */
 class Platform
 {
@@ -24,6 +26,8 @@ public:
   Platform(Platform && /*other*/) = default;
   auto operator=(Platform const & /*other*/) -> Platform & = default;
   auto operator=(Platform && /*other*/) -> Platform & = default;
+
+  [[nodiscard]] virtual auto surface_mode() const noexcept -> SurfaceMode { return SurfaceMode::kWindowed; }
 
   [[nodiscard]] virtual auto native_window() const noexcept -> NativeWindowHandle = 0;
   [[nodiscard]] virtual auto framebuffer_extent() const noexcept -> Extent2D = 0;

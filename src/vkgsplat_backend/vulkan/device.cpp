@@ -1,14 +1,19 @@
 #include "device.hpp"
 
+#include <algorithm>
+#include <cstdint>
 #include <expected>
 #include <print>
+#include <string_view>
 #include <system_error>
+#include <vector>
 
 #include "vkexec_requirements.hpp"
 #include "vulkan_bootstrap.hpp"
 #include "vulkan_context.hpp"
 #include "vulkan_platform.hpp"
 #include <vkgsplat/driver.hpp>
+#include <vkgsplat/platform.hpp>
 #include <vkgsplat_utility/error.hpp>
 
 #include <vulkan/vulkan_core.h>
@@ -17,6 +22,40 @@
 
 namespace vkgsplat {
 namespace {
+
+  [[nodiscard]] auto CheckHeadlessExtension() -> std::expected<void, Error>
+  {
+    constexpr std::uint32_t kMaximumEnumerationAttempts = 4;
+    std::vector<VkExtensionProperties> extensions;
+    bool enumerated = false;
+    for (std::uint32_t attempt = 0; attempt < kMaximumEnumerationAttempts; ++attempt) {
+      std::uint32_t extension_count = 0;
+      VkResult result = vkEnumerateInstanceExtensionProperties(nullptr, &extension_count, nullptr);
+      if (result != VK_SUCCESS) {
+        return std::unexpected{ MakeError(std::errc::io_error, "Failed to enumerate Vulkan instance extensions") };
+      }
+      extensions.resize(extension_count);
+      result = vkEnumerateInstanceExtensionProperties(nullptr, &extension_count, extensions.data());
+      if (result == VK_INCOMPLETE) { continue; }
+      if (result != VK_SUCCESS) {
+        return std::unexpected{ MakeError(std::errc::io_error, "Failed to enumerate Vulkan instance extensions") };
+      }
+      extensions.resize(extension_count);
+      enumerated = true;
+      break;
+    }
+    if (!enumerated) {
+      return std::unexpected{
+        MakeError(std::errc::io_error, "Vulkan instance extension enumeration remained incomplete") };
+    }
+    bool const found = std::ranges::any_of(extensions, [](VkExtensionProperties const &extension) -> bool {
+      return std::string_view{ static_cast<char const *>(extension.extensionName) }
+        == VK_EXT_HEADLESS_SURFACE_EXTENSION_NAME;
+    });
+    if (found) { return {}; }
+    return std::unexpected{ MakeError(std::errc::function_not_supported,
+      "Headless rendering unavailable: VK_EXT_headless_surface is not supported by this Vulkan implementation") };
+  }
 
   // Query device + surface present-timing capabilities and enable only what both support.
   // Device features alone are insufficient: Mesa often advertises absolute/id2 features while
@@ -137,8 +176,18 @@ auto DeviceInitialization(vulkan::Context &context, DriverConfig const &config) 
 
   auto const requirements = vulkan::MakeVkexecRequirements();
 
+  bool const headless = context.platform->surface_mode() == SurfaceMode::kHeadless;
+  if (headless) {
+    if (auto checked = CheckHeadlessExtension(); !checked) { return std::unexpected(checked.error()); }
+  }
+
   vkb::InstanceBuilder instance_builder;
   instance_builder.require_api_version(requirements.api_version_major, requirements.api_version_minor, 0);
+  if (headless) {
+    instance_builder.set_headless(true);
+    instance_builder.enable_extension(VK_KHR_SURFACE_EXTENSION_NAME);
+    instance_builder.enable_extension(VK_EXT_HEADLESS_SURFACE_EXTENSION_NAME);
+  }
   if (config.request_present_timing) {
     // Required to query present-timing / present-id2 surface capabilities.
     instance_builder.enable_extension(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME);
@@ -154,12 +203,13 @@ auto DeviceInitialization(vulkan::Context &context, DriverConfig const &config) 
       context.instance = instance;
       context.inst_disp = context.instance.make_table();
 
-      auto surface = vulkan::CreateSurfaceFromNativeWindow(context.instance, context.platform->native_window());
+      auto surface = vulkan::CreateSurface(context.instance, *context.platform);
       if (!surface) { return std::unexpected{ surface.error() }; }
       context.surface = *surface;
 
       vkb::PhysicalDeviceSelector phys_device_selector(context.instance);
       phys_device_selector.set_surface(context.surface);
+      phys_device_selector.require_present(true);
       phys_device_selector.set_minimum_version(requirements.api_version_major, requirements.api_version_minor);
       for (char const *extension : requirements.device_extensions) {
         phys_device_selector.add_required_extension(extension);
