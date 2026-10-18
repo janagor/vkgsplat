@@ -6,6 +6,8 @@
 #include <glm/ext/vector_float4.hpp>
 #include <glm/ext/vector_uint2.hpp>
 
+#include <cstddef>
+
 #include "gs/gaussian_splat.hpp"
 #include <vkgsplat_utility/types.hpp>
 
@@ -24,7 +26,23 @@ struct ProjectPushConstants
 };
 
 constexpr size_t kProjectPushConstantsSize = 160;
+constexpr size_t kProjectProjectionOffset = sizeof(glm::mat4);
+constexpr size_t kProjectViewportOffset = kProjectProjectionOffset + sizeof(glm::mat4);
+constexpr size_t kProjectShDegreeOffset = kProjectViewportOffset + sizeof(glm::vec2);
+constexpr size_t kProjectCullMarginOffset = kProjectShDegreeOffset + sizeof(u32);
+constexpr size_t kProjectCameraPositionOffset = kProjectCullMarginOffset + sizeof(f32);
 static_assert(sizeof(ProjectPushConstants) == kProjectPushConstantsSize);
+static_assert(offsetof(ProjectPushConstants, view) == 0U);
+static_assert(offsetof(ProjectPushConstants, projection) == kProjectProjectionOffset);
+static_assert(offsetof(ProjectPushConstants, viewport) == kProjectViewportOffset);
+static_assert(offsetof(ProjectPushConstants, sh_degree) == kProjectShDegreeOffset);
+static_assert(offsetof(ProjectPushConstants, cull_margin) == kProjectCullMarginOffset);
+static_assert(offsetof(ProjectPushConstants, camera_position) == kProjectCameraPositionOffset);
+
+struct ProjectBatchPushConstants
+{
+  u32 group_count_x{};
+};
 
 // Stage 2 tile binning.
 struct BinPushConstants
@@ -77,8 +95,8 @@ struct RasterPushConstants
   u32 tile_size{ kTileSize };
   u32 tiles_x{};
   glm::vec4 background{ 0.0F, 0.0F, 0.0F, 0.0F };// rgb used
-  u32 sh_degree{ 3 };// 0 = SH0 only; 3 = full degree-3
-  u32 pad0{};
+  u32 projected_splat_count{};
+  u32 projected_view_index{};
   // Quilt tile origin in the atlas (framebuffer pixels); mono uses (0,0).
   glm::uvec2 tile_offset{};
 };

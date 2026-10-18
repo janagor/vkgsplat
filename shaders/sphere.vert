@@ -14,8 +14,8 @@ layout(push_constant) uniform RasterPush {
 	uint tile_size;
 	uint tiles_x;
 	vec4 background;
-	uint sh_degree;
-	uint pad0_;
+	uint projected_splat_count;
+	uint projected_view_index;
 	uvec2 tile_offset;
 } push;
 
@@ -45,7 +45,7 @@ const vec2 QUAD_VERTS[6] = vec2[](
 void main()
 {
 	uint gaussian_id = sorted_values_buffers[HEAP_SORTED_VALUES].data[gl_InstanceIndex];
-	uint proj_base = gaussian_id * PROJECTED_STRIDE;
+	uint proj_base = (push.projected_view_index * push.projected_splat_count + gaussian_id) * PROJECTED_STRIDE;
 
 	vec2 mean = vec2(
 		projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_MEAN],

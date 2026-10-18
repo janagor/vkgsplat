@@ -46,6 +46,8 @@ template<typename T> using Tensor = vkexec::tensor<T, GpuBuffer>;
 constexpr size_t kFrameSlotCount = 2;
 
 constexpr u32 kVertsPerSphere = 6;
+constexpr u32 kDefaultProjectionBatchSize = 4U;
+constexpr u32 kMaxProjectionBatchSize = 8U;
 
 struct ImGuiOverlayState;
 
@@ -61,6 +63,8 @@ struct RenderData
   std::optional<GpuBuffer> geometry_buffer;
   std::optional<GpuBuffer> appearance_buffer;
   std::optional<GpuBuffer> projected_buffer;
+  std::optional<GpuBuffer> projection_cameras_buffer;
+  u32 lfd_projection_batch_size{ kDefaultProjectionBatchSize };
   std::optional<GpuBuffer> unsorted_keys_buffer;
   std::optional<GpuBuffer> unsorted_values_buffer;
   std::optional<GpuBuffer> instance_count_buffer;
@@ -110,6 +114,7 @@ struct RenderData
   size_t sampler_descriptor_size{};
 
   std::optional<vkexec::algorithm> project_algorithm;
+  std::optional<vkexec::algorithm> project_batch_algorithm;
   std::optional<vkexec::algorithm> bin_algorithm;
   std::optional<vkexec::algorithm> prepare_sort_algorithm;
   std::optional<vkexec::algorithm> radix_histogram_algorithm;

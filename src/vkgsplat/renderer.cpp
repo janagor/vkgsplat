@@ -83,10 +83,6 @@ namespace {
 
     if (auto queues = GetQueues(context, render_data); !queues) { return std::unexpected(queues.error()); }
 
-    if (!CreateSphereBuffers(context, render_data, splats)) {
-      return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to create PLY sphere buffers"));
-    }
-
     render_data.lfd_grid = config.lfd_grid;
     render_data.quilt_size = config.quilt_size;
     render_data.view_cone_deg = config.view_cone_deg;
@@ -103,6 +99,10 @@ namespace {
     }
     if (auto const validated = ValidateLfdViewOrder(render_data.lfd_view_order, render_data.lfd_grid); !validated) {
       return std::unexpected(validated.error());
+    }
+
+    if (!CreateSphereBuffers(context, render_data, splats)) {
+      return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to create PLY sphere buffers"));
     }
 
     render_data.sort_size = NextPowerOf2(render_data.splat_count);

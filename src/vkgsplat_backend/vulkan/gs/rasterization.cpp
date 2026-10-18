@@ -210,10 +210,31 @@ auto DrawQuiltTile(vulkan::Context const &context,
   RasterPushConstants const &push_constants,
   VkCommandBuffer command_buffer,
   VkRect2D tile,
-  bool clear_attachment) -> std::expected<void, Error>
+  bool clear_attachment,
+  bool synchronize_projection) -> std::expected<void, Error>
 {
-  auto barrier = vkexec::barrier::compute_to_graphics(*context.vkexec_context, command_buffer);
-  if (!barrier) { return std::unexpected{ MakeError(std::errc::io_error, barrier.error().message()) }; }
+  if (synchronize_projection) {
+    auto barrier = vkexec::barrier::compute_to_graphics(*context.vkexec_context, command_buffer);
+    if (!barrier) { return std::unexpected{ MakeError(std::errc::io_error, barrier.error().message()) }; }
+  }
+  if (!clear_attachment) {
+    VkMemoryBarrier const attachment_barrier{
+      .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
+      .pNext = nullptr,
+      .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+      .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+    };
+    context.disp.cmdPipelineBarrier(command_buffer,
+      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+      VK_DEPENDENCY_BY_REGION_BIT,
+      1U,
+      &attachment_barrier,
+      0U,
+      nullptr,
+      0U,
+      nullptr);
+  }
 
   // First tile may clear the full atlas; later tiles LOAD and only write their viewport.
   VkRect2D const render_area = clear_attachment ? VkRect2D{ .offset = { .x = 0, .y = 0 },

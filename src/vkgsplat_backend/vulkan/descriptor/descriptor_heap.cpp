@@ -47,7 +47,8 @@ namespace {
     GsStorageBuffer<HeapSlot::kSortedKeys>,
     GsStorageBuffer<HeapSlot::kSortedValues>,
     GsStorageBuffer<HeapSlot::kTileRanges>,
-    GsStorageBuffer<HeapSlot::kSortHistogram>>;
+    GsStorageBuffer<HeapSlot::kSortHistogram>,
+    GsStorageBuffer<HeapSlot::kProjectionCameras>>;
 
   inline constexpr GsHeapSchema kGsHeapSchema{};
   inline constexpr std::array<u32, GsHeapSchema::binding_count> kGsPhysicalIndices{
@@ -62,11 +63,12 @@ namespace {
     static_cast<u32>(HeapSlot::kSortedValues),
     static_cast<u32>(HeapSlot::kTileRanges),
     static_cast<u32>(HeapSlot::kSortHistogram),
+    static_cast<u32>(HeapSlot::kProjectionCameras),
   };
 
   [[nodiscard]] auto HasGsBuffers(RenderData const &data) -> bool
   {
-    return data.geometry_buffer && data.appearance_buffer && data.projected_buffer && data.unsorted_keys_buffer
+    return data.geometry_buffer && data.appearance_buffer && data.projected_buffer && data.projection_cameras_buffer && data.unsorted_keys_buffer
            && data.unsorted_values_buffer && data.sorted_keys_buffer && data.sorted_values_buffer
            && data.sort_histogram_buffer && data.tile_ranges_buffer && data.sorted_indices
            && data.sorted_indices.value().size() != 0 && data.sort_entries && data.sort_entries.value().size() != 0;
@@ -146,7 +148,7 @@ namespace {
     // NOLINTBEGIN(bugprone-unchecked-optional-access)
     auto const geometry_buffer_size = static_cast<VkDeviceSize>(data.splat_count * sizeof(gs::GaussianGeometry));
     auto const appearance_buffer_size = static_cast<VkDeviceSize>(data.splat_count * sizeof(gs::GaussianAppearance));
-    auto const projected_buffer_size = static_cast<VkDeviceSize>(data.splat_count * sizeof(gs::GaussianProjected));
+    auto const projected_buffer_size = data.projected_buffer.value().size();
     auto const unsorted_keys_buffer_size = static_cast<VkDeviceSize>(data.max_bin_instances * sizeof(gs::BinningKey));
     auto const unsorted_values_buffer_size = static_cast<VkDeviceSize>(data.max_bin_instances * sizeof(u32));
     auto const sorted_keys_buffer_size = static_cast<VkDeviceSize>(data.gaussian_sort_size * sizeof(gs::BinningKey));
@@ -168,7 +170,8 @@ namespace {
       vkexec::buffer_resource(data.sorted_keys_buffer.value().handle(), sorted_keys_buffer_size),
       vkexec::buffer_resource(data.sorted_values_buffer.value().handle(), sorted_values_buffer_size),
       vkexec::buffer_resource(data.tile_ranges_buffer.value().handle(), tile_ranges_buffer_size),
-      vkexec::buffer_resource(data.sort_histogram_buffer.value().handle(), sort_histogram_buffer_size));
+      vkexec::buffer_resource(data.sort_histogram_buffer.value().handle(), sort_histogram_buffer_size),
+      vkexec::buffer_resource(data.projection_cameras_buffer.value().handle(), data.projection_cameras_buffer.value().size()));
 
     auto heap_bytes = data.descriptor_heap_buffer.value().mapped();
     std::array<VkDeviceAddress, GsHeapSchema::binding_count> const device_addresses{
@@ -183,6 +186,7 @@ namespace {
       vulkan::DeviceAddressOrZero(data.sorted_values_buffer.value()),
       vulkan::DeviceAddressOrZero(data.tile_ranges_buffer.value()),
       vulkan::DeviceAddressOrZero(data.sort_histogram_buffer.value()),
+      vulkan::DeviceAddressOrZero(data.projection_cameras_buffer.value()),
     };
     // NOLINTEND(bugprone-unchecked-optional-access)
     auto const entries = resources.entries();

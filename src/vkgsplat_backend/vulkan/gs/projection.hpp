@@ -6,6 +6,7 @@
 #include "vulkan_context.hpp"
 
 #include <vulkan/vulkan_core.h>
+#include <span>
 
 namespace vkgsplat::gs {
 
@@ -14,6 +15,11 @@ namespace vkgsplat::gs {
 [[nodiscard]] auto DispatchProjection(vulkan::Context const &context,
   RenderData const &data,
   ProjectPushConstants const &push_constants,
+  VkCommandBuffer command_buffer) -> std::expected<void, Error>;
+
+[[nodiscard]] auto DispatchProjectionBatch(vulkan::Context const &context,
+  RenderData const &data,
+  std::span<ProjectPushConstants const> cameras,
   VkCommandBuffer command_buffer) -> std::expected<void, Error>;
 
 void DestroyProjection(vulkan::Context &context, RenderData &data);

@@ -35,7 +35,8 @@ namespace vkgsplat::gs {
   RasterPushConstants const &push_constants,
   VkCommandBuffer command_buffer,
   VkRect2D tile,
-  bool clear_attachment) -> std::expected<void, Error>;
+  bool clear_attachment,
+  bool synchronize_projection = true) -> std::expected<void, Error>;
 
 [[nodiscard]] auto BlitQuiltToSwapchain(vulkan::Context const &context,
   RenderData const &data,

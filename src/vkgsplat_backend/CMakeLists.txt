@@ -43,6 +43,7 @@ vkgsplat_compile_shaders(
   shaders/sphere.vert
   shaders/sphere.frag
   shaders/gs/projection.comp
+  shaders/gs/projection_batch.comp
   shaders/gs/binning.comp
   shaders/gs/prepare_sorting.comp
   "${VKGSPLAT_VKRADIXSORT_SHADERS_DIR}/multi_radixsort_histograms.comp"

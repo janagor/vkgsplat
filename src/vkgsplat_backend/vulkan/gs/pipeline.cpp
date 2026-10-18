@@ -3,6 +3,7 @@
 #include "app_state.hpp"
 #include "gs/gaussian_splat.hpp"
 #include "gs/operations.hpp"
+#include "gs/projection.hpp"
 #include "gs/rasterization.hpp"
 #include "vulkan/frame_context.hpp"
 #include "vulkan/gpu_pass_timer.hpp"
@@ -14,9 +15,11 @@
 #include <vkgsplat_utility/types.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <expected>
+#include <span>
 #include <system_error>
 
 #include <glm/ext/vector_float4.hpp>
@@ -105,9 +108,12 @@ namespace {
     f64 tile_aspect,// NOLINT(bugprone-easily-swappable-parameters)
     u32 col,
     u32 row,
-    bool first_tile) -> std::expected<void, Error>
+    bool first_tile,
+    bool project_view,
+    bool synchronize_projection,
+    u32 projected_view_index) -> std::expected<void, Error>
   {
-    if (!first_tile) {
+    if (project_view && !first_tile) {
       auto barrier = vkexec::barrier::graphics_to_compute(*context.vkexec_context, command_buffer);
       if (!barrier) { return std::unexpected{ MakeError(std::errc::io_error, barrier.error().message()) }; }
     }
@@ -123,21 +129,111 @@ namespace {
       .tile_aspect = tile_aspect,
     });
     ApplyQuiltTilePush(data, view, tile);
+    data.raster_push.projected_view_index = projected_view_index;
     u32 const view_index = (row * data.lfd_grid.at(0)) + col;
 
-    data.gpu_pass_timer.write_view(
-      context, data.current_slot, view_index, GpuPass::kMultiviewProjection, false, command_buffer);
-    if (auto recorded = RecordProjection(context, data, command_buffer, false); !recorded) { return recorded; }
-    data.gpu_pass_timer.write_view(
-      context, data.current_slot, view_index, GpuPass::kMultiviewProjection, true, command_buffer);
+    if (project_view) {
+      data.gpu_pass_timer.write_view(
+        context, data.current_slot, view_index, GpuPass::kMultiviewProjection, false, command_buffer);
+      if (auto recorded = RecordProjection(context, data, command_buffer, false); !recorded) { return recorded; }
+      data.gpu_pass_timer.write_view(
+        context, data.current_slot, view_index, GpuPass::kMultiviewProjection, true, command_buffer);
+    }
     VkRect2D const draw_tile = {
       .offset = { .x = static_cast<int32_t>(tile.origin_x), .y = static_cast<int32_t>(tile.origin_y) },
       .extent = { .width = tile.width, .height = tile.height },
     };
     data.gpu_pass_timer.write_view(context, data.current_slot, view_index, GpuPass::kRasterize, false, command_buffer);
-    auto recorded = DrawQuiltTile(context, data, data.raster_push, command_buffer, draw_tile, first_tile);
+    auto recorded = DrawQuiltTile(
+      context, data, data.raster_push, command_buffer, draw_tile, first_tile, synchronize_projection);
     if (!recorded) { return recorded; }
     data.gpu_pass_timer.write_view(context, data.current_slot, view_index, GpuPass::kRasterize, true, command_buffer);
+    return {};
+  }
+
+  struct QuiltBatch
+  {
+    u32 cols{};
+    u32 tile_width{};
+    u32 tile_height{};
+    u32 begin{};
+    u32 count{};
+    u32 size{};
+    f64 tile_aspect{};
+  };
+
+  [[nodiscard]] auto QuiltTileForView(QuiltBatch const &batch, u32 view_index) -> QuiltTileRect
+  {
+    u32 const col = view_index % batch.cols;
+    u32 const row = view_index / batch.cols;
+    return QuiltTileRect{ .origin_x = col * batch.tile_width,
+      .origin_y = row * batch.tile_height,
+      .width = batch.tile_width,
+      .height = batch.tile_height };
+  }
+
+  [[nodiscard]] auto RecordQuiltBatchProjection(vulkan::Context &context,
+    RenderData &data,
+    VkCommandBuffer command_buffer,
+    FrameSetup const &setup,
+    QuiltBatch const &batch) -> std::expected<void, Error>
+  {
+    if (batch.size == 1U) { return {}; }
+    if (batch.begin != 0U) {
+      auto barrier = vkexec::barrier::graphics_to_compute(*context.vkexec_context, command_buffer);
+      if (!barrier) { return std::unexpected{ MakeError(std::errc::io_error, barrier.error().message()) }; }
+    }
+    if (auto barrier = vkexec::barrier::compute_to_compute(*context.vkexec_context, command_buffer); !barrier) {
+      return std::unexpected{ MakeError(std::errc::io_error, barrier.error().message()) };
+    }
+
+    std::array<ProjectPushConstants, kMaxProjectionBatchSize> cameras{};
+    for (u32 local = 0U; local < batch.count; ++local) {
+      u32 const view_index = batch.begin + local;
+      u32 const col = view_index % batch.cols;
+      u32 const row = view_index / batch.cols;
+      LfdGridCell const logical = LfdLogicalCellForGridPosition(data.lfd_view_order, data.lfd_grid, col, row);
+      QuiltView const view = MakeQuiltView(QuiltViewRequest{
+        .center = &setup.camera,
+        .grid = data.lfd_grid,
+        .col = logical.col,
+        .row = logical.row,
+        .view_cone_deg = data.view_cone_deg,
+        .focal_distance = data.lfd_focal_distance,
+        .tile_aspect = batch.tile_aspect,
+      });
+      ApplyQuiltTilePush(data, view, QuiltTileForView(batch, view_index));
+      cameras.at(local) = data.project_push;
+    }
+    u32 const batch_index = batch.begin / batch.size;
+    data.gpu_pass_timer.write_view(
+      context, data.current_slot, batch_index, GpuPass::kMultiviewProjection, false, command_buffer);
+    if (auto recorded = DispatchProjectionBatch(context, data,
+          std::span<ProjectPushConstants const>{ cameras.data(), batch.count }, command_buffer); !recorded) {
+      return recorded;
+    }
+    data.gpu_pass_timer.write_view(
+      context, data.current_slot, batch_index, GpuPass::kMultiviewProjection, true, command_buffer);
+    return {};
+  }
+
+  [[nodiscard]] auto RecordQuiltBatchTiles(vulkan::Context &context,
+    RenderData &data,
+    VkCommandBuffer command_buffer,
+    FrameSetup const &setup,
+    QuiltBatch const &batch) -> std::expected<void, Error>
+  {
+    for (u32 local = 0U; local < batch.count; ++local) {
+      u32 const view_index = batch.begin + local;
+      u32 const col = view_index % batch.cols;
+      u32 const row = view_index / batch.cols;
+      bool const first_tile = view_index == 0U;
+      if (auto recorded = RecordQuiltCell(context, data, command_buffer, setup,
+            QuiltTileForView(batch, view_index), batch.tile_aspect, col, row, first_tile,
+            batch.size == 1U, batch.size == 1U || local == 0U, batch.size == 1U ? 0U : local); !recorded) {
+        return recorded;
+      }
+    }
     return {};
   }
 
@@ -156,18 +252,17 @@ namespace {
     if (auto recorded = PrepareQuiltPresent(context, data, command_buffer, data.present_image_index); !recorded) {
       return recorded;
     }
-    bool first_tile = true;
-    for (u32 row = 0U; row < rows; ++row) {
-      for (u32 col = 0U; col < cols; ++col) {
-        QuiltTileRect const tile{
-          .origin_x = col * tile_w, .origin_y = row * tile_h, .width = tile_w, .height = tile_h
-        };
-        if (auto recorded =
-              RecordQuiltCell(context, data, command_buffer, setup, tile, tile_aspect, col, row, first_tile);
-          !recorded) {
-          return recorded;
-        }
-        first_tile = false;
+    u32 const view_count = cols * rows;
+    u32 const batch_size = data.project_batch_algorithm ? data.lfd_projection_batch_size : 1U;
+    for (u32 begin = 0U; begin < view_count; begin += batch_size) {
+      QuiltBatch const batch{ .cols = cols, .tile_width = tile_w, .tile_height = tile_h,
+        .begin = begin, .count = std::min(batch_size, view_count - begin), .size = batch_size,
+        .tile_aspect = tile_aspect };
+      if (auto recorded = RecordQuiltBatchProjection(context, data, command_buffer, setup, batch); !recorded) {
+        return recorded;
+      }
+      if (auto recorded = RecordQuiltBatchTiles(context, data, command_buffer, setup, batch); !recorded) {
+        return recorded;
       }
     }
     return BlitQuiltToSwapchain(context, data, command_buffer, data.present_image_index);

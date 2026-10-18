@@ -76,8 +76,8 @@ namespace {
       .viewport = { tile.width, tile.height },
       .tile_size = gs::kTileSize,
       .tiles_x = (tile.width + gs::kTileSize - 1U) / gs::kTileSize,
-      .sh_degree = gs::kViewerShDegree,
-      .pad0 = 0U,
+      .projected_splat_count = data.splat_count,
+      .projected_view_index = 0U,
       .tile_offset = { 0U, 0U },
     };
 

@@ -23,12 +23,13 @@ enum class HeapSlot : u8 {
   kTileRanges = 9,
   kColorTarget = 10,
   kSortHistogram = 11,
+  kProjectionCameras = 20,
 };
 
 inline constexpr size_t kHeapDescriptorCount = 12;
 inline constexpr uint32_t kImguiImageBase = 12;
 inline constexpr uint32_t kImguiImageSlots = 8;
-inline constexpr size_t kSharedResourceSlots = kImguiImageBase + kImguiImageSlots;
+inline constexpr size_t kSharedResourceSlots = static_cast<size_t>(HeapSlot::kProjectionCameras) + 1U;
 inline constexpr size_t kSharedSamplerSlots = 2;
 
 [[nodiscard]] constexpr auto AlignUp(VkDeviceSize value, VkDeviceSize alignment) noexcept -> VkDeviceSize
