@@ -68,9 +68,9 @@ namespace {
 
   [[nodiscard]] auto HasGsBuffers(RenderData const &data) -> bool
   {
-    return data.geometry_buffer && data.appearance_buffer && data.projected_buffer && data.projection_cameras_buffer && data.unsorted_keys_buffer
-           && data.unsorted_values_buffer && data.sorted_keys_buffer && data.sorted_values_buffer
-           && data.sort_histogram_buffer && data.tile_ranges_buffer && data.sorted_indices
+    return data.geometry_buffer && data.appearance_buffer && data.projected_buffer && data.projection_cameras_buffer
+           && data.unsorted_keys_buffer && data.unsorted_values_buffer && data.sorted_keys_buffer
+           && data.sorted_values_buffer && data.sort_histogram_buffer && data.tile_ranges_buffer && data.sorted_indices
            && data.sorted_indices.value().size() != 0 && data.sort_entries && data.sort_entries.value().size() != 0;
   }
 
@@ -171,7 +171,8 @@ namespace {
       vkexec::buffer_resource(data.sorted_values_buffer.value().handle(), sorted_values_buffer_size),
       vkexec::buffer_resource(data.tile_ranges_buffer.value().handle(), tile_ranges_buffer_size),
       vkexec::buffer_resource(data.sort_histogram_buffer.value().handle(), sort_histogram_buffer_size),
-      vkexec::buffer_resource(data.projection_cameras_buffer.value().handle(), data.projection_cameras_buffer.value().size()));
+      vkexec::buffer_resource(
+        data.projection_cameras_buffer.value().handle(), data.projection_cameras_buffer.value().size()));
 
     auto heap_bytes = data.descriptor_heap_buffer.value().mapped();
     std::array<VkDeviceAddress, GsHeapSchema::binding_count> const device_addresses{

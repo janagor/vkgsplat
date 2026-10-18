@@ -144,8 +144,8 @@ namespace {
       .extent = { .width = tile.width, .height = tile.height },
     };
     data.gpu_pass_timer.write_view(context, data.current_slot, view_index, GpuPass::kRasterize, false, command_buffer);
-    auto recorded = DrawQuiltTile(
-      context, data, data.raster_push, command_buffer, draw_tile, first_tile, synchronize_projection);
+    auto recorded =
+      DrawQuiltTile(context, data, data.raster_push, command_buffer, draw_tile, first_tile, synchronize_projection);
     if (!recorded) { return recorded; }
     data.gpu_pass_timer.write_view(context, data.current_slot, view_index, GpuPass::kRasterize, true, command_buffer);
     return {};
@@ -208,8 +208,9 @@ namespace {
     u32 const batch_index = batch.begin / batch.size;
     data.gpu_pass_timer.write_view(
       context, data.current_slot, batch_index, GpuPass::kMultiviewProjection, false, command_buffer);
-    if (auto recorded = DispatchProjectionBatch(context, data,
-          std::span<ProjectPushConstants const>{ cameras.data(), batch.count }, command_buffer); !recorded) {
+    if (auto recorded = DispatchProjectionBatch(
+          context, data, std::span<ProjectPushConstants const>{ cameras.data(), batch.count }, command_buffer);
+      !recorded) {
       return recorded;
     }
     data.gpu_pass_timer.write_view(
@@ -228,9 +229,19 @@ namespace {
       u32 const col = view_index % batch.cols;
       u32 const row = view_index / batch.cols;
       bool const first_tile = view_index == 0U;
-      if (auto recorded = RecordQuiltCell(context, data, command_buffer, setup,
-            QuiltTileForView(batch, view_index), batch.tile_aspect, col, row, first_tile,
-            batch.size == 1U, batch.size == 1U || local == 0U, batch.size == 1U ? 0U : local); !recorded) {
+      if (auto recorded = RecordQuiltCell(context,
+            data,
+            command_buffer,
+            setup,
+            QuiltTileForView(batch, view_index),
+            batch.tile_aspect,
+            col,
+            row,
+            first_tile,
+            batch.size == 1U,
+            batch.size == 1U || local == 0U,
+            batch.size == 1U ? 0U : local);
+        !recorded) {
         return recorded;
       }
     }
@@ -255,8 +266,12 @@ namespace {
     u32 const view_count = cols * rows;
     u32 const batch_size = data.project_batch_algorithm ? data.lfd_projection_batch_size : 1U;
     for (u32 begin = 0U; begin < view_count; begin += batch_size) {
-      QuiltBatch const batch{ .cols = cols, .tile_width = tile_w, .tile_height = tile_h,
-        .begin = begin, .count = std::min(batch_size, view_count - begin), .size = batch_size,
+      QuiltBatch const batch{ .cols = cols,
+        .tile_width = tile_w,
+        .tile_height = tile_h,
+        .begin = begin,
+        .count = std::min(batch_size, view_count - begin),
+        .size = batch_size,
         .tile_aspect = tile_aspect };
       if (auto recorded = RecordQuiltBatchProjection(context, data, command_buffer, setup, batch); !recorded) {
         return recorded;

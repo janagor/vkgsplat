@@ -41,8 +41,11 @@ auto InitProjection(vulkan::Context &context, RenderData &data) -> bool
   if (data.lfd_projection_batch_size > 1U) {
     std::string const batch_shader_path = std::string(kShaderDirectory) + "/projection_batch.comp.spv";
     auto batch_algorithm = LoadHeapAlgorithm(context, batch_shader_path, std::span{ specialization_constants });
-    if (batch_algorithm) { data.project_batch_algorithm = std::move(*batch_algorithm); }
-    else { data.lfd_projection_batch_size = 1U; }
+    if (batch_algorithm) {
+      data.project_batch_algorithm = std::move(*batch_algorithm);
+    } else {
+      data.lfd_projection_batch_size = 1U;
+    }
   }
   return true;
 }
@@ -89,10 +92,18 @@ auto DispatchProjectionBatch(vulkan::Context const &context,
     .srcAccessMask = VK_ACCESS_SHADER_READ_BIT,
     .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
   };
-  context.disp.cmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-    VK_PIPELINE_STAGE_TRANSFER_BIT, 0U, 1U, &reuse_barrier, 0U, nullptr, 0U, nullptr);
-  context.disp.cmdUpdateBuffer(command_buffer, data.projection_cameras_buffer->handle(), 0,
-    cameras.size_bytes(), cameras.data());
+  context.disp.cmdPipelineBarrier(command_buffer,
+    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+    VK_PIPELINE_STAGE_TRANSFER_BIT,
+    0U,
+    1U,
+    &reuse_barrier,
+    0U,
+    nullptr,
+    0U,
+    nullptr);
+  context.disp.cmdUpdateBuffer(
+    command_buffer, data.projection_cameras_buffer->handle(), 0, cameras.size_bytes(), cameras.data());
   if (auto barrier = vkexec::barrier::transfer_to_compute(*context.vkexec_context, command_buffer); !barrier) {
     return std::unexpected{ MakeError(std::errc::io_error, barrier.error().message()) };
   }
@@ -101,7 +112,8 @@ auto DispatchProjectionBatch(vulkan::Context const &context,
     command_buffer,
     data.project_batch_algorithm->bind(),
     std::as_bytes(std::span{ &push, 1 }),
-    vkexec::dispatch{ .x = group_count_x, .y = static_cast<u32>(group_count_y), .z = static_cast<u32>(cameras.size()) });
+    vkexec::dispatch{
+      .x = group_count_x, .y = static_cast<u32>(group_count_y), .z = static_cast<u32>(cameras.size()) });
   if (!recorded) { return std::unexpected{ MakeError(std::errc::io_error, recorded.error().message()) }; }
   return {};
 }

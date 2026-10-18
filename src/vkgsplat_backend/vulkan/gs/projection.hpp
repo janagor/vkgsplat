@@ -5,8 +5,8 @@
 #include "gs/push_constants.hpp"
 #include "vulkan_context.hpp"
 
-#include <vulkan/vulkan_core.h>
 #include <span>
+#include <vulkan/vulkan_core.h>
 
 namespace vkgsplat::gs {
 
