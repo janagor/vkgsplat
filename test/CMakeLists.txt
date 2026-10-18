@@ -108,6 +108,18 @@ if(vkgsplat_ENABLE_HEADLESS_GPU_TESTS)
                "DISPLAY=;WAYLAND_DISPLAY="
                TIMEOUT
                120)
+  add_test(
+    NAME offscreen.gpu.smoke
+    COMMAND
+      ${CMAKE_COMMAND} -DEXECUTABLE=$<TARGET_FILE:vkgsplat_headless> -DPLY=${vkgsplat_HEADLESS_TEST_PLY}
+      -DOUTPUT=${CMAKE_CURRENT_BINARY_DIR}/offscreen-test.png -DTARGET_MODE=offscreen
+      -DVALIDATION=${vkgsplat_HEADLESS_GPU_TEST_VALIDATION} -P ${CMAKE_CURRENT_SOURCE_DIR}/headless_gpu_smoke.cmake)
+  set_tests_properties(
+    offscreen.gpu.smoke
+    PROPERTIES ENVIRONMENT
+               "DISPLAY=;WAYLAND_DISPLAY="
+               TIMEOUT
+               120)
   if(TARGET vkgsplat_fixture_gen)
     add_executable(vkgsplat_gpu_timing_smoke gpu_timing_smoke.cpp)
     target_link_libraries(vkgsplat_gpu_timing_smoke PRIVATE vkgsplat::vkgsplat_benchmark_renderer_adapter
@@ -116,6 +128,20 @@ if(vkgsplat_ENABLE_HEADLESS_GPU_TESTS)
     target_link_libraries(vkgsplat_fixture_gpu_smoke PRIVATE vkgsplat::vkgsplat_benchmark_renderer_adapter
                                                              vkgsplat::vkgsplat_headless_platform stb::stb)
     set(benchmark_scene ${CMAKE_CURRENT_BINARY_DIR}/benchmark-baseline-v1.ply)
+    add_executable(vkgsplat_offscreen_gpu_smoke offscreen_gpu_smoke.cpp)
+    target_link_libraries(vkgsplat_offscreen_gpu_smoke PRIVATE vkgsplat::vkgsplat vkgsplat::vkgsplat_headless_platform
+                                                               vkgsplat::vkgsplat_benchmark_fixture)
+    add_test(NAME offscreen.gpu.sequence
+             COMMAND $<TARGET_FILE:vkgsplat_offscreen_gpu_smoke> ${benchmark_scene}
+                     ${CMAKE_CURRENT_BINARY_DIR}/offscreen-compact.ply ${vkgsplat_HEADLESS_GPU_TEST_VALIDATION})
+    set_tests_properties(
+      offscreen.gpu.sequence
+      PROPERTIES FIXTURES_REQUIRED
+                 benchmark_fixture
+                 ENVIRONMENT
+                 "DISPLAY=;WAYLAND_DISPLAY="
+                 TIMEOUT
+                 180)
     add_test(NAME benchmark.fixture.generate COMMAND $<TARGET_FILE:vkgsplat_fixture_gen> --profile baseline-v1 --output
                                                      ${benchmark_scene})
     set_tests_properties(

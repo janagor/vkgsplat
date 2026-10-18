@@ -17,6 +17,7 @@
 
 #include <VkBootstrap.h>
 #include <beman/indirect/indirect.hpp>
+#include <vulkan/vulkan_core.h>
 
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat/driver.hpp>
@@ -40,12 +41,12 @@
 #include "vulkan/present_pacer.hpp"
 #include "vulkan/render_thread.hpp"
 #include "vulkan/renderer.hpp"
-#include "vulkan/screenshot.hpp"
 #include "vulkan/sphere_setup.hpp"
 #include "vulkan/vulkan_context.hpp"
 #include "vulkan/vulkan_driver.hpp"
 #include <vkgsplat_io/load_splats.hpp>
 #include <vkgsplat_io/splat_cpu.hpp>
+#include <vkgsplat_io/write_png.hpp>
 
 namespace vkgsplat {
 
@@ -87,24 +88,38 @@ namespace {
     return {};
   }
 
-  [[nodiscard]] auto BuildRendererResources(vulkan::Context &context,
-    RenderData &render_data,
-    RendererConfig const &config) -> std::expected<void, Error>
+  [[nodiscard]] auto ValidateOffscreenConfig(RendererConfig const &config, Platform const &platform)
+    -> std::expected<void, Error>
   {
-    auto loaded = LoadSplatsFromPly(config.ply_path);
-    if (!loaded) { return std::unexpected(loaded.error()); }
-    SplatCpuData const splats = std::move(*loaded);
-    std::println("Loaded {} splats from {}", splats.geometries.size(), config.ply_path);
-    {
-      auto const &first_appearance = splats.appearances.at(0);
-      std::println("appearance[0] f_dc=({}, {}, {})",
-        first_appearance.f_dc.at(0),
-        first_appearance.f_dc.at(1),
-        first_appearance.f_dc.at(2));
+    if (platform.surface_mode() != SurfaceMode::kOffscreen) { return {}; }
+    auto const extent = platform.framebuffer_extent();
+    if (extent.width == 0U || extent.height == 0U) {
+      return std::unexpected{ MakeError(std::errc::invalid_argument, "offscreen extent must be positive") };
     }
+    if (config.enable_imgui || config.frame_rate.IsPacingRequested()
+        || config.submission_policy != FrameSubmissionPolicy::kLossless) {
+      return std::unexpected{ MakeError(std::errc::invalid_argument,
+        "offscreen rendering requires disabled ImGui and pacing, and lossless submission") };
+    }
+    return {};
+  }
 
-    if (auto queues = GetQueues(context, render_data); !queues) { return std::unexpected(queues.error()); }
+  [[nodiscard]] auto ValidateOutputConfig(RendererConfig const &config, vulkan::Context const &context)
+    -> std::expected<void, Error>
+  {
+    VkExtent2D const extent = context.swapchain == nullptr
+                                ? VkExtent2D{ .width = context.platform->framebuffer_extent().width,
+                                    .height = context.platform->framebuffer_extent().height }
+                                : context.swapchain->vk_extent();
+    if (extent.width == 0U || extent.height == 0U) {
+      return std::unexpected{ MakeError(std::errc::invalid_argument, "render extent must be positive") };
+    }
+    if (auto valid = ValidateOffscreenConfig(config, *context.platform); !valid) { return valid; }
+    return {};
+  }
 
+  [[nodiscard]] auto ConfigureLfd(RenderData &render_data, RendererConfig const &config) -> std::expected<void, Error>
+  {
     render_data.lfd_grid = config.lfd_grid;
     render_data.quilt_size = config.quilt_size;
     render_data.view_cone_deg = config.view_cone_deg;
@@ -121,6 +136,34 @@ namespace {
     }
     if (auto const validated = ValidateLfdViewOrder(render_data.lfd_view_order, render_data.lfd_grid); !validated) {
       return std::unexpected(validated.error());
+    }
+    return {};
+  }
+
+  [[nodiscard]] auto BuildRendererResources(vulkan::Context &context,
+    RenderData &render_data,
+    RendererConfig const &config) -> std::expected<void, Error>
+  {
+    if (auto valid = ValidateOutputConfig(config, context); !valid) { return valid; }
+    auto const output_extent =
+      context.swapchain == nullptr ? context.platform->framebuffer_extent() : context.swapchain->extent();
+    render_data.output_extent = { .width = output_extent.width, .height = output_extent.height };
+    auto loaded = LoadSplatsFromPly(config.ply_path);
+    if (!loaded) { return std::unexpected(loaded.error()); }
+    SplatCpuData const splats = std::move(*loaded);
+    std::println("Loaded {} splats from {}", splats.geometries.size(), config.ply_path);
+    {
+      auto const &first_appearance = splats.appearances.at(0);
+      std::println("appearance[0] f_dc=({}, {}, {})",
+        first_appearance.f_dc.at(0),
+        first_appearance.f_dc.at(1),
+        first_appearance.f_dc.at(2));
+    }
+
+    if (auto queues = GetQueues(context, render_data); !queues) { return std::unexpected(queues.error()); }
+
+    if (auto configured = ConfigureLfd(render_data, config); !configured) {
+      return std::unexpected(configured.error());
     }
 
     if (!CreateSphereBuffers(context, render_data, splats)) {
@@ -201,6 +244,9 @@ Renderer::~Renderer() noexcept
 auto Renderer::create(RendererConfig const &config, Platform &platform) -> std::expected<Renderer, Error>
 {
   if (auto validated = ValidateGpuTimingConfig(config); !validated) { return std::unexpected{ validated.error() }; }
+  if (auto validated = ValidateOffscreenConfig(config, platform); !validated) {
+    return std::unexpected{ validated.error() };
+  }
   auto engine = Engine::create(EngineConfig{ .enable_validation = config.enable_validation,
                                  .request_present_timing = config.frame_rate.IsPacingRequested() },
     platform);
@@ -225,6 +271,9 @@ auto Renderer::create(RendererConfig const &config, Platform &platform) -> std::
 auto Renderer::create(RendererConfig const &config, Engine &engine) -> std::expected<Renderer, Error>
 {
   if (auto validated = ValidateGpuTimingConfig(config); !validated) { return std::unexpected{ validated.error() }; }
+  if (auto validated = ValidateOffscreenConfig(config, engine.platform()); !validated) {
+    return std::unexpected{ validated.error() };
+  }
   beman::indirect::indirect<Impl> impl;
   impl->engine = &engine;
 
@@ -248,6 +297,16 @@ auto Renderer::draw(Camera const &camera) -> std::expected<void, Error>
   return impl_->render_thread->SubmitFrame(camera, aspect_ratio);
 }
 
+auto Renderer::render_frame(Camera const &camera) -> std::expected<RgbaFrame, Error>
+{
+  if (impl_->engine->platform().surface_mode() != SurfaceMode::kOffscreen) {
+    return std::unexpected{ MakeError(std::errc::operation_not_supported, "render_frame requires offscreen mode") };
+  }
+  auto const extent = impl_->engine->platform().framebuffer_extent();
+  f64 const aspect_ratio = static_cast<f64>(extent.width) / static_cast<f64>(extent.height);
+  return impl_->render_thread->CaptureFrame(camera, aspect_ratio);
+}
+
 auto Renderer::poll_error() const -> std::optional<Error> { return impl_->render_thread->PollError(); }
 
 auto Renderer::completed_frame_count() const -> u64 { return impl_->render_thread->CompletedFrameCount(); }
@@ -269,9 +328,10 @@ auto Renderer::device_info() const -> RenderDeviceInfo
 
 auto Renderer::save_frame_png(std::string_view path) -> std::expected<void, Error>
 {
-  if (auto idle = wait_idle(); !idle) { return std::unexpected{ idle.error() }; }
-  auto &context = AsVulkanDriver(impl_->engine->driver()).context();
-  return vulkan::SaveColorTargetPng(context, impl_->render_data, path);
+  auto frame = impl_->render_thread->ReadLatestFrame();
+  if (!frame) { return std::unexpected(frame.error()); }
+  constexpr u32 kRgbaChannels = 4U;
+  return WritePng(path, frame->width, frame->height, kRgbaChannels, frame->pixels);
 }
 
 auto Renderer::wait_idle() -> std::expected<void, Error> { return impl_->render_thread->WaitIdle(); }
@@ -300,29 +360,35 @@ auto Renderer::gpu_timestamp_valid_bits() const -> u32
 
 auto Renderer::set_lfd_emulate(bool active) -> std::expected<void, Error>
 {
-  if (auto idle = wait_idle(); !idle) { return std::unexpected{ idle.error() }; }
-  impl_->render_data.lfd_emulate_active = active;
-  if (active) { impl_->render_data.lfd_emulate_cell = { 0U, 0U }; }
-
-  auto &context = AsVulkanDriver(impl_->engine->driver()).context();
-  if (!gs::RecreateRasterizationColorTarget(context, impl_->render_data)) {
-    return std::unexpected{ MakeError(std::errc::io_error, "failed to recreate rasterization color target") };
-  }
-  return {};
+  auto *const worker = impl_->render_thread.get();
+  auto *const data = &impl_->render_data;
+  auto *const context = &AsVulkanDriver(impl_->engine->driver()).context();
+  return worker->RunExclusive([worker, data, context, active]() -> std::expected<void, Error> {
+    worker->InvalidateColorTarget();
+    data->lfd_emulate_active = active;
+    if (active) { data->lfd_emulate_cell = { 0U, 0U }; }
+    if (!gs::RecreateRasterizationColorTarget(*context, *data)) {
+      return std::unexpected{ MakeError(std::errc::io_error, "failed to recreate rasterization color target") };
+    }
+    return {};
+  });
 }
 
-auto Renderer::lfd_emulate_active() const noexcept -> bool { return impl_->render_data.lfd_emulate_active; }
+auto Renderer::lfd_emulate_active() const noexcept -> bool { return impl_->render_thread->LfdEmulateActive(); }
 
 auto Renderer::set_lfd_emulate_cell(u32 col, u32 row) -> std::expected<void, Error>
 {
-  if (auto idle = wait_idle(); !idle) { return std::unexpected{ idle.error() }; }
-  auto const cols = std::max(1U, impl_->render_data.lfd_grid.at(0));
-  auto const rows = std::max(1U, impl_->render_data.lfd_grid.at(1));
-  impl_->render_data.lfd_emulate_cell = { std::min(col, cols - 1U), std::min(row, rows - 1U) };
-  return {};
+  auto *const data = &impl_->render_data;
+  return impl_->render_thread->RunExclusive([data, col, row]() -> std::expected<void, Error> {
+    auto const cols = std::max(1U, data->lfd_grid.at(0));
+    auto const rows = std::max(1U, data->lfd_grid.at(1));
+    data->lfd_emulate_cell = { std::min(col, cols - 1U), std::min(row, rows - 1U) };
+    return {};
+  });
 }
 
-auto Renderer::lfd_emulate_cell() const noexcept -> std::array<u32, 2> { return impl_->render_data.lfd_emulate_cell; }
+auto Renderer::lfd_emulate_cell() const noexcept -> std::array<u32, 2>
+{ return impl_->render_thread->LfdEmulateCell(); }
 
 auto Renderer::lfd_grid() const noexcept -> std::array<u32, 2> { return impl_->render_data.lfd_grid; }
 

@@ -8,7 +8,7 @@ namespace vkgsplat {
 /** Opaque OS-native window handle, such as `GLFWwindow*`. */
 using NativeWindowHandle = void *;
 
-enum class SurfaceMode : u8 { kWindowed, kHeadless };
+enum class SurfaceMode : u8 { kWindowed, kHeadless, kOffscreen };
 
 /**
  * OS windowing abstraction used by the renderer.

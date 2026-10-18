@@ -1,6 +1,6 @@
 include(GenerateExportHeader)
 
-add_library(vkgsplat_headless_platform headless_platform.cpp)
+add_library(vkgsplat_headless_platform headless_platform.cpp offscreen_platform.cpp)
 add_library(vkgsplat::vkgsplat_headless_platform ALIAS vkgsplat_headless_platform)
 target_link_libraries(
   vkgsplat_headless_platform

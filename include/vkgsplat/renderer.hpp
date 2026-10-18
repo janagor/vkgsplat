@@ -19,6 +19,7 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <vector>
 
 namespace vkgsplat {
@@ -34,6 +35,14 @@ struct RenderDeviceInfo
   u32 vulkan_api_version{};
 };
 
+/** Owned, tightly packed RGBA8 pixels in top-to-bottom row order. */
+struct RgbaFrame
+{
+  u32 width{};
+  u32 height{};
+  std::vector<std::uint8_t> pixels;
+};
+
 /** Configuration for a renderer and its optional quilt output. */
 struct RendererConfig
 {
@@ -46,7 +55,7 @@ struct RendererConfig
   FrameRateConfig frame_rate{};
   /// Quilt dimensions as {columns, rows}; {1, 1} selects the mono path.
   std::array<u32, 2> lfd_grid{ 1U, 1U };
-  /// Atlas width and height; {0,0} uses the swapchain size for each tile.
+  /// Atlas width and height; {0,0} uses the selected output extent for each tile.
   std::array<u32, 2> quilt_size{ 0U, 0U };
   f64 view_cone_deg{ kDefaultViewConeDegrees };
   std::vector<u32> lfd_view_order;
@@ -75,6 +84,8 @@ public:
 
   /** Render one frame using the supplied camera. */
   [[nodiscard]] auto draw(Camera const &camera) -> std::expected<void, Error>;
+  /** Render and capture exactly one camera frame in offscreen mode. */
+  [[nodiscard]] auto render_frame(Camera const &camera) -> std::expected<RgbaFrame, Error>;
   [[nodiscard]] auto poll_error() const -> std::optional<Error>;
   [[nodiscard]] auto completed_frame_count() const -> u64;
   [[nodiscard]] auto recreated_frame_count() const -> u64;

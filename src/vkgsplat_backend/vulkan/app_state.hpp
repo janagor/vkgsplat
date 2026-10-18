@@ -86,6 +86,7 @@ struct RenderData
   u32 tile_count = 0;
   u32 color_width = 0;
   u32 color_height = 0;
+  VkExtent2D output_extent{};
   // LFD quilt: mono is {1,1}. Color RT is an atlas of quilt_tile_extent cells.
   std::array<u32, 2> lfd_grid{ 1U, 1U };
   std::array<u32, 2> quilt_size{ 0U, 0U };
@@ -129,9 +130,12 @@ struct RenderData
 
   std::optional<vulkan::CommandPool> command_pool;
   std::vector<vulkan::CommandBuffer> command_buffers;
+  std::vector<GpuBuffer> in_flight_readbacks;
 
   // Binary WSI acquire/present semaphores + timeline gates for slot/image reuse.
   std::optional<vkexec::owned::frame_ring> frame_ring;
+  VkSemaphore offscreen_timeline{ VK_NULL_HANDLE };
+  u64 offscreen_signal_value{ 0U };
   size_t current_slot = {};
   std::array<FrameContext, kFrameSlotCount> frames{};
   GpuPassTimer gpu_pass_timer;

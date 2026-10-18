@@ -3,7 +3,6 @@
 #include "app_state.hpp"
 #include "gs/gaussian_splat.hpp"
 #include "vulkan/gpu_buffers.hpp"
-#include "vulkan_context.hpp"
 
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat_io/splat_cpu.hpp>
@@ -29,18 +28,16 @@ namespace {
 
   constexpr f64 kQuiltNormalizedCenter = 0.5;
 
-  [[nodiscard]] auto TileExtent(vulkan::Context const &context, RenderData const &data) -> VkExtent2D
+  [[nodiscard]] auto TileExtent(RenderData const &data) -> VkExtent2D
   {
     if (data.quilt_tile_extent.width != 0U && data.quilt_tile_extent.height != 0U) { return data.quilt_tile_extent; }
-    return context.swapchain->vk_extent();
+    return data.output_extent;
   }
 
-  [[nodiscard]] auto BuildGsFrameConstants(vulkan::Context const &context,
-    RenderData const &data,
-    CameraSnapshot const &camera) -> GsFrameConstants
+  [[nodiscard]] auto BuildGsFrameConstants(RenderData const &data, CameraSnapshot const &camera) -> GsFrameConstants
   {
     glm::vec3 const camera_pos{ camera.position };
-    VkExtent2D const tile = TileExtent(context, data);
+    VkExtent2D const tile = TileExtent(data);
     f32 const tile_w = static_cast<f32>(tile.width);
     f32 const tile_h = static_cast<f32>(tile.height);
 
@@ -142,10 +139,10 @@ auto MakeQuiltView(QuiltViewRequest const &request) -> QuiltView
   };
 }
 
-void BuildFrameSetupGpu(vulkan::Context const &context, RenderData const &data, FrameSetup &setup, size_t image_index)
+void BuildFrameSetupGpu(RenderData const &data, FrameSetup &setup, size_t image_index)
 {
   setup.image_index = image_index;
-  setup.gs = BuildGsFrameConstants(context, data, setup.camera);
+  setup.gs = BuildGsFrameConstants(data, setup.camera);
 }
 
 void ApplyFrameSetup(RenderData &data, size_t frame_slot)

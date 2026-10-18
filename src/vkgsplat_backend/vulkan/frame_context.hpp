@@ -94,7 +94,7 @@ namespace vulkan {
 }
 
 // Render thread: finalize setup after swapchain acquire.
-void BuildFrameSetupGpu(vulkan::Context const &context, RenderData const &data, FrameSetup &setup, size_t image_index);
+void BuildFrameSetupGpu(RenderData const &data, FrameSetup &setup, size_t image_index);
 
 // Copy the slot's GS constants into RenderData for the existing pipeline ops.
 void ApplyFrameSetup(RenderData &data, size_t frame_slot);

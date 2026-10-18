@@ -1,7 +1,10 @@
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat/frame_rate.hpp>
+#include <vkgsplat/platform.hpp>
 #include <vkgsplat/renderer.hpp>
 #include <vkgsplat_headless/headless_platform.hpp>
+#include <vkgsplat_headless/offscreen_platform.hpp>
+#include <vkgsplat_io/write_png.hpp>
 #include <vkgsplat_utility/types.hpp>
 
 #include <CLI/CLI.hpp>
@@ -9,8 +12,10 @@
 
 #include <array>
 #include <exception>
+#include <memory>
 #include <print>
 #include <string>
+#include <utility>
 
 namespace {
 [[nodiscard]] auto ToArray(glm::dvec3 const &vector) -> std::array<vkgsplat::f64, 3>
@@ -25,6 +30,7 @@ auto RunHeadless(int argc, char **argv) -> int
   CLI::App app{ "Render one Gaussian Splatting frame without a window" };
   std::string ply_path;
   std::string output;
+  std::string target = "headless-surface";
   vkgsplat::u32 width = vkgsplat::kDefaultHeadlessWidth;
   vkgsplat::u32 height = vkgsplat::kDefaultHeadlessHeight;
   bool validation = false;
@@ -33,6 +39,8 @@ auto RunHeadless(int argc, char **argv) -> int
   auto camera_target = ToArray(default_camera.target);
   app.add_option("--ply", ply_path, "PLY scene path")->required()->check(CLI::ExistingFile);
   app.add_option("--output", output, "Output PNG path")->required();
+  app.add_option("--target", target, "Output target: headless-surface or offscreen")
+    ->check(CLI::IsMember({ "headless-surface", "offscreen" }));
   app.add_option("--width", width, "Frame width")->capture_default_str();
   app.add_option("--height", height, "Frame height")->capture_default_str();
   app.add_flag("--validation", validation, "Enable Vulkan validation layers");
@@ -44,16 +52,28 @@ auto RunHeadless(int argc, char **argv) -> int
     return app.exit(error);
   }
 
-  auto platform = vkgsplat::HeadlessPlatform::create({ .width = width, .height = height });
-  if (!platform) {
-    std::println(stderr, "{}", platform.error().message());
-    return 1;
+  std::unique_ptr<vkgsplat::Platform> platform;
+  if (target == "offscreen") {
+    auto created = vkgsplat::OffscreenPlatform::create({ .width = width, .height = height });
+    if (!created) {
+      std::println(stderr, "{}", created.error().message());
+      return 1;
+    }
+    platform = std::make_unique<vkgsplat::OffscreenPlatform>(std::move(*created));
+  } else {
+    auto created = vkgsplat::HeadlessPlatform::create({ .width = width, .height = height });
+    if (!created) {
+      std::println(stderr, "{}", created.error().message());
+      return 1;
+    }
+    platform = std::make_unique<vkgsplat::HeadlessPlatform>(std::move(*created));
   }
   vkgsplat::RendererConfig const config{
     .ply_path = ply_path,
     .enable_validation = validation,
     .enable_imgui = false,
     .enable_gpu_timers = false,
+    .submission_policy = vkgsplat::FrameSubmissionPolicy::kLossless,
     .frame_rate = { .mode = vkgsplat::FrameRateMode::kUncapped },
     .lfd_view_order = {},
   };
@@ -67,6 +87,21 @@ auto RunHeadless(int argc, char **argv) -> int
     .target = { camera_target.at(0), camera_target.at(1), camera_target.at(2) },
     .aspect_ratio = static_cast<vkgsplat::f64>(width) / static_cast<vkgsplat::f64>(height),
   } };
+  if (target == "offscreen") {
+    auto frame = renderer->render_frame(camera);
+    if (!frame) {
+      std::println(stderr, "{}", frame.error().message());
+      return 1;
+    }
+    constexpr vkgsplat::u32 kRgbaChannels = 4U;
+    if (auto written = vkgsplat::WritePng(output, frame->width, frame->height, kRgbaChannels, frame->pixels);
+      !written) {
+      std::println(stderr, "{}", written.error().message());
+      return 1;
+    }
+    std::println("Saved {}", output);
+    return 0;
+  }
   if (auto result = renderer->draw(camera); !result) {
     std::println(stderr, "{}", result.error().message());
     return 1;

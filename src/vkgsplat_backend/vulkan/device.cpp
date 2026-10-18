@@ -166,6 +166,50 @@ namespace {
       static_cast<unsigned>(context.present_stage_queries));
   }
 
+  auto InitializeDeviceContext(vulkan::Context &context, vkb::Device const &device) -> std::expected<void, Error>
+  {
+    context.device = device;
+    context.disp = context.device.make_table();
+
+    VkPhysicalDeviceSubgroupProperties subgroup_props{};
+    subgroup_props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES;
+    VkPhysicalDeviceProperties2 props2 = {
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+      .pNext = &subgroup_props,
+      .properties = {},
+    };
+    context.inst_disp.getPhysicalDeviceProperties2(context.device.physical_device, &props2);
+    std::println("Subgroup size={} operations={:#x} (radix sort needs arithmetic)",
+      subgroup_props.subgroupSize,
+      static_cast<unsigned>(subgroup_props.supportedOperations));
+
+    // NOLINTBEGIN(cppcoreguidelines-pro-type-reinterpret-cast)
+    context.set_swapchain_present_timing_queue_size = reinterpret_cast<PFN_vkSetSwapchainPresentTimingQueueSizeEXT>(
+      vkGetDeviceProcAddr(context.device, "vkSetSwapchainPresentTimingQueueSizeEXT"));
+    context.get_swapchain_timing_properties = reinterpret_cast<PFN_vkGetSwapchainTimingPropertiesEXT>(
+      vkGetDeviceProcAddr(context.device, "vkGetSwapchainTimingPropertiesEXT"));
+    context.get_swapchain_time_domain_properties = reinterpret_cast<PFN_vkGetSwapchainTimeDomainPropertiesEXT>(
+      vkGetDeviceProcAddr(context.device, "vkGetSwapchainTimeDomainPropertiesEXT"));
+    context.get_past_presentation_timing = reinterpret_cast<PFN_vkGetPastPresentationTimingEXT>(
+      vkGetDeviceProcAddr(context.device, "vkGetPastPresentationTimingEXT"));
+    // NOLINTEND(cppcoreguidelines-pro-type-reinterpret-cast)
+
+    if (context.present_timing_enabled
+        && (context.set_swapchain_present_timing_queue_size == nullptr
+            || context.get_swapchain_timing_properties == nullptr
+            || context.get_swapchain_time_domain_properties == nullptr
+            || context.get_past_presentation_timing == nullptr)) {
+      std::println(stderr, "[present-timing] entry points unavailable; --frame-rate ignored");
+      context.present_timing_enabled = false;
+      context.present_id2_enabled = false;
+      context.present_at_absolute_time = false;
+      context.present_at_relative_time = false;
+      context.present_stage_queries = 0;
+    }
+
+    return {};
+  }
+
 }// namespace
 
 auto DeviceInitialization(vulkan::Context &context, DriverConfig const &config) -> std::expected<void, Error>
@@ -177,18 +221,19 @@ auto DeviceInitialization(vulkan::Context &context, DriverConfig const &config) 
   auto const requirements = vulkan::MakeVkexecRequirements();
 
   bool const headless = context.platform->surface_mode() == SurfaceMode::kHeadless;
+  bool const offscreen = context.platform->surface_mode() == SurfaceMode::kOffscreen;
   if (headless) {
     if (auto checked = CheckHeadlessExtension(); !checked) { return std::unexpected(checked.error()); }
   }
 
   vkb::InstanceBuilder instance_builder;
   instance_builder.require_api_version(requirements.api_version_major, requirements.api_version_minor, 0);
+  if (headless || offscreen) { instance_builder.set_headless(true); }
   if (headless) {
-    instance_builder.set_headless(true);
     instance_builder.enable_extension(VK_KHR_SURFACE_EXTENSION_NAME);
     instance_builder.enable_extension(VK_EXT_HEADLESS_SURFACE_EXTENSION_NAME);
   }
-  if (config.request_present_timing) {
+  if (config.request_present_timing && !offscreen) {
     // Required to query present-timing / present-id2 surface capabilities.
     instance_builder.enable_extension(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME);
   }
@@ -203,13 +248,15 @@ auto DeviceInitialization(vulkan::Context &context, DriverConfig const &config) 
       context.instance = instance;
       context.inst_disp = context.instance.make_table();
 
-      auto surface = vulkan::CreateSurface(context.instance, *context.platform);
-      if (!surface) { return std::unexpected{ surface.error() }; }
-      context.surface = *surface;
+      if (!offscreen) {
+        auto surface = vulkan::CreateSurface(context.instance, *context.platform);
+        if (!surface) { return std::unexpected{ surface.error() }; }
+        context.surface = *surface;
+      }
 
       vkb::PhysicalDeviceSelector phys_device_selector(context.instance);
-      phys_device_selector.set_surface(context.surface);
-      phys_device_selector.require_present(true);
+      if (!offscreen) { phys_device_selector.set_surface(context.surface); }
+      phys_device_selector.require_present(!offscreen);
       phys_device_selector.set_minimum_version(requirements.api_version_major, requirements.api_version_minor);
       for (char const *extension : requirements.device_extensions) {
         phys_device_selector.add_required_extension(extension);
@@ -241,52 +288,13 @@ auto DeviceInitialization(vulkan::Context &context, DriverConfig const &config) 
       return VKBResultToExpected(phys_device_selector.select());
     })
     .and_then([&](vkb::PhysicalDevice physical_device) -> std::expected<vkb::Device, Error> {
-      if (config.request_present_timing) { TryEnablePresentTiming(context, physical_device); }
+      if (config.request_present_timing && !offscreen) { TryEnablePresentTiming(context, physical_device); }
 
       vkb::DeviceBuilder const device_builder{ physical_device };
       return VKBResultToExpected(device_builder.build());
     })
     .and_then([&](vkb::Device const &device) -> std::expected<void, Error> {
-      context.device = device;
-      context.disp = context.device.make_table();
-
-      VkPhysicalDeviceSubgroupProperties subgroup_props{};
-      subgroup_props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES;
-      VkPhysicalDeviceProperties2 props2 = {
-        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
-        .pNext = &subgroup_props,
-        .properties = {},
-      };
-      context.inst_disp.getPhysicalDeviceProperties2(context.device.physical_device, &props2);
-      std::println("Subgroup size={} operations={:#x} (radix sort needs arithmetic)",
-        subgroup_props.subgroupSize,
-        static_cast<unsigned>(subgroup_props.supportedOperations));
-
-      // NOLINTBEGIN(cppcoreguidelines-pro-type-reinterpret-cast)
-      context.set_swapchain_present_timing_queue_size = reinterpret_cast<PFN_vkSetSwapchainPresentTimingQueueSizeEXT>(
-        vkGetDeviceProcAddr(context.device, "vkSetSwapchainPresentTimingQueueSizeEXT"));
-      context.get_swapchain_timing_properties = reinterpret_cast<PFN_vkGetSwapchainTimingPropertiesEXT>(
-        vkGetDeviceProcAddr(context.device, "vkGetSwapchainTimingPropertiesEXT"));
-      context.get_swapchain_time_domain_properties = reinterpret_cast<PFN_vkGetSwapchainTimeDomainPropertiesEXT>(
-        vkGetDeviceProcAddr(context.device, "vkGetSwapchainTimeDomainPropertiesEXT"));
-      context.get_past_presentation_timing = reinterpret_cast<PFN_vkGetPastPresentationTimingEXT>(
-        vkGetDeviceProcAddr(context.device, "vkGetPastPresentationTimingEXT"));
-      // NOLINTEND(cppcoreguidelines-pro-type-reinterpret-cast)
-
-      if (context.present_timing_enabled
-          && (context.set_swapchain_present_timing_queue_size == nullptr
-              || context.get_swapchain_timing_properties == nullptr
-              || context.get_swapchain_time_domain_properties == nullptr
-              || context.get_past_presentation_timing == nullptr)) {
-        std::println(stderr, "[present-timing] entry points unavailable; --frame-rate ignored");
-        context.present_timing_enabled = false;
-        context.present_id2_enabled = false;
-        context.present_at_absolute_time = false;
-        context.present_at_relative_time = false;
-        context.present_stage_queries = 0;
-      }
-
-      return {};
+      return InitializeDeviceContext(context, device);
     });
 }
 

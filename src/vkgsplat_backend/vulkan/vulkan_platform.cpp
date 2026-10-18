@@ -44,6 +44,8 @@ auto CreateSurface(VkInstance instance, Platform const &platform) -> std::expect
     return CreateSurfaceFromNativeWindow(instance, platform.native_window());
   case SurfaceMode::kHeadless:
     return CreateHeadlessSurface(instance);
+  case SurfaceMode::kOffscreen:
+    return std::unexpected{ MakeError(std::errc::operation_not_supported, "offscreen rendering has no surface") };
   }
   return std::unexpected{ MakeError(std::errc::invalid_argument, "Unknown Vulkan surface mode") };
 }

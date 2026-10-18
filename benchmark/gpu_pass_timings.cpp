@@ -11,7 +11,7 @@
 #include <vkgsplat/renderer.hpp>
 #include <vkgsplat_utility/types.hpp>
 
-#include <benchmark/benchmark.h> // NOLINT(misc-include-cleaner)
+#include <benchmark/benchmark.h>// NOLINT(misc-include-cleaner)
 
 #include <array>
 #include <atomic>
@@ -138,12 +138,8 @@ auto RegisterGpuPassTimings(Platform &platform,
       }
       PublishStatistics(state, statistics);
     });
-  registered->ArgName("batch")
-    ->Arg(static_cast<std::int64_t>(kBatchFrames))
-    ->Arg(static_cast<std::int64_t>(kBatchFrames * 2U))
-    ->Arg(static_cast<std::int64_t>(kBatchFrames * 4U))
-    ->UseManualTime()
-    ->Unit(::benchmark::kMillisecond);
+  registered->ArgName("batch")->UseManualTime()->Unit(::benchmark::kMillisecond);
+  for (auto const batch_frames : kBatchFrameCounts) { registered->Arg(static_cast<std::int64_t>(batch_frames)); }
 }
 // NOLINTEND(misc-include-cleaner)
 

@@ -67,12 +67,13 @@ namespace {
     data.raster_push.tile_offset = { tile.origin_x, tile.origin_y };
   }
 
-  [[nodiscard]] auto RecordEmulatedView(vulkan::Context &context, RenderData &data, VkCommandBuffer command_buffer)
-    -> std::expected<void, Error>
+  [[nodiscard]] auto RecordEmulatedView(vulkan::Context const &context,
+    RenderData &data,
+    VkCommandBuffer command_buffer) -> std::expected<void, Error>
   {
     FrameSetup const &setup = FrameSetupFor(data, data.current_slot);
-    u32 const tile_w = context.swapchain->vk_extent().width;
-    u32 const tile_h = context.swapchain->vk_extent().height;
+    u32 const tile_w = data.output_extent.width;
+    u32 const tile_h = data.output_extent.height;
     f64 const tile_aspect = static_cast<f64>(tile_w) / static_cast<f64>(std::max(1U, tile_h));
     LfdGridCell const logical = LfdLogicalCellForGridPosition(
       data.lfd_view_order, data.lfd_grid, data.lfd_emulate_cell.at(0), data.lfd_emulate_cell.at(1));
@@ -255,15 +256,11 @@ namespace {
     FrameSetup const &setup = FrameSetupFor(data, data.current_slot);
     u32 const cols = std::max(1U, data.lfd_grid.at(0));
     u32 const rows = std::max(1U, data.lfd_grid.at(1));
-    u32 const tile_w =
-      data.quilt_tile_extent.width != 0U ? data.quilt_tile_extent.width : context.swapchain->vk_extent().width;
-    u32 const tile_h =
-      data.quilt_tile_extent.height != 0U ? data.quilt_tile_extent.height : context.swapchain->vk_extent().height;
+    u32 const tile_w = data.quilt_tile_extent.width != 0U ? data.quilt_tile_extent.width : data.output_extent.width;
+    u32 const tile_h = data.quilt_tile_extent.height != 0U ? data.quilt_tile_extent.height : data.output_extent.height;
     f64 const tile_aspect = static_cast<f64>(tile_w) / static_cast<f64>(std::max(1U, tile_h));
 
-    if (auto recorded = PrepareQuiltPresent(context, data, command_buffer, data.present_image_index); !recorded) {
-      return recorded;
-    }
+    if (auto recorded = BeginColorTargetFrame(context, data, command_buffer); !recorded) { return recorded; }
     u32 const view_count = cols * rows;
     u32 const batch_size = data.project_batch_algorithm ? data.lfd_projection_batch_size : 1U;
     for (u32 begin = 0U; begin < view_count; begin += batch_size) {
@@ -281,6 +278,7 @@ namespace {
         return recorded;
       }
     }
+    if (auto finished = FinishColorTargetFrame(context, data, command_buffer); !finished) { return finished; }
     return BlitQuiltToSwapchain(context, data, command_buffer, data.present_image_index);
   }
 

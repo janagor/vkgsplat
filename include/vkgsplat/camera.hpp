@@ -51,7 +51,7 @@ struct CameraConfig
   glm::dvec3 target{ kDefaultCameraTarget };
   glm::dvec3 up{ kDefaultCameraUp };
 
-  /// Intrinsics. Windowed rendering overrides the aspect from the swapchain.
+  /// Intrinsics. Rendering overrides the aspect from the selected output extent.
   f64 fov_degrees{ kCameraDefaultFovDegrees };
   f64 aspect_ratio{ kCameraDefaultAspectRatio };
   f64 near_plane{ kCameraDefaultNearPlane };

@@ -14,6 +14,13 @@ set(render_arguments
     720
     --output
     "${OUTPUT}")
+if(DEFINED TARGET_MODE)
+  list(
+    APPEND
+    render_arguments
+    --target
+    "${TARGET_MODE}")
+endif()
 if(VALIDATION)
   list(APPEND render_arguments --validation)
 endif()

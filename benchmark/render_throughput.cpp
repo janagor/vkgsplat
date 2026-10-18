@@ -9,7 +9,7 @@
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
 
-#include <benchmark/benchmark.h> // NOLINT(misc-include-cleaner)
+#include <benchmark/benchmark.h>// NOLINT(misc-include-cleaner)
 
 #include <atomic>
 #include <cstdint>
@@ -73,12 +73,8 @@ auto RegisterRenderThroughput(Platform &platform,
       state.SetItemsProcessed(static_cast<std::int64_t>(frames));
       state.counters["fps"] = ::benchmark::Counter(static_cast<double>(frames), ::benchmark::Counter::kIsRate);
     });
-  registered->ArgName("batch")
-    ->Arg(static_cast<std::int64_t>(kBatchFrames))
-    ->Arg(static_cast<std::int64_t>(kBatchFrames * 2U))
-    ->Arg(static_cast<std::int64_t>(kBatchFrames * 4U))
-    ->UseRealTime()
-    ->Unit(::benchmark::kMillisecond);
+  registered->ArgName("batch")->UseRealTime()->Unit(::benchmark::kMillisecond);
+  for (auto const batch_frames : kBatchFrameCounts) { registered->Arg(static_cast<std::int64_t>(batch_frames)); }
 }
 // NOLINTEND(misc-include-cleaner)
 

@@ -1,5 +1,6 @@
 #include <vkgsplat/platform.hpp>
 #include <vkgsplat_headless/headless_platform.hpp>
+#include <vkgsplat_headless/offscreen_platform.hpp>
 #include <vkgsplat_utility/types.hpp>
 
 #include <catch2/catch_test_macros.hpp>
@@ -33,6 +34,24 @@ TEST_CASE("headless platform rejects zero dimensions", "[headless]")
   REQUIRE_FALSE(zero_height.has_value());
   REQUIRE(zero_width.error().code() == std::errc::invalid_argument);
   REQUIRE(zero_height.error().code() == std::errc::invalid_argument);
+}
+
+TEST_CASE("offscreen platform has a fixed extent and no window", "[offscreen]")
+{
+  auto platform = vkgsplat::OffscreenPlatform::create({ .width = kTestWidth, .height = kTestHeight });
+  REQUIRE(platform.has_value());
+  REQUIRE(platform->surface_mode() == vkgsplat::SurfaceMode::kOffscreen);
+  REQUIRE(platform->native_window() == nullptr);
+  REQUIRE(platform->framebuffer_extent().width == kTestWidth);
+  REQUIRE(platform->framebuffer_extent().height == kTestHeight);
+  platform->poll_events();
+  REQUIRE_FALSE(platform->should_close());
+}
+
+TEST_CASE("offscreen platform rejects zero dimensions", "[offscreen]")
+{
+  REQUIRE_FALSE(vkgsplat::OffscreenPlatform::create({ .width = 0U, .height = kTestHeight }));
+  REQUIRE_FALSE(vkgsplat::OffscreenPlatform::create({ .width = kTestWidth, .height = 0U }));
 }
 
 TEST_CASE("platform defaults to windowed mode", "[headless]")

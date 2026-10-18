@@ -3,18 +3,19 @@
 #include "app_state.hpp"
 #include "vulkan/gpu_buffers.hpp"
 #include "vulkan_context.hpp"
-#include <vkgsplat_io/write_png.hpp>
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <limits>
 #include <optional>
 #include <span>
-#include <string_view>
 #include <system_error>
 #include <utility>
+#include <vector>
 
+#include <vkgsplat/renderer.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
 
@@ -34,9 +35,21 @@ namespace {
     }
   }
 
+  [[nodiscard]] auto WaitForPriorFrames(RenderData &data) -> std::expected<void, Error>
+  {
+    if (!data.frame_ring.has_value()) { return {}; }
+    auto &ring = *data.frame_ring;
+    for (std::size_t slot = 0; slot < ring.slot_count(); ++slot) {
+      if (auto waited = ring.wait_slot(slot); !waited) {
+        return std::unexpected{ MakeError(std::errc::io_error, waited.error().message()) };
+      }
+    }
+    return {};
+  }
+
 }// namespace
 
-auto SaveColorTargetPng(Context &context, RenderData &data, std::string_view path) -> std::expected<void, Error>
+auto ReadColorTargetRgba8(Context &context, RenderData &data) -> std::expected<RgbaFrame, Error>
 {
   if (!data.color_image.has_value() || data.color_width == 0 || data.color_height == 0) {
     return std::unexpected{ MakeError(std::errc::invalid_argument, "no color target available for screenshot") };
@@ -53,19 +66,13 @@ auto SaveColorTargetPng(Context &context, RenderData &data, std::string_view pat
   if (context.allocator == nullptr) {
     return std::unexpected{ MakeError(std::errc::state_not_recoverable, "VMA allocator missing for screenshot") };
   }
-  if (!data.frame_ring.has_value()) {
-    return std::unexpected{ MakeError(std::errc::state_not_recoverable, "frame_ring missing for screenshot") };
-  }
-
-  auto &ring = *data.frame_ring;
-  for (std::size_t slot = 0; slot < ring.slot_count(); ++slot) {
-    if (auto waited = ring.wait_slot(slot); !waited) {
-      return std::unexpected{ MakeError(std::errc::io_error, waited.error().message()) };
-    }
-  }
+  if (auto waited = WaitForPriorFrames(data); !waited) { return std::unexpected{ waited.error() }; }
 
   constexpr u32 kChannels = 4;
-  auto const byte_size = static_cast<VkDeviceSize>(data.color_width) * data.color_height * kChannels;
+  if (data.color_width > std::numeric_limits<size_t>::max() / kChannels / data.color_height) {
+    return std::unexpected{ MakeError(std::errc::value_too_large, "color target byte size overflows") };
+  }
+  auto const byte_size = static_cast<size_t>(data.color_width) * data.color_height * kChannels;
   auto staging_created = CreateStagingBuffer(*context.allocator, byte_size);
   if (!staging_created) { return std::unexpected{ staging_created.error() }; }
   auto staging = std::optional<vulkan::GpuBuffer>{ std::move(*staging_created) };
@@ -74,7 +81,7 @@ auto SaveColorTargetPng(Context &context, RenderData &data, std::string_view pat
   if (!buffers) { return std::unexpected{ buffers.error() }; }
   VkCommandBuffer cmd = buffers->front().handle();
 
-  auto fail = [&](Error err) -> std::expected<void, Error> {
+  auto fail = [&](Error err) -> std::expected<RgbaFrame, Error> {
     FreeCmd(context, data, cmd);
     staging.reset();
     return std::unexpected{ std::move(err) };
@@ -91,7 +98,7 @@ auto SaveColorTargetPng(Context &context, RenderData &data, std::string_view pat
   }
 
   // After a normal frame the color target is already TRANSFER_SRC_OPTIMAL.
-  (void)vkexec::image_barrier(*context.vkexec_context,
+  auto barrier = vkexec::image_barrier(*context.vkexec_context,
     cmd,
     {
       .image = data.color_image->handle(),
@@ -102,6 +109,7 @@ auto SaveColorTargetPng(Context &context, RenderData &data, std::string_view pat
       .src_access = VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
       .dst_access = VK_ACCESS_TRANSFER_READ_BIT,
     });
+  if (!barrier) { return fail(MakeError(std::errc::io_error, barrier.error().message())); }
 
   VkBufferImageCopy const region{
     .bufferOffset = 0,
@@ -124,9 +132,14 @@ auto SaveColorTargetPng(Context &context, RenderData &data, std::string_view pat
     return fail(MakeError(std::errc::io_error, "failed to end screenshot command buffer"));
   }
 
-  auto const signal_value = ring.allocate_signal_value();
+  auto *const timeline = data.frame_ring.has_value() ? data.frame_ring->timeline().handle() : data.offscreen_timeline;
+  if (timeline == VK_NULL_HANDLE) {
+    return fail(MakeError(std::errc::state_not_recoverable, "readback timeline is missing"));
+  }
+  u64 const signal_value =
+    data.frame_ring.has_value() ? data.frame_ring->allocate_signal_value() : ++data.offscreen_signal_value;
   std::array<vkexec::semaphore_submit, 1> const signals{ vkexec::semaphore_submit{
-    .semaphore = ring.timeline().handle(),
+    .semaphore = timeline,
     .value = signal_value,
     .stage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
   } };
@@ -137,10 +150,24 @@ auto SaveColorTargetPng(Context &context, RenderData &data, std::string_view pat
         .queue = data.graphics_queue,
       });
     !submitted) {
+    if (!data.frame_ring.has_value()) { --data.offscreen_signal_value; }
     return fail(MakeError(std::errc::io_error, submitted.error().message()));
   }
-  if (auto waited = ring.timeline().wait(signal_value); !waited) {
-    return fail(MakeError(std::errc::io_error, waited.error().message()));
+  VkSemaphoreWaitInfo const wait_info{
+    .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
+    .pNext = nullptr,
+    .flags = 0U,
+    .semaphoreCount = 1U,
+    .pSemaphores = &timeline,
+    .pValues = &signal_value,
+  };
+  if (context.disp.waitSemaphores(&wait_info, UINT64_MAX) != VK_SUCCESS) {
+    if (context.disp.deviceWaitIdle() != VK_SUCCESS) {
+      // Keep the staging allocation and command buffer alive until renderer teardown.
+      data.in_flight_readbacks.push_back(std::move(*staging));
+      return std::unexpected{ MakeError(std::errc::io_error, "failed to wait for color target readback") };
+    }
+    return fail(MakeError(std::errc::io_error, "failed to wait for color target readback"));
   }
 
   FreeCmd(context, data, cmd);
@@ -159,9 +186,11 @@ auto SaveColorTargetPng(Context &context, RenderData &data, std::string_view pat
     reinterpret_cast<std::uint8_t const *>(mapped.data()),
     static_cast<std::size_t>(byte_size),
   };
-  auto const written = WritePng(path, data.color_width, data.color_height, kChannels, pixels);
+  RgbaFrame frame{ .width = data.color_width,
+    .height = data.color_height,
+    .pixels = std::vector<std::uint8_t>{ pixels.begin(), pixels.end() } };
   staging.reset();
-  return written;
+  return frame;
 }
 
 }// namespace vkgsplat::vulkan

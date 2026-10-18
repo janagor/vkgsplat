@@ -17,18 +17,21 @@ namespace vkgsplat::gs {
 
 [[nodiscard]] auto RecreateRasterizationColorTarget(vulkan::Context &context, RenderData &data) -> bool;
 
-// Mono path: clear color target, draw full extent, blit to swapchain.
+// Mono path: clear and draw the color target, then blit when presenting.
 [[nodiscard]] auto DispatchRasterization(vulkan::Context const &context,
   RenderData const &data,
   RasterPushConstants const &push_constants,
   VkCommandBuffer command_buffer,
   size_t image_index) -> std::expected<void, Error>;
 
-// Quilt path helpers (atlas RT). Call Prepare once, DrawTile per cell, then Blit.
-[[nodiscard]] auto PrepareQuiltPresent(vulkan::Context const &context,
+// Begin and finish the color target once around all atlas tiles.
+[[nodiscard]] auto BeginColorTargetFrame(vulkan::Context const &context,
   RenderData const &data,
-  VkCommandBuffer command_buffer,
-  size_t image_index) -> std::expected<void, Error>;
+  VkCommandBuffer command_buffer) -> std::expected<void, Error>;
+
+[[nodiscard]] auto FinishColorTargetFrame(vulkan::Context const &context,
+  RenderData const &data,
+  VkCommandBuffer command_buffer) -> std::expected<void, Error>;
 
 [[nodiscard]] auto DrawQuiltTile(vulkan::Context const &context,
   RenderData const &data,

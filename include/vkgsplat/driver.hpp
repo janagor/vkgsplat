@@ -35,6 +35,7 @@ public:
 
   /** Create or replace the presentation target for `platform` and `extent`. */
   [[nodiscard]] virtual auto create_swapchain(Platform &platform, Extent2D extent) -> std::expected<void, Error> = 0;
+  /** Returns null when rendering directly to an offscreen color target. */
   [[nodiscard]] virtual auto swapchain() noexcept -> Swapchain * = 0;
   [[nodiscard]] virtual auto swapchain() const noexcept -> Swapchain const * = 0;
 

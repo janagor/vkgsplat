@@ -8,18 +8,29 @@
 #include <vkgsplat_utility/types.hpp>
 
 #include <array>
+#include <atomic>
 #include <barrier>
 #include <condition_variable>
+#include <cstdint>
 #include <expected>
 #include <mutex>
+#include <optional>
 #include <system_error>
 #include <thread>
+#include <vector>
 
 namespace {
 
 inline constexpr int kProducerCount = 2;
 inline constexpr int kFramesPerProducer = 100;
 inline constexpr int kInitialFrameCount = 1;
+inline constexpr vkgsplat::u32 kReadbackTestWidth = 1U;
+inline constexpr vkgsplat::u32 kReadbackTestHeight = 1U;
+inline constexpr std::uint8_t kReadbackRed = 17U;
+inline constexpr std::uint8_t kReadbackGreen = 34U;
+inline constexpr std::uint8_t kReadbackBlue = 51U;
+inline constexpr std::uint8_t kReadbackAlpha = 255U;
+inline constexpr vkgsplat::u64 kTwoFrameCount = 2U;
 
 struct FrameBarrier
 {
@@ -208,5 +219,139 @@ TEST_CASE("shutdown during an idle command terminates the worker and fails the i
   stopper.join();
   REQUIRE(stop_completed);
   REQUIRE_FALSE(idle_succeeded);
+}
+
+TEST_CASE("CPU-only worker rejects GPU readback without a callback", "[render]")
+{
+  vkgsplat::RenderThread worker;
+  worker.StartForTest(
+    vkgsplat::FrameSubmissionPolicy::kLossless, []() -> std::expected<void, vkgsplat::Error> { return {}; });
+  vkgsplat::Camera const camera{ vkgsplat::CameraConfig{} };
+  REQUIRE(worker.SubmitFrame(camera, camera.aspect_ratio()));
+  REQUIRE(worker.WaitIdle());
+  auto frame = worker.ReadLatestFrame();
+  REQUIRE_FALSE(frame);
+  REQUIRE(frame.error().code() == std::errc::operation_not_supported);
+  worker.Stop();
+}
+
+TEST_CASE("readback rejects an invalidated color target", "[render]")
+{
+  vkgsplat::RenderThread worker;
+  worker.StartForTest(
+    vkgsplat::FrameSubmissionPolicy::kLossless,
+    []() -> std::expected<void, vkgsplat::Error> { return {}; },
+    {},
+    []() -> std::expected<vkgsplat::RgbaFrame, vkgsplat::Error> {
+      return vkgsplat::RgbaFrame{ .width = kReadbackTestWidth,
+        .height = kReadbackTestHeight,
+        .pixels = { kReadbackRed, kReadbackGreen, kReadbackBlue, kReadbackAlpha } };
+    });
+  vkgsplat::Camera const camera{ vkgsplat::CameraConfig{} };
+  REQUIRE(worker.SubmitFrame(camera, camera.aspect_ratio()));
+  REQUIRE(worker.WaitIdle());
+  REQUIRE(worker.ReadLatestFrame());
+  worker.InvalidateColorTarget();
+  auto stale = worker.ReadLatestFrame();
+  REQUIRE_FALSE(stale);
+  REQUIRE(stale.error().code() == std::errc::invalid_argument);
+  worker.Stop();
+}
+
+TEST_CASE("readback blocks new submissions until its worker operation completes", "[render]")
+{
+  FrameBarrier draw_barrier;
+  FrameBarrier readback_barrier;
+  std::atomic<int> draw_count{ 0 };
+  vkgsplat::RenderThread worker;
+  worker.StartForTest(
+    vkgsplat::FrameSubmissionPolicy::kLossless,
+    [&]() -> std::expected<void, vkgsplat::Error> {
+      if (draw_count.fetch_add(1) == 0) { draw_barrier.Wait(); }
+      return {};
+    },
+    {},
+    [&]() -> std::expected<vkgsplat::RgbaFrame, vkgsplat::Error> {
+      readback_barrier.Wait();
+      return vkgsplat::RgbaFrame{ .width = kReadbackTestWidth,
+        .height = kReadbackTestHeight,
+        .pixels = { kReadbackRed, kReadbackGreen, kReadbackBlue, kReadbackAlpha } };
+    });
+  vkgsplat::Camera const camera{ vkgsplat::CameraConfig{} };
+  REQUIRE(worker.SubmitFrame(camera, camera.aspect_ratio()));
+  draw_barrier.WaitUntilEntered();
+
+  std::optional<std::expected<vkgsplat::RgbaFrame, vkgsplat::Error>> readback_result;
+  std::jthread reader{ [&]() -> void { readback_result = worker.ReadLatestFrame(); } };
+  worker.WaitForReadbackPendingForTest();
+  std::atomic<bool> producer_finished{ false };
+  bool producer_succeeded = false;
+  std::jthread producer{ [&]() -> void {
+    producer_succeeded = worker.SubmitFrame(camera, camera.aspect_ratio()).has_value();
+    producer_finished.store(true);
+  } };
+  worker.WaitForBlockedProducerCountForTest(1U);
+  draw_barrier.Release();
+  readback_barrier.WaitUntilEntered();
+  CHECK_FALSE(producer_finished.load());
+  readback_barrier.Release();
+  reader.join();
+  producer.join();
+
+  REQUIRE(readback_result.has_value());
+  // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
+  REQUIRE(readback_result->has_value());
+  std::vector<std::uint8_t> const expected_pixels{ kReadbackRed, kReadbackGreen, kReadbackBlue, kReadbackAlpha };
+  // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
+  REQUIRE(readback_result->value().pixels == expected_pixels);
+  REQUIRE(producer_succeeded);
+  REQUIRE(worker.WaitIdle());
+  REQUIRE(worker.CompletedFrameCount() == kTwoFrameCount);
+  worker.Stop();
+}
+
+TEST_CASE("exclusive reconfiguration blocks submissions until the worker completes it", "[render]")
+{
+  FrameBarrier draw_barrier;
+  FrameBarrier exclusive_barrier;
+  std::atomic<int> draw_count{ 0 };
+  vkgsplat::RenderThread worker;
+  worker.StartForTest(vkgsplat::FrameSubmissionPolicy::kLossless, [&]() -> std::expected<void, vkgsplat::Error> {
+    if (draw_count.fetch_add(1) == 0) { draw_barrier.Wait(); }
+    return {};
+  });
+  vkgsplat::Camera const camera{ vkgsplat::CameraConfig{} };
+  REQUIRE(worker.SubmitFrame(camera, camera.aspect_ratio()));
+  draw_barrier.WaitUntilEntered();
+
+  std::optional<std::expected<void, vkgsplat::Error>> exclusive_result;
+  std::jthread reconfiguration{ [&]() -> void {
+    exclusive_result = worker.RunExclusive([&]() -> std::expected<void, vkgsplat::Error> {
+      exclusive_barrier.Wait();
+      return {};
+    });
+  } };
+  worker.WaitForExclusivePendingForTest();
+  std::atomic<bool> producer_finished{ false };
+  bool producer_succeeded = false;
+  std::jthread producer{ [&]() -> void {
+    producer_succeeded = worker.SubmitFrame(camera, camera.aspect_ratio()).has_value();
+    producer_finished.store(true);
+  } };
+  worker.WaitForBlockedProducerCountForTest(1U);
+  draw_barrier.Release();
+  exclusive_barrier.WaitUntilEntered();
+  CHECK_FALSE(producer_finished.load());
+  exclusive_barrier.Release();
+  reconfiguration.join();
+  producer.join();
+
+  REQUIRE(exclusive_result.has_value());
+  // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
+  REQUIRE(exclusive_result->has_value());
+  REQUIRE(producer_succeeded);
+  REQUIRE(worker.WaitIdle());
+  REQUIRE(worker.CompletedFrameCount() == kTwoFrameCount);
+  worker.Stop();
 }
 // NOLINTEND(readability-function-cognitive-complexity)

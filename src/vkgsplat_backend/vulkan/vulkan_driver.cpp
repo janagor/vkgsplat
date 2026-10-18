@@ -36,9 +36,14 @@ namespace {
         std::make_error_code(std::errc::function_not_supported), "graphics queue unavailable for vkexec adopt" } };
     }
 
-    auto present = context.device.get_queue_and_index(vkb::QueueType::present);
-    VkQueue present_queue = present ? present->first : graphics->first;
-    std::uint32_t present_family = present ? present->second : graphics->second;
+    VkQueue present_queue = graphics->first;
+    std::uint32_t present_family = graphics->second;
+    if (context.platform->surface_mode() != SurfaceMode::kOffscreen) {
+      if (auto present = context.device.get_queue_and_index(vkb::QueueType::present)) {
+        present_queue = present->first;
+        present_family = present->second;
+      }
+    }
 
     // Prefer a dedicated compute queue when present; otherwise graphics (compute-capable).
     VkQueue compute_queue = graphics->first;
@@ -121,6 +126,12 @@ auto VulkanDriver::create(Platform &platform, DriverConfig const &config)
 
   if (auto adopted = AdoptVkexecContext(driver->context_); !adopted) { return std::unexpected(adopted.error()); }
 
+  if (platform.surface_mode() == SurfaceMode::kOffscreen) {
+    driver->context_.surface = VK_NULL_HANDLE;
+    driver->context_.swapchain.reset();
+    return driver;
+  }
+
   if (auto created = driver->create_swapchain(platform, platform.framebuffer_extent()); !created) {
     if (platform.surface_mode() == SurfaceMode::kHeadless) {
       return std::unexpected(
@@ -143,6 +154,9 @@ auto VulkanDriver::create(Platform &platform, DriverConfig const &config)
 
 auto VulkanDriver::create_swapchain(Platform &platform, Extent2D extent) -> std::expected<void, Error>
 {
+  if (context_.platform->surface_mode() == SurfaceMode::kOffscreen) {
+    return std::unexpected{ MakeError(std::errc::operation_not_supported, "offscreen rendering has no swapchain") };
+  }
   (void)platform;
   SwapchainCreateOptions const options{ .enable_present_timing = context_.present_timing_enabled,
     .enable_present_id2 = context_.present_id2_enabled };

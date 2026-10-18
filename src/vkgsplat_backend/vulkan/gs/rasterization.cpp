@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <cstring>
 #include <expected>
+#include <limits>
 #include <print>
 #include <system_error>
 #include <utility>
@@ -52,8 +53,8 @@ namespace {
     u32 const cols = data.lfd_emulate_active ? 1U : std::max(1U, data.lfd_grid.at(0));
     u32 const rows = data.lfd_emulate_active ? 1U : std::max(1U, data.lfd_grid.at(1));
     bool const use_quilt_size = !data.lfd_emulate_active && data.quilt_size.at(0) != 0U;
-    u32 const tile_w = use_quilt_size ? data.quilt_size.at(0) / cols : context.swapchain->vk_extent().width;
-    u32 const tile_h = use_quilt_size ? data.quilt_size.at(1) / rows : context.swapchain->vk_extent().height;
+    u32 const tile_w = use_quilt_size ? data.quilt_size.at(0) / cols : data.output_extent.width;
+    u32 const tile_h = use_quilt_size ? data.quilt_size.at(1) / rows : data.output_extent.height;
     if (tile_w == 0 || tile_h == 0) {
       std::println("Rasterize requires a non-zero quilt tile extent!");
       return false;
@@ -64,6 +65,11 @@ namespace {
     u32 const max_dim = context.device.physical_device.properties.limits.maxImageDimension2D;
     if (atlas_w == 0 || atlas_h == 0 || atlas_w > max_dim || atlas_h > max_dim) {
       std::println("LFD atlas {}x{} exceeds device maxImageDimension2D ({})!", atlas_w, atlas_h, max_dim);
+      return false;
+    }
+    constexpr u64 kRgbaChannels = 4U;
+    if (atlas_w > std::numeric_limits<size_t>::max() / kRgbaChannels / atlas_h) {
+      std::println("LFD atlas byte size exceeds addressable memory!");
       return false;
     }
 
@@ -167,10 +173,8 @@ auto InitRasterization(vulkan::Context &context, RenderData &data) -> bool { ret
 auto RecreateRasterizationColorTarget(vulkan::Context &context, RenderData &data) -> bool
 { return CreateColorTarget(context, data); }
 
-auto PrepareQuiltPresent(vulkan::Context const &context,
-  RenderData const &data,
-  VkCommandBuffer command_buffer,
-  size_t image_index) -> std::expected<void, Error>
+auto BeginColorTargetFrame(vulkan::Context const &context, RenderData const &data, VkCommandBuffer command_buffer)
+  -> std::expected<void, Error>
 {
   if (!data.color_image.has_value()) {
     return std::unexpected{ MakeError(std::errc::state_not_recoverable, "raster color image is missing") };
@@ -188,20 +192,6 @@ auto PrepareQuiltPresent(vulkan::Context const &context,
       .dst_access = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
     });
   if (!color_barrier) { return std::unexpected{ MakeError(std::errc::io_error, color_barrier.error().message()) }; }
-  auto swapchain_barrier = vkexec::image_barrier(*context.vkexec_context,
-    command_buffer,
-    {
-      .image = context.swapchain->images().at(image_index),
-      .old_layout = VK_IMAGE_LAYOUT_UNDEFINED,
-      .new_layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-      .src_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-      .dst_stage = VK_PIPELINE_STAGE_TRANSFER_BIT,
-      .src_access = 0,
-      .dst_access = VK_ACCESS_TRANSFER_WRITE_BIT,
-    });
-  if (!swapchain_barrier) {
-    return std::unexpected{ MakeError(std::errc::io_error, swapchain_barrier.error().message()) };
-  }
   return {};
 }
 
@@ -254,10 +244,8 @@ auto DrawQuiltTile(vulkan::Context const &context,
   return {};
 }
 
-auto BlitQuiltToSwapchain(vulkan::Context const &context,
-  RenderData const &data,
-  VkCommandBuffer command_buffer,
-  size_t image_index) -> std::expected<void, Error>
+auto FinishColorTargetFrame(vulkan::Context const &context, RenderData const &data, VkCommandBuffer command_buffer)
+  -> std::expected<void, Error>
 {
   if (!data.color_image.has_value()) {
     return std::unexpected{ MakeError(std::errc::state_not_recoverable, "raster color image is missing") };
@@ -275,6 +263,32 @@ auto BlitQuiltToSwapchain(vulkan::Context const &context,
       .dst_access = VK_ACCESS_TRANSFER_READ_BIT,
     });
   if (!barrier) { return std::unexpected{ MakeError(std::errc::io_error, barrier.error().message()) }; }
+  return {};
+}
+
+auto BlitQuiltToSwapchain(vulkan::Context const &context,
+  RenderData const &data,
+  VkCommandBuffer command_buffer,
+  size_t image_index) -> std::expected<void, Error>
+{
+  if (context.swapchain == nullptr) { return {}; }
+  if (!data.color_image.has_value()) {
+    return std::unexpected{ MakeError(std::errc::state_not_recoverable, "color target is not initialized") };
+  }
+  auto swapchain_barrier = vkexec::image_barrier(*context.vkexec_context,
+    command_buffer,
+    {
+      .image = context.swapchain->images().at(image_index),
+      .old_layout = VK_IMAGE_LAYOUT_UNDEFINED,
+      .new_layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+      .src_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+      .dst_stage = VK_PIPELINE_STAGE_TRANSFER_BIT,
+      .src_access = 0,
+      .dst_access = VK_ACCESS_TRANSFER_WRITE_BIT,
+    });
+  if (!swapchain_barrier) {
+    return std::unexpected{ MakeError(std::errc::io_error, swapchain_barrier.error().message()) };
+  }
 
   VkImageBlit const blit = {
     .srcSubresource =
@@ -323,7 +337,7 @@ auto DispatchRasterization(vulkan::Context const &context,
   VkCommandBuffer command_buffer,
   size_t image_index) -> std::expected<void, Error>
 {
-  if (auto recorded = PrepareQuiltPresent(context, data, command_buffer, image_index); !recorded) { return recorded; }
+  if (auto recorded = BeginColorTargetFrame(context, data, command_buffer); !recorded) { return recorded; }
 
   VkExtent2D const extent = { .width = data.color_width, .height = data.color_height };
   VkRect2D const full_tile = {
@@ -334,6 +348,7 @@ auto DispatchRasterization(vulkan::Context const &context,
     return recorded;
   }
 
+  if (auto finished = FinishColorTargetFrame(context, data, command_buffer); !finished) { return finished; }
   return BlitQuiltToSwapchain(context, data, command_buffer, image_index);
 }
 

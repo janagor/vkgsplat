@@ -28,9 +28,9 @@ Run repeated measurements and write Google Benchmark JSON:
   --benchmark_out_format=json
 ```
 
-Each Google Benchmark iteration is a frame batch. The registered `batch` arguments are 64, 128, and 256 frames; 64 is the canonical baseline. Use `--benchmark_filter='batch:64'` to select it. `real_time` is wall-clock time per batch. `fps` and `items_per_second` count rendered frames per second. Each independent measurement invocation performs 64 warmup frames outside the timed loop. Scene loading, fixture verification, and renderer creation also happen before measurement. No per-frame device-idle wait is used; the device-idle wait at the end of each batch is part of the measured time.
+Each Google Benchmark iteration is a frame batch. The registered `batch` arguments are 1, 2, 4, 8, 16, 32, 64, and 128 frames; 64 is the canonical baseline. Use `--benchmark_filter='batch:64'` to select it. `real_time` is wall-clock time per batch. `fps` and `items_per_second` count rendered frames per second. Each independent measurement invocation performs 64 warmup frames outside the timed loop. Scene loading, fixture verification, and renderer creation also happen before measurement. No per-frame device-idle wait is used; the device-idle wait at the end of each batch is part of the measured time.
 
-The JSON context records the GPU name, Vulkan vendor/device IDs, raw driver and API versions, Git commit and dirty-working-tree status at configure time, build type, IPO setting, fixture checksum and seed, resolution, and render settings. The benchmark name records its batch argument. Git metadata is a configure-time snapshot: **reconfigure after any source change**, including uncommitted edits, before rebuilding and recording results. Compare results only with the same fixture, resolution, batch size, build settings, and comparable hardware. The 128 and 256 frame variants show how strongly the batch-end idle wait affects throughput.
+The JSON context records the GPU name, Vulkan vendor/device IDs, raw driver and API versions, Git commit and dirty-working-tree status at configure time, build type, IPO setting, fixture checksum and seed, resolution, and render settings. The benchmark name records its batch argument. Git metadata is a configure-time snapshot: **reconfigure after any source change**, including uncommitted edits, before rebuilding and recording results. Compare results only with the same fixture, resolution, batch size, build settings, and comparable hardware. Compare the smaller batches with 64 frames to see where the batch-end idle wait stops affecting throughput.
 
 This FPS includes CPU command recording, GPU rendering, synchronization, and headless presentation. It is not a GPU pass time or a GPU-only kernel throughput result. A skipped or recreated frame, render error, or failed fixture verification invalidates the run.
 
@@ -38,7 +38,7 @@ The CPU-only tests cover mailbox replacement and ownership, plus the production 
 
 ## GPU pass timings
 
-`BM_GpuPassTimings` uses Vulkan timestamps on the graphics queue. It creates a separate renderer with GPU timers and sample collection enabled, runs 64 warmup frames, waits for idle, and discards those warmup samples. Each measured iteration submits a lossless batch of 64, 128, or 256 frames. After `wait_idle()`, it checks that every completed frame has one unique sample. The benchmark's manual time is the sum of GPU frame spans in that batch. Renderer setup, teardown, CPU recording, presentation, and batch idle time are outside this manual time.
+`BM_GpuPassTimings` uses Vulkan timestamps on the graphics queue. It creates a separate renderer with GPU timers and sample collection enabled, runs 64 warmup frames, waits for idle, and discards those warmup samples. Each measured iteration submits a lossless batch of 1, 2, 4, 8, 16, 32, 64, or 128 frames. After `wait_idle()`, it checks that every completed frame has one unique sample. The benchmark's manual time is the sum of GPU frame spans in that batch. Renderer setup, teardown, CPU recording, presentation, and batch idle time are outside this manual time.
 
 ```sh
 ./out/build/benchmark/benchmark/vkgsplat_bench \

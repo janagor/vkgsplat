@@ -5,10 +5,12 @@
 #include "gpu_timing_samples.hpp"
 #include <vkgsplat_adt/latest_frame_mailbox.hpp>
 
+#include <array>
 #include <condition_variable>
 #include <cstddef>
 #include <expected>
 #include <functional>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <thread>
@@ -28,9 +30,8 @@ namespace vulkan {
 }
 struct RenderData;
 
-// Dedicated thread for all Vulkan queue, swapchain, and command-buffer work.
-// Main publishes one replaceable camera and UI snapshot while the worker owns a slot.
-// GPU completion for a slot/image is tracked on frame_ring and waited on the worker.
+// Dedicated thread for Vulkan queue and command-buffer work.
+// Presentation uses frame_ring; offscreen output uses a timeline semaphore.
 class VKGSPLAT_BACKEND_EXPORT RenderThread
 {
 public:
@@ -49,12 +50,23 @@ public:
   // Runs the production admission and worker loop with a CPU-only frame callback.
   auto StartForTest(FrameSubmissionPolicy policy,
     std::function<std::expected<void, Error>()> draw_frame,
-    std::function<void()> wait_idle = {}) -> void;
+    std::function<void()> wait_idle = {},
+    std::function<std::expected<RgbaFrame, Error>()> readback_frame = {}) -> void;
   auto WaitForShutdownForTest() -> void;
   auto WaitForBlockedProducerCountForTest(size_t count) -> void;
+  auto WaitForReadbackPendingForTest() -> void;
+  auto WaitForExclusivePendingForTest() -> void;
   void Stop();
 
   [[nodiscard]] auto SubmitFrame(Camera const &camera, f64 aspect_ratio) -> std::expected<void, Error>;
+  [[nodiscard]] auto CaptureFrame(Camera const &camera, f64 aspect_ratio) -> std::expected<RgbaFrame, Error>;
+  [[nodiscard]] auto ReadLatestFrame() -> std::expected<RgbaFrame, Error>;
+  // Drain queued frames, wait for GPU completion, then run without concurrent submission or readback.
+  [[nodiscard]] auto RunExclusive(std::function<std::expected<void, Error>()> action) -> std::expected<void, Error>;
+  // Call from an exclusive worker action when replacing the color target.
+  auto InvalidateColorTarget() -> void;
+  [[nodiscard]] auto LfdEmulateActive() const noexcept -> bool;
+  [[nodiscard]] auto LfdEmulateCell() const noexcept -> std::array<u32, 2>;
   [[nodiscard]] auto PollError() const -> std::optional<Error>;
   [[nodiscard]] auto CompletedFrameCount() const -> u64;
   [[nodiscard]] auto RecreatedFrameCount() const -> u64;
@@ -66,6 +78,8 @@ private:
   enum class Command : u8 {
     kNone,
     kWaitIdle,
+    kReadback,
+    kExclusive,
     kShutdown,
   };
 
@@ -75,22 +89,35 @@ private:
     kSwapchainRecreated,
   };
 
+  struct CaptureRequest
+  {
+    std::optional<std::expected<RgbaFrame, Error>> result;
+    bool completed{ false };
+  };
+
   struct PendingFrame
   {
+    std::shared_ptr<CaptureRequest> capture;
     f64 aspect_ratio{};
     CameraSnapshot camera{};
     ImGuiFrameSnapshot imgui{};
   };
 
   auto ThreadMain() -> void;
+  auto ProcessFrame(size_t frame_slot, PendingFrame const &frame) -> void;
   auto ProcessWaitIdle(std::unique_lock<std::mutex> &lock) -> void;
+  auto ProcessReadback(std::unique_lock<std::mutex> &lock) -> void;
+  auto ProcessExclusive(std::unique_lock<std::mutex> &lock) -> void;
   auto StartWorker(vulkan::Context *context,
     RenderData *data,
     FrameSubmissionPolicy policy,
     std::function<std::expected<void, Error>()> draw_frame,
-    std::function<void()> wait_idle) -> void;
+    std::function<void()> wait_idle,
+    std::function<std::expected<RgbaFrame, Error>()> readback_frame) -> void;
   auto FinishFrame(size_t frame_slot, std::expected<FrameOutcome, Error> const &drawn) -> void;
   [[nodiscard]] auto DrawFrameVulkan(size_t frame_slot) -> std::expected<FrameOutcome, Error>;
+  [[nodiscard]] auto DrawFrameOffscreen(size_t frame_slot) -> std::expected<FrameOutcome, Error>;
+  [[nodiscard]] auto ReadFrameOnWorker() -> std::expected<RgbaFrame, Error>;
   auto PublishGpuTiming(std::optional<GpuFrameTimings> sample) -> void;
 
   vulkan::Context *context_{ nullptr };
@@ -98,8 +125,10 @@ private:
   std::jthread thread_;
   std::function<std::expected<void, Error>()> draw_frame_override_;
   std::function<void()> wait_idle_override_;
+  std::function<std::expected<RgbaFrame, Error>()> readback_frame_override_;
 
   mutable std::mutex control_mutex_;
+  mutable std::mutex operation_mutex_;
   mutable std::condition_variable control_cv_;
 
   Command command_{ Command::kNone };
@@ -111,11 +140,20 @@ private:
   bool worker_busy_{ false };
   bool thread_running_{ false };
   bool idle_done_{ true };
+  bool readback_pending_{ false };
+  bool exclusive_pending_{ false };
+  bool color_target_valid_{ false };
+  std::optional<std::expected<RgbaFrame, Error>> readback_result_;
+  std::optional<std::expected<void, Error>> exclusive_result_;
+  std::function<std::expected<void, Error>()> exclusive_action_;
+  bool lfd_emulate_active_snapshot_{ false };
+  std::array<u32, 2> lfd_emulate_cell_snapshot_{ 0U, 0U };
   size_t blocked_producer_count_{ 0U };
   bool test_mode_{ false };
   bool capture_gpu_timing_samples_{ false };
   GpuTimingSamples gpu_timing_samples_;
   FrameSubmissionPolicy submission_policy_{ FrameSubmissionPolicy::kLatest };
+  std::vector<std::shared_ptr<CaptureRequest>> capture_requests_;
 };
 
 }// namespace vkgsplat

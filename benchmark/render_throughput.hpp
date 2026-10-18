@@ -8,13 +8,14 @@
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
 
+#include <array>
 #include <atomic>
 #include <expected>
 
 namespace vkgsplat::benchmark {
 
 inline constexpr u64 kWarmupFrames = 64U;
-inline constexpr u64 kBatchFrames = 64U;
+inline constexpr auto kBatchFrameCounts = std::to_array<u64>({ 1U, 2U, 4U, 8U, 16U, 32U, 64U, 128U });
 
 [[nodiscard]] auto RenderBatch(Renderer &renderer, Camera const &camera, u64 frame_count) -> std::expected<void, Error>;
 auto RegisterRenderThroughput(Platform &platform,
