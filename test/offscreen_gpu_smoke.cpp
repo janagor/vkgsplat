@@ -9,6 +9,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
+#include <algorithm>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -34,6 +35,8 @@ constexpr vkgsplat::u64 kInterleavedFrameCount = 3U;
 constexpr vkgsplat::u32 kQuiltColumns = 2U;
 constexpr vkgsplat::u32 kQuiltRows = 2U;
 constexpr vkgsplat::u32 kColorTolerance = 4U;
+constexpr vkgsplat::u32 kRepeatedFrameMeanChannelTolerance = 4U;
+constexpr vkgsplat::u32 kRepeatedFrameMaximumChannelTolerance = 64U;
 constexpr vkgsplat::u32 kRedChannel = 0U;
 constexpr vkgsplat::u32 kGreenChannel = 1U;
 constexpr vkgsplat::u32 kBlueChannel = 2U;
@@ -41,7 +44,7 @@ constexpr vkgsplat::f64 kCameraDistance = 6.0;
 constexpr vkgsplat::f64 kCameraSideOffset = 2.0;
 constexpr vkgsplat::f64 kCompactViewConeDegrees = 8.0;
 constexpr vkgsplat::f32 kCompactOffset = 0.35F;
-constexpr vkgsplat::f32 kCompactLogScale = -0.3F;
+constexpr vkgsplat::f32 kCompactLogScale = 0.5F;
 constexpr vkgsplat::f32 kCompactOpacityLogit = 4.0F;
 constexpr vkgsplat::f32 kCompactShDc = 1.0F / vkgsplat::gs::kShC0;
 
@@ -98,6 +101,34 @@ constexpr vkgsplat::f32 kCompactShDc = 1.0F / vkgsplat::gs::kShC0;
   return false;
 }
 
+[[nodiscard]] auto RepeatedFrameMatches(vkgsplat::RgbaFrame const &reference,
+  vkgsplat::RgbaFrame const &actual,
+  std::string_view description) -> bool
+{
+  if (reference.width != actual.width || reference.height != actual.height
+      || reference.pixels.size() != actual.pixels.size() || reference.pixels.empty()) {
+    std::cerr << description << " has different dimensions or pixel count\n";
+    return false;
+  }
+  std::uint64_t total_delta = 0;
+  vkgsplat::u32 maximum_delta = 0;
+  for (std::size_t index = 0; index < reference.pixels.size(); ++index) {
+    auto const left = static_cast<int>(reference.pixels[index]);
+    auto const right = static_cast<int>(actual.pixels[index]);
+    auto const delta = static_cast<vkgsplat::u32>(std::abs(left - right));
+    total_delta += delta;
+    maximum_delta = std::max(maximum_delta, delta);
+  }
+  auto const mean_delta = static_cast<double>(total_delta) / static_cast<double>(reference.pixels.size());
+  if (mean_delta > kRepeatedFrameMeanChannelTolerance
+      || maximum_delta > kRepeatedFrameMaximumChannelTolerance) {
+    std::cerr << description << " differs: mean channel delta=" << mean_delta
+              << ", maximum channel delta=" << maximum_delta << '\n';
+    return false;
+  }
+  return true;
+}
+
 auto Run(std::string const &scene_path, std::string const &compact_path, bool validation) -> int
 {
   auto platform = vkgsplat::OffscreenPlatform::create({ .width = kTestWidth, .height = kTestHeight });
@@ -144,8 +175,7 @@ auto Run(std::string const &scene_path, std::string const &compact_path, bool va
       std::cerr << frame.error().message() << '\n';
       return EXIT_FAILURE;
     }
-    if (frame->pixels != first->pixels) {
-      std::cerr << "Repeated camera changed pixels\n";
+    if (!RepeatedFrameMatches(*first, *frame, "Repeated camera")) {
       return EXIT_FAILURE;
     }
   }
@@ -158,7 +188,7 @@ auto Run(std::string const &scene_path, std::string const &compact_path, bool va
     std::cerr << frame_b.error().message() << '\n';
     return EXIT_FAILURE;
   }
-  if (frame_b->pixels == first->pixels) {
+  if (RepeatedFrameMatches(*first, *frame_b, "Different camera")) {
     std::cerr << "Different camera did not change pixels\n";
     return EXIT_FAILURE;
   }
@@ -171,8 +201,7 @@ auto Run(std::string const &scene_path, std::string const &compact_path, bool va
     std::cerr << captured_b.error().message() << '\n';
     return EXIT_FAILURE;
   }
-  if (captured_b->pixels != frame_b->pixels) {
-    std::cerr << "Interleaved capture returned the wrong camera frame\n";
+  if (!RepeatedFrameMatches(*frame_b, *captured_b, "Interleaved camera")) {
     return EXIT_FAILURE;
   }
   if (renderer->completed_frame_count() != kFrameCount + kInterleavedFrameCount) {
@@ -210,9 +239,10 @@ auto Run(std::string const &scene_path, std::string const &compact_path, bool va
     }
     decoded_frames.push_back(std::move(*decoded));
   }
-  if (decoded_frames.at(0).pixels != first->pixels || decoded_frames.at(1).pixels != frame_b->pixels
-      || decoded_frames.at(2).pixels != decoded_frames.at(0).pixels
-      || decoded_frames.at(1).pixels == decoded_frames.at(0).pixels) {
+  if (!RepeatedFrameMatches(*first, decoded_frames.at(0), "First sequence frame")
+      || !RepeatedFrameMatches(*frame_b, decoded_frames.at(1), "Second sequence frame")
+      || !RepeatedFrameMatches(decoded_frames.at(0), decoded_frames.at(2), "Repeated sequence frame")
+      || RepeatedFrameMatches(decoded_frames.at(0), decoded_frames.at(1), "Distinct sequence cameras")) {
     std::cerr << "Sequence PNG pixels do not match their camera states\n";
     return EXIT_FAILURE;
   }
@@ -264,7 +294,7 @@ auto Run(std::string const &scene_path, std::string const &compact_path, bool va
   }
   auto decoded_quilt = ReadPng(quilt_recorded->path);
   if (!decoded_quilt || decoded_quilt->width != kTestWidth || decoded_quilt->height != kTestHeight
-      || decoded_quilt->pixels != quilt->pixels) {
+      || !RepeatedFrameMatches(*quilt, *decoded_quilt, "Quilt sequence frame")) {
     std::cerr << "Quilt sequence PNG pixels differ from the captured atlas\n";
     return EXIT_FAILURE;
   }

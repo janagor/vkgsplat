@@ -6,6 +6,7 @@ add_library(
   ply/miniply.cpp
   ply/load_splats.cpp
   image/write_png.cpp
+  video/h264_writer.cpp
   image/stb_image_write_impl.cpp)
 
 add_library(vkgsplat::vkgsplat_io ALIAS vkgsplat_io)

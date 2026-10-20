@@ -8,6 +8,7 @@ add_library(
   vulkan/device.cpp
   vulkan/video/video_capabilities.cpp
   vulkan/video/video_device.cpp
+  vulkan/video/video_session.cpp
   vulkan/shader.cpp
   vulkan/mesh_gpu.cpp
   vulkan/sphere_setup.cpp

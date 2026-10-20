@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <cstring>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -48,6 +49,8 @@ struct ProbeFixture
   bool nv12_transfer_destination = true;
   bool alternative_transfer_destination = true;
   bool storage = false;
+  bool supports_disjoint_images = false;
+  bool queried_optional_create_flags = false;
   bool incomplete_extensions = false;
   bool incomplete_formats = false;
   bool missing_video_entry_point = false;
@@ -135,6 +138,8 @@ auto MakeQueries(ProbeFixture &fixture) -> video::Queries
       properties[0].format = VK_FORMAT_G8_B8R8_2PLANE_420_UNORM;
       properties[0].imageType = VK_IMAGE_TYPE_2D;
       properties[0].imageTiling = VK_IMAGE_TILING_OPTIMAL;
+      properties[0].imageCreateFlags = fixture.supports_disjoint_images
+                                       ? VK_IMAGE_CREATE_DISJOINT_BIT : 0;
       properties[0].imageUsageFlags = info->imageUsage;
       if (fixture.transfer_destination && profile_transfer && fixture.nv12_transfer_destination) {
         properties[0].imageUsageFlags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
@@ -155,6 +160,10 @@ auto MakeQueries(ProbeFixture &fixture) -> video::Queries
   queries.image_format = [&](VkPhysicalDevice,
                            VkPhysicalDeviceImageFormatInfo2 const *info,
                            VkImageFormatProperties2 *properties) -> VkResult {
+    if (info->flags != 0) { fixture.queried_optional_create_flags = true; }
+    if (fixture.supports_disjoint_images && info->flags != 0) {
+      return VK_ERROR_FORMAT_NOT_SUPPORTED;
+    }
     bool const extra_usage = (info->usage & (VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT)) != 0;
     if (extra_usage && fixture.extra_usage_error != VK_SUCCESS) { return fixture.extra_usage_error; }
     auto const format_maximum = info->format == VK_FORMAT_G8_B8_R8_3PLANE_420_UNORM
@@ -174,6 +183,36 @@ auto Probe(ProbeFixture &fixture) -> std::expected<video::Report, vkgsplat::Erro
 }
 
 }// namespace
+
+TEST_CASE("Optional video image creation flags are not required by capability queries")
+{
+  ProbeFixture fixture;
+  fixture.supports_disjoint_images = true;
+  auto report = Probe(fixture);
+  REQUIRE(report);
+  CHECK_FALSE(fixture.queried_optional_create_flags);
+  REQUIRE(report->selected_configuration());
+  CHECK(report->selected_configuration()->source_format.transfer_destination);
+}
+
+TEST_CASE("Explicit NV12 upload selection searches later profiles")
+{
+  ProbeFixture fixture;
+  fixture.baseline_profile = true;
+  fixture.main_transfer_destination = false;
+  auto report = Probe(fixture);
+  REQUIRE(report);
+  auto selection = report->select({
+    .require_conversion = true,
+    .require_references = false,
+    .required_format = VK_FORMAT_G8_B8R8_2PLANE_420_UNORM,
+    .require_transfer_destination = true,
+    .required_extent = { kMinimumExtent, kMinimumExtent },
+  });
+  REQUIRE(selection);
+  CHECK(selection->profile == STD_VIDEO_H264_PROFILE_IDC_BASELINE);
+  CHECK(selection->source_format.transfer_destination);
+}
 
 TEST_CASE("Probe reports missing extensions and an unavailable encode queue")
 {
@@ -327,7 +366,8 @@ TEST_CASE("Selected profile keeps conversion and reference flags with its own fo
   CHECK(main->profile == STD_VIDEO_H264_PROFILE_IDC_MAIN);
   CHECK_FALSE(main->capture_conversion_supported);
   CHECK_FALSE(main->reference_pictures_supported);
-  auto references = report->select({ .require_references = true });
+  auto references = report->select({ .require_conversion = false, .require_references = true,
+    .required_format = std::nullopt, .require_transfer_destination = false, .required_extent = {} });
   REQUIRE(references);
   CHECK(references->profile == STD_VIDEO_H264_PROFILE_IDC_BASELINE);
 }
@@ -391,7 +431,8 @@ TEST_CASE("Reference selection prefers the DPB format covering the source extent
   fixture.alternative_max_extent = kAlternativeMaximumExtent;
   auto report = Probe(fixture);
   REQUIRE(report);
-  auto selected = report->select({ .require_conversion = true, .require_references = true });
+  auto selected = report->select({ .require_conversion = true, .require_references = true,
+    .required_format = std::nullopt, .require_transfer_destination = false, .required_extent = {} });
   REQUIRE(selected);
   REQUIRE(selected->dpb_format);
   CHECK(selected->source_format.format == VK_FORMAT_G8_B8_R8_3PLANE_420_UNORM);
@@ -411,7 +452,8 @@ TEST_CASE("Combined requirements select one profile satisfying both")
   fixture.max_active_references = 1U;
   auto report = Probe(fixture);
   REQUIRE(report);
-  auto selected = report->select({ .require_conversion = true, .require_references = true });
+  auto selected = report->select({ .require_conversion = true, .require_references = true,
+    .required_format = std::nullopt, .require_transfer_destination = false, .required_extent = {} });
   REQUIRE(selected);
   REQUIRE(selected->dpb_format);
   CHECK(selected->profile == STD_VIDEO_H264_PROFILE_IDC_HIGH);

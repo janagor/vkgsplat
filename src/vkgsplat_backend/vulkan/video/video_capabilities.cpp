@@ -131,7 +131,9 @@ namespace {
             .type = entry.imageType,
             .tiling = entry.imageTiling,
             .usage = usage | extra,
-            .flags = entry.imageCreateFlags,
+            // imageCreateFlags advertises optional supported flags. The
+            // non-disjoint input image is created without any of them.
+            .flags = 0,
           };
           VkImageFormatProperties2 scratch{};
           scratch.sType = VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2;
@@ -225,6 +227,18 @@ auto Report::select(EncodeRequirements requirements) const noexcept -> std::opti
     auto const &profile = profiles[index];
     auto const *source = requirements.require_conversion ? profile.preferred_conversion_format()
                                                          : profile.preferred_source_format();
+    if (requirements.required_format || requirements.require_transfer_destination
+        || requirements.required_extent.width != 0 || requirements.required_extent.height != 0) {
+      auto const found = std::ranges::find_if(profile.source_formats, [&](ImageFormat const &format) -> bool {
+        auto const maximum = ExtentFor(profile, format);
+        return (!requirements.required_format || format.format == *requirements.required_format)
+               && (!requirements.require_conversion || format.transfer_destination || format.storage)
+               && (!requirements.require_transfer_destination || format.transfer_destination)
+               && maximum.width >= requirements.required_extent.width
+               && maximum.height >= requirements.required_extent.height;
+      });
+      source = found == profile.source_formats.end() ? nullptr : &*found;
+    }
     if (source == nullptr) { continue; }
     auto maximum = ExtentFor(profile, *source);
     ImageFormat const *dpb = nullptr;
@@ -281,7 +295,9 @@ auto Report::select(EncodeRequirements requirements) const noexcept -> std::opti
 
 auto Report::selected_configuration() const noexcept -> std::optional<EncodeSelection>
 {
-  if (auto converted = select({ .require_conversion = true }); converted) { return converted; }
+  if (auto converted = select({ .require_conversion = true, .require_references = false,
+        .required_format = std::nullopt, .require_transfer_destination = false,
+        .required_extent = {} }); converted) { return converted; }
   return select();
 }
 

@@ -62,6 +62,9 @@ struct EncodeRequirements
 {
   bool require_conversion = false;
   bool require_references = false;
+  std::optional<VkFormat> required_format;
+  bool require_transfer_destination = false;
+  VkExtent2D required_extent{};
 };
 
 enum class UploadStrategy { kUnavailable, kTransferDestination, kStorageWrite };

@@ -67,6 +67,10 @@ if(TARGET vkgsplat::vkgsplat_utility)
   endif()
 
   if(TARGET vkgsplat::vkgsplat_backend)
+    add_executable(vkgsplat_h264_writer_test h264_writer.cpp)
+    target_link_libraries(vkgsplat_h264_writer_test PRIVATE Catch2::Catch2WithMain vkgsplat::vkgsplat_io)
+    catch_discover_tests(vkgsplat_h264_writer_test)
+
     add_executable(vkgsplat_video_capabilities_test video_capabilities.cpp)
     target_link_libraries(vkgsplat_video_capabilities_test PRIVATE Catch2::Catch2WithMain vkgsplat::vkgsplat_backend)
     catch_discover_tests(vkgsplat_video_capabilities_test)
@@ -100,6 +104,7 @@ endif()
 
 option(vkgsplat_ENABLE_HEADLESS_GPU_TESTS "Enable GPU-dependent headless integration tests" OFF)
 option(vkgsplat_HEADLESS_GPU_TEST_VALIDATION "Enable validation layers in the headless GPU test" ON)
+option(vkgsplat_ENABLE_VIDEO_GPU_TESTS "Enable Vulkan Video integration tests without a scene fixture" OFF)
 set(vkgsplat_HEADLESS_TEST_PLY
     ""
     CACHE FILEPATH "PLY fixture for headless GPU integration test")
@@ -107,6 +112,41 @@ if(TARGET vkgsplat_headless)
   add_test(NAME headless.cli.arguments
            COMMAND ${CMAKE_COMMAND} -DEXECUTABLE=$<TARGET_FILE:vkgsplat_headless>
                    -DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR} -P ${CMAKE_CURRENT_SOURCE_DIR}/headless_cli.cmake)
+endif()
+if(vkgsplat_ENABLE_VIDEO_GPU_TESTS OR vkgsplat_ENABLE_HEADLESS_GPU_TESTS)
+  if(NOT TARGET vkgsplat::vkgsplat_backend OR NOT TARGET vkgsplat::vkgsplat_headless_platform)
+    message(FATAL_ERROR "Vulkan Video tests require a native Vulkan backend and offscreen platform")
+  endif()
+  add_executable(vkgsplat_video_session_test video_session.cpp)
+  target_link_libraries(vkgsplat_video_session_test PRIVATE vkgsplat::vkgsplat_backend
+                                                           vkgsplat::vkgsplat_headless_platform)
+  target_compile_definitions(vkgsplat_video_session_test PRIVATE
+                             VKGSPLAT_TEST_VIDEO_VALIDATION=$<BOOL:${vkgsplat_HEADLESS_GPU_TEST_VALIDATION}>)
+  add_test(NAME video.session.parameters COMMAND $<TARGET_FILE:vkgsplat_video_session_test>)
+  set_tests_properties(video.session.parameters PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 120)
+  add_executable(vkgsplat_video_encode_synthetic_test video_encode_synthetic.cpp)
+  target_link_libraries(vkgsplat_video_encode_synthetic_test PRIVATE vkgsplat::vkgsplat_backend
+                                                                    vkgsplat::vkgsplat_headless_platform
+                                                                    vkgsplat::vkgsplat_io)
+  target_compile_definitions(vkgsplat_video_encode_synthetic_test PRIVATE
+                             VKGSPLAT_TEST_VIDEO_VALIDATION=$<BOOL:${vkgsplat_HEADLESS_GPU_TEST_VALIDATION}>)
+  find_program(vkgsplat_FFMPEG_EXECUTABLE ffmpeg)
+  find_program(vkgsplat_FFPROBE_EXECUTABLE ffprobe)
+  find_package(Python3 COMPONENTS Interpreter QUIET)
+  add_test(NAME video.encode.synthetic.smoke
+           COMMAND $<TARGET_FILE:vkgsplat_video_encode_synthetic_test>
+                   ${CMAKE_CURRENT_BINARY_DIR}/video-synthetic-smoke.h264)
+  set_tests_properties(video.encode.synthetic.smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 120)
+  if(vkgsplat_FFMPEG_EXECUTABLE AND vkgsplat_FFPROBE_EXECUTABLE AND Python3_Interpreter_FOUND)
+    add_test(NAME video.encode.synthetic
+             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/video_encode_integration.py
+                     $<TARGET_FILE:vkgsplat_video_encode_synthetic_test> ${CMAKE_COMMAND}
+                     ${CMAKE_CURRENT_SOURCE_DIR}/video_encode_verify.cmake
+                     ${vkgsplat_FFMPEG_EXECUTABLE} ${vkgsplat_FFPROBE_EXECUTABLE})
+    set_tests_properties(video.encode.synthetic PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 120)
+  elseif(vkgsplat_ENABLE_VIDEO_GPU_TESTS)
+    message(STATUS "Full Vulkan Video encode verification requires FFmpeg, FFprobe, and Python3")
+  endif()
 endif()
 if(vkgsplat_ENABLE_HEADLESS_GPU_TESTS)
   if(NOT TARGET vkgsplat_headless OR NOT EXISTS "${vkgsplat_HEADLESS_TEST_PLY}")

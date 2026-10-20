@@ -30,7 +30,8 @@ auto Run(char const *scene_path) -> int
       return kSkipped;
     }
     if (disabled->video_encode_capabilities().h264_enabled) { return EXIT_FAILURE; }
-    auto renderer = disabled->create_renderer({ .ply_path = scene_path, .enable_imgui = false });
+    auto renderer = disabled->create_renderer({ .ply_path = scene_path, .enable_imgui = false,
+      .submission_policy = vkgsplat::FrameSubmissionPolicy::kLossless });
     if (!renderer) {
       std::cerr << renderer.error().message() << '\n';
       return EXIT_FAILURE;
@@ -57,7 +58,8 @@ auto Run(char const *scene_path) -> int
       return EXIT_FAILURE;
     }
     std::cout << optional->video_encode_capabilities().diagnostic << '\n';
-    auto renderer = optional->create_renderer({ .ply_path = scene_path, .enable_imgui = false });
+    auto renderer = optional->create_renderer({ .ply_path = scene_path, .enable_imgui = false,
+      .submission_policy = vkgsplat::FrameSubmissionPolicy::kLossless });
     if (!renderer) {
       std::cerr << renderer.error().message() << '\n';
       return EXIT_FAILURE;
