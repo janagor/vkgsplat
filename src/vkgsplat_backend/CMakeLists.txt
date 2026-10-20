@@ -6,6 +6,8 @@ add_library(
   vulkan/vulkan_driver.cpp
   vulkan/presentable_swapchain.cpp
   vulkan/device.cpp
+  vulkan/video/video_capabilities.cpp
+  vulkan/video/video_device.cpp
   vulkan/shader.cpp
   vulkan/mesh_gpu.cpp
   vulkan/sphere_setup.cpp

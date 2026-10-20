@@ -8,6 +8,7 @@
 #include <beman/indirect/indirect.hpp>
 #include <vkgsplat/driver.hpp>
 #include <vkgsplat/platform.hpp>
+#include <vkgsplat/video_capabilities.hpp>
 #include <vkgsplat/vkgsplat_export.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
@@ -23,6 +24,7 @@ struct EngineConfig
   bool enable_validation = false;
   /// Request VK_EXT_present_timing; ignored when the device does not support it.
   bool request_present_timing = false;
+  VideoEncodeSupport video_encode = VideoEncodeSupport::kDisabled;
 };
 
 /**
@@ -48,6 +50,7 @@ public:
   [[nodiscard]] auto driver() const noexcept -> Driver const &;
   [[nodiscard]] auto platform() noexcept -> Platform &;
   [[nodiscard]] auto platform() const noexcept -> Platform const &;
+  [[nodiscard]] auto video_encode_capabilities() const noexcept -> VideoEncodeCapabilities const &;
 
   /** Create a renderer that shares this engine's driver. */
   [[nodiscard]] auto create_renderer(RendererConfig const &config) -> std::expected<Renderer, Error>;

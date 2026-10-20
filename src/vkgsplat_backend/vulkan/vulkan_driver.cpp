@@ -170,6 +170,11 @@ auto VulkanDriver::swapchain() noexcept -> vkgsplat::Swapchain * { return contex
 
 auto VulkanDriver::swapchain() const noexcept -> vkgsplat::Swapchain const * { return context_.swapchain.get(); }
 
+auto VulkanDriver::video_encode_capabilities() const noexcept -> VideoEncodeCapabilities const &
+{
+  return context_.video_encode_capabilities;
+}
+
 void VulkanDriver::wait_idle() const noexcept
 {
   if (context_.device.device != VK_NULL_HANDLE) { context_.disp.deviceWaitIdle(); }

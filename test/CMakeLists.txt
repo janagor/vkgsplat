@@ -67,6 +67,10 @@ if(TARGET vkgsplat::vkgsplat_utility)
   endif()
 
   if(TARGET vkgsplat::vkgsplat_backend)
+    add_executable(vkgsplat_video_capabilities_test video_capabilities.cpp)
+    target_link_libraries(vkgsplat_video_capabilities_test PRIVATE Catch2::Catch2WithMain vkgsplat::vkgsplat_backend)
+    catch_discover_tests(vkgsplat_video_capabilities_test)
+
     add_executable(vkgsplat_capture_png_test capture_png.cpp)
     target_link_libraries(vkgsplat_capture_png_test PRIVATE Catch2::Catch2WithMain vkgsplat::vkgsplat_capture stb::stb)
     catch_discover_tests(vkgsplat_capture_png_test)
@@ -108,6 +112,11 @@ if(vkgsplat_ENABLE_HEADLESS_GPU_TESTS)
   if(NOT TARGET vkgsplat_headless OR NOT EXISTS "${vkgsplat_HEADLESS_TEST_PLY}")
     message(FATAL_ERROR "Headless GPU tests require a native build and vkgsplat_HEADLESS_TEST_PLY")
   endif()
+  add_executable(vkgsplat_video_device_test video_device.cpp)
+  target_link_libraries(vkgsplat_video_device_test PRIVATE vkgsplat::vkgsplat vkgsplat::vkgsplat_headless_platform)
+  add_test(NAME video.device.initialization COMMAND $<TARGET_FILE:vkgsplat_video_device_test>
+                                                    ${vkgsplat_HEADLESS_TEST_PLY})
+  set_tests_properties(video.device.initialization PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 120)
   add_test(
     NAME headless.gpu.smoke
     COMMAND

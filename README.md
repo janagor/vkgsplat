@@ -24,6 +24,28 @@ The `main` branch deploys to the root, `develop` to `/develop/`, and tags to `/t
  * [Docker](README_docker.md)
  * [vkexec migration baseline](docs/migration/vkexec-baseline.md)
 
+## Vulkan Video initialization
+
+`EngineConfig::video_encode` (or `DriverConfig::video_encode`) controls optional H.264
+capability setup. The default, `kDisabled`, keeps the existing device initialization.
+`kOptional` probes the rendering device already selected by Vulkan and enables
+encoding when it supports an 8-bit 4:2:0 H.264 profile, an encode queue, and
+an encode-source image format. A zero-DPB all-intra session does not need a DPB
+format. `kRequired` searches rendering-capable devices
+for those requirements and returns an initialization error when none qualify.
+
+After creation, `engine.video_encode_capabilities()` (or the driver equivalent)
+reports whether the logical device has H.264 enabled, whether the known RGBA
+conversion path and reference pictures are supported, its usable coded extent,
+and a diagnostic string. This only reports initialization capability; encoding
+and video output are not implemented yet. The Vulkan backend retains the complete
+profile, format, limit, and queue data for the future encoder.
+`capture_conversion_supported` reports compatible image usages, not a completed
+color-conversion pipeline.
+The public maximum extent and both support flags describe one selected profile
+and encode-source format; the internal report retains alternatives for later
+encoder configurations.
+
 ## Screenshot API
 
 Include `<vkgsplat_capture/screenshot.hpp>` and link `vkgsplat::vkgsplat_capture`.
