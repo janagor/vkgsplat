@@ -5,6 +5,7 @@
 
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat/renderer.hpp>
+#include <vkgsplat_capture/screenshot.hpp>
 #include <vkgsplat_headless/headless_platform.hpp>
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -67,7 +68,7 @@ auto Run(std::filesystem::path const &scene_path, std::filesystem::path const &i
     std::cerr << accounted.error().message() << '\n';
     return EXIT_FAILURE;
   }
-  if (auto result = renderer->save_frame_png(image_path.string()); !result) {
+  if (auto result = vkgsplat::capture::save_png(*renderer, image_path.string()); !result) {
     std::cerr << result.error().message() << '\n';
     return EXIT_FAILURE;
   }

@@ -4,7 +4,7 @@
 #include <vkgsplat/renderer.hpp>
 #include <vkgsplat_headless/headless_platform.hpp>
 #include <vkgsplat_headless/offscreen_platform.hpp>
-#include <vkgsplat_io/write_png.hpp>
+#include <vkgsplat_capture/screenshot.hpp>
 #include <vkgsplat_utility/types.hpp>
 
 #include <CLI/CLI.hpp>
@@ -93,9 +93,7 @@ auto RunHeadless(int argc, char **argv) -> int
       std::println(stderr, "{}", frame.error().message());
       return 1;
     }
-    constexpr vkgsplat::u32 kRgbaChannels = 4U;
-    if (auto written = vkgsplat::WritePng(output, frame->width, frame->height, kRgbaChannels, frame->pixels);
-      !written) {
+    if (auto written = vkgsplat::capture::write_png(*frame, output); !written) {
       std::println(stderr, "{}", written.error().message());
       return 1;
     }
@@ -114,7 +112,7 @@ auto RunHeadless(int argc, char **argv) -> int
     std::println(stderr, "Expected exactly one rendered frame; got {}", renderer->completed_frame_count());
     return 1;
   }
-  if (auto result = renderer->save_frame_png(output); !result) {
+  if (auto result = vkgsplat::capture::save_png(*renderer, output); !result) {
     std::println(stderr, "{}", result.error().message());
     return 1;
   }

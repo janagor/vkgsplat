@@ -2,6 +2,7 @@ add_executable(vkgsplat_headless main.cpp)
 target_link_libraries(
   vkgsplat_headless
   PRIVATE vkgsplat::vkgsplat
+          vkgsplat::vkgsplat_capture
           vkgsplat::vkgsplat_headless_platform
           vkgsplat::vkgsplat_options
           vkgsplat::vkgsplat_warnings

@@ -1,4 +1,4 @@
-#include "screenshot.hpp"
+#include "readback.hpp"
 
 #include "app_state.hpp"
 #include "vulkan/gpu_buffers.hpp"
@@ -15,7 +15,7 @@
 #include <utility>
 #include <vector>
 
-#include <vkgsplat/renderer.hpp>
+#include <vkgsplat/frame.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
 
@@ -52,19 +52,19 @@ namespace {
 auto ReadColorTargetRgba8(Context &context, RenderData &data) -> std::expected<RgbaFrame, Error>
 {
   if (!data.color_image.has_value() || data.color_width == 0 || data.color_height == 0) {
-    return std::unexpected{ MakeError(std::errc::invalid_argument, "no color target available for screenshot") };
+    return std::unexpected{ MakeError(std::errc::invalid_argument, "no color target available for readback") };
   }
   if (data.color_format != VK_FORMAT_R8G8B8A8_UNORM) {
-    return std::unexpected{ MakeError(std::errc::not_supported, "screenshot currently requires R8G8B8A8_UNORM") };
+    return std::unexpected{ MakeError(std::errc::not_supported, "readback currently requires R8G8B8A8_UNORM") };
   }
   if (!data.command_pool.has_value()) {
-    return std::unexpected{ MakeError(std::errc::state_not_recoverable, "command pool missing for screenshot") };
+    return std::unexpected{ MakeError(std::errc::state_not_recoverable, "command pool missing for readback") };
   }
   if (context.vkexec_context == nullptr) {
-    return std::unexpected{ MakeError(std::errc::state_not_recoverable, "vkexec context missing for screenshot") };
+    return std::unexpected{ MakeError(std::errc::state_not_recoverable, "vkexec context missing for readback") };
   }
   if (context.allocator == nullptr) {
-    return std::unexpected{ MakeError(std::errc::state_not_recoverable, "VMA allocator missing for screenshot") };
+    return std::unexpected{ MakeError(std::errc::state_not_recoverable, "VMA allocator missing for readback") };
   }
   if (auto waited = WaitForPriorFrames(data); !waited) { return std::unexpected{ waited.error() }; }
 
@@ -94,7 +94,7 @@ auto ReadColorTargetRgba8(Context &context, RenderData &data) -> std::expected<R
     .pInheritanceInfo = nullptr,
   };
   if (context.disp.beginCommandBuffer(cmd, &begin_info) != VK_SUCCESS) {
-    return fail(MakeError(std::errc::io_error, "failed to begin screenshot command buffer"));
+    return fail(MakeError(std::errc::io_error, "failed to begin readback command buffer"));
   }
 
   // After a normal frame the color target is already TRANSFER_SRC_OPTIMAL.
@@ -129,7 +129,7 @@ auto ReadColorTargetRgba8(Context &context, RenderData &data) -> std::expected<R
     cmd, data.color_image->handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, staging->handle(), 1, &region);
 
   if (context.disp.endCommandBuffer(cmd) != VK_SUCCESS) {
-    return fail(MakeError(std::errc::io_error, "failed to end screenshot command buffer"));
+    return fail(MakeError(std::errc::io_error, "failed to end readback command buffer"));
   }
 
   auto *const timeline = data.frame_ring.has_value() ? data.frame_ring->timeline().handle() : data.offscreen_timeline;
@@ -175,7 +175,7 @@ auto ReadColorTargetRgba8(Context &context, RenderData &data) -> std::expected<R
 
   auto const mapped = staging->mapped();
   if (mapped.empty()) {
-    return std::unexpected{ MakeError(std::errc::io_error, "failed to map screenshot staging buffer") };
+    return std::unexpected{ MakeError(std::errc::io_error, "failed to map readback staging buffer") };
   }
   if (auto invalidated = staging->invalidate(); !invalidated) {
     return std::unexpected{ MakeError(std::errc::io_error, invalidated.error().message()) };

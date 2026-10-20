@@ -10,7 +10,6 @@
 #include <print>
 #include <span>
 #include <string>
-#include <string_view>
 #include <system_error>
 #include <utility>
 #include <vector>
@@ -46,7 +45,6 @@
 #include "vulkan/vulkan_driver.hpp"
 #include <vkgsplat_io/load_splats.hpp>
 #include <vkgsplat_io/splat_cpu.hpp>
-#include <vkgsplat_io/write_png.hpp>
 
 namespace vkgsplat {
 
@@ -326,13 +324,8 @@ auto Renderer::device_info() const -> RenderDeviceInfo
   };
 }
 
-auto Renderer::save_frame_png(std::string_view path) -> std::expected<void, Error>
-{
-  auto frame = impl_->render_thread->ReadLatestFrame();
-  if (!frame) { return std::unexpected(frame.error()); }
-  constexpr u32 kRgbaChannels = 4U;
-  return WritePng(path, frame->width, frame->height, kRgbaChannels, frame->pixels);
-}
+auto Renderer::capture_latest_frame() -> std::expected<RgbaFrame, Error>
+{ return impl_->render_thread->ReadLatestFrame(); }
 
 auto Renderer::wait_idle() -> std::expected<void, Error> { return impl_->render_thread->WaitIdle(); }
 

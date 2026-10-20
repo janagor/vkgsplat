@@ -25,7 +25,7 @@
 #include "vulkan/imgui_overlay.hpp"
 #include "vulkan/initializers.hpp"
 #include "vulkan/renderer.hpp"
-#include "vulkan/screenshot.hpp"
+#include "vulkan/capture/readback.hpp"
 #include "vulkan_context.hpp"
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat/gpu_timings.hpp>

@@ -1,11 +1,11 @@
-#ifndef VKGSPLAT_BACKEND_VULKAN_SCREENSHOT_HPP
-#define VKGSPLAT_BACKEND_VULKAN_SCREENSHOT_HPP
+#ifndef VKGSPLAT_BACKEND_VULKAN_CAPTURE_READBACK_HPP
+#define VKGSPLAT_BACKEND_VULKAN_CAPTURE_READBACK_HPP
 
 #include <expected>
 
 #include "app_state.hpp"
 #include "vulkan_context.hpp"
-#include <vkgsplat/renderer.hpp>
+#include <vkgsplat/frame.hpp>
 #include <vkgsplat_utility/error.hpp>
 
 namespace vkgsplat::vulkan {
@@ -15,4 +15,4 @@ namespace vkgsplat::vulkan {
 
 }// namespace vkgsplat::vulkan
 
-#endif// VKGSPLAT_BACKEND_VULKAN_SCREENSHOT_HPP
+#endif// VKGSPLAT_BACKEND_VULKAN_CAPTURE_READBACK_HPP

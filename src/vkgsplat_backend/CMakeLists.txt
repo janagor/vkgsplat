@@ -22,7 +22,7 @@ add_library(
   vulkan/gs/rasterization.cpp
   vulkan/gs/pipeline.cpp
   vulkan/gs/operations.cpp
-  vulkan/screenshot.cpp
+  vulkan/capture/readback.cpp
   vulkan/descriptor/descriptor_heap.cpp
   vulkan/gpu_pass_timer.cpp
   vulkan/imgui_overlay.cpp

@@ -67,6 +67,10 @@ if(TARGET vkgsplat::vkgsplat_utility)
   endif()
 
   if(TARGET vkgsplat::vkgsplat_backend)
+    add_executable(vkgsplat_capture_png_test capture_png.cpp)
+    target_link_libraries(vkgsplat_capture_png_test PRIVATE Catch2::Catch2WithMain vkgsplat::vkgsplat_capture stb::stb)
+    catch_discover_tests(vkgsplat_capture_png_test)
+
     add_executable(vkgsplat_render_thread_test render_thread.cpp)
     target_link_libraries(vkgsplat_render_thread_test PRIVATE Catch2::Catch2WithMain vkgsplat::vkgsplat_backend
                                                               vkgsplat::vkgsplat)
@@ -126,7 +130,7 @@ if(vkgsplat_ENABLE_HEADLESS_GPU_TESTS)
                                                             vkgsplat::vkgsplat_headless_platform)
     add_executable(vkgsplat_fixture_gpu_smoke fixture_gpu_smoke.cpp)
     target_link_libraries(vkgsplat_fixture_gpu_smoke PRIVATE vkgsplat::vkgsplat_benchmark_renderer_adapter
-                                                             vkgsplat::vkgsplat_headless_platform stb::stb)
+                                                             vkgsplat::vkgsplat_headless_platform vkgsplat::vkgsplat_capture stb::stb)
     set(benchmark_scene ${CMAKE_CURRENT_BINARY_DIR}/benchmark-baseline-v1.ply)
     add_executable(vkgsplat_offscreen_gpu_smoke offscreen_gpu_smoke.cpp)
     target_link_libraries(vkgsplat_offscreen_gpu_smoke PRIVATE vkgsplat::vkgsplat vkgsplat::vkgsplat_headless_platform

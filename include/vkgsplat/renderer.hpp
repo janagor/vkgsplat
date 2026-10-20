@@ -4,12 +4,12 @@
 #include <expected>
 #include <optional>
 #include <string>
-#include <string_view>
 
 #include <beman/indirect/indirect.hpp>
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat/engine.hpp>
 #include <vkgsplat/frame_rate.hpp>
+#include <vkgsplat/frame.hpp>
 #include <vkgsplat/gpu_timings.hpp>
 #include <vkgsplat/lfd_config.hpp>
 #include <vkgsplat/platform.hpp>
@@ -33,14 +33,6 @@ struct RenderDeviceInfo
   u32 device_id{};
   u32 driver_version{};
   u32 vulkan_api_version{};
-};
-
-/** Owned, tightly packed RGBA8 pixels in top-to-bottom row order. */
-struct RgbaFrame
-{
-  u32 width{};
-  u32 height{};
-  std::vector<std::uint8_t> pixels;
 };
 
 /** Configuration for a renderer and its optional quilt output. */
@@ -90,8 +82,8 @@ public:
   [[nodiscard]] auto completed_frame_count() const -> u64;
   [[nodiscard]] auto recreated_frame_count() const -> u64;
   [[nodiscard]] auto device_info() const -> RenderDeviceInfo;
-  /** Save the latest scene color target as PNG, excluding the ImGui overlay. */
-  [[nodiscard]] auto save_frame_png(std::string_view path) -> std::expected<void, Error>;
+  /** Capture the latest completed scene color target, excluding the ImGui overlay. */
+  [[nodiscard]] auto capture_latest_frame() -> std::expected<RgbaFrame, Error>;
   [[nodiscard]] auto wait_idle() -> std::expected<void, Error>;
   /**
    * Drain collected samples in frame-ID order and clear the collection.
