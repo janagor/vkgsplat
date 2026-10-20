@@ -2,16 +2,27 @@
 
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat/renderer.hpp>
+#include <vkgsplat_capture/frame_sequence.hpp>
 #include <vkgsplat_headless/offscreen_platform.hpp>
 #include <vkgsplat_io/splat_cpu.hpp>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
+
+#include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <initializer_list>
 #include <iostream>
+#include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <system_error>
+#include <utility>
+#include <vector>
 
 namespace {
 
@@ -51,6 +62,21 @@ constexpr vkgsplat::f32 kCompactShDc = 1.0F / vkgsplat::gs::kShC0;
     }
   }
   return vkgsplat::benchmark::WritePly(path, scene);
+}
+
+[[nodiscard]] auto ReadPng(std::filesystem::path const &path) -> std::optional<vkgsplat::RgbaFrame>
+{
+  int width{};
+  int height{};
+  int channels{};
+  auto const filename = path.string();
+  std::unique_ptr<stbi_uc, decltype(&stbi_image_free)> pixels{
+    stbi_load(filename.c_str(), &width, &height, &channels, static_cast<int>(kRgbaChannels)), stbi_image_free
+  };
+  if (!pixels || width <= 0 || height <= 0) { return std::nullopt; }
+  auto const byte_count = static_cast<size_t>(width) * static_cast<size_t>(height) * kRgbaChannels;
+  return vkgsplat::RgbaFrame{ .width = static_cast<vkgsplat::u32>(width),
+    .height = static_cast<vkgsplat::u32>(height), .pixels = { pixels.get(), pixels.get() + byte_count } };
 }
 
 [[nodiscard]] auto HasScenePixels(vkgsplat::RgbaFrame const &frame,
@@ -153,6 +179,49 @@ auto Run(std::string const &scene_path, std::string const &compact_path, bool va
     std::cerr << "Interleaved frame count differs from request count\n";
     return EXIT_FAILURE;
   }
+  auto const sequence_path = std::filesystem::temp_directory_path()
+    / ("vkgsplat-offscreen-sequence-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+  auto sequence = vkgsplat::capture::FrameSequence::create(*renderer, { .output_directory = sequence_path });
+  if (!sequence) {
+    std::cerr << sequence.error().message() << '\n';
+    return EXIT_FAILURE;
+  }
+  std::vector<std::filesystem::path> sequence_files;
+  for (auto const &capture_camera : { camera_a, camera_b, camera_a }) {
+    auto recorded = sequence->record_frame(capture_camera);
+    if (!recorded || recorded->width != kTestWidth || recorded->height != kTestHeight) {
+      std::cerr << "Sequence frame capture failed\n";
+      return EXIT_FAILURE;
+    }
+    sequence_files.push_back(recorded->path);
+  }
+  auto const summary = sequence->finish();
+  if (!summary || summary->frame_count != kInterleavedFrameCount) {
+    std::cerr << "Sequence did not finish\n";
+    return EXIT_FAILURE;
+  }
+  std::vector<vkgsplat::RgbaFrame> decoded_frames;
+  for (auto const &filename : sequence_files) {
+    auto decoded = ReadPng(filename);
+    if (!decoded || decoded->width != kTestWidth || decoded->height != kTestHeight
+        || decoded->pixels.size() != first->pixels.size()) {
+      std::cerr << "Sequence PNG is missing or has unexpected dimensions\n";
+      return EXIT_FAILURE;
+    }
+    decoded_frames.push_back(std::move(*decoded));
+  }
+  if (decoded_frames.at(0).pixels != first->pixels || decoded_frames.at(1).pixels != frame_b->pixels
+      || decoded_frames.at(2).pixels != decoded_frames.at(0).pixels
+      || decoded_frames.at(1).pixels == decoded_frames.at(0).pixels) {
+    std::cerr << "Sequence PNG pixels do not match their camera states\n";
+    return EXIT_FAILURE;
+  }
+  std::error_code cleanup_error;
+  std::filesystem::remove_all(sequence_path, cleanup_error);
+  if (cleanup_error) {
+    std::cerr << "Could not remove sequence test files\n";
+    return EXIT_FAILURE;
+  }
 
   if (auto written = WriteCompactQuiltScene(compact_path); !written) {
     std::cerr << written.error().message() << '\n';
@@ -175,6 +244,33 @@ auto Run(std::string const &scene_path, std::string const &compact_path, bool va
   if (quilt->width != kTestWidth || quilt->height != kTestHeight
       || quilt->pixels.size() != static_cast<size_t>(kTestWidth) * kTestHeight * kRgbaChannels) {
     std::cerr << "Unexpected quilt extent\n";
+    return EXIT_FAILURE;
+  }
+  auto const quilt_sequence_path = std::filesystem::temp_directory_path()
+    / ("vkgsplat-quilt-sequence-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+  auto quilt_sequence = vkgsplat::capture::FrameSequence::create(*quilt_renderer,
+    { .output_directory = quilt_sequence_path });
+  if (!quilt_sequence) {
+    std::cerr << quilt_sequence.error().message() << '\n';
+    return EXIT_FAILURE;
+  }
+  auto quilt_recorded = quilt_sequence->record_frame(camera_a);
+  auto quilt_finished = quilt_sequence->finish();
+  if (!quilt_recorded || quilt_recorded->width != kTestWidth || quilt_recorded->height != kTestHeight
+      || !quilt_finished || quilt_finished->frame_count != 1U
+      || !std::filesystem::is_regular_file(quilt_recorded->path)) {
+    std::cerr << "Quilt sequence capture failed\n";
+    return EXIT_FAILURE;
+  }
+  auto decoded_quilt = ReadPng(quilt_recorded->path);
+  if (!decoded_quilt || decoded_quilt->width != kTestWidth || decoded_quilt->height != kTestHeight
+      || decoded_quilt->pixels != quilt->pixels) {
+    std::cerr << "Quilt sequence PNG pixels differ from the captured atlas\n";
+    return EXIT_FAILURE;
+  }
+  std::filesystem::remove_all(quilt_sequence_path, cleanup_error);
+  if (cleanup_error) {
+    std::cerr << "Could not remove quilt sequence test files\n";
     return EXIT_FAILURE;
   }
   auto const tile_width = kTestWidth / kQuiltColumns;

@@ -45,13 +45,15 @@ if(vkgsplat_BUILD_BENCHMARKS)
     main.cpp
     render_throughput.cpp
     gpu_pass_timings.cpp
-    gpu_statistics.cpp)
+    gpu_statistics.cpp
+    capture_sequence.cpp)
   add_dependencies(vkgsplat_bench vkgsplat_benchmark_scene)
   target_link_libraries(
     vkgsplat_bench
     PRIVATE benchmark::benchmark
             vkgsplat::vkgsplat_benchmark_renderer_adapter
             vkgsplat::vkgsplat_headless_platform
+            vkgsplat::vkgsplat_capture
             vkgsplat::vkgsplat_options
             vkgsplat::vkgsplat_warnings)
   target_compile_features(vkgsplat_bench PRIVATE cxx_std_23)

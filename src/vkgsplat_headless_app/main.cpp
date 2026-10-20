@@ -4,6 +4,7 @@
 #include <vkgsplat/renderer.hpp>
 #include <vkgsplat_headless/headless_platform.hpp>
 #include <vkgsplat_headless/offscreen_platform.hpp>
+#include <vkgsplat_capture/frame_sequence.hpp>
 #include <vkgsplat_capture/screenshot.hpp>
 #include <vkgsplat_utility/types.hpp>
 
@@ -11,13 +12,20 @@
 #include <glm/ext/vector_double3.hpp>
 
 #include <array>
+#include <cmath>
 #include <exception>
+#include <numbers>
 #include <memory>
 #include <print>
 #include <string>
 #include <utility>
 
 namespace {
+constexpr vkgsplat::u32 kDefaultSequenceFps = 60U;
+constexpr vkgsplat::f64 kDefaultOrbitDegrees = 360.0;
+constexpr vkgsplat::f64 kFullCircleDegrees = 360.0;
+constexpr vkgsplat::f64 kRadiansPerCircle = 2.0 * std::numbers::pi_v<vkgsplat::f64>;
+
 [[nodiscard]] auto ToArray(glm::dvec3 const &vector) -> std::array<vkgsplat::f64, 3>
 {
   // NOLINTBEGIN(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
@@ -27,9 +35,14 @@ namespace {
 
 auto RunHeadless(int argc, char **argv) -> int
 {
-  CLI::App app{ "Render one Gaussian Splatting frame without a window" };
+  CLI::App app{ "Render Gaussian Splatting frames without a window" };
   std::string ply_path;
   std::string output;
+  std::string sequence_dir;
+  vkgsplat::u64 frames = 0U;
+  vkgsplat::u32 fps = kDefaultSequenceFps;
+  vkgsplat::u32 fps_denominator = 1U;
+  vkgsplat::f64 orbit_degrees = kDefaultOrbitDegrees;
   std::string target = "headless-surface";
   vkgsplat::u32 width = vkgsplat::kDefaultHeadlessWidth;
   vkgsplat::u32 height = vkgsplat::kDefaultHeadlessHeight;
@@ -38,7 +51,13 @@ auto RunHeadless(int argc, char **argv) -> int
   auto camera_position = ToArray(default_camera.position);
   auto camera_target = ToArray(default_camera.target);
   app.add_option("--ply", ply_path, "PLY scene path")->required()->check(CLI::ExistingFile);
-  app.add_option("--output", output, "Output PNG path")->required();
+  auto *output_option = app.add_option("--output", output, "Output PNG path");
+  auto *sequence_option = app.add_option("--sequence-dir", sequence_dir, "Output directory for a PNG sequence");
+  output_option->excludes(sequence_option);
+  app.add_option("--frames", frames, "Number of sequence frames");
+  app.add_option("--fps", fps, "Frame rate numerator");
+  app.add_option("--fps-denominator", fps_denominator, "Frame rate denominator");
+  app.add_option("--orbit-degrees", orbit_degrees, "Total horizontal orbit angle");
   app.add_option("--target", target, "Output target: headless-surface or offscreen")
     ->check(CLI::IsMember({ "headless-surface", "offscreen" }));
   app.add_option("--width", width, "Frame width")->capture_default_str();
@@ -50,6 +69,13 @@ auto RunHeadless(int argc, char **argv) -> int
     app.parse(argc, argv);
   } catch (CLI::ParseError const &error) {
     return app.exit(error);
+  }
+
+  if ((output.empty() && sequence_dir.empty()) || width == 0U || height == 0U || fps == 0U
+      || fps_denominator == 0U || !std::isfinite(orbit_degrees)
+      || (!sequence_dir.empty() && (target != "offscreen" || frames == 0U))) {
+    std::println(stderr, "Invalid output mode, positive width and height, frame count, frame rate, or orbit angle");
+    return 1;
   }
 
   std::unique_ptr<vkgsplat::Platform> platform;
@@ -87,6 +113,42 @@ auto RunHeadless(int argc, char **argv) -> int
     .target = { camera_target.at(0), camera_target.at(1), camera_target.at(2) },
     .aspect_ratio = static_cast<vkgsplat::f64>(width) / static_cast<vkgsplat::f64>(height),
   } };
+  if (!sequence_dir.empty()) {
+    auto sequence = vkgsplat::capture::FrameSequence::create(*renderer, {
+      .output_directory = sequence_dir,
+      .frame_rate = { .numerator = fps, .denominator = fps_denominator },
+    });
+    if (!sequence) {
+      std::println(stderr, "{}", sequence.error().message());
+      return 1;
+    }
+    auto const radians_per_degree = kRadiansPerCircle / kFullCircleDegrees;
+    auto const dx = camera_position.at(0) - camera_target.at(0);
+    auto const dz = camera_position.at(2) - camera_target.at(2);
+    for (vkgsplat::u64 index = 0U; index < frames; ++index) {
+      auto const angle = static_cast<vkgsplat::f64>(index) / static_cast<vkgsplat::f64>(frames)
+                         * orbit_degrees * radians_per_degree;
+      vkgsplat::Camera const orbit_camera{ vkgsplat::CameraConfig{
+        .position = { camera_target.at(0) + dx * std::cos(angle) + dz * std::sin(angle),
+          camera_position.at(1),
+          camera_target.at(2) - dx * std::sin(angle) + dz * std::cos(angle) },
+        .target = { camera_target.at(0), camera_target.at(1), camera_target.at(2) },
+        .aspect_ratio = static_cast<vkgsplat::f64>(width) / static_cast<vkgsplat::f64>(height),
+      } };
+      auto recorded = sequence->record_frame(orbit_camera);
+      if (!recorded) {
+        std::println(stderr, "{}", recorded.error().message());
+        return 1;
+      }
+    }
+    auto result = sequence->finish();
+    if (!result) {
+      std::println(stderr, "{}", result.error().message());
+      return 1;
+    }
+    std::println("Saved {} frames to {}", result->frame_count, sequence_dir);
+    return 0;
+  }
   if (target == "offscreen") {
     auto frame = renderer->render_frame(camera);
     if (!frame) {

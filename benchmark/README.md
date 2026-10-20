@@ -52,3 +52,22 @@ The CPU-only tests cover mailbox replacement and ownership, plus the production 
 The JSON result has `gpu.frame.*` and `gpu.<pass>.*` counters in milliseconds, plus `gpu.samples`. It does not report `items_per_second`: manual GPU time is the sum of frame spans, so a rate based on it would not represent application FPS. Each applicable pass reports mean, median, p95, population standard deviation, minimum, maximum, and sample count. p95 uses nearest rank. The mono baseline omits multiview projection counters because that pass does not execute. The GPU frame span brackets the GS pipeline before the ImGui overlay; it includes work outside named pass timers, so it is measured independently rather than computed by summing them. The JSON context records the timestamp period, valid bit count, timing schema version, and scope.
 
 `BM_RenderThroughput` remains the uninstrumented wall-clock FPS measurement. Timestamp writes add GPU work, so compare GPU pass timings with other profiled runs. The renderer's `take_gpu_timings()` transfers collected samples and clears the collection; call `wait_idle()` first to obtain a complete batch. The opt-in `benchmark.gpu.timing.smoke` test runs the canonical scene with validation and checks batches of 1, 2, 3, and 64 frames, including repeated drains.
+
+## PNG sequence baseline
+
+`BM_CaptureDiscard`, `BM_CaptureSynchronousPng`, and `BM_CaptureQueuedPng` measure
+120-frame offscreen batches at 1920 × 1080 and 3840 × 2160. Each mode has a
+fixed-camera baseline and a deterministic circular-orbit variant. They use the same fixture
+and renderer settings. Queued export also reports mean writer-queue wait per batch and peak
+queued-frame count. Scene loading and renderer creation happen before timing;
+rendering, readback, PNG work, and the final writer drain are timed. Temporary output
+cleanup is outside timing. Run repeated trials and compare median end-to-end FPS:
+
+```sh
+./out/build/benchmark/benchmark/vkgsplat_bench \
+  --benchmark_filter='BM_Capture(Discard|SynchronousPng|QueuedPng)' \
+  --benchmark_repetitions=5 --benchmark_out=capture_results.json --benchmark_out_format=json
+```
+
+These benchmarks require a compatible offscreen Vulkan device and sufficient storage
+for a 120-frame batch. No result is recorded until the benchmark has actually run.

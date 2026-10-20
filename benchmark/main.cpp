@@ -1,3 +1,4 @@
+#include "benchmark/capture_sequence.hpp"
 #include "benchmark/fixture/manifest.hpp"
 #include "benchmark/fixture/profile.hpp"
 #include "benchmark/fixture/renderer_adapter.hpp"
@@ -82,6 +83,7 @@ auto RunBenchmark(int argc, char **argv) -> int
   std::atomic_bool failed{ false };
   vkgsplat::benchmark::RegisterRenderThroughput(*platform, profile, scene_path, camera, failed);
   vkgsplat::benchmark::RegisterGpuPassTimings(*platform, profile, scene_path, camera, failed);
+  vkgsplat::benchmark::RegisterCaptureSequence(profile, scene_path, camera, failed);
   ::benchmark::RunSpecifiedBenchmarks();
   ::benchmark::Shutdown();
   return failed.load() ? EXIT_FAILURE : EXIT_SUCCESS;

@@ -71,6 +71,14 @@ if(TARGET vkgsplat::vkgsplat_utility)
     target_link_libraries(vkgsplat_capture_png_test PRIVATE Catch2::Catch2WithMain vkgsplat::vkgsplat_capture stb::stb)
     catch_discover_tests(vkgsplat_capture_png_test)
 
+    add_executable(vkgsplat_png_sequence_writer_test png_sequence_writer.cpp ../src/vkgsplat_capture/png_sequence_writer.cpp)
+    target_link_libraries(vkgsplat_png_sequence_writer_test PRIVATE Catch2::Catch2WithMain vkgsplat::vkgsplat_capture stb::stb)
+    catch_discover_tests(
+      vkgsplat_png_sequence_writer_test
+      PROPERTIES
+      TIMEOUT
+      10)
+
     add_executable(vkgsplat_render_thread_test render_thread.cpp)
     target_link_libraries(vkgsplat_render_thread_test PRIVATE Catch2::Catch2WithMain vkgsplat::vkgsplat_backend
                                                               vkgsplat::vkgsplat)
@@ -131,10 +139,28 @@ if(vkgsplat_ENABLE_HEADLESS_GPU_TESTS)
     add_executable(vkgsplat_fixture_gpu_smoke fixture_gpu_smoke.cpp)
     target_link_libraries(vkgsplat_fixture_gpu_smoke PRIVATE vkgsplat::vkgsplat_benchmark_renderer_adapter
                                                              vkgsplat::vkgsplat_headless_platform vkgsplat::vkgsplat_capture stb::stb)
+    add_executable(vkgsplat_png_sequence_verify png_sequence_verify.cpp)
+    target_link_libraries(vkgsplat_png_sequence_verify PRIVATE stb::stb vkgsplat::vkgsplat_utility)
     set(benchmark_scene ${CMAKE_CURRENT_BINARY_DIR}/benchmark-baseline-v1.ply)
     add_executable(vkgsplat_offscreen_gpu_smoke offscreen_gpu_smoke.cpp)
     target_link_libraries(vkgsplat_offscreen_gpu_smoke PRIVATE vkgsplat::vkgsplat vkgsplat::vkgsplat_headless_platform
-                                                               vkgsplat::vkgsplat_benchmark_fixture)
+                                                               vkgsplat::vkgsplat_benchmark_fixture vkgsplat::vkgsplat_capture stb::stb)
+    add_test(
+      NAME headless.gpu.sequence
+      COMMAND ${CMAKE_COMMAND} -DEXECUTABLE=$<TARGET_FILE:vkgsplat_headless>
+              -DVERIFY_EXECUTABLE=$<TARGET_FILE:vkgsplat_png_sequence_verify>
+              -DPLY=${benchmark_scene}
+              -DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/headless-sequence-test
+              -DVALIDATION=${vkgsplat_HEADLESS_GPU_TEST_VALIDATION}
+              -P ${CMAKE_CURRENT_SOURCE_DIR}/headless_sequence_gpu_smoke.cmake)
+    set_tests_properties(
+      headless.gpu.sequence
+      PROPERTIES FIXTURES_REQUIRED
+                 benchmark_fixture
+                 ENVIRONMENT
+                 "DISPLAY=;WAYLAND_DISPLAY="
+                 TIMEOUT
+                 180)
     add_test(NAME offscreen.gpu.sequence
              COMMAND $<TARGET_FILE:vkgsplat_offscreen_gpu_smoke> ${benchmark_scene}
                      ${CMAKE_CURRENT_BINARY_DIR}/offscreen-compact.ply ${vkgsplat_HEADLESS_GPU_TEST_VALIDATION})
