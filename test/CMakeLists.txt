@@ -67,6 +67,10 @@ if(TARGET vkgsplat::vkgsplat_utility)
   endif()
 
   if(TARGET vkgsplat::vkgsplat_backend)
+    add_executable(vkgsplat_h264_gop_test h264_gop.cpp)
+    target_link_libraries(vkgsplat_h264_gop_test PRIVATE Catch2::Catch2WithMain vkgsplat::vkgsplat_backend)
+    catch_discover_tests(vkgsplat_h264_gop_test)
+
     add_executable(vkgsplat_h264_writer_test h264_writer.cpp)
     target_link_libraries(vkgsplat_h264_writer_test PRIVATE Catch2::Catch2WithMain vkgsplat::vkgsplat_io)
     catch_discover_tests(vkgsplat_h264_writer_test)
@@ -124,7 +128,7 @@ if(vkgsplat_ENABLE_VIDEO_GPU_TESTS OR vkgsplat_ENABLE_HEADLESS_GPU_TESTS)
                              VKGSPLAT_TEST_VIDEO_VALIDATION=$<BOOL:${vkgsplat_HEADLESS_GPU_TEST_VALIDATION}>)
   add_test(NAME video.session.parameters COMMAND $<TARGET_FILE:vkgsplat_video_session_test>)
   set_tests_properties(video.session.parameters PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 120)
-  add_executable(vkgsplat_video_encode_synthetic_test video_encode_synthetic.cpp)
+  add_executable(vkgsplat_video_encode_synthetic_test video_encode_synthetic.cpp video_encode_gpu_source.cpp)
   target_link_libraries(vkgsplat_video_encode_synthetic_test PRIVATE vkgsplat::vkgsplat_backend
                                                                     vkgsplat::vkgsplat_headless_platform
                                                                     vkgsplat::vkgsplat_io)
@@ -136,14 +140,14 @@ if(vkgsplat_ENABLE_VIDEO_GPU_TESTS OR vkgsplat_ENABLE_HEADLESS_GPU_TESTS)
   add_test(NAME video.encode.synthetic.smoke
            COMMAND $<TARGET_FILE:vkgsplat_video_encode_synthetic_test>
                    ${CMAKE_CURRENT_BINARY_DIR}/video-synthetic-smoke.h264)
-  set_tests_properties(video.encode.synthetic.smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 120)
+  set_tests_properties(video.encode.synthetic.smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300)
   if(vkgsplat_FFMPEG_EXECUTABLE AND vkgsplat_FFPROBE_EXECUTABLE AND Python3_Interpreter_FOUND)
     add_test(NAME video.encode.synthetic
              COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/video_encode_integration.py
                      $<TARGET_FILE:vkgsplat_video_encode_synthetic_test> ${CMAKE_COMMAND}
                      ${CMAKE_CURRENT_SOURCE_DIR}/video_encode_verify.cmake
                      ${vkgsplat_FFMPEG_EXECUTABLE} ${vkgsplat_FFPROBE_EXECUTABLE})
-    set_tests_properties(video.encode.synthetic PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 120)
+    set_tests_properties(video.encode.synthetic PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300)
   elseif(vkgsplat_ENABLE_VIDEO_GPU_TESTS)
     message(STATUS "Full Vulkan Video encode verification requires FFmpeg, FFprobe, and Python3")
   endif()

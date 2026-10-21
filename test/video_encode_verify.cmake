@@ -18,6 +18,6 @@ execute_process(COMMAND "${FFPROBE}" -v error -f h264 -count_frames -select_stre
                         -show_entries stream=width,height,nb_read_frames -of default=noprint_wrappers=1 "${INPUT}"
                 RESULT_VARIABLE probe_result OUTPUT_VARIABLE probe_output ERROR_VARIABLE probe_error)
 if(NOT probe_result EQUAL 0 OR NOT probe_output MATCHES "width=1280"
-   OR NOT probe_output MATCHES "height=720" OR NOT probe_output MATCHES "nb_read_frames=1")
+   OR NOT probe_output MATCHES "height=720" OR NOT probe_output MATCHES "nb_read_frames=60")
   message(FATAL_ERROR "Unexpected synthetic H.264 dimensions or frame count: ${probe_output} ${probe_error}")
 endif()

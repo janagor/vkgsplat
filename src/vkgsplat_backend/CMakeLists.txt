@@ -9,6 +9,8 @@ add_library(
   vulkan/video/video_capabilities.cpp
   vulkan/video/video_device.cpp
   vulkan/video/video_session.cpp
+  vulkan/video/video_encoder.cpp
+  vulkan/video/h264_gop.cpp
   vulkan/shader.cpp
   vulkan/mesh_gpu.cpp
   vulkan/sphere_setup.cpp
