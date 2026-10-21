@@ -170,7 +170,8 @@ if(vkgsplat_ENABLE_HEADLESS_GPU_TESTS)
     message(FATAL_ERROR "Headless GPU tests require a native build and vkgsplat_HEADLESS_TEST_PLY")
   endif()
   add_executable(vkgsplat_video_device_test video_device.cpp)
-  target_link_libraries(vkgsplat_video_device_test PRIVATE vkgsplat::vkgsplat vkgsplat::vkgsplat_headless_platform)
+  target_link_libraries(vkgsplat_video_device_test PRIVATE vkgsplat::vkgsplat vkgsplat::vkgsplat_headless_platform
+                                                          vkgsplat::vkgsplat_capture)
   add_test(NAME video.device.initialization COMMAND $<TARGET_FILE:vkgsplat_video_device_test>
                                                     ${vkgsplat_HEADLESS_TEST_PLY})
   set_tests_properties(video.device.initialization PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 120)
@@ -211,6 +212,9 @@ if(vkgsplat_ENABLE_HEADLESS_GPU_TESTS)
     add_executable(vkgsplat_offscreen_gpu_smoke offscreen_gpu_smoke.cpp)
     target_link_libraries(vkgsplat_offscreen_gpu_smoke PRIVATE vkgsplat::vkgsplat vkgsplat::vkgsplat_headless_platform
                                                                vkgsplat::vkgsplat_benchmark_fixture vkgsplat::vkgsplat_capture stb::stb)
+    if(vkgsplat_ENABLE_MP4)
+      target_compile_definitions(vkgsplat_offscreen_gpu_smoke PRIVATE VKGSPLAT_ENABLE_MP4=1)
+    endif()
     add_test(
       NAME headless.gpu.sequence
       COMMAND ${CMAKE_COMMAND} -DEXECUTABLE=$<TARGET_FILE:vkgsplat_headless>

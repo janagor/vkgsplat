@@ -1,9 +1,11 @@
 #include <vkgsplat/engine.hpp>
 #include <vkgsplat/renderer.hpp>
+#include <vkgsplat_capture/video_recorder.hpp>
 #include <vkgsplat_headless/offscreen_platform.hpp>
 
 #include <cstdint>
 #include <cstdlib>
+#include <filesystem>
 #include <iostream>
 #include <system_error>
 #include <utility>
@@ -12,6 +14,7 @@
 namespace {
 
 constexpr vkgsplat::u32 kTestExtent = 64U;
+constexpr vkgsplat::u32 kMismatchedRecordingExtent = kTestExtent + 1U;
 constexpr int kSkipped = 77;
 constexpr int kExpectedArguments = 2;
 constexpr std::size_t kRgbaChannels = 4U;
@@ -63,6 +66,19 @@ auto Run(char const *scene_path) -> int
     if (!renderer) {
       std::cerr << renderer.error().message() << '\n';
       return EXIT_FAILURE;
+    }
+    if (optional_enabled) {
+      auto output_path = std::filesystem::path{ scene_path };
+      output_path += ".mismatched.h264";
+      auto mismatched = vkgsplat::capture::VideoRecorder::create(*renderer, {
+        .output_path = output_path,
+        .width = kMismatchedRecordingExtent,
+        .height = kTestExtent,
+      });
+      if (mismatched || mismatched.error().code() != std::make_error_code(std::errc::invalid_argument)) {
+        std::cerr << "Recording accepted an extent different from the renderer\n";
+        return EXIT_FAILURE;
+      }
     }
     for (std::uint32_t index = 0; index < kRenderFrames; ++index) {
       auto frame = renderer->render_frame(vkgsplat::Camera{});

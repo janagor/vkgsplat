@@ -3,6 +3,7 @@
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat/renderer.hpp>
 #include <vkgsplat_capture/frame_sequence.hpp>
+#include <vkgsplat_capture/video_recorder.hpp>
 #include <vkgsplat_headless/offscreen_platform.hpp>
 #include <vkgsplat_io/splat_cpu.hpp>
 
@@ -17,6 +18,7 @@
 #include <filesystem>
 #include <initializer_list>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
@@ -29,6 +31,8 @@ namespace {
 
 constexpr vkgsplat::u32 kTestWidth = 64U;
 constexpr vkgsplat::u32 kTestHeight = 64U;
+constexpr vkgsplat::u32 kInvalidFrameRateComponent = static_cast<vkgsplat::u32>(std::numeric_limits<int>::max()) + 1U;
+constexpr vkgsplat::u32 kUnsupportedIdrInterval = 2U;
 constexpr vkgsplat::u32 kRgbaChannels = 4U;
 constexpr vkgsplat::u64 kFrameCount = 10U;
 constexpr vkgsplat::u64 kInterleavedFrameCount = 3U;
@@ -129,6 +133,61 @@ constexpr vkgsplat::f32 kCompactShDc = 1.0F / vkgsplat::gs::kShC0;
   return true;
 }
 
+[[nodiscard]] auto CheckVideoConfigRejections(vkgsplat::Renderer &renderer,
+  std::filesystem::path const &output_path) -> bool
+{
+  using vkgsplat::capture::VideoConfig;
+  using vkgsplat::capture::VideoRecorder;
+  auto const base = VideoConfig{ .output_path = output_path, .width = kTestWidth, .height = kTestHeight };
+  auto const rejected = [&renderer](VideoConfig const &config, std::errc expected) -> bool {
+    auto result = VideoRecorder::create(renderer, config);
+    if (result || result.error().code() != std::make_error_code(expected)) {
+      std::cerr << "Video configuration returned the wrong error category\n";
+      return false;
+    }
+    return true;
+  };
+  auto invalid = base;
+  invalid.output_path.clear();
+  if (!rejected(invalid, std::errc::invalid_argument)) { return false; }
+  invalid = base;
+  invalid.width = 0U;
+  if (!rejected(invalid, std::errc::invalid_argument)) { return false; }
+  invalid = base;
+  invalid.height = 0U;
+  if (!rejected(invalid, std::errc::invalid_argument)) { return false; }
+  invalid = base;
+  invalid.frame_rate.numerator = 0U;
+  if (!rejected(invalid, std::errc::invalid_argument)) { return false; }
+  invalid = base;
+  invalid.frame_rate.denominator = 0U;
+  if (!rejected(invalid, std::errc::invalid_argument)) { return false; }
+  invalid = base;
+  invalid.frame_rate.numerator = kInvalidFrameRateComponent;
+  if (!rejected(invalid, std::errc::invalid_argument)) { return false; }
+  invalid = base;
+  invalid.frame_rate.denominator = kInvalidFrameRateComponent;
+  if (!rejected(invalid, std::errc::invalid_argument)) { return false; }
+  invalid = base;
+  invalid.gop.enable_p_frames = true;
+  if (!rejected(invalid, std::errc::function_not_supported)) { return false; }
+  invalid = base;
+  invalid.gop.idr_interval = kUnsupportedIdrInterval;
+  if (!rejected(invalid, std::errc::function_not_supported)) { return false; }
+  for (auto const mode : { vkgsplat::capture::RateControlMode::kConstantQp,
+         vkgsplat::capture::RateControlMode::kCbr, vkgsplat::capture::RateControlMode::kVbr }) {
+    invalid = base;
+    invalid.rate_control.mode = mode;
+    if (!rejected(invalid, std::errc::function_not_supported)) { return false; }
+  }
+#if !defined(VKGSPLAT_ENABLE_MP4)
+  invalid = base;
+  invalid.container = vkgsplat::capture::VideoContainer::kMp4;
+  if (!rejected(invalid, std::errc::function_not_supported)) { return false; }
+#endif
+  return !std::filesystem::exists(output_path);
+}
+
 auto Run(std::string const &scene_path, std::string const &compact_path, bool validation) -> int
 {
   auto platform = vkgsplat::OffscreenPlatform::create({ .width = kTestWidth, .height = kTestHeight });
@@ -147,6 +206,8 @@ auto Run(std::string const &scene_path, std::string const &compact_path, bool va
     std::cerr << renderer.error().message() << '\n';
     return EXIT_FAILURE;
   }
+  auto const invalid_video_path = std::filesystem::path{ compact_path }.replace_extension(".invalid.h264");
+  if (!CheckVideoConfigRejections(*renderer, invalid_video_path)) { return EXIT_FAILURE; }
   vkgsplat::Camera const camera_a{ vkgsplat::CameraConfig{
     .position = { 0.0, 0.0, kCameraDistance },
     .target = { 0.0, 0.0, 0.0 },
