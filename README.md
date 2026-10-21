@@ -37,11 +37,10 @@ for those requirements and returns an initialization error when none qualify.
 After creation, `engine.video_encode_capabilities()` (or the driver equivalent)
 reports whether the logical device has H.264 enabled, whether the known RGBA
 conversion path and reference pictures are supported, its usable coded extent,
-and a diagnostic string. This only reports initialization capability; encoding
-and video output are not implemented yet. The Vulkan backend retains the complete
-profile, format, limit, and queue data for the future encoder.
-`capture_conversion_supported` reports compatible image usages, not a completed
-color-conversion pipeline.
+and a diagnostic string. The Vulkan backend retains the detailed profile, format,
+limit, and queue data used by the offline H.264 encoder.
+`capture_conversion_supported` reports compatible image usages; recording also
+requires a usable compute graphics queue.
 The public maximum extent and both support flags describe one selected profile
 and encode-source format; the internal report retains alternatives for later
 encoder configurations.
@@ -82,6 +81,30 @@ vkgsplat_headless --ply scene.ply --target offscreen --sequence-dir output/seque
   --width 1920 --height 1080 --frames 120 --fps 60 --orbit-degrees 360
 ```
 
-The `--output` option continues to save one screenshot and cannot be combined with
-`--sequence-dir`. Sequence mode uses an offscreen target. Orbit positions are calculated
+The `--output` option saves one PNG screenshot or a video when its extension is
+`.h264` or `.mp4`; it cannot be combined with `--sequence-dir`. Sequence mode uses
+an offscreen target. Orbit positions are calculated
 from each frame index, so capture speed does not affect the requested camera state.
+
+## Offline video recording
+
+Include `<vkgsplat_capture/video_recorder.hpp>` and link `vkgsplat::vkgsplat_capture`.
+Create an offscreen `Engine` with `EngineConfig::video_encode = VideoEncodeSupport::kRequired`,
+then create its renderer and a `capture::VideoRecorder`. Keep the engine and renderer
+alive until the recorder is destroyed. Call `record_frame(camera)` once per presentation
+frame and check `finish()` to finalize the output. The configured rational frame rate
+determines timestamps; rendering speed does not affect them.
+
+The current encoder writes IDR-only H.264 and requires dimensions divisible by 16.
+`VideoConfig` defaults to raw `.h264`, 1280×720, and an IDR interval of one.
+Requests for P frames or explicit rate-control modes fail during recorder creation.
+MP4 requires `vkgsplat_ENABLE_MP4=ON` and FFmpeg development libraries at build time.
+MP4 publication fails if the destination already exists and uses a reserved temporary
+file until `finish()` succeeds. The output filesystem must support hard links.
+
+```sh
+vkgsplat_headless --ply scene.ply --target offscreen --output orbit.mp4 \
+  --width 1280 --height 720 --frames 300 --fps 60 --orbit-degrees 360
+```
+
+The same command with `orbit.h264` writes a raw Annex B stream without FFmpeg.

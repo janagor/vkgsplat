@@ -59,3 +59,21 @@ execute_process(
 if(sequence_count_result EQUAL 0 OR NOT sequence_count_error MATCHES "frame count")
   message(FATAL_ERROR "Sequence mode accepted zero frames: ${sequence_count_error}")
 endif()
+
+execute_process(
+  COMMAND "${EXECUTABLE}" --ply "${ply_path}" --target headless-surface
+          --output "${OUTPUT_DIR}/invalid-video.mp4" --frames 2
+  RESULT_VARIABLE video_target_result
+  ERROR_VARIABLE video_target_error)
+if(video_target_result EQUAL 0 OR NOT video_target_error MATCHES "Invalid output mode")
+  message(FATAL_ERROR "Video mode accepted a headless surface: ${video_target_error}")
+endif()
+
+execute_process(
+  COMMAND "${EXECUTABLE}" --ply "${ply_path}" --target offscreen
+          --output "${OUTPUT_DIR}/invalid-video.h264" --frames 0
+  RESULT_VARIABLE video_count_result
+  ERROR_VARIABLE video_count_error)
+if(video_count_result EQUAL 0 OR NOT video_count_error MATCHES "frame count")
+  message(FATAL_ERROR "Video mode accepted zero frames: ${video_count_error}")
+endif()

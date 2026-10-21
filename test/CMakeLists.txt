@@ -128,7 +128,8 @@ if(vkgsplat_ENABLE_VIDEO_GPU_TESTS OR vkgsplat_ENABLE_HEADLESS_GPU_TESTS)
                              VKGSPLAT_TEST_VIDEO_VALIDATION=$<BOOL:${vkgsplat_HEADLESS_GPU_TEST_VALIDATION}>)
   add_test(NAME video.session.parameters COMMAND $<TARGET_FILE:vkgsplat_video_session_test>)
   set_tests_properties(video.session.parameters PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 120)
-  add_executable(vkgsplat_video_encode_synthetic_test video_encode_synthetic.cpp video_encode_gpu_source.cpp)
+  add_executable(vkgsplat_video_encode_synthetic_test video_encode_synthetic.cpp video_encode_gpu_source.cpp
+                                                   video_encode_color_source.cpp)
   target_link_libraries(vkgsplat_video_encode_synthetic_test PRIVATE vkgsplat::vkgsplat_backend
                                                                     vkgsplat::vkgsplat_headless_platform
                                                                     vkgsplat::vkgsplat_io)
@@ -141,13 +142,25 @@ if(vkgsplat_ENABLE_VIDEO_GPU_TESTS OR vkgsplat_ENABLE_HEADLESS_GPU_TESTS)
            COMMAND $<TARGET_FILE:vkgsplat_video_encode_synthetic_test>
                    ${CMAKE_CURRENT_BINARY_DIR}/video-synthetic-smoke.h264)
   set_tests_properties(video.encode.synthetic.smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300)
+  add_test(NAME video.encode.gpu_source.smoke
+           COMMAND $<TARGET_FILE:vkgsplat_video_encode_synthetic_test>
+                   ${CMAKE_CURRENT_BINARY_DIR}/video-gpu-source-smoke.h264 --gpu-only)
+  set_tests_properties(video.encode.gpu_source.smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300)
+  add_test(NAME video.encode.color_conversion.smoke
+           COMMAND $<TARGET_FILE:vkgsplat_video_encode_synthetic_test>
+                   ${CMAKE_CURRENT_BINARY_DIR}/video-color-conversion-smoke.h264 --color-conversion)
+  set_tests_properties(video.encode.color_conversion.smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300)
   if(vkgsplat_FFMPEG_EXECUTABLE AND vkgsplat_FFPROBE_EXECUTABLE AND Python3_Interpreter_FOUND)
     add_test(NAME video.encode.synthetic
              COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/video_encode_integration.py
                      $<TARGET_FILE:vkgsplat_video_encode_synthetic_test> ${CMAKE_COMMAND}
                      ${CMAKE_CURRENT_SOURCE_DIR}/video_encode_verify.cmake
                      ${vkgsplat_FFMPEG_EXECUTABLE} ${vkgsplat_FFPROBE_EXECUTABLE})
-    set_tests_properties(video.encode.synthetic PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300)
+    set_tests_properties(video.encode.synthetic PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
+    add_test(NAME video.encode.color_conversion
+             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/video_encode_verify_colors.py
+                     $<TARGET_FILE:vkgsplat_video_encode_synthetic_test> ${vkgsplat_FFMPEG_EXECUTABLE})
+    set_tests_properties(video.encode.color_conversion PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300)
   elseif(vkgsplat_ENABLE_VIDEO_GPU_TESTS)
     message(STATUS "Full Vulkan Video encode verification requires FFmpeg, FFprobe, and Python3")
   endif()
@@ -214,6 +227,26 @@ if(vkgsplat_ENABLE_HEADLESS_GPU_TESTS)
                  "DISPLAY=;WAYLAND_DISPLAY="
                  TIMEOUT
                  180)
+    if(vkgsplat_ENABLE_VIDEO_GPU_TESTS AND vkgsplat_FFMPEG_EXECUTABLE AND vkgsplat_FFPROBE_EXECUTABLE AND Python3_Interpreter_FOUND)
+      add_test(NAME headless.gpu.video.h264
+               COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/headless_video_gpu_smoke.py
+                       $<TARGET_FILE:vkgsplat_headless> ${benchmark_scene}
+                       ${vkgsplat_FFMPEG_EXECUTABLE} ${vkgsplat_FFPROBE_EXECUTABLE}
+                       .h264 ${vkgsplat_HEADLESS_GPU_TEST_VALIDATION})
+      set_tests_properties(headless.gpu.video.h264
+                           PROPERTIES FIXTURES_REQUIRED benchmark_fixture
+                                      ENVIRONMENT "DISPLAY=;WAYLAND_DISPLAY=" TIMEOUT 600)
+      if(vkgsplat_ENABLE_MP4)
+        add_test(NAME headless.gpu.video.mp4
+                 COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/headless_video_gpu_smoke.py
+                         $<TARGET_FILE:vkgsplat_headless> ${benchmark_scene}
+                         ${vkgsplat_FFMPEG_EXECUTABLE} ${vkgsplat_FFPROBE_EXECUTABLE}
+                         .mp4 ${vkgsplat_HEADLESS_GPU_TEST_VALIDATION})
+        set_tests_properties(headless.gpu.video.mp4
+                             PROPERTIES FIXTURES_REQUIRED benchmark_fixture
+                                        ENVIRONMENT "DISPLAY=;WAYLAND_DISPLAY=" TIMEOUT 600)
+      endif()
+    endif()
     add_test(NAME offscreen.gpu.sequence
              COMMAND $<TARGET_FILE:vkgsplat_offscreen_gpu_smoke> ${benchmark_scene}
                      ${CMAKE_CURRENT_BINARY_DIR}/offscreen-compact.ply ${vkgsplat_HEADLESS_GPU_TEST_VALIDATION})

@@ -71,6 +71,11 @@ GpuVideoSource::~GpuVideoSource()
 auto GpuVideoSource::Create(vulkan::Context &context, vulkan::video::EncodeDevice const &device,
   VkExtent2D extent) -> std::expected<std::unique_ptr<GpuVideoSource>, Error>
 {
+  if (device.selection.source_format.format != VK_FORMAT_G8_B8R8_2PLANE_420_UNORM
+      || !device.selection.source_format.transfer_destination) {
+    return std::unexpected(MakeError(std::errc::function_not_supported,
+      "external GPU test source requires a two-plane NV12 transfer destination"));
+  }
   auto graphics = context.device.get_queue_and_index(vkb::QueueType::graphics);
   if (!graphics || device.queue == VK_NULL_HANDLE) {
     return std::unexpected(MakeError(std::errc::function_not_supported, "GPU test requires graphics and video queues"));
