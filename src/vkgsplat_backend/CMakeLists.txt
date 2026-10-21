@@ -10,6 +10,7 @@ add_library(
   vulkan/video/video_device.cpp
   vulkan/video/video_session.cpp
   vulkan/video/video_encoder.cpp
+  vulkan/video/color_converter.cpp
   vulkan/video/h264_gop.cpp
   vulkan/shader.cpp
   vulkan/mesh_gpu.cpp
@@ -54,7 +55,8 @@ vkgsplat_compile_shaders(
   "${VKGSPLAT_VKRADIXSORT_SHADERS_DIR}/multi_radixsort_histograms.comp"
   "${VKGSPLAT_VKRADIXSORT_SHADERS_DIR}/multi_radixsort.comp"
   shaders/gs/identify_ranges.comp
-  shaders/gs/rasterization.comp)
+  shaders/gs/rasterization.comp
+  shaders/video/rgba_to_nv12.comp)
 
 target_link_libraries(
   vkgsplat_backend

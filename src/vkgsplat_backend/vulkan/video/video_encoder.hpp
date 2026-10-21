@@ -11,6 +11,7 @@
 #include <span>
 
 #include <vkgsplat_utility/error.hpp>
+#include <vkgsplat_backend/vkgsplat_backend_export.hpp>
 
 #include <vkgsplat_video/encoded_packet.hpp>
 
@@ -21,7 +22,8 @@ struct EncoderResources;
 // The producer creates an NV12 image view with VIDEO_ENCODE_SRC usage and the
 // selected H.264 profile, makes the image accessible to the
 // encode queue, and submits its transition to VIDEO_ENCODE_SRC_KHR before signaling
-// ready_binary_semaphore. The image and semaphore remain valid until EncodeImage returns.
+// ready_binary_semaphore. The image and semaphore remain valid until EncodeImage
+// succeeds or failed in-flight work has been drained.
 struct PreparedVideoFrame
 {
   VkImageView image_view = VK_NULL_HANDLE;
@@ -33,7 +35,7 @@ struct PreparedVideoFrame
 
 // Blocking all-intra H.264 encoder. The caller supplies a tightly packed NV12 frame.
 // This API also establishes the session and packet contract for a future GPU source.
-class VideoEncoder
+class VKGSPLAT_BACKEND_EXPORT VideoEncoder
 {
 public:
   [[nodiscard]] static auto Create(Context &context, EncodeDevice device, VkExtent2D extent)
@@ -43,6 +45,8 @@ public:
     -> std::expected<EncodedPacket, Error>;
   [[nodiscard]] auto EncodeImage(PreparedVideoFrame const &frame, std::uint64_t frame_index)
     -> std::expected<EncodedPacket, Error>;
+  [[nodiscard]] auto WaitForInFlightWork() -> std::expected<void, Error>;
+  auto Abort() noexcept -> void { failed_ = true; }
   [[nodiscard]] auto Finish() -> std::expected<void, Error>;
   [[nodiscard]] auto ParameterSets() const noexcept -> std::span<std::byte const>;
 

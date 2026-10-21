@@ -26,6 +26,8 @@
 #include "vulkan/initializers.hpp"
 #include "vulkan/renderer.hpp"
 #include "vulkan/capture/readback.hpp"
+#include "video/color_converter.hpp"
+#include "video/video_encoder.hpp"
 #include "vulkan_context.hpp"
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat/gpu_timings.hpp>
@@ -244,6 +246,7 @@ auto RenderThread::StartWorker(vulkan::Context *context,
     recreated_frame_count_ = 0U;
     gpu_timing_samples_.reset();
     capture_requests_.clear();
+    video_capture_requests_.clear();
     worker_busy_ = false;
     blocked_producer_count_ = 0U;
     test_mode_ = static_cast<bool>(draw_frame_override_);
@@ -275,6 +278,18 @@ void RenderThread::Stop()
 
   thread_.join();
 
+  {
+    std::scoped_lock const lock{ control_mutex_ };
+    for (auto const &request : video_capture_requests_) {
+      if (request->completed) { continue; }
+      request->result = std::unexpected{
+        MakeError(std::errc::operation_canceled, "render thread stopped during video capture") };
+      request->completed = true;
+    }
+    video_capture_requests_.clear();
+  }
+  control_cv_.notify_all();
+
   context_ = nullptr;
   data_ = nullptr;
   draw_frame_override_ = {};
@@ -287,10 +302,11 @@ auto RenderThread::SubmitFrame(Camera const &camera, f64 aspect_ratio) -> std::e
   {
     std::unique_lock lock{ control_mutex_ };
     if (submission_policy_ == FrameSubmissionPolicy::kLossless || command_ != Command::kNone || readback_pending_
-        || exclusive_pending_) {
+        || exclusive_pending_ || !capture_requests_.empty() || !video_capture_requests_.empty()) {
       auto const can_continue = [this]() -> bool {
         return first_error_.has_value() || !thread_running_
                || (command_ == Command::kNone && !readback_pending_ && !exclusive_pending_
+                   && capture_requests_.empty() && video_capture_requests_.empty()
                    && (submission_policy_ != FrameSubmissionPolicy::kLossless || mailbox_.CanPublishLossless()));
       };
       if (!can_continue()) {
@@ -310,7 +326,10 @@ auto RenderThread::SubmitFrame(Camera const &camera, f64 aspect_ratio) -> std::e
     if (!frame_slot.has_value()) {
       return std::unexpected{ MakeError(std::errc::state_not_recoverable, "no CPU frame slot is available") };
     }
-    PendingFrame frame{ .capture = {}, .aspect_ratio = aspect_ratio, .camera = SnapshotCamera(camera, aspect_ratio) };
+    PendingFrame frame{
+      .capture = {}, .video_capture = {}, .aspect_ratio = aspect_ratio,
+      .camera = SnapshotCamera(camera, aspect_ratio),
+    };
     if (data_ != nullptr) { BuildImGuiFrameSnapshot(*data_, frame_slot.value(), frame.imgui); }
     mailbox_.Publish(frame_slot.value(), frame);
   }
@@ -336,7 +355,8 @@ auto RenderThread::CaptureFrame(Camera const &camera, f64 aspect_ratio) -> std::
     auto const slot = mailbox_.PrepareSlot();
     if (!slot) { return std::unexpected{ MakeError(std::errc::state_not_recoverable, "no capture slot available") }; }
     PendingFrame const frame{
-      .capture = request, .aspect_ratio = aspect_ratio, .camera = SnapshotCamera(camera, aspect_ratio)
+      .capture = request, .video_capture = {}, .aspect_ratio = aspect_ratio,
+      .camera = SnapshotCamera(camera, aspect_ratio)
     };
     mailbox_.Publish(*slot, frame);
     capture_requests_.push_back(request);
@@ -346,6 +366,47 @@ auto RenderThread::CaptureFrame(Camera const &camera, f64 aspect_ratio) -> std::
   control_cv_.wait(lock, [&]() -> bool { return request->completed || !thread_running_; });
   if (request->result.has_value()) { return std::move(*request->result); }
   return std::unexpected{ MakeError(std::errc::operation_canceled, "render thread stopped during capture") };
+}
+
+auto RenderThread::CaptureVideoFrame(Camera const &camera, f64 aspect_ratio,
+  vulkan::video::GpuColorConverter &converter, vulkan::video::VideoEncoder &encoder,
+  u64 frame_index) -> std::expected<EncodedPacket, Error>
+{
+  auto request = std::make_shared<VideoCaptureRequest>();
+  request->converter = &converter;
+  request->encoder = &encoder;
+  request->frame_index = frame_index;
+  {
+    std::unique_lock lock{ control_mutex_ };
+    control_cv_.wait(lock, [this]() -> bool {
+      return first_error_.has_value() || !thread_running_
+             || (command_ == Command::kNone && !readback_pending_ && !exclusive_pending_
+                 && mailbox_.CanPublishLossless());
+    });
+    if (first_error_.has_value()) { return std::unexpected(*first_error_); }
+    if (!thread_running_) {
+      return std::unexpected{ MakeError(std::errc::operation_not_permitted, "render thread is not running") };
+    }
+    if (context_ == nullptr || data_ == nullptr || context_->swapchain != nullptr) {
+      return std::unexpected{ MakeError(std::errc::operation_not_supported,
+        "video capture requires an offscreen Vulkan renderer") };
+    }
+    auto const slot = mailbox_.PrepareSlot();
+    if (!slot) {
+      return std::unexpected{ MakeError(std::errc::state_not_recoverable, "no video capture slot available") };
+    }
+    PendingFrame const frame{
+      .capture = {}, .video_capture = request, .aspect_ratio = aspect_ratio,
+      .camera = SnapshotCamera(camera, aspect_ratio),
+    };
+    mailbox_.Publish(*slot, frame);
+    video_capture_requests_.push_back(request);
+  }
+  control_cv_.notify_all();
+  std::unique_lock lock{ control_mutex_ };
+  control_cv_.wait(lock, [&]() -> bool { return request->completed; });
+  if (request->result.has_value()) { return std::move(*request->result); }
+  return std::unexpected{ MakeError(std::errc::operation_canceled, "render thread stopped during video capture") };
 }
 
 auto RenderThread::ReadLatestFrame() -> std::expected<RgbaFrame, Error>
@@ -506,6 +567,12 @@ auto RenderThread::FinishFrame(size_t frame_slot, std::expected<FrameOutcome, Er
           request->completed = true;
         }
       }
+      for (auto const &request : video_capture_requests_) {
+        if (!request->result.has_value()) {
+          request->result = std::unexpected(*first_error_);
+          request->completed = true;
+        }
+      }
     }
     if (drawn) {
       if (drawn.value() == FrameOutcome::kSubmitted) {
@@ -520,6 +587,7 @@ auto RenderThread::FinishFrame(size_t frame_slot, std::expected<FrameOutcome, Er
     mailbox_.Complete(frame_slot);
     worker_busy_ = false;
     std::erase_if(capture_requests_, [](auto const &request) -> bool { return request->result.has_value(); });
+    std::erase_if(video_capture_requests_, [](auto const &request) -> bool { return request->result.has_value(); });
   }
   control_cv_.notify_all();
   if (context_ != nullptr) { context_->platform->post_empty_event(); }
@@ -693,11 +761,68 @@ auto RenderThread::ProcessFrame(size_t frame_slot, PendingFrame const &frame) ->
     }
   }
 
+  if (frame.video_capture != nullptr) {
+    // The worker owns both the graphics queue and the shared color target here.
+    // EncodeImage blocks until the converted image has been consumed, so the
+    // next frame cannot overwrite either image before this request completes.
+    auto encoded = [&]() -> std::expected<EncodedPacket, Error> {
+      if (!drawn) { return std::unexpected(drawn.error()); }
+      if (drawn.value() != FrameOutcome::kSubmitted || context_ == nullptr || data_ == nullptr
+          || !data_->color_image.has_value() || data_->color_format != VK_FORMAT_R8G8B8A8_UNORM) {
+        return std::unexpected(MakeError(std::errc::operation_not_supported,
+          "video capture requires a rendered RGBA8 color target"));
+      }
+      auto const extent = frame.video_capture->converter->Extent();
+      if (data_->color_width != extent.width || data_->color_height != extent.height) {
+        return std::unexpected(MakeError(std::errc::invalid_argument,
+          "video converter extent does not match the rendered color target"));
+      }
+      auto prepared = frame.video_capture->converter->Convert(data_->color_image->handle(),
+        data_->offscreen_timeline, data_->offscreen_signal_value);
+      if (!prepared) { return std::unexpected(prepared.error()); }
+      auto packet = frame.video_capture->encoder->EncodeImage(*prepared, frame.video_capture->frame_index);
+      if (!packet) {
+        std::optional<Error> cleanup_error;
+        if (auto drained = frame.video_capture->encoder->WaitForInFlightWork(); !drained) {
+          cleanup_error = drained.error();
+        }
+        if (auto released = frame.video_capture->converter->WaitForSourceRelease(); !released) {
+          if (!cleanup_error) { cleanup_error = released.error(); }
+        }
+        if (cleanup_error) {
+          drawn = std::unexpected(*cleanup_error);
+          return std::unexpected(*cleanup_error);
+        }
+        return packet;
+      }
+      if (auto completed = frame.video_capture->converter->Complete(); !completed) {
+        drawn = std::unexpected(completed.error());
+        return std::unexpected(completed.error());
+      }
+      return packet;
+    }();
+    if (!encoded) {
+      frame.video_capture->encoder->Abort();
+      frame.video_capture->converter->Abort();
+    }
+    {
+      std::scoped_lock const lock{ control_mutex_ };
+      frame.video_capture->result = std::move(encoded);
+    }
+  }
+
   FinishFrame(frame_slot, drawn);
   if (frame.capture != nullptr) {
     {
       std::scoped_lock const lock{ control_mutex_ };
       frame.capture->completed = true;
+    }
+    control_cv_.notify_all();
+  }
+  if (frame.video_capture != nullptr) {
+    {
+      std::scoped_lock const lock{ control_mutex_ };
+      frame.video_capture->completed = true;
     }
     control_cv_.notify_all();
   }

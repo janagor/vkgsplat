@@ -3,6 +3,7 @@
 
 #include <expected>
 #include <optional>
+#include <memory>
 #include <string>
 
 #include <beman/indirect/indirect.hpp>
@@ -23,6 +24,9 @@
 #include <vector>
 
 namespace vkgsplat {
+
+namespace capture { class VideoRecorder; }
+namespace video { class RecordingSession; }
 
 enum class FrameSubmissionPolicy : u8 { kLatest, kLossless };
 
@@ -103,6 +107,9 @@ public:
   [[nodiscard]] auto lfd_grid() const noexcept -> std::array<u32, 2>;
 
 private:
+  friend class capture::VideoRecorder;
+  [[nodiscard]] auto create_video_recording_session(u32 width, u32 height)
+    -> std::expected<std::unique_ptr<video::RecordingSession>, Error>;
   struct Impl;
   explicit Renderer(beman::indirect::indirect<Impl> impl);
 

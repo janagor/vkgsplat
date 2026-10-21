@@ -44,6 +44,7 @@ struct EncoderResources
   VkDeviceSize upload_size = 0;
   VkDeviceSize bitstream_size = 0;
   bool in_flight = false;
+  bool rate_control_configured = false;
   VkImage image = VK_NULL_HANDLE;
   VkImageView view = VK_NULL_HANDLE;
   VkDeviceMemory image_memory = VK_NULL_HANDLE;
@@ -70,8 +71,12 @@ struct EncoderResources
     // A failed partial submission has no completion fence; drain only the queues
     // used by this encoder before releasing its resources.
     if (in_flight) {
-      if (graphics_queue != VK_NULL_HANDLE) { context.disp.queueWaitIdle(graphics_queue); }
+      if (graphics_queue != VK_NULL_HANDLE) {
+        auto const queue_lock = context.vkexec_context->lock_queue(graphics_queue);
+        context.disp.queueWaitIdle(graphics_queue);
+      }
       if (video_queue != VK_NULL_HANDLE && video_queue != graphics_queue) {
+        auto const queue_lock = context.vkexec_context->lock_queue(video_queue);
         context.disp.queueWaitIdle(video_queue);
       }
     }
@@ -236,6 +241,7 @@ namespace {
   submit.pCommandBufferInfos = &command_info;
   submit.signalSemaphoreInfoCount = signal == VK_NULL_HANDLE ? 0 : kOneResource;
   submit.pSignalSemaphoreInfos = signal == VK_NULL_HANDLE ? nullptr : &signal_info;
+  auto const queue_lock = context.vkexec_context->lock_queue(queue);
   auto const result = context.disp.queueSubmit2(queue, kOneResource, &submit, fence);
   if (result != VK_SUCCESS) { return std::unexpected(Failure("submit video command buffer", result)); }
   return {};
@@ -395,8 +401,12 @@ namespace {
   auto result = BeginCommand(context, resources.video_cmd);
   if (!result) { return result; }
   context.disp.cmdResetQueryPool(resources.video_cmd, resources.feedback, 0, kOneResource);
+  VkVideoEncodeRateControlInfoKHR rate{};
+  rate.sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_RATE_CONTROL_INFO_KHR;
+  rate.rateControlMode = VK_VIDEO_ENCODE_RATE_CONTROL_MODE_DISABLED_BIT_KHR;
   VkVideoBeginCodingInfoKHR begin{};
   begin.sType = VK_STRUCTURE_TYPE_VIDEO_BEGIN_CODING_INFO_KHR;
+  begin.pNext = resources.rate_control_configured ? &rate : nullptr;
   begin.videoSession = session.handle();
   begin.videoSessionParameters = session.parameters();
   context.disp.cmdBeginVideoCodingKHR(resources.video_cmd, &begin);
@@ -404,9 +414,6 @@ namespace {
   reset.sType = VK_STRUCTURE_TYPE_VIDEO_CODING_CONTROL_INFO_KHR;
   reset.flags = VK_VIDEO_CODING_CONTROL_RESET_BIT_KHR;
   context.disp.cmdControlVideoCodingKHR(resources.video_cmd, &reset);
-  VkVideoEncodeRateControlInfoKHR rate{};
-  rate.sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_RATE_CONTROL_INFO_KHR;
-  rate.rateControlMode = VK_VIDEO_ENCODE_RATE_CONTROL_MODE_DISABLED_BIT_KHR;
   VkVideoCodingControlInfoKHR control{};
   control.sType = VK_STRUCTURE_TYPE_VIDEO_CODING_CONTROL_INFO_KHR;
   control.pNext = &rate;
@@ -551,6 +558,7 @@ namespace {
   auto result = context.disp.waitForFences(kOneResource, &resources.readback_done, VK_TRUE, UINT64_MAX);
   if (result != VK_SUCCESS) { return std::unexpected(Failure("wait for encoded picture", result)); }
   resources.in_flight = false;
+  resources.rate_control_configured = true;
   struct Feedback
   {
     std::uint32_t offset;
@@ -639,10 +647,28 @@ auto VideoEncoder::EncodeImage(PreparedVideoFrame const &frame, std::uint64_t fr
   return EncodeSource(frame.image_view, frame.ready_binary_semaphore, {}, frame_index);
 }
 
+auto VideoEncoder::WaitForInFlightWork() -> std::expected<void, Error>
+{
+  if (!resources_->in_flight) { return {}; }
+  for (auto queue : { resources_->graphics_queue, resources_->video_queue }) {
+    if (queue == VK_NULL_HANDLE) { continue; }
+    auto const queue_lock = context_.vkexec_context->lock_queue(queue);
+    auto const result = context_.disp.queueWaitIdle(queue);
+    if (result != VK_SUCCESS) { return std::unexpected(Failure("wait for video encode work", result)); }
+    if (queue == resources_->video_queue && resources_->video_queue == resources_->graphics_queue) { break; }
+  }
+  resources_->in_flight = false;
+  return {};
+}
+
 auto VideoEncoder::EncodeSource(VkImageView source_view, VkSemaphore ready_semaphore,
   std::span<std::byte const> frame, std::uint64_t frame_index) -> std::expected<EncodedPacket, Error>
 {
-  if (finished_ || failed_ || frame_index != next_index_
+  if (failed_) {
+    return std::unexpected(MakeError(std::errc::state_not_recoverable,
+      "H.264 encoder failed; create a new recording session"));
+  }
+  if (finished_ || frame_index != next_index_
       || frame_index > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())) {
     return std::unexpected(MakeError(std::errc::invalid_argument, "invalid or out-of-order H.264 frame"));
   }
@@ -666,7 +692,11 @@ auto VideoEncoder::EncodeSource(VkImageView source_view, VkSemaphore ready_semap
 
 auto VideoEncoder::Finish() -> std::expected<void, Error>
 {
-  if (finished_ || failed_) {
+  if (failed_) {
+    return std::unexpected(MakeError(std::errc::state_not_recoverable,
+      "H.264 encoder failed; create a new recording session"));
+  }
+  if (finished_) {
     return std::unexpected(MakeError(std::errc::operation_not_permitted, "H.264 encoder is finalized"));
   }
   finished_ = true;

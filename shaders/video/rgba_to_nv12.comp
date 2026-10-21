@@ -1,0 +1,75 @@
+#version 460
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(set = 0, binding = 0, std430) readonly buffer RgbaInput {
+  uint pixels[];
+} rgba_input;
+
+layout(set = 0, binding = 1, std430) writeonly buffer Nv12Output {
+  uint words[];
+} nv12_output;
+
+layout(push_constant) uniform ConversionExtent {
+  uint width;
+  uint height;
+} extent;
+
+const uint PIXELS_PER_WORD = 4u;
+const uint CHROMA_WIDTH = 2u;
+const uint CHROMA_HEIGHT = 2u;
+const float BYTE_MAX = 255.0;
+const float LUMA_OFFSET = 16.0;
+const float CHROMA_OFFSET = 128.0;
+const float LUMA_RANGE = 219.0;
+const float CHROMA_RANGE = 224.0;
+const vec3 BT709_LUMA = vec3(0.2126, 0.7152, 0.0722);
+const vec3 BT709_CB = vec3(-0.114572, -0.385428, 0.5);
+const vec3 BT709_CR = vec3(0.5, -0.454153, -0.045847);
+
+vec3 rgb_at(uint x, uint y)
+{
+  return unpackUnorm4x8(rgba_input.pixels[y * extent.width + x]).rgb;
+}
+
+float luma_at(vec3 rgb)
+{
+  return (LUMA_OFFSET + LUMA_RANGE * dot(BT709_LUMA, rgb)) / BYTE_MAX;
+}
+
+vec2 chroma_at(vec3 rgb)
+{
+  return (vec2(CHROMA_OFFSET) + CHROMA_RANGE * vec2(dot(BT709_CB, rgb), dot(BT709_CR, rgb))) / BYTE_MAX;
+}
+
+void main()
+{
+  uint macro_x = gl_GlobalInvocationID.x;
+  uint macro_y = gl_GlobalInvocationID.y;
+  uint x = macro_x * PIXELS_PER_WORD;
+  uint y = macro_y * CHROMA_HEIGHT;
+  if (x >= extent.width || y >= extent.height) { return; }
+
+  vec3 top_0 = rgb_at(x, y);
+  vec3 top_1 = rgb_at(x + 1u, y);
+  vec3 top_2 = rgb_at(x + 2u, y);
+  vec3 top_3 = rgb_at(x + 3u, y);
+  vec3 bottom_0 = rgb_at(x, y + 1u);
+  vec3 bottom_1 = rgb_at(x + 1u, y + 1u);
+  vec3 bottom_2 = rgb_at(x + 2u, y + 1u);
+  vec3 bottom_3 = rgb_at(x + 3u, y + 1u);
+
+  uint row_words = extent.width / PIXELS_PER_WORD;
+  nv12_output.words[y * row_words + macro_x] = packUnorm4x8(vec4(
+    luma_at(top_0), luma_at(top_1), luma_at(top_2), luma_at(top_3)));
+  nv12_output.words[(y + 1u) * row_words + macro_x] = packUnorm4x8(vec4(
+    luma_at(bottom_0), luma_at(bottom_1), luma_at(bottom_2), luma_at(bottom_3)));
+
+  vec2 first_chroma = chroma_at((top_0 + top_1 + bottom_0 + bottom_1) /
+    float(CHROMA_WIDTH * CHROMA_HEIGHT));
+  vec2 second_chroma = chroma_at((top_2 + top_3 + bottom_2 + bottom_3) /
+    float(CHROMA_WIDTH * CHROMA_HEIGHT));
+  uint uv_start = extent.width * extent.height / PIXELS_PER_WORD;
+  nv12_output.words[uv_start + macro_y * row_words + macro_x] = packUnorm4x8(vec4(
+    first_chroma, second_chroma));
+}

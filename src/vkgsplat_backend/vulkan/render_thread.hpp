@@ -22,11 +22,16 @@
 #include <vkgsplat_backend/vkgsplat_backend_export.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
+#include <vkgsplat_video/encoded_packet.hpp>
 
 namespace vkgsplat {
 
 namespace vulkan {
   struct Context;
+  namespace video {
+    class GpuColorConverter;
+    class VideoEncoder;
+  }
 }
 struct RenderData;
 
@@ -60,6 +65,11 @@ public:
 
   [[nodiscard]] auto SubmitFrame(Camera const &camera, f64 aspect_ratio) -> std::expected<void, Error>;
   [[nodiscard]] auto CaptureFrame(Camera const &camera, f64 aspect_ratio) -> std::expected<RgbaFrame, Error>;
+  // A failed request retires the supplied encoder and converter. The caller
+  // must keep both alive until this method returns, including during Stop().
+  [[nodiscard]] auto CaptureVideoFrame(Camera const &camera, f64 aspect_ratio,
+    vulkan::video::GpuColorConverter &converter, vulkan::video::VideoEncoder &encoder,
+    u64 frame_index) -> std::expected<EncodedPacket, Error>;
   [[nodiscard]] auto ReadLatestFrame() -> std::expected<RgbaFrame, Error>;
   // Drain queued frames, wait for GPU completion, then run without concurrent submission or readback.
   [[nodiscard]] auto RunExclusive(std::function<std::expected<void, Error>()> action) -> std::expected<void, Error>;
@@ -95,9 +105,19 @@ private:
     bool completed{ false };
   };
 
+  struct VideoCaptureRequest
+  {
+    vulkan::video::GpuColorConverter *converter = nullptr;
+    vulkan::video::VideoEncoder *encoder = nullptr;
+    u64 frame_index = 0U;
+    std::optional<std::expected<EncodedPacket, Error>> result;
+    bool completed{ false };
+  };
+
   struct PendingFrame
   {
     std::shared_ptr<CaptureRequest> capture;
+    std::shared_ptr<VideoCaptureRequest> video_capture;
     f64 aspect_ratio{};
     CameraSnapshot camera{};
     ImGuiFrameSnapshot imgui{};
@@ -154,6 +174,7 @@ private:
   GpuTimingSamples gpu_timing_samples_;
   FrameSubmissionPolicy submission_policy_{ FrameSubmissionPolicy::kLatest };
   std::vector<std::shared_ptr<CaptureRequest>> capture_requests_;
+  std::vector<std::shared_ptr<VideoCaptureRequest>> video_capture_requests_;
 };
 
 }// namespace vkgsplat
