@@ -201,6 +201,8 @@ auto Mp4Muxer::Finish() -> std::expected<void, Error>
     }
   }
   std::error_code error;
+  // The reserved temporary file is in the destination directory, so publication
+  // uses a same-filesystem hard link and never replaces an existing output.
   std::filesystem::create_hard_link(temporary_path_, path_, error);
   if (error) {
     failed_ = true;

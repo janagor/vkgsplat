@@ -123,9 +123,10 @@ auto PrintSelectionDetails(EncodeDevice const &device) -> void
 auto Run(std::filesystem::path const &output, bool gpu_only, bool color_conversion,
   bool repeat_conversion, std::string_view failure_mode) -> int
 {
-  if ((repeat_conversion || !failure_mode.empty()) && !VKGSPLAT_TEST_VIDEO_VALIDATION) {
-    std::cerr << "GPU lifetime tests require Vulkan validation to be enabled\n";
-    return EXIT_FAILURE;
+  if (repeat_conversion || !failure_mode.empty()) {
+    std::cout << "Vulkan validation checking "
+              << (VKGSPLAT_TEST_VIDEO_VALIDATION ? "enabled" : "disabled; checking functional cleanup only")
+              << '\n';
   }
   std::error_code remove_error;
   std::filesystem::remove(output, remove_error);

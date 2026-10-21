@@ -31,6 +31,7 @@ constexpr std::uint32_t kVideoHeight = 16U;
 constexpr std::uint32_t kFrameRateNumerator = 30U;
 constexpr std::uint32_t kFrameRateDenominator = 1U;
 constexpr std::ptrdiff_t kReservedTemporaryFileCount = 1;
+constexpr std::ptrdiff_t kSingleOutputFileCount = 1;
 constexpr std::ptrdiff_t kOccupiedOutputAndTemporaryFileCount = 2;
 constexpr char kOccupiedOutputByte = 'x';
 constexpr std::array kIdrPicture{
@@ -124,5 +125,34 @@ TEST_CASE("MP4 publication failure is sticky and removes temporary output", "[vi
   REQUIRE(occupied.peek() == std::char_traits<char>::eof());
   auto const entry_count = std::distance(std::filesystem::directory_iterator{ directory.path() },
     std::filesystem::directory_iterator{});
-  REQUIRE(entry_count == kReservedTemporaryFileCount);
+  REQUIRE(entry_count == kSingleOutputFileCount);
+}
+
+TEST_CASE("successful MP4 publication removes its temporary output", "[video]")
+{
+  TemporaryDirectory const directory;
+  auto const output = directory.path() / "completed.mp4";
+  {
+    auto muxer = vkgsplat::Mp4Muxer::Open(output, kVideoWidth, kVideoHeight,
+      kFrameRateNumerator, kFrameRateDenominator, kParameterSets);
+    REQUIRE(muxer);
+    vkgsplat::EncodedPacket const packet{
+      .data = std::vector<std::byte>{ kIdrPicture.begin(), kIdrPicture.end() },
+      .frame_index = 0U,
+      .pts = 0,
+      .dts = 0,
+      .duration = 1,
+      .keyframe = true,
+    };
+    REQUIRE((*muxer)->Write(packet));
+    REQUIRE((*muxer)->Finish());
+    REQUIRE(std::filesystem::exists(output));
+    auto const entry_count = std::distance(std::filesystem::directory_iterator{ directory.path() },
+      std::filesystem::directory_iterator{});
+    REQUIRE(entry_count == kSingleOutputFileCount);
+  }
+  REQUIRE(std::filesystem::exists(output));
+  auto const entry_count = std::distance(std::filesystem::directory_iterator{ directory.path() },
+    std::filesystem::directory_iterator{});
+  REQUIRE(entry_count == kSingleOutputFileCount);
 }

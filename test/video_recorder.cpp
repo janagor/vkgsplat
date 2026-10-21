@@ -12,8 +12,11 @@
 #include <memory>
 #include <span>
 #include <system_error>
+#include <utility>
 
 namespace {
+
+constexpr int kRecorderOwnedObjectCount = 2;
 
 struct RecorderState
 {
@@ -178,4 +181,53 @@ TEST_CASE("session finalization failure prevents sink finalization and retries",
   REQUIRE(state.captures == 1);
   REQUIRE(state.session_finishes == 1);
   REQUIRE(state.sink_finishes == 0);
+}
+
+TEST_CASE("moving a recorder leaves the source inert and preserves its failure", "[video]")
+{
+  RecorderState state{ .capture_fails = true };
+  auto source = MakeRecorder(state);
+  vkgsplat::Camera const camera{ vkgsplat::CameraConfig{} };
+  auto failed = source.record_frame(camera);
+  REQUIRE_FALSE(failed);
+  auto recorder = std::move(source);
+
+  auto moved_from_record = source.record_frame(camera);
+  REQUIRE_FALSE(moved_from_record);
+  REQUIRE(moved_from_record.error().code() == std::errc::operation_not_permitted);
+  auto moved_from_finish = source.finish();
+  REQUIRE_FALSE(moved_from_finish);
+  REQUIRE(moved_from_finish.error().code() == std::errc::operation_not_permitted);
+  REQUIRE(failed.error().code() == std::errc::io_error);
+  auto repeated_record = recorder.record_frame(camera);
+  REQUIRE_FALSE(repeated_record);
+  REQUIRE(repeated_record.error().code() == failed.error().code());
+  auto repeated = recorder.finish();
+  REQUIRE_FALSE(repeated);
+  REQUIRE(repeated.error().code() == failed.error().code());
+  REQUIRE(state.captures == 1);
+}
+
+TEST_CASE("move assignment destroys the replaced recorder and transfers ownership", "[video]")
+{
+  RecorderState replaced;
+  RecorderState transferred;
+  {
+    auto destination = MakeRecorder(replaced);
+    auto source = MakeRecorder(transferred);
+    destination = std::move(source);
+    REQUIRE(replaced.destroyed == kRecorderOwnedObjectCount);
+    REQUIRE(transferred.destroyed == 0);
+
+    vkgsplat::Camera const camera{ vkgsplat::CameraConfig{} };
+    auto moved_from_record = source.record_frame(camera);
+    REQUIRE_FALSE(moved_from_record);
+    REQUIRE(moved_from_record.error().code() == std::errc::operation_not_permitted);
+    REQUIRE(destination.record_frame(camera));
+    REQUIRE(destination.finish());
+  }
+  REQUIRE(replaced.destroyed == kRecorderOwnedObjectCount);
+  REQUIRE(transferred.destroyed == kRecorderOwnedObjectCount);
+  REQUIRE(transferred.session_finishes == 1);
+  REQUIRE(transferred.sink_finishes == 1);
 }

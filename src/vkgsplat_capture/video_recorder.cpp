@@ -74,6 +74,10 @@ namespace {
 
 struct VideoRecorder::Impl
 {
+  Impl(std::unique_ptr<VideoSink> output, std::unique_ptr<video::RecordingSession> recording)
+    : sink{ std::move(output) }, session{ std::move(recording) }
+  {}
+
   std::unique_ptr<VideoSink> sink;
   std::unique_ptr<video::RecordingSession> session;
   u64 next_index = 0U;
@@ -93,25 +97,13 @@ auto VideoRecorder::create(Renderer &renderer, VideoConfig config) -> std::expec
   if (!session) { return std::unexpected(session.error()); }
   auto sink = OpenSink(config, (*session)->ParameterSets());
   if (!sink) { return std::unexpected(sink.error()); }
-  return VideoRecorder{ std::make_unique<Impl>(Impl{
-    .sink = std::move(*sink),
-    .session = std::move(*session),
-    .next_index = 0U,
-    .finished = false,
-    .failure = {},
-  }) };
+  return VideoRecorder{ std::make_unique<Impl>(std::move(*sink), std::move(*session)) };
 }
 
 auto VideoRecorderTestAccess::Create(std::unique_ptr<video::RecordingSession> session,
   std::unique_ptr<VideoSink> sink) -> VideoRecorder
 {
-  return VideoRecorder{ std::make_unique<VideoRecorder::Impl>(VideoRecorder::Impl{
-    .sink = std::move(sink),
-    .session = std::move(session),
-    .next_index = 0U,
-    .finished = false,
-    .failure = {},
-  }) };
+  return VideoRecorder{ std::make_unique<VideoRecorder::Impl>(std::move(sink), std::move(session)) };
 }
 
 auto VideoRecorder::record_frame(Camera const &camera) -> std::expected<void, Error>

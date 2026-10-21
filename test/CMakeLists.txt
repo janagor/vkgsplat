@@ -120,8 +120,7 @@ option(vkgsplat_HEADLESS_GPU_TEST_VALIDATION "Enable validation layers in the he
 option(vkgsplat_ENABLE_VIDEO_GPU_TESTS "Enable Vulkan Video integration tests without a scene fixture" OFF)
 # Decoded-color fidelity is opt-in; the strict NV12 conversion test only needs Python3.
 option(vkgsplat_ENABLE_VIDEO_COLOR_FIDELITY_TESTS "Enable strict decoded H.264 color verification" OFF)
-if(vkgsplat_ENABLE_VIDEO_COLOR_FIDELITY_TESTS AND
-   NOT (vkgsplat_ENABLE_VIDEO_GPU_TESTS OR vkgsplat_ENABLE_HEADLESS_GPU_TESTS))
+if(vkgsplat_ENABLE_VIDEO_COLOR_FIDELITY_TESTS AND NOT vkgsplat_ENABLE_VIDEO_GPU_TESTS)
   message(FATAL_ERROR "Video color fidelity tests require Vulkan Video GPU tests to be enabled")
 endif()
 set(vkgsplat_HEADLESS_TEST_PLY
@@ -132,7 +131,7 @@ if(TARGET vkgsplat_headless)
            COMMAND ${CMAKE_COMMAND} -DEXECUTABLE=$<TARGET_FILE:vkgsplat_headless>
                    -DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR} -P ${CMAKE_CURRENT_SOURCE_DIR}/headless_cli.cmake)
 endif()
-if(vkgsplat_ENABLE_VIDEO_GPU_TESTS OR vkgsplat_ENABLE_HEADLESS_GPU_TESTS)
+if(vkgsplat_ENABLE_VIDEO_GPU_TESTS)
   if(NOT TARGET vkgsplat::vkgsplat_backend OR NOT TARGET vkgsplat::vkgsplat_headless_platform)
     message(FATAL_ERROR "Vulkan Video tests require a native Vulkan backend and offscreen platform")
   endif()
@@ -169,28 +168,26 @@ if(vkgsplat_ENABLE_VIDEO_GPU_TESTS OR vkgsplat_ENABLE_HEADLESS_GPU_TESTS)
            COMMAND $<TARGET_FILE:vkgsplat_video_encode_synthetic_test>
                    ${CMAKE_CURRENT_BINARY_DIR}/video-color-conversion-smoke.h264 --color-conversion)
   set_tests_properties(video.encode.color_conversion.smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300)
-  if(vkgsplat_HEADLESS_GPU_TEST_VALIDATION)
-    add_test(NAME video.encode.repeat_color_conversion.smoke
+  add_test(NAME video.encode.repeat_color_conversion.smoke
+           COMMAND $<TARGET_FILE:vkgsplat_video_encode_synthetic_test>
+                   ${CMAKE_CURRENT_BINARY_DIR}/video-repeat-color-conversion-smoke.h264 --repeat-color-conversion)
+  set_tests_properties(video.encode.repeat_color_conversion.smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300
+                       FAIL_REGULAR_EXPRESSION "\\[ERROR: .*Validation"
+                       ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1")
+  foreach(failure_point converter video readback)
+    add_test(NAME video.encode.fault_${failure_point}.smoke
              COMMAND $<TARGET_FILE:vkgsplat_video_encode_synthetic_test>
-                     ${CMAKE_CURRENT_BINARY_DIR}/video-repeat-color-conversion-smoke.h264 --repeat-color-conversion)
-    set_tests_properties(video.encode.repeat_color_conversion.smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300
+                     ${CMAKE_CURRENT_BINARY_DIR}/video-fault-${failure_point}.h264 --fault-${failure_point}-submit)
+    set_tests_properties(video.encode.fault_${failure_point}.smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300
                          FAIL_REGULAR_EXPRESSION "\\[ERROR: .*Validation"
                          ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1")
-    foreach(failure_point converter video readback)
-      add_test(NAME video.encode.fault_${failure_point}.smoke
-               COMMAND $<TARGET_FILE:vkgsplat_video_encode_synthetic_test>
-                       ${CMAKE_CURRENT_BINARY_DIR}/video-fault-${failure_point}.h264 --fault-${failure_point}-submit)
-      set_tests_properties(video.encode.fault_${failure_point}.smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300
-                           FAIL_REGULAR_EXPRESSION "\\[ERROR: .*Validation"
-                           ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1")
-    endforeach()
-    add_test(NAME video.encode.fault_readback_destructor.smoke
-             COMMAND $<TARGET_FILE:vkgsplat_video_encode_synthetic_test>
-                     ${CMAKE_CURRENT_BINARY_DIR}/video-fault-readback-destructor.h264 --fault-readback-destructor)
-    set_tests_properties(video.encode.fault_readback_destructor.smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300
-                         FAIL_REGULAR_EXPRESSION "\\[ERROR: .*Validation"
-                         ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1")
-  endif()
+  endforeach()
+  add_test(NAME video.encode.fault_readback_destructor.smoke
+           COMMAND $<TARGET_FILE:vkgsplat_video_encode_synthetic_test>
+                   ${CMAKE_CURRENT_BINARY_DIR}/video-fault-readback-destructor.h264 --fault-readback-destructor)
+  set_tests_properties(video.encode.fault_readback_destructor.smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300
+                       FAIL_REGULAR_EXPRESSION "\\[ERROR: .*Validation"
+                       ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1")
   if(Python3_Interpreter_FOUND)
     add_test(NAME video.encode.color_conversion
              COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/video_encode_verify_colors.py
