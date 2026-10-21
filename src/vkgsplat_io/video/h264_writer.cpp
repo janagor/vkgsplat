@@ -34,6 +34,7 @@ namespace {
     bool sps = false;
     bool pps = false;
     bool idr = false;
+    bool picture = false;
   };
 
   [[nodiscard]] auto ScanAnnexB(std::span<std::byte const> bytes) -> std::expected<NaluTypes, Error>
@@ -41,6 +42,7 @@ namespace {
     constexpr std::uint8_t kNaluTypeMask = 0x1f;
     constexpr std::uint8_t kForbiddenZeroBit = 0x80;
     constexpr std::uint8_t kIdrNaluType = 5;
+    constexpr std::uint8_t kNonIdrNaluType = 1;
     constexpr std::uint8_t kSpsNaluType = 7;
     constexpr std::uint8_t kPpsNaluType = 8;
     if (StartCodeSize(bytes) == 0) {
@@ -61,6 +63,7 @@ namespace {
       types.sps |= type == kSpsNaluType;
       types.pps |= type == kPpsNaluType;
       types.idr |= type == kIdrNaluType;
+      types.picture |= type == kIdrNaluType || type == kNonIdrNaluType;
       size_t next = bytes.size();
       for (size_t index = offset + prefix + 1; index < bytes.size(); ++index) {
         if (StartCodeSize(bytes.subspan(index)) != 0) {
@@ -108,11 +111,13 @@ auto H264Writer::WriteFrame(std::span<std::byte const> picture) -> std::expected
     return std::unexpected(MakeError(std::errc::bad_file_descriptor, "H.264 output is finalized"));
   }
   auto const types = ScanAnnexB(picture);
-  if (!types || !types->idr) {
+  if (!types || !types->picture || (!seen_idr_ && !types->idr)) {
     return std::unexpected(MakeError(std::errc::invalid_argument,
-      "H.264 picture must contain an Annex B IDR NAL unit"));
+      "H.264 picture must contain an Annex B slice, beginning with IDR"));
   }
-  return WriteBytes(stream_, picture);
+  if (auto result = WriteBytes(stream_, picture); !result) { return result; }
+  seen_idr_ |= types->idr;
+  return {};
 }
 
 auto H264Writer::Finish() -> std::expected<void, Error>

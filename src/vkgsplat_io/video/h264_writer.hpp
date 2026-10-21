@@ -28,6 +28,7 @@ private:
 
   std::ofstream stream_;
   bool finished_ = false;
+  bool seen_idr_ = false;
 };
 
 }// namespace vkgsplat

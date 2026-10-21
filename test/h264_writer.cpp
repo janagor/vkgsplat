@@ -91,6 +91,17 @@ TEST_CASE("H.264 writer rejects missing parameter sets", "[video]")
   CHECK_FALSE(std::filesystem::exists(file.path()));
 }
 
+TEST_CASE("H.264 writer accepts P slices after an IDR", "[video]")
+{
+  TemporaryFile const file;
+  auto writer = vkgsplat::H264Writer::Open(file.path().string(), kParameterSets);
+  REQUIRE(writer);
+  CHECK_FALSE(writer->WriteFrame(kInvalidPicture));
+  REQUIRE(writer->WriteFrame(kIdrPicture));
+  REQUIRE(writer->WriteFrame(kInvalidPicture));
+  REQUIRE(writer->Finish());
+}
+
 TEST_CASE("H.264 writer accepts complete externally generated parameter sets", "[video]")
 {
   TemporaryFile const file;
