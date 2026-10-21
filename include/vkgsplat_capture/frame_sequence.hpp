@@ -8,6 +8,7 @@
 #include <string>
 
 #include <vkgsplat_capture/vkgsplat_capture_export.hpp>
+#include <vkgsplat_capture/frame_rate.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
 
@@ -16,12 +17,6 @@ class Camera;
 class Renderer;
 
 namespace capture {
-
-struct FrameRate
-{
-  u32 numerator = 60U;
-  u32 denominator = 1U;
-};
 
 struct FrameSequenceConfig
 {

@@ -3,7 +3,7 @@
 
 #include <filesystem>
 
-#include <vkgsplat_capture/frame_sequence.hpp>
+#include <vkgsplat_capture/frame_rate.hpp>
 #include <vkgsplat_utility/types.hpp>
 
 namespace vkgsplat::capture {
@@ -21,16 +21,16 @@ struct RateControlConfig
 
 struct GopConfig
 {
-  u32 idr_interval = 60U;
-  bool enable_p_frames = true;
+  u32 idr_interval = 1U;
+  bool enable_p_frames = false;
 };
 
 struct VideoConfig
 {
   std::filesystem::path output_path;
-  VideoContainer container = VideoContainer::kMp4;
-  u32 width = 1920U;
-  u32 height = 1080U;
+  VideoContainer container = VideoContainer::kH264;
+  u32 width = 1280U;
+  u32 height = 720U;
   FrameRate frame_rate{};
   RateControlConfig rate_control{};
   GopConfig gop{};

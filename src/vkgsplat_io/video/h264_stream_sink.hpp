@@ -11,9 +11,11 @@
 #include <span>
 #include <utility>
 
+#include <vkgsplat_io/vkgsplat_io_export.hpp>
+
 namespace vkgsplat {
 
-class H264StreamSink final : public VideoSink
+class VKGSPLAT_IO_EXPORT H264StreamSink final : public VideoSink
 {
 public:
   [[nodiscard]] static auto Open(std::filesystem::path const &path,

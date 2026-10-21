@@ -1,7 +1,7 @@
 include(GenerateExportHeader)
 find_package(Threads REQUIRED)
 
-add_library(vkgsplat_capture screenshot.cpp frame_sequence.cpp png_sequence_writer.cpp)
+add_library(vkgsplat_capture screenshot.cpp frame_sequence.cpp png_sequence_writer.cpp video_recorder.cpp)
 add_library(vkgsplat::vkgsplat_capture ALIAS vkgsplat_capture)
 
 target_link_libraries(
@@ -28,4 +28,9 @@ endif()
 target_include_directories(
   vkgsplat_capture ${WARNING_GUARD}
   PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include> $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>
-  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/src/vkgsplat_io)
+
+if(vkgsplat_ENABLE_MP4 AND NOT EMSCRIPTEN)
+  target_link_libraries(vkgsplat_capture PRIVATE vkgsplat::vkgsplat_video_io)
+  target_compile_definitions(vkgsplat_capture PRIVATE VKGSPLAT_ENABLE_MP4=1)
+endif()

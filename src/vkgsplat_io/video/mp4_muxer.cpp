@@ -1,7 +1,9 @@
 #include "mp4_muxer.hpp"
 
 #include <cerrno>
+#include <atomic>
 #include <cstring>
+#include <fstream>
 #include <limits>
 #include <string>
 #include <system_error>
@@ -23,6 +25,8 @@ namespace {
   constexpr std::uint8_t kPpsNalType = 8;
   constexpr std::size_t kLongStartCodeSize = 4;
   constexpr std::size_t kShortStartCodeSize = 3;
+  constexpr std::uint32_t kMaxTemporaryPathAttempts = 256U;
+  std::atomic_uint64_t gTemporaryPathSequence{ 0U };
 
   [[nodiscard]] auto FfmpegError(char const *operation, int code) -> Error
   {
@@ -62,7 +66,7 @@ Mp4Muxer::~Mp4Muxer()
     }
     avformat_free_context(context_);
   }
-  if (!finished_ && !temporary_path_.empty()) {
+  if (!temporary_path_.empty()) {
     std::error_code error;
     std::filesystem::remove(temporary_path_, error);
   }
@@ -81,9 +85,28 @@ auto Mp4Muxer::Open(std::filesystem::path path, std::uint32_t width, std::uint32
       || !HasParameterSet(parameter_sets, kSpsNalType) || !HasParameterSet(parameter_sets, kPpsNalType)) {
     return std::unexpected(MakeError(std::errc::invalid_argument, "invalid MP4 video parameters or SPS/PPS"));
   }
+  std::error_code path_error;
+  if (std::filesystem::exists(path, path_error)) {
+    return std::unexpected(MakeError(std::errc::file_exists, "MP4 output already exists"));
+  }
+  if (path_error) { return std::unexpected(MakeError(path_error, "inspect MP4 output path failed")); }
   auto muxer = std::unique_ptr<Mp4Muxer>{ new Mp4Muxer{ std::move(path), fps_numerator, fps_denominator } };
-  muxer->temporary_path_ = muxer->path_;
-  muxer->temporary_path_ += ".partial";
+  for (std::uint32_t attempt = 0U; attempt < kMaxTemporaryPathAttempts; ++attempt) {
+    auto candidate = muxer->path_;
+    candidate += ".partial." + std::to_string(gTemporaryPathSequence.fetch_add(1U));
+    std::ofstream reservation{ candidate, std::ios::out | std::ios::binary | std::ios::noreplace };
+    if (reservation) {
+      muxer->temporary_path_ = std::move(candidate);
+      break;
+    }
+    std::error_code candidate_error;
+    if (!std::filesystem::exists(candidate, candidate_error) || candidate_error) {
+      return std::unexpected(MakeError(std::errc::io_error, "reserve MP4 temporary output failed"));
+    }
+  }
+  if (muxer->temporary_path_.empty()) {
+    return std::unexpected(MakeError(std::errc::file_exists, "no free MP4 temporary output name"));
+  }
   auto const output = muxer->temporary_path_.string();
   auto result = avformat_alloc_output_context2(&muxer->context_, nullptr, "mp4", output.c_str());
   if (result < 0 || muxer->context_ == nullptr) {
@@ -176,9 +199,11 @@ auto Mp4Muxer::Finish() -> std::expected<void, Error>
     }
   }
   std::error_code error;
-  std::filesystem::rename(temporary_path_, path_, error);
+  std::filesystem::create_hard_link(temporary_path_, path_, error);
   if (error) { return std::unexpected(MakeError(error, "publish MP4 output failed")); }
   finished_ = true;
+  std::filesystem::remove(temporary_path_, error);
+  if (!error) { temporary_path_.clear(); }
   return {};
 }
 

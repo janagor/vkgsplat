@@ -10,12 +10,14 @@
 #include <memory>
 #include <span>
 
+#include <vkgsplat_video_io/vkgsplat_video_io_export.hpp>
+
 struct AVFormatContext;
 struct AVStream;
 
 namespace vkgsplat {
 
-class Mp4Muxer final : public VideoSink
+class VKGSPLAT_VIDEO_IO_EXPORT Mp4Muxer final : public VideoSink
 {
 public:
   [[nodiscard]] static auto Open(std::filesystem::path path, std::uint32_t width, std::uint32_t height,
