@@ -14,6 +14,7 @@ class Camera;
 class Renderer;
 
 namespace capture {
+struct VideoRecorderTestAccess;
 
 // Blocking offline recorder. The borrowed renderer must outlive the recorder.
 class VKGSPLAT_CAPTURE_EXPORT VideoRecorder
@@ -31,6 +32,7 @@ public:
   ~VideoRecorder() noexcept;
 
 private:
+  friend struct VideoRecorderTestAccess;
   struct Impl;
   explicit VideoRecorder(std::unique_ptr<Impl> impl) noexcept;
   std::unique_ptr<Impl> impl_;

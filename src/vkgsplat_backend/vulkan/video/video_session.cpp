@@ -21,7 +21,7 @@ namespace {
 
   [[nodiscard]] auto Failure(char const *operation, VkResult result) -> Error
   {
-    return MakeError(std::errc::io_error,
+    return MakeError(result == VK_ERROR_DEVICE_LOST ? std::errc::no_such_device : std::errc::io_error,
       std::string{ operation } + " failed (VkResult " + std::to_string(static_cast<int>(result)) + ")");
   }
 

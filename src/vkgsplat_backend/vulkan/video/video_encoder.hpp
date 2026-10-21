@@ -19,6 +19,13 @@ namespace vkgsplat::vulkan::video {
 
 struct EncoderResources;
 
+// Simulates rejection at the selected submission boundary in GPU tests.
+enum class EncodeFailurePointForTest {
+  kNone,
+  kVideoSubmission,
+  kReadbackSubmission,
+};
+
 // The producer creates an NV12 image view with VIDEO_ENCODE_SRC usage and the
 // selected H.264 profile, makes the image accessible to the
 // encode queue, and submits its transition to VIDEO_ENCODE_SRC_KHR before signaling
@@ -47,6 +54,7 @@ public:
     -> std::expected<EncodedPacket, Error>;
   [[nodiscard]] auto WaitForInFlightWork() -> std::expected<void, Error>;
   auto Abort() noexcept -> void { failed_ = true; }
+  auto FailSubmissionForTest(EncodeFailurePointForTest point) noexcept -> void { failure_point_for_test_ = point; }
   [[nodiscard]] auto Finish() -> std::expected<void, Error>;
   [[nodiscard]] auto ParameterSets() const noexcept -> std::span<std::byte const>;
 
@@ -69,6 +77,7 @@ private:
   std::uint64_t next_index_{};
   bool finished_ = false;
   bool failed_ = false;
+  EncodeFailurePointForTest failure_point_for_test_ = EncodeFailurePointForTest::kNone;
 };
 
 }// namespace vkgsplat::vulkan::video

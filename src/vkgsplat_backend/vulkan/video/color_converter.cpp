@@ -27,7 +27,7 @@ namespace {
 
   [[nodiscard]] auto Failure(char const *operation, VkResult result) -> Error
   {
-    return MakeError(std::errc::io_error,
+    return MakeError(result == VK_ERROR_DEVICE_LOST ? std::errc::no_such_device : std::errc::io_error,
       std::string{ operation } + " failed (VkResult " + std::to_string(static_cast<int>(result)) + ")");
   }
 
@@ -435,6 +435,11 @@ auto GpuColorConverter::Convert(VkImage source, VkSemaphore ready_timeline, std:
   submit.pSignalSemaphoreInfos = &signal;
   result = context_.disp.resetFences(kOneResource, &converted_done_);
   if (result != VK_SUCCESS) { return std::unexpected(Failure("reset conversion fence", result)); }
+  if (fail_next_submission_for_test_) {
+    fail_next_submission_for_test_ = false;
+    failed_ = true;
+    return std::unexpected(MakeError(std::errc::io_error, "injected conversion submission failure"));
+  }
   auto const queue_lock = context_.vkexec_context->lock_queue(graphics_queue_);
   result = context_.disp.queueSubmit2(graphics_queue_, kOneResource, &submit, converted_done_);
   if (result != VK_SUCCESS) { return std::unexpected(Failure("submit GPU color conversion", result)); }

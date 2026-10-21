@@ -30,7 +30,7 @@ constexpr std::array kAnnexBStartCode{
 
 [[nodiscard]] auto Failure(char const *operation, VkResult result) -> Error
 {
-  return vkgsplat::MakeError(std::errc::io_error,
+  return vkgsplat::MakeError(result == VK_ERROR_DEVICE_LOST ? std::errc::no_such_device : std::errc::io_error,
     std::string{ operation } + " failed (VkResult " + std::to_string(static_cast<int>(result)) + ")");
 }
 
@@ -508,7 +508,8 @@ namespace {
 [[nodiscard]] auto EncodePicture(Context &context, EncodeDevice const &device,
   VideoSession const &session, VkExtent2D extent, VkImageView source_view,
   VkSemaphore ready_semaphore, std::span<std::byte const> frame,
-  EncoderResources &resources) -> std::expected<std::vector<std::byte>, Error>
+  EncoderResources &resources, EncodeFailurePointForTest failure_point)
+  -> std::expected<std::vector<std::byte>, Error>
 {
   auto const y_size = static_cast<VkDeviceSize>(extent.width) * extent.height;
   auto const upload_size = resources.upload_size;
@@ -544,12 +545,18 @@ namespace {
     resources.in_flight = true;
     ready_semaphore = resources.upload_done;
   }
+  if (failure_point == EncodeFailurePointForTest::kVideoSubmission) {
+    return std::unexpected(MakeError(std::errc::io_error, "injected video submission failure"));
+  }
   if (auto submitted = Submit(context, resources.video_queue, resources.video_cmd,
         ready_semaphore, VK_PIPELINE_STAGE_2_VIDEO_ENCODE_BIT_KHR,
         resources.video_done, VK_NULL_HANDLE); !submitted) {
     return std::unexpected(submitted.error());
   }
   resources.in_flight = true;
+  if (failure_point == EncodeFailurePointForTest::kReadbackSubmission) {
+    return std::unexpected(MakeError(std::errc::io_error, "injected bitstream readback submission failure"));
+  }
   if (auto submitted = Submit(context, resources.graphics_queue, resources.readback_cmd,
         resources.video_done, VK_PIPELINE_STAGE_2_COPY_BIT,
         VK_NULL_HANDLE, resources.readback_done); !submitted) {
@@ -673,7 +680,8 @@ auto VideoEncoder::EncodeSource(VkImageView source_view, VkSemaphore ready_semap
     return std::unexpected(MakeError(std::errc::invalid_argument, "invalid or out-of-order H.264 frame"));
   }
   auto picture = EncodePicture(context_, device_, *session_, extent_, source_view,
-    ready_semaphore, frame, *resources_);
+    ready_semaphore, frame, *resources_, failure_point_for_test_);
+  failure_point_for_test_ = EncodeFailurePointForTest::kNone;
   if (!picture) {
     failed_ = true;
     return std::unexpected(picture.error());

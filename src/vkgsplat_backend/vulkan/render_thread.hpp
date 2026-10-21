@@ -56,10 +56,13 @@ public:
   auto StartForTest(FrameSubmissionPolicy policy,
     std::function<std::expected<void, Error>()> draw_frame,
     std::function<void()> wait_idle = {},
-    std::function<std::expected<RgbaFrame, Error>()> readback_frame = {}) -> void;
+    std::function<std::expected<RgbaFrame, Error>()> readback_frame = {},
+    std::function<std::expected<EncodedPacket, Error>()> video_frame = {}) -> void;
   auto WaitForShutdownForTest() -> void;
   auto WaitForBlockedProducerCountForTest(size_t count) -> void;
   auto WaitForReadbackPendingForTest() -> void;
+  auto WaitForCapturePendingForTest() -> void;
+  auto WaitForVideoCapturePendingForTest() -> void;
   auto WaitForExclusivePendingForTest() -> void;
   void Stop();
 
@@ -69,6 +72,8 @@ public:
   // must keep both alive until this method returns, including during Stop().
   [[nodiscard]] auto CaptureVideoFrame(Camera const &camera, f64 aspect_ratio,
     vulkan::video::GpuColorConverter &converter, vulkan::video::VideoEncoder &encoder,
+    u64 frame_index) -> std::expected<EncodedPacket, Error>;
+  [[nodiscard]] auto CaptureVideoFrameForTest(Camera const &camera, f64 aspect_ratio,
     u64 frame_index) -> std::expected<EncodedPacket, Error>;
   [[nodiscard]] auto ReadLatestFrame() -> std::expected<RgbaFrame, Error>;
   // Drain queued frames, wait for GPU completion, then run without concurrent submission or readback.
@@ -133,7 +138,11 @@ private:
     FrameSubmissionPolicy policy,
     std::function<std::expected<void, Error>()> draw_frame,
     std::function<void()> wait_idle,
-    std::function<std::expected<RgbaFrame, Error>()> readback_frame) -> void;
+    std::function<std::expected<RgbaFrame, Error>()> readback_frame,
+    std::function<std::expected<EncodedPacket, Error>()> video_frame) -> void;
+  [[nodiscard]] auto CaptureVideoFrameImpl(Camera const &camera, f64 aspect_ratio,
+    vulkan::video::GpuColorConverter *converter, vulkan::video::VideoEncoder *encoder,
+    u64 frame_index) -> std::expected<EncodedPacket, Error>;
   auto FinishFrame(size_t frame_slot, std::expected<FrameOutcome, Error> const &drawn) -> void;
   [[nodiscard]] auto DrawFrameVulkan(size_t frame_slot) -> std::expected<FrameOutcome, Error>;
   [[nodiscard]] auto DrawFrameOffscreen(size_t frame_slot) -> std::expected<FrameOutcome, Error>;
@@ -146,6 +155,7 @@ private:
   std::function<std::expected<void, Error>()> draw_frame_override_;
   std::function<void()> wait_idle_override_;
   std::function<std::expected<RgbaFrame, Error>()> readback_frame_override_;
+  std::function<std::expected<EncodedPacket, Error>()> video_frame_override_;
 
   mutable std::mutex control_mutex_;
   mutable std::mutex operation_mutex_;

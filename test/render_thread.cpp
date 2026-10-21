@@ -1,5 +1,6 @@
 // NOLINTBEGIN(readability-function-cognitive-complexity)
 #include "vulkan/render_thread.hpp"
+#include "vulkan/vkexec_error.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 #include <vkgsplat/camera.hpp>
@@ -307,6 +308,299 @@ TEST_CASE("readback blocks new submissions until its worker operation completes"
   REQUIRE(producer_succeeded);
   REQUIRE(worker.WaitIdle());
   REQUIRE(worker.CompletedFrameCount() == kTwoFrameCount);
+  worker.Stop();
+}
+
+TEST_CASE("queued screenshot survives ordinary submissions in latest mode", "[render]")
+{
+  FrameBarrier draw_barrier;
+  std::atomic<int> draw_count{ 0 };
+  std::atomic<int> readback_count{ 0 };
+  vkgsplat::RenderThread worker;
+  worker.StartForTest(vkgsplat::FrameSubmissionPolicy::kLatest,
+    [&]() -> std::expected<void, vkgsplat::Error> {
+      if (draw_count.fetch_add(1) == 0) { draw_barrier.Wait(); }
+      return {};
+    }, {},
+    [&]() -> std::expected<vkgsplat::RgbaFrame, vkgsplat::Error> {
+      ++readback_count;
+      return vkgsplat::RgbaFrame{ .width = kReadbackTestWidth,
+        .height = kReadbackTestHeight,
+        .pixels = { kReadbackRed, kReadbackGreen, kReadbackBlue, kReadbackAlpha } };
+    });
+  vkgsplat::Camera const camera{ vkgsplat::CameraConfig{} };
+  REQUIRE(worker.SubmitFrame(camera, camera.aspect_ratio()));
+  draw_barrier.WaitUntilEntered();
+
+  std::optional<std::expected<vkgsplat::RgbaFrame, vkgsplat::Error>> captured;
+  std::jthread reader{ [&]() -> void { captured = worker.CaptureFrame(camera, camera.aspect_ratio()); } };
+  worker.WaitForCapturePendingForTest();
+  bool producer_succeeded = false;
+  std::jthread producer{ [&]() -> void {
+    producer_succeeded = worker.SubmitFrame(camera, camera.aspect_ratio()).has_value();
+  } };
+  worker.WaitForBlockedProducerCountForTest(1U);
+  draw_barrier.Release();
+  reader.join();
+  producer.join();
+  REQUIRE(captured.has_value());
+  REQUIRE(captured->has_value());
+  std::vector<std::uint8_t> const expected_pixels{ kReadbackRed, kReadbackGreen, kReadbackBlue, kReadbackAlpha };
+  REQUIRE(captured->value().pixels == expected_pixels);
+  REQUIRE(producer_succeeded);
+  REQUIRE(readback_count.load() == 1);
+  worker.Stop();
+}
+
+TEST_CASE("shutdown cancels a queued screenshot and rejects later submissions", "[render]")
+{
+  FrameBarrier draw_barrier;
+  std::atomic<int> readback_count{ 0 };
+  vkgsplat::RenderThread worker;
+  worker.StartForTest(vkgsplat::FrameSubmissionPolicy::kLossless,
+    [&]() -> std::expected<void, vkgsplat::Error> {
+      draw_barrier.Wait();
+      return {};
+    }, {},
+    [&]() -> std::expected<vkgsplat::RgbaFrame, vkgsplat::Error> {
+      ++readback_count;
+      return vkgsplat::RgbaFrame{ .width = kReadbackTestWidth,
+        .height = kReadbackTestHeight,
+        .pixels = { kReadbackRed, kReadbackGreen, kReadbackBlue, kReadbackAlpha } };
+    });
+  vkgsplat::Camera const camera{ vkgsplat::CameraConfig{} };
+  REQUIRE(worker.SubmitFrame(camera, camera.aspect_ratio()));
+  draw_barrier.WaitUntilEntered();
+
+  std::optional<std::expected<vkgsplat::RgbaFrame, vkgsplat::Error>> captured;
+  std::jthread reader{ [&]() -> void { captured = worker.CaptureFrame(camera, camera.aspect_ratio()); } };
+  worker.WaitForCapturePendingForTest();
+  std::jthread stopper{ [&]() -> void { worker.Stop(); } };
+  worker.WaitForShutdownForTest();
+  draw_barrier.Release();
+  reader.join();
+  stopper.join();
+  REQUIRE(captured.has_value());
+  REQUIRE_FALSE(captured->has_value());
+  REQUIRE(captured->error().code() == std::errc::operation_canceled);
+  REQUIRE(readback_count.load() == 0);
+  auto submitted = worker.SubmitFrame(camera, camera.aspect_ratio());
+  REQUIRE_FALSE(submitted);
+  REQUIRE(submitted.error().code() == std::errc::operation_not_permitted);
+}
+
+TEST_CASE("shutdown waits for executing screenshot readback", "[render]")
+{
+  FrameBarrier readback_barrier;
+  std::atomic<bool> stop_returned{ false };
+  vkgsplat::RenderThread worker;
+  worker.StartForTest(vkgsplat::FrameSubmissionPolicy::kLossless,
+    []() -> std::expected<void, vkgsplat::Error> { return {}; }, {},
+    [&]() -> std::expected<vkgsplat::RgbaFrame, vkgsplat::Error> {
+      readback_barrier.Wait();
+      return vkgsplat::RgbaFrame{ .width = kReadbackTestWidth,
+        .height = kReadbackTestHeight,
+        .pixels = { kReadbackRed, kReadbackGreen, kReadbackBlue, kReadbackAlpha } };
+    });
+  vkgsplat::Camera const camera{ vkgsplat::CameraConfig{} };
+  std::optional<std::expected<vkgsplat::RgbaFrame, vkgsplat::Error>> captured;
+  std::jthread reader{ [&]() -> void { captured = worker.CaptureFrame(camera, camera.aspect_ratio()); } };
+  readback_barrier.WaitUntilEntered();
+  std::jthread stopper{ [&]() -> void {
+    worker.Stop();
+    stop_returned.store(true);
+  } };
+  worker.WaitForShutdownForTest();
+  CHECK_FALSE(stop_returned.load());
+  readback_barrier.Release();
+  reader.join();
+  stopper.join();
+  REQUIRE(captured.has_value());
+  REQUIRE(captured->has_value());
+  REQUIRE(stop_returned.load());
+}
+
+TEST_CASE("queued video capture is canceled after shutdown", "[render]")
+{
+  FrameBarrier draw_barrier;
+  std::atomic<int> encoded_count{ 0 };
+  vkgsplat::RenderThread worker;
+  worker.StartForTest(vkgsplat::FrameSubmissionPolicy::kLatest,
+    [&]() -> std::expected<void, vkgsplat::Error> {
+      draw_barrier.Wait();
+      return {};
+    }, {}, {},
+    [&]() -> std::expected<vkgsplat::EncodedPacket, vkgsplat::Error> {
+      ++encoded_count;
+      return vkgsplat::EncodedPacket{};
+    });
+  vkgsplat::Camera const camera{ vkgsplat::CameraConfig{} };
+  REQUIRE(worker.SubmitFrame(camera, camera.aspect_ratio()));
+  draw_barrier.WaitUntilEntered();
+  std::optional<std::expected<vkgsplat::EncodedPacket, vkgsplat::Error>> captured;
+  std::jthread recorder{ [&]() -> void {
+    captured = worker.CaptureVideoFrameForTest(camera, camera.aspect_ratio(), 0U);
+  } };
+  worker.WaitForVideoCapturePendingForTest();
+  std::jthread stopper{ [&]() -> void { worker.Stop(); } };
+  worker.WaitForShutdownForTest();
+  draw_barrier.Release();
+  recorder.join();
+  stopper.join();
+  REQUIRE(captured.has_value());
+  REQUIRE_FALSE(captured->has_value());
+  REQUIRE(captured->error().code() == std::errc::operation_canceled);
+  REQUIRE(encoded_count.load() == 0);
+}
+
+TEST_CASE("queued video capture blocks ordinary submissions in latest mode", "[render]")
+{
+  FrameBarrier draw_barrier;
+  std::atomic<int> draw_count{ 0 };
+  std::atomic<int> encoded_count{ 0 };
+  vkgsplat::RenderThread worker;
+  worker.StartForTest(vkgsplat::FrameSubmissionPolicy::kLatest,
+    [&]() -> std::expected<void, vkgsplat::Error> {
+      if (draw_count.fetch_add(1) == 0) { draw_barrier.Wait(); }
+      return {};
+    }, {}, {},
+    [&]() -> std::expected<vkgsplat::EncodedPacket, vkgsplat::Error> {
+      ++encoded_count;
+      return vkgsplat::EncodedPacket{};
+    });
+  vkgsplat::Camera const camera{ vkgsplat::CameraConfig{} };
+  REQUIRE(worker.SubmitFrame(camera, camera.aspect_ratio()));
+  draw_barrier.WaitUntilEntered();
+  std::optional<std::expected<vkgsplat::EncodedPacket, vkgsplat::Error>> captured;
+  std::jthread recorder{ [&]() -> void {
+    captured = worker.CaptureVideoFrameForTest(camera, camera.aspect_ratio(), 0U);
+  } };
+  worker.WaitForVideoCapturePendingForTest();
+  bool producer_succeeded = false;
+  std::jthread producer{ [&]() -> void {
+    producer_succeeded = worker.SubmitFrame(camera, camera.aspect_ratio()).has_value();
+  } };
+  worker.WaitForBlockedProducerCountForTest(1U);
+  draw_barrier.Release();
+  recorder.join();
+  producer.join();
+  REQUIRE(captured.has_value());
+  REQUIRE(captured->has_value());
+  REQUIRE(producer_succeeded);
+  REQUIRE(encoded_count.load() == 1);
+  worker.Stop();
+}
+
+TEST_CASE("shutdown waits for executing video capture", "[render]")
+{
+  FrameBarrier encode_barrier;
+  std::atomic<bool> stop_returned{ false };
+  vkgsplat::RenderThread worker;
+  worker.StartForTest(vkgsplat::FrameSubmissionPolicy::kLossless,
+    []() -> std::expected<void, vkgsplat::Error> { return {}; }, {}, {},
+    [&]() -> std::expected<vkgsplat::EncodedPacket, vkgsplat::Error> {
+      encode_barrier.Wait();
+      return vkgsplat::EncodedPacket{};
+    });
+  vkgsplat::Camera const camera{ vkgsplat::CameraConfig{} };
+  std::optional<std::expected<vkgsplat::EncodedPacket, vkgsplat::Error>> captured;
+  std::jthread recorder{ [&]() -> void {
+    captured = worker.CaptureVideoFrameForTest(camera, camera.aspect_ratio(), 0U);
+  } };
+  encode_barrier.WaitUntilEntered();
+  std::jthread stopper{ [&]() -> void {
+    worker.Stop();
+    stop_returned.store(true);
+  } };
+  worker.WaitForShutdownForTest();
+  CHECK_FALSE(stop_returned.load());
+  encode_barrier.Release();
+  recorder.join();
+  stopper.join();
+  REQUIRE(captured.has_value());
+  REQUIRE(captured->has_value());
+  REQUIRE(stop_returned.load());
+}
+
+TEST_CASE("video device loss is terminal to later frame submissions", "[render]")
+{
+  vkgsplat::RenderThread worker;
+  worker.StartForTest(vkgsplat::FrameSubmissionPolicy::kLossless,
+    []() -> std::expected<void, vkgsplat::Error> { return {}; }, {}, {},
+    []() -> std::expected<vkgsplat::EncodedPacket, vkgsplat::Error> {
+      return std::unexpected{ vkgsplat::MakeError(std::errc::no_such_device, "injected device loss") };
+    });
+  vkgsplat::Camera const camera{ vkgsplat::CameraConfig{} };
+  auto captured = worker.CaptureVideoFrameForTest(camera, camera.aspect_ratio(), 0U);
+  REQUIRE_FALSE(captured);
+  REQUIRE(captured.error().code() == std::errc::no_such_device);
+  auto submitted = worker.SubmitFrame(camera, camera.aspect_ratio());
+  REQUIRE_FALSE(submitted);
+  REQUIRE(submitted.error().code() == std::errc::no_such_device);
+  worker.Stop();
+}
+
+TEST_CASE("vkexec submission errors retain structured device loss", "[render]")
+{
+  vkexec::error const failure{
+    .code = vkexec::make_vk_error_code(VK_ERROR_DEVICE_LOST),
+    .detail = "injected queue submission failure",
+  };
+  auto converted = vkgsplat::vulkan::VkexecFailure(failure);
+  REQUIRE(converted.code() == std::errc::no_such_device);
+}
+
+TEST_CASE("recording-local failure releases video admission without stopping rendering", "[render]")
+{
+  vkgsplat::RenderThread worker;
+  std::atomic<int> encode_count{ 0 };
+  worker.StartForTest(vkgsplat::FrameSubmissionPolicy::kLossless,
+    []() -> std::expected<void, vkgsplat::Error> { return {}; }, {}, {},
+    [&]() -> std::expected<vkgsplat::EncodedPacket, vkgsplat::Error> {
+      ++encode_count;
+      return std::unexpected{ vkgsplat::MakeError(std::errc::io_error, "injected encode failure") };
+    });
+  vkgsplat::Camera const camera{ vkgsplat::CameraConfig{} };
+  auto captured = worker.CaptureVideoFrameForTest(camera, camera.aspect_ratio(), 0U);
+  REQUIRE_FALSE(captured);
+  REQUIRE(captured.error().code() == std::errc::io_error);
+  REQUIRE(encode_count.load() == 1);
+  REQUIRE_FALSE(worker.PollError().has_value());
+  REQUIRE(worker.SubmitFrame(camera, camera.aspect_ratio()));
+  REQUIRE(worker.WaitIdle());
+  worker.Stop();
+}
+
+TEST_CASE("frame failure resolves a queued screenshot and blocked producer", "[render]")
+{
+  FrameBarrier draw_barrier;
+  vkgsplat::RenderThread worker;
+  worker.StartForTest(vkgsplat::FrameSubmissionPolicy::kLossless,
+    [&]() -> std::expected<void, vkgsplat::Error> {
+      draw_barrier.Wait();
+      return std::unexpected{ vkgsplat::MakeError(std::errc::io_error, "injected draw failure") };
+    }, {},
+    []() -> std::expected<vkgsplat::RgbaFrame, vkgsplat::Error> {
+      return vkgsplat::RgbaFrame{};
+    });
+  vkgsplat::Camera const camera{ vkgsplat::CameraConfig{} };
+  REQUIRE(worker.SubmitFrame(camera, camera.aspect_ratio()));
+  draw_barrier.WaitUntilEntered();
+  std::optional<std::expected<vkgsplat::RgbaFrame, vkgsplat::Error>> captured;
+  std::jthread reader{ [&]() -> void { captured = worker.CaptureFrame(camera, camera.aspect_ratio()); } };
+  worker.WaitForCapturePendingForTest();
+  std::optional<std::expected<void, vkgsplat::Error>> submitted;
+  std::jthread producer{ [&]() -> void { submitted = worker.SubmitFrame(camera, camera.aspect_ratio()); } };
+  worker.WaitForBlockedProducerCountForTest(1U);
+  draw_barrier.Release();
+  reader.join();
+  producer.join();
+  REQUIRE(captured.has_value());
+  REQUIRE_FALSE(captured->has_value());
+  REQUIRE(captured->error().code() == std::errc::io_error);
+  REQUIRE(submitted.has_value());
+  REQUIRE_FALSE(submitted->has_value());
+  REQUIRE(submitted->error().code() == std::errc::io_error);
   worker.Stop();
 }
 

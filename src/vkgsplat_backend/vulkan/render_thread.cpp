@@ -29,6 +29,7 @@
 #include "video/color_converter.hpp"
 #include "video/video_encoder.hpp"
 #include "vulkan_context.hpp"
+#include "vkexec_error.hpp"
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat/gpu_timings.hpp>
 #include <vkgsplat/renderer.hpp>
@@ -42,6 +43,7 @@
 namespace vkgsplat {
 
 namespace {
+
 
   [[nodiscard]] auto
     RecordSphereDraw(vulkan::Context &context, RenderData &data, VkCommandBuffer command_buffer, size_t image_index)
@@ -100,6 +102,7 @@ namespace {
   [[nodiscard]] auto RetireAcquiredImage(vulkan::Context &context, RenderData &data, Error error)
     -> std::expected<void, Error>
   {
+    if (error.code() == std::errc::no_such_device) { return std::unexpected{ std::move(error) }; }
     if (auto recreated = RecreateSwapchain(context, data); !recreated) { return std::unexpected{ recreated.error() }; }
     return std::unexpected{ std::move(error) };
   }
@@ -111,12 +114,12 @@ namespace {
     bool capture_samples) -> std::expected<std::optional<GpuFrameTimings>, Error>
   {
     if (auto waited = ring.wait_slot(frame_slot); !waited) {
-      return std::unexpected{ MakeError(std::errc::io_error, waited.error().message()) };
+      return std::unexpected{ vulkan::VkexecFailure(waited.error()) };
     }
     // Gaussian buffers and the color target are shared across frame slots.
     size_t const previous_slot = (frame_slot + kFrameSlotCount - 1U) % kFrameSlotCount;
     if (auto waited = ring.wait_slot(previous_slot); !waited) {
-      return std::unexpected{ MakeError(std::errc::io_error, waited.error().message()) };
+      return std::unexpected{ vulkan::VkexecFailure(waited.error()) };
     }
     return ResolveGpuPassTimings(context, data, frame_slot, capture_samples);
   }
@@ -128,7 +131,7 @@ namespace {
     uint32_t image_index) -> std::expected<void, Error>
   {
     if (auto waited = ring.wait_image(image_index); !waited) {
-      return std::unexpected{ MakeError(std::errc::io_error, waited.error().message()) };
+      return std::unexpected{ vulkan::VkexecFailure(waited.error()) };
     }
 
     FrameSetup &setup = data.frames.at(frame_slot).setup;
@@ -145,7 +148,7 @@ namespace {
 
     auto const signal_value = ring.allocate_signal_value();
     auto submit_sync = ring.make_submit_sync(frame_slot, image_index, signal_value, VK_PIPELINE_STAGE_2_TRANSFER_BIT);
-    if (!submit_sync) { return std::unexpected{ MakeError(std::errc::io_error, submit_sync.error().message()) }; }
+    if (!submit_sync) { return std::unexpected{ vulkan::VkexecFailure(submit_sync.error()) }; }
 
     std::array<VkCommandBuffer, 1> const cmds{ command_buffer };
     if (auto submitted = context.vkexec_context->submit(vkexec::queue_submit{
@@ -155,11 +158,11 @@ namespace {
           .queue = data.graphics_queue,
         });
       !submitted) {
-      return std::unexpected{ MakeError(std::errc::io_error, submitted.error().message()) };
+      return std::unexpected{ vulkan::VkexecFailure(submitted.error()) };
     }
 
     if (auto marked = ring.mark_submitted(frame_slot, image_index, signal_value); !marked) {
-      return std::unexpected{ MakeError(std::errc::io_error, marked.error().message()) };
+      return std::unexpected{ vulkan::VkexecFailure(marked.error()) };
     }
     if (data.gpu_pass_timer.enabled()) { data.gpu_pass_timer.mark_submitted(frame_slot); }
     return {};
@@ -175,16 +178,18 @@ auto RenderThread::Start(vulkan::Context *context,
   bool capture_gpu_timing_samples) -> void
 {
   capture_gpu_timing_samples_ = capture_gpu_timing_samples;
-  StartWorker(context, data, policy, {}, {}, {});
+  StartWorker(context, data, policy, {}, {}, {}, {});
 }
 
 auto RenderThread::StartForTest(FrameSubmissionPolicy policy,
   std::function<std::expected<void, Error>()> draw_frame,
   std::function<void()> wait_idle,
-  std::function<std::expected<RgbaFrame, Error>()> readback_frame) -> void
+  std::function<std::expected<RgbaFrame, Error>()> readback_frame,
+  std::function<std::expected<EncodedPacket, Error>()> video_frame) -> void
 {
   capture_gpu_timing_samples_ = false;
-  StartWorker(nullptr, nullptr, policy, std::move(draw_frame), std::move(wait_idle), std::move(readback_frame));
+  StartWorker(nullptr, nullptr, policy, std::move(draw_frame), std::move(wait_idle),
+    std::move(readback_frame), std::move(video_frame));
 }
 
 auto RenderThread::WaitForShutdownForTest() -> void
@@ -205,6 +210,18 @@ auto RenderThread::WaitForReadbackPendingForTest() -> void
   control_cv_.wait(lock, [this]() -> bool { return readback_pending_ || !thread_running_; });
 }
 
+auto RenderThread::WaitForCapturePendingForTest() -> void
+{
+  std::unique_lock lock{ control_mutex_ };
+  control_cv_.wait(lock, [this]() -> bool { return !capture_requests_.empty() || !thread_running_; });
+}
+
+auto RenderThread::WaitForVideoCapturePendingForTest() -> void
+{
+  std::unique_lock lock{ control_mutex_ };
+  control_cv_.wait(lock, [this]() -> bool { return !video_capture_requests_.empty() || !thread_running_; });
+}
+
 auto RenderThread::WaitForExclusivePendingForTest() -> void
 {
   std::unique_lock lock{ control_mutex_ };
@@ -216,7 +233,8 @@ auto RenderThread::StartWorker(vulkan::Context *context,
   FrameSubmissionPolicy policy,
   std::function<std::expected<void, Error>()> draw_frame,
   std::function<void()> wait_idle,
-  std::function<std::expected<RgbaFrame, Error>()> readback_frame) -> void
+  std::function<std::expected<RgbaFrame, Error>()> readback_frame,
+  std::function<std::expected<EncodedPacket, Error>()> video_frame) -> void
 {
   Stop();
 
@@ -225,6 +243,7 @@ auto RenderThread::StartWorker(vulkan::Context *context,
   draw_frame_override_ = std::move(draw_frame);
   wait_idle_override_ = std::move(wait_idle);
   readback_frame_override_ = std::move(readback_frame);
+  video_frame_override_ = std::move(video_frame);
 
   {
     std::scoped_lock const lock{ control_mutex_ };
@@ -264,6 +283,7 @@ void RenderThread::Stop()
     draw_frame_override_ = {};
     wait_idle_override_ = {};
     readback_frame_override_ = {};
+    video_frame_override_ = {};
     thread_running_ = false;
     return;
   }
@@ -280,6 +300,13 @@ void RenderThread::Stop()
 
   {
     std::scoped_lock const lock{ control_mutex_ };
+    for (auto const &request : capture_requests_) {
+      if (request->completed) { continue; }
+      request->result = std::unexpected{
+        MakeError(std::errc::operation_canceled, "render thread stopped during capture") };
+      request->completed = true;
+    }
+    capture_requests_.clear();
     for (auto const &request : video_capture_requests_) {
       if (request->completed) { continue; }
       request->result = std::unexpected{
@@ -295,6 +322,7 @@ void RenderThread::Stop()
   draw_frame_override_ = {};
   wait_idle_override_ = {};
   readback_frame_override_ = {};
+  video_frame_override_ = {};
 }
 
 auto RenderThread::SubmitFrame(Camera const &camera, f64 aspect_ratio) -> std::expected<void, Error>
@@ -363,7 +391,7 @@ auto RenderThread::CaptureFrame(Camera const &camera, f64 aspect_ratio) -> std::
   }
   control_cv_.notify_all();
   std::unique_lock lock{ control_mutex_ };
-  control_cv_.wait(lock, [&]() -> bool { return request->completed || !thread_running_; });
+  control_cv_.wait(lock, [&]() -> bool { return request->completed; });
   if (request->result.has_value()) { return std::move(*request->result); }
   return std::unexpected{ MakeError(std::errc::operation_canceled, "render thread stopped during capture") };
 }
@@ -372,9 +400,22 @@ auto RenderThread::CaptureVideoFrame(Camera const &camera, f64 aspect_ratio,
   vulkan::video::GpuColorConverter &converter, vulkan::video::VideoEncoder &encoder,
   u64 frame_index) -> std::expected<EncodedPacket, Error>
 {
+  return CaptureVideoFrameImpl(camera, aspect_ratio, &converter, &encoder, frame_index);
+}
+
+auto RenderThread::CaptureVideoFrameForTest(Camera const &camera, f64 aspect_ratio,
+  u64 frame_index) -> std::expected<EncodedPacket, Error>
+{
+  return CaptureVideoFrameImpl(camera, aspect_ratio, nullptr, nullptr, frame_index);
+}
+
+auto RenderThread::CaptureVideoFrameImpl(Camera const &camera, f64 aspect_ratio,
+  vulkan::video::GpuColorConverter *converter, vulkan::video::VideoEncoder *encoder,
+  u64 frame_index) -> std::expected<EncodedPacket, Error>
+{
   auto request = std::make_shared<VideoCaptureRequest>();
-  request->converter = &converter;
-  request->encoder = &encoder;
+  request->converter = converter;
+  request->encoder = encoder;
   request->frame_index = frame_index;
   {
     std::unique_lock lock{ control_mutex_ };
@@ -387,7 +428,11 @@ auto RenderThread::CaptureVideoFrame(Camera const &camera, f64 aspect_ratio,
     if (!thread_running_) {
       return std::unexpected{ MakeError(std::errc::operation_not_permitted, "render thread is not running") };
     }
-    if (context_ == nullptr || data_ == nullptr || context_->swapchain != nullptr) {
+    if ((converter == nullptr || encoder == nullptr) && !video_frame_override_) {
+      return std::unexpected{ MakeError(std::errc::operation_not_supported,
+        "CPU-only video capture requires a test callback") };
+    }
+    if (!video_frame_override_ && (context_ == nullptr || data_ == nullptr || context_->swapchain != nullptr)) {
       return std::unexpected{ MakeError(std::errc::operation_not_supported,
         "video capture requires an offscreen Vulkan renderer") };
     }
@@ -639,7 +684,8 @@ auto RenderThread::ProcessWaitIdle(std::unique_lock<std::mutex> &lock) -> void
   bool const failed = result != VK_SUCCESS || timing_error.has_value();
   if (failed && !first_error_.has_value()) {
     first_error_ = timing_error.value_or(
-      MakeError(std::errc::io_error, "device wait idle failed. VkResult=" + std::to_string(result)));
+      MakeError(result == VK_ERROR_DEVICE_LOST ? std::errc::no_such_device : std::errc::io_error,
+        "device wait idle failed. VkResult=" + std::to_string(result)));
   }
   idle_done_ = true;
   if (command_ == Command::kWaitIdle) { command_ = Command::kNone; }
@@ -653,6 +699,9 @@ auto RenderThread::ProcessReadback(std::unique_lock<std::mutex> &lock) -> void
   lock.unlock();
   auto frame = ReadFrameOnWorker();
   lock.lock();
+  if (!frame && frame.error().code() == std::errc::no_such_device && !first_error_) {
+    first_error_ = frame.error();
+  }
   readback_result_ = std::move(frame);
   readback_pending_ = false;
   if (command_ == Command::kReadback) { command_ = Command::kNone; }
@@ -663,8 +712,11 @@ auto RenderThread::ProcessExclusive(std::unique_lock<std::mutex> &lock) -> void
 {
   lock.unlock();
   std::expected<void, Error> result;
-  if (context_ != nullptr && context_->disp.deviceWaitIdle() != VK_SUCCESS) {
-    result = std::unexpected{ MakeError(std::errc::io_error, "failed to wait for GPU before reconfiguration") };
+  auto const wait_result = context_ != nullptr ? context_->disp.deviceWaitIdle() : VK_SUCCESS;
+  if (wait_result != VK_SUCCESS) {
+    result = std::unexpected{ MakeError(
+      wait_result == VK_ERROR_DEVICE_LOST ? std::errc::no_such_device : std::errc::io_error,
+      "failed to wait for GPU before reconfiguration") };
   } else {
     result = exclusive_action_();
   }
@@ -767,6 +819,7 @@ auto RenderThread::ProcessFrame(size_t frame_slot, PendingFrame const &frame) ->
     // next frame cannot overwrite either image before this request completes.
     auto encoded = [&]() -> std::expected<EncodedPacket, Error> {
       if (!drawn) { return std::unexpected(drawn.error()); }
+      if (video_frame_override_) { return video_frame_override_(); }
       if (drawn.value() != FrameOutcome::kSubmitted || context_ == nullptr || data_ == nullptr
           || !data_->color_image.has_value() || data_->color_format != VK_FORMAT_R8G8B8A8_UNORM) {
         return std::unexpected(MakeError(std::errc::operation_not_supported,
@@ -787,11 +840,15 @@ auto RenderThread::ProcessFrame(size_t frame_slot, PendingFrame const &frame) ->
           cleanup_error = drained.error();
         }
         if (auto released = frame.video_capture->converter->WaitForSourceRelease(); !released) {
-          if (!cleanup_error) { cleanup_error = released.error(); }
+          if (!cleanup_error || released.error().code() == std::errc::no_such_device) {
+            cleanup_error = released.error();
+          }
         }
         if (cleanup_error) {
-          drawn = std::unexpected(*cleanup_error);
-          return std::unexpected(*cleanup_error);
+          auto const &failure = packet.error().code() == std::errc::no_such_device
+                                  ? packet.error() : *cleanup_error;
+          drawn = std::unexpected(failure);
+          return std::unexpected(failure);
         }
         return packet;
       }
@@ -802,8 +859,11 @@ auto RenderThread::ProcessFrame(size_t frame_slot, PendingFrame const &frame) ->
       return packet;
     }();
     if (!encoded) {
-      frame.video_capture->encoder->Abort();
-      frame.video_capture->converter->Abort();
+      if (encoded.error().code() == std::errc::no_such_device) {
+        drawn = std::unexpected(encoded.error());
+      }
+      if (frame.video_capture->encoder != nullptr) { frame.video_capture->encoder->Abort(); }
+      if (frame.video_capture->converter != nullptr) { frame.video_capture->converter->Abort(); }
     }
     {
       std::scoped_lock const lock{ control_mutex_ };
@@ -853,7 +913,7 @@ auto RenderThread::DrawFrameVulkan(size_t frame_slot) -> std::expected<FrameOutc
 
   auto acquire_semaphore = ring.acquire_semaphore(frame_slot);
   if (!acquire_semaphore) {
-    return std::unexpected{ MakeError(std::errc::io_error, acquire_semaphore.error().message()) };
+    return std::unexpected{ vulkan::VkexecFailure(acquire_semaphore.error()) };
   }
 
   uint32_t image_index = 0;
@@ -867,7 +927,8 @@ auto RenderThread::DrawFrameVulkan(size_t frame_slot) -> std::expected<FrameOutc
   if (result == VK_TIMEOUT || result == VK_NOT_READY) { return FrameOutcome::kSkipped; }
   if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
     return std::unexpected{ MakeError(
-      std::errc::io_error, "failed to acquire swapchain image. VkResult=" + std::to_string(result)) };
+      result == VK_ERROR_DEVICE_LOST ? std::errc::no_such_device : std::errc::io_error,
+      "failed to acquire swapchain image. VkResult=" + std::to_string(result)) };
   }
   bool const acquired_suboptimal = result == VK_SUBOPTIMAL_KHR;
 
@@ -879,7 +940,7 @@ auto RenderThread::DrawFrameVulkan(size_t frame_slot) -> std::expected<FrameOutc
   auto finished_semaphore = ring.render_finished_semaphore(image_index);
   if (!finished_semaphore) {
     auto const retired =
-      RetireAcquiredImage(context, data, MakeError(std::errc::io_error, finished_semaphore.error().message()));
+      RetireAcquiredImage(context, data, vulkan::VkexecFailure(finished_semaphore.error()));
     return std::unexpected{ retired.error() };
   }
 
@@ -898,7 +959,8 @@ auto RenderThread::DrawFrameVulkan(size_t frame_slot) -> std::expected<FrameOutc
   if (result != VK_SUCCESS) {
     auto const retired = RetireAcquiredImage(context,
       data,
-      MakeError(std::errc::io_error, "failed to present swapchain image. VkResult=" + std::to_string(result)));
+      MakeError(result == VK_ERROR_DEVICE_LOST ? std::errc::no_such_device : std::errc::io_error,
+        "failed to present swapchain image. VkResult=" + std::to_string(result)));
     return std::unexpected{ retired.error() };
   }
 
@@ -921,8 +983,11 @@ auto RenderThread::DrawFrameOffscreen(size_t frame_slot) -> std::expected<FrameO
       .pSemaphores = &data.offscreen_timeline,
       .pValues = &data.offscreen_signal_value,
     };
-    if (context.disp.waitSemaphores(&wait_info, UINT64_MAX) != VK_SUCCESS) {
-      return std::unexpected{ MakeError(std::errc::io_error, "failed to wait for offscreen frame") };
+    auto const waited = context.disp.waitSemaphores(&wait_info, UINT64_MAX);
+    if (waited != VK_SUCCESS) {
+      return std::unexpected{ MakeError(
+        waited == VK_ERROR_DEVICE_LOST ? std::errc::no_such_device : std::errc::io_error,
+        "failed to wait for offscreen frame") };
     }
   }
   auto resolved = ResolveGpuPassTimings(context, data, frame_slot, capture_gpu_timing_samples_);
@@ -957,7 +1022,7 @@ auto RenderThread::DrawFrameOffscreen(size_t frame_slot) -> std::expected<FrameO
       });
     !submitted) {
     --data.offscreen_signal_value;
-    return std::unexpected{ MakeError(std::errc::io_error, submitted.error().message()) };
+    return std::unexpected{ vulkan::VkexecFailure(submitted.error()) };
   }
   if (data.gpu_pass_timer.enabled()) { data.gpu_pass_timer.mark_submitted(frame_slot); }
   return FrameOutcome::kSubmitted;

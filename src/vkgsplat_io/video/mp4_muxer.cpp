@@ -141,6 +141,7 @@ auto Mp4Muxer::Open(std::filesystem::path path, std::uint32_t width, std::uint32
 
 auto Mp4Muxer::Write(EncodedPacket const &encoded) -> std::expected<void, Error>
 {
+  if (publish_failure_) { return std::unexpected(*publish_failure_); }
   if (finished_ || failed_ || context_ == nullptr) {
     return std::unexpected(MakeError(std::errc::operation_not_permitted, "MP4 output is finalized"));
   }
@@ -180,6 +181,7 @@ auto Mp4Muxer::Write(EncodedPacket const &encoded) -> std::expected<void, Error>
 
 auto Mp4Muxer::Finish() -> std::expected<void, Error>
 {
+  if (publish_failure_) { return std::unexpected(*publish_failure_); }
   if (finished_ || failed_ || context_ == nullptr) {
     return std::unexpected(MakeError(std::errc::operation_not_permitted, "MP4 output is finalized"));
   }
@@ -200,7 +202,11 @@ auto Mp4Muxer::Finish() -> std::expected<void, Error>
   }
   std::error_code error;
   std::filesystem::create_hard_link(temporary_path_, path_, error);
-  if (error) { return std::unexpected(MakeError(error, "publish MP4 output failed")); }
+  if (error) {
+    failed_ = true;
+    publish_failure_ = MakeError(error, "publish MP4 output failed");
+    return std::unexpected(*publish_failure_);
+  }
   finished_ = true;
   std::filesystem::remove(temporary_path_, error);
   if (!error) { temporary_path_.clear(); }

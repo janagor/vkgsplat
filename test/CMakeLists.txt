@@ -75,6 +75,15 @@ if(TARGET vkgsplat::vkgsplat_utility)
     target_link_libraries(vkgsplat_h264_writer_test PRIVATE Catch2::Catch2WithMain vkgsplat::vkgsplat_io)
     catch_discover_tests(vkgsplat_h264_writer_test)
 
+    add_executable(vkgsplat_video_recorder_test video_recorder.cpp)
+    target_link_libraries(vkgsplat_video_recorder_test PRIVATE Catch2::Catch2WithMain vkgsplat::vkgsplat_capture)
+    catch_discover_tests(vkgsplat_video_recorder_test)
+    if(TARGET vkgsplat::vkgsplat_video_io)
+      add_executable(vkgsplat_mp4_cleanup_test mp4_cleanup.cpp)
+      target_link_libraries(vkgsplat_mp4_cleanup_test PRIVATE Catch2::Catch2WithMain vkgsplat::vkgsplat_video_io)
+      catch_discover_tests(vkgsplat_mp4_cleanup_test)
+    endif()
+
     add_executable(vkgsplat_video_capabilities_test video_capabilities.cpp)
     target_link_libraries(vkgsplat_video_capabilities_test PRIVATE Catch2::Catch2WithMain vkgsplat::vkgsplat_backend)
     catch_discover_tests(vkgsplat_video_capabilities_test)
@@ -150,6 +159,28 @@ if(vkgsplat_ENABLE_VIDEO_GPU_TESTS OR vkgsplat_ENABLE_HEADLESS_GPU_TESTS)
            COMMAND $<TARGET_FILE:vkgsplat_video_encode_synthetic_test>
                    ${CMAKE_CURRENT_BINARY_DIR}/video-color-conversion-smoke.h264 --color-conversion)
   set_tests_properties(video.encode.color_conversion.smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300)
+  if(vkgsplat_HEADLESS_GPU_TEST_VALIDATION)
+    add_test(NAME video.encode.repeat_color_conversion.smoke
+             COMMAND $<TARGET_FILE:vkgsplat_video_encode_synthetic_test>
+                     ${CMAKE_CURRENT_BINARY_DIR}/video-repeat-color-conversion-smoke.h264 --repeat-color-conversion)
+    set_tests_properties(video.encode.repeat_color_conversion.smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300
+                         FAIL_REGULAR_EXPRESSION "\\[ERROR: .*Validation"
+                         ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1")
+    foreach(failure_point converter video readback)
+      add_test(NAME video.encode.fault_${failure_point}.smoke
+               COMMAND $<TARGET_FILE:vkgsplat_video_encode_synthetic_test>
+                       ${CMAKE_CURRENT_BINARY_DIR}/video-fault-${failure_point}.h264 --fault-${failure_point}-submit)
+      set_tests_properties(video.encode.fault_${failure_point}.smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300
+                           FAIL_REGULAR_EXPRESSION "\\[ERROR: .*Validation"
+                           ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1")
+    endforeach()
+    add_test(NAME video.encode.fault_readback_destructor.smoke
+             COMMAND $<TARGET_FILE:vkgsplat_video_encode_synthetic_test>
+                     ${CMAKE_CURRENT_BINARY_DIR}/video-fault-readback-destructor.h264 --fault-readback-destructor)
+    set_tests_properties(video.encode.fault_readback_destructor.smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300
+                         FAIL_REGULAR_EXPRESSION "\\[ERROR: .*Validation"
+                         ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1")
+  endif()
   if(vkgsplat_FFMPEG_EXECUTABLE AND vkgsplat_FFPROBE_EXECUTABLE AND Python3_Interpreter_FOUND)
     add_test(NAME video.encode.synthetic
              COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/video_encode_integration.py

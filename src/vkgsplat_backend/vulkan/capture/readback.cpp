@@ -3,6 +3,7 @@
 #include "app_state.hpp"
 #include "vulkan/gpu_buffers.hpp"
 #include "vulkan_context.hpp"
+#include "vkexec_error.hpp"
 
 #include <array>
 #include <cstddef>
@@ -28,6 +29,7 @@ namespace vkgsplat::vulkan {
 
 namespace {
 
+
   void FreeCmd(Context &context, RenderData &data, VkCommandBuffer cmd)
   {
     if (cmd != VK_NULL_HANDLE && data.command_pool.has_value()) {
@@ -41,7 +43,7 @@ namespace {
     auto &ring = *data.frame_ring;
     for (std::size_t slot = 0; slot < ring.slot_count(); ++slot) {
       if (auto waited = ring.wait_slot(slot); !waited) {
-        return std::unexpected{ MakeError(std::errc::io_error, waited.error().message()) };
+        return std::unexpected{ VkexecFailure(waited.error()) };
       }
     }
     return {};
@@ -93,8 +95,10 @@ auto ReadColorTargetRgba8(Context &context, RenderData &data) -> std::expected<R
     .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
     .pInheritanceInfo = nullptr,
   };
-  if (context.disp.beginCommandBuffer(cmd, &begin_info) != VK_SUCCESS) {
-    return fail(MakeError(std::errc::io_error, "failed to begin readback command buffer"));
+  auto const begun = context.disp.beginCommandBuffer(cmd, &begin_info);
+  if (begun != VK_SUCCESS) {
+    return fail(MakeError(begun == VK_ERROR_DEVICE_LOST ? std::errc::no_such_device : std::errc::io_error,
+      "failed to begin readback command buffer"));
   }
 
   // After a normal frame the color target is already TRANSFER_SRC_OPTIMAL.
@@ -109,7 +113,7 @@ auto ReadColorTargetRgba8(Context &context, RenderData &data) -> std::expected<R
       .src_access = VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
       .dst_access = VK_ACCESS_TRANSFER_READ_BIT,
     });
-  if (!barrier) { return fail(MakeError(std::errc::io_error, barrier.error().message())); }
+  if (!barrier) { return fail(VkexecFailure(barrier.error())); }
 
   VkBufferImageCopy const region{
     .bufferOffset = 0,
@@ -128,8 +132,10 @@ auto ReadColorTargetRgba8(Context &context, RenderData &data) -> std::expected<R
   context.disp.cmdCopyImageToBuffer(
     cmd, data.color_image->handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, staging->handle(), 1, &region);
 
-  if (context.disp.endCommandBuffer(cmd) != VK_SUCCESS) {
-    return fail(MakeError(std::errc::io_error, "failed to end readback command buffer"));
+  auto const ended = context.disp.endCommandBuffer(cmd);
+  if (ended != VK_SUCCESS) {
+    return fail(MakeError(ended == VK_ERROR_DEVICE_LOST ? std::errc::no_such_device : std::errc::io_error,
+      "failed to end readback command buffer"));
   }
 
   auto *const timeline = data.frame_ring.has_value() ? data.frame_ring->timeline().handle() : data.offscreen_timeline;
@@ -151,7 +157,7 @@ auto ReadColorTargetRgba8(Context &context, RenderData &data) -> std::expected<R
       });
     !submitted) {
     if (!data.frame_ring.has_value()) { --data.offscreen_signal_value; }
-    return fail(MakeError(std::errc::io_error, submitted.error().message()));
+    return fail(VkexecFailure(submitted.error()));
   }
   VkSemaphoreWaitInfo const wait_info{
     .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
@@ -161,13 +167,17 @@ auto ReadColorTargetRgba8(Context &context, RenderData &data) -> std::expected<R
     .pSemaphores = &timeline,
     .pValues = &signal_value,
   };
-  if (context.disp.waitSemaphores(&wait_info, UINT64_MAX) != VK_SUCCESS) {
-    if (context.disp.deviceWaitIdle() != VK_SUCCESS) {
+  auto const waited = context.disp.waitSemaphores(&wait_info, UINT64_MAX);
+  if (waited != VK_SUCCESS) {
+    auto const drained = context.disp.deviceWaitIdle();
+    auto const code = waited == VK_ERROR_DEVICE_LOST || drained == VK_ERROR_DEVICE_LOST
+                        ? std::errc::no_such_device : std::errc::io_error;
+    if (drained != VK_SUCCESS) {
       // Keep the staging allocation and command buffer alive until renderer teardown.
       data.in_flight_readbacks.push_back(std::move(*staging));
-      return std::unexpected{ MakeError(std::errc::io_error, "failed to wait for color target readback") };
+      return std::unexpected{ MakeError(code, "failed to wait for color target readback") };
     }
-    return fail(MakeError(std::errc::io_error, "failed to wait for color target readback"));
+    return fail(MakeError(code, "failed to wait for color target readback"));
   }
 
   FreeCmd(context, data, cmd);

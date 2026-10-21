@@ -34,6 +34,8 @@ public:
   // Call only after EncodeImage has successfully consumed the returned frame.
   [[nodiscard]] auto Complete() -> std::expected<void, Error>;
   auto Abort() noexcept -> void { failed_ = true; }
+  // Simulates a rejected queue submission after the conversion fence is reset.
+  auto FailNextSubmissionForTest() noexcept -> void { fail_next_submission_for_test_ = true; }
 
   ~GpuColorConverter();
   GpuColorConverter(GpuColorConverter const &) = delete;
@@ -63,6 +65,7 @@ private:
   VkFence converted_done_ = VK_NULL_HANDLE;
   bool in_flight_ = false;
   bool failed_ = false;
+  bool fail_next_submission_for_test_ = false;
 };
 
 }// namespace vkgsplat::vulkan::video

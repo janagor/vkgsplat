@@ -8,6 +8,7 @@
 #include <expected>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <span>
 
 #include <vkgsplat_video_io/vkgsplat_video_io_export.hpp>
@@ -43,6 +44,7 @@ private:
   std::uint64_t next_index_{};
   bool finished_ = false;
   bool failed_ = false;
+  std::optional<Error> publish_failure_;
 };
 
 }// namespace vkgsplat

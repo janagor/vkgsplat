@@ -91,6 +91,13 @@ TEST_CASE("H.264 writer rejects missing parameter sets", "[video]")
   CHECK_FALSE(std::filesystem::exists(file.path()));
 }
 
+TEST_CASE("H.264 writer rejects a directory as output", "[video]")
+{
+  auto const directory = std::filesystem::temp_directory_path();
+  auto writer = vkgsplat::H264Writer::Open(directory.string(), kParameterSets);
+  REQUIRE_FALSE(writer);
+}
+
 TEST_CASE("H.264 writer accepts P slices after an IDR", "[video]")
 {
   TemporaryFile const file;

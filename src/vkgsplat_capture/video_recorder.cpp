@@ -1,4 +1,5 @@
 #include <vkgsplat_capture/video_recorder.hpp>
+#include "video_recorder_test_access.hpp"
 
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat/renderer.hpp>
@@ -95,6 +96,18 @@ auto VideoRecorder::create(Renderer &renderer, VideoConfig config) -> std::expec
   return VideoRecorder{ std::make_unique<Impl>(Impl{
     .sink = std::move(*sink),
     .session = std::move(*session),
+    .next_index = 0U,
+    .finished = false,
+    .failure = {},
+  }) };
+}
+
+auto VideoRecorderTestAccess::Create(std::unique_ptr<video::RecordingSession> session,
+  std::unique_ptr<VideoSink> sink) -> VideoRecorder
+{
+  return VideoRecorder{ std::make_unique<VideoRecorder::Impl>(VideoRecorder::Impl{
+    .sink = std::move(sink),
+    .session = std::move(session),
     .next_index = 0U,
     .finished = false,
     .failure = {},
