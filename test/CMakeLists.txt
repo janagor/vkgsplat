@@ -118,6 +118,12 @@ endif()
 option(vkgsplat_ENABLE_HEADLESS_GPU_TESTS "Enable GPU-dependent headless integration tests" OFF)
 option(vkgsplat_HEADLESS_GPU_TEST_VALIDATION "Enable validation layers in the headless GPU test" ON)
 option(vkgsplat_ENABLE_VIDEO_GPU_TESTS "Enable Vulkan Video integration tests without a scene fixture" OFF)
+# Decoded-color fidelity is opt-in; the strict NV12 conversion test only needs Python3.
+option(vkgsplat_ENABLE_VIDEO_COLOR_FIDELITY_TESTS "Enable strict decoded H.264 color verification" OFF)
+if(vkgsplat_ENABLE_VIDEO_COLOR_FIDELITY_TESTS AND
+   NOT (vkgsplat_ENABLE_VIDEO_GPU_TESTS OR vkgsplat_ENABLE_HEADLESS_GPU_TESTS))
+  message(FATAL_ERROR "Video color fidelity tests require Vulkan Video GPU tests to be enabled")
+endif()
 set(vkgsplat_HEADLESS_TEST_PLY
     ""
     CACHE FILEPATH "PLY fixture for headless GPU integration test")
@@ -147,6 +153,10 @@ if(vkgsplat_ENABLE_VIDEO_GPU_TESTS OR vkgsplat_ENABLE_HEADLESS_GPU_TESTS)
   find_program(vkgsplat_FFMPEG_EXECUTABLE ffmpeg)
   find_program(vkgsplat_FFPROBE_EXECUTABLE ffprobe)
   find_package(Python3 COMPONENTS Interpreter QUIET)
+  if(vkgsplat_ENABLE_VIDEO_COLOR_FIDELITY_TESTS AND
+     (NOT Python3_Interpreter_FOUND OR NOT vkgsplat_FFMPEG_EXECUTABLE))
+    message(FATAL_ERROR "Video color fidelity tests require Python3 and FFmpeg")
+  endif()
   add_test(NAME video.encode.synthetic.smoke
            COMMAND $<TARGET_FILE:vkgsplat_video_encode_synthetic_test>
                    ${CMAKE_CURRENT_BINARY_DIR}/video-synthetic-smoke.h264)
@@ -181,6 +191,20 @@ if(vkgsplat_ENABLE_VIDEO_GPU_TESTS OR vkgsplat_ENABLE_HEADLESS_GPU_TESTS)
                          FAIL_REGULAR_EXPRESSION "\\[ERROR: .*Validation"
                          ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1")
   endif()
+  if(Python3_Interpreter_FOUND)
+    add_test(NAME video.encode.color_conversion
+             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/video_encode_verify_colors.py
+                     --check-nv12 $<TARGET_FILE:vkgsplat_video_encode_synthetic_test>)
+    set_tests_properties(video.encode.color_conversion PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300)
+  elseif(vkgsplat_ENABLE_VIDEO_GPU_TESTS)
+    message(STATUS "NV12 color conversion verification requires Python3")
+  endif()
+  if(vkgsplat_ENABLE_VIDEO_COLOR_FIDELITY_TESTS)
+    add_test(NAME video.encode.color_fidelity
+             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/video_encode_verify_colors.py
+                     --check-encoded $<TARGET_FILE:vkgsplat_video_encode_synthetic_test> ${vkgsplat_FFMPEG_EXECUTABLE})
+    set_tests_properties(video.encode.color_fidelity PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300)
+  endif()
   if(vkgsplat_FFMPEG_EXECUTABLE AND vkgsplat_FFPROBE_EXECUTABLE AND Python3_Interpreter_FOUND)
     add_test(NAME video.encode.synthetic
              COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/video_encode_integration.py
@@ -188,10 +212,6 @@ if(vkgsplat_ENABLE_VIDEO_GPU_TESTS OR vkgsplat_ENABLE_HEADLESS_GPU_TESTS)
                      ${CMAKE_CURRENT_SOURCE_DIR}/video_encode_verify.cmake
                      ${vkgsplat_FFMPEG_EXECUTABLE} ${vkgsplat_FFPROBE_EXECUTABLE})
     set_tests_properties(video.encode.synthetic PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
-    add_test(NAME video.encode.color_conversion
-             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/video_encode_verify_colors.py
-                     $<TARGET_FILE:vkgsplat_video_encode_synthetic_test> ${vkgsplat_FFMPEG_EXECUTABLE})
-    set_tests_properties(video.encode.color_conversion PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300)
   elseif(vkgsplat_ENABLE_VIDEO_GPU_TESTS)
     message(STATUS "Full Vulkan Video encode verification requires FFmpeg, FFprobe, and Python3")
   endif()

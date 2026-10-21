@@ -1,3 +1,4 @@
+import argparse
 import subprocess
 import sys
 import tempfile
@@ -15,6 +16,9 @@ MAX_NV12_ERROR = 2
 MISSING_CR_TOLERANCE = 4
 FRAME_SOURCES = ("GPU image", "CPU upload")
 AFFECTED_COLORS = ("red", "green")
+COMPONENTS = ("Y", "U", "V")
+TOLERANCES = (MAX_LUMA_ERROR, MAX_CHROMA_ERROR, MAX_CHROMA_ERROR)
+COLOR_NAMES = ("red", "green", "blue", "white")
 QUARTER_DIVISOR = 4
 THREE_QUARTERS = 3
 LUMA_OFFSET = 16.0
@@ -77,19 +81,32 @@ def check_nv12(data: bytes) -> bool:
 
 
 def main() -> int:
-    encoder, ffmpeg = sys.argv[1:]
+    parser = argparse.ArgumentParser()
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--check-nv12", action="store_true")
+    mode.add_argument("--check-encoded", action="store_true")
+    parser.add_argument("encoder")
+    parser.add_argument("ffmpeg", nargs="?")
+    args = parser.parse_args()
+    if args.check_encoded and args.ffmpeg is None:
+        parser.error("--check-encoded requires FFmpeg")
     with tempfile.TemporaryDirectory(prefix="vkgsplat-color-") as directory:
         stream = Path(directory) / "converted.h264"
-        encoded = subprocess.run([encoder, str(stream), "--color-conversion"], check=False)
+        encoded = subprocess.run([args.encoder, str(stream), "--color-conversion"], check=False)
         if encoded.returncode == SKIPPED:
             return SKIPPED
         if encoded.returncode != 0:
             print("GPU color conversion encode failed", file=sys.stderr)
             return 1
-        if not check_nv12(Path(f"{stream}.nv12").read_bytes()):
+        nv12_ok = check_nv12(Path(f"{stream}.nv12").read_bytes())
+        if not nv12_ok:
+            print("FAIL: NV12 conversion", file=sys.stderr)
             return 1
+        print("NV12 conversion: PASS")
+        if args.check_nv12:
+            return 0
         decoded = subprocess.run(
-            [ffmpeg, "-v", "error", "-xerror", "-f", "h264", "-i", str(stream),
+            [args.ffmpeg, "-v", "error", "-xerror", "-f", "h264", "-i", str(stream),
              "-f", "rawvideo", "-pix_fmt", "yuv420p", "-"],
             capture_output=True,
             check=False,
@@ -112,6 +129,8 @@ def main() -> int:
         )
         failures = []
         neutral_cr_samples = set()
+        other_failures = False
+        source_failures = set()
         for frame_index, source in enumerate(FRAME_SOURCES):
             frame = decoded.stdout[frame_index * expected_size:(frame_index + 1) * expected_size]
             planes = (
@@ -119,7 +138,7 @@ def main() -> int:
                 frame[y_size:y_size + uv_size],
                 frame[y_size + uv_size:],
             )
-            for name, rgb, (x, y) in zip(("red", "green", "blue", "white"), COLORS, locations):
+            for name, rgb, (x, y) in zip(COLOR_NAMES, COLORS, locations):
                 reference = expected_yuv(rgb)
                 observed = (
                     sample_mean(planes[0], WIDTH, x, y),
@@ -128,27 +147,35 @@ def main() -> int:
                     sample_mean(planes[2], WIDTH // CHROMA_DIVISOR,
                                 x // CHROMA_DIVISOR, y // CHROMA_DIVISOR),
                 )
-                for component, actual, expected, tolerance in zip(
-                    ("Y", "U", "V"), observed, reference,
-                    (MAX_LUMA_ERROR, MAX_CHROMA_ERROR, MAX_CHROMA_ERROR),
-                ):
+                for component, actual, expected, tolerance in zip(COMPONENTS, observed, reference, TOLERANCES):
+                    print(
+                        f"{source} {name} {component}: got {actual:.1f}, expected {expected:.1f}, "
+                        f"tolerance {tolerance}"
+                    )
                     if abs(actual - expected) > tolerance:
                         failures.append(
-                            f"{source} {name} {component}: got {actual:.1f}, expected {expected:.1f}")
+                            f"{source} {name} {component}: got {actual:.1f}, expected {expected:.1f}, "
+                            f"tolerance {tolerance}")
+                        source_failures.add(source)
                         if (component == "V" and name in AFFECTED_COLORS
                                 and abs(actual - CHROMA_OFFSET) <= MISSING_CR_TOLERANCE):
                             neutral_cr_samples.add((source, name))
+                        else:
+                            other_failures = True
         if failures:
+            print("FAIL: H.264 encoded-color fidelity", file=sys.stderr)
+            for source in FRAME_SOURCES:
+                print(f"{source} encoded color: {'FAIL' if source in source_failures else 'PASS'}", file=sys.stderr)
             print("\n".join(failures), file=sys.stderr)
-            if len(neutral_cr_samples) == len(FRAME_SOURCES) * len(AFFECTED_COLORS):
+            if not other_failures and len(neutral_cr_samples) == len(FRAME_SOURCES) * len(AFFECTED_COLORS):
                 print(
-                    "This matches the Mesa ANV missing-Cr symptom on Intel: the NV12 input passed "
-                    "the CPU reference check, "
-                    "but H.264 output has neutral Cr (V near 128) for red and green in both GPU-image "
-                    "and CPU-upload paths. The shared Vulkan Video encode path needs investigation; "
-                    "the test remains failed so color corruption is visible.",
+                    "Red and green Cr values are approximately 128 in both encoded paths. "
+                    "Matches the known Mesa ANV missing-Cr symptom. Possible driver defect; "
+                    "application-side causes have not been conclusively excluded.",
                     file=sys.stderr,
                 )
+            else:
+                print("General encoded-color regression", file=sys.stderr)
             return 1
     return 0
 

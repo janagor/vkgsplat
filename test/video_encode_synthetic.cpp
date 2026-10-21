@@ -183,6 +183,7 @@ auto Run(std::filesystem::path const &output, bool gpu_only, bool color_conversi
   if (color_conversion) {
     auto const &components = device.selection.source_format.components;
     std::cout << "Color encode device: " << device.capabilities.device_name
+              << ", driver version: " << device.capabilities.driver_version
               << ", NV12 component mapping: "
               << static_cast<int>(components.r) << ','
               << static_cast<int>(components.g) << ','
