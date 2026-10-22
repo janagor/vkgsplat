@@ -4,6 +4,7 @@
 #include "video_device.hpp"
 
 #include <cstddef>
+#include <cstdint>
 #include <expected>
 #include <memory>
 #include <vector>
@@ -20,7 +21,8 @@ namespace vkgsplat::vulkan::video {
 class VideoSession
 {
 public:
-  [[nodiscard]] static auto Create(Context &context, EncodeDevice const &device, VkExtent2D extent)
+  [[nodiscard]] static auto Create(Context &context, EncodeDevice const &device, VkExtent2D extent,
+    std::uint32_t fps_numerator, std::uint32_t fps_denominator)
     -> std::expected<std::unique_ptr<VideoSession>, Error>;
 
   ~VideoSession();

@@ -607,7 +607,8 @@ VideoEncoder::VideoEncoder(Context &context, EncodeDevice device, VkExtent2D ext
 
 VideoEncoder::~VideoEncoder() = default;
 
-auto VideoEncoder::Create(Context &context, EncodeDevice device, VkExtent2D extent)
+auto VideoEncoder::Create(Context &context, EncodeDevice device, VkExtent2D extent,
+  std::uint32_t fps_numerator, std::uint32_t fps_denominator)
   -> std::expected<std::unique_ptr<VideoEncoder>, Error>
 {
   if (device.selection.profile_index >= device.capabilities.profiles.size()) {
@@ -619,7 +620,7 @@ auto VideoEncoder::Create(Context &context, EncodeDevice device, VkExtent2D exte
     return std::unexpected(MakeError(std::errc::function_not_supported,
       "H.264 encoder requires an NV12 encode source with transfer-destination support"));
   }
-  auto session = VideoSession::Create(context, device, extent);
+  auto session = VideoSession::Create(context, device, extent, fps_numerator, fps_denominator);
   if (!session) { return std::unexpected(session.error()); }
   auto resources = std::make_unique<EncoderResources>(context);
   if (auto created = InitializeEncoderResources(context, device, extent, *resources); !created) {

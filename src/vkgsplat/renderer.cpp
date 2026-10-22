@@ -361,7 +361,8 @@ auto Renderer::render_frame(Camera const &camera) -> std::expected<RgbaFrame, Er
   return impl_->render_thread->CaptureFrame(camera, aspect_ratio);
 }
 
-auto Renderer::create_video_recording_session(u32 width, u32 height)
+auto Renderer::create_video_recording_session(u32 width, u32 height,
+  u32 fps_numerator, u32 fps_denominator)
   -> std::expected<std::unique_ptr<video::RecordingSession>, Error>
 {
   auto &context = AsVulkanDriver(impl_->engine->driver()).context();
@@ -390,7 +391,8 @@ auto Renderer::create_video_recording_session(u32 width, u32 height)
   device.selection = *selection;
   auto converter = vulkan::video::GpuColorConverter::Create(context, device, extent);
   if (!converter) { return std::unexpected(converter.error()); }
-  auto encoder = vulkan::video::VideoEncoder::Create(context, std::move(device), extent);
+  auto encoder = vulkan::video::VideoEncoder::Create(context, std::move(device), extent,
+    fps_numerator, fps_denominator);
   if (!encoder) { return std::unexpected(encoder.error()); }
   return std::unique_ptr<video::RecordingSession>{
     std::make_unique<VulkanVideoRecordingSession>(*impl_->render_thread,

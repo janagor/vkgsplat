@@ -2,9 +2,13 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
+#include <cstdint>
+#include <filesystem>
 #include <limits>
 #include <string>
 #include <system_error>
+#include <utility>
 
 namespace vkgsplat {
 namespace {
@@ -15,6 +19,8 @@ namespace {
   constexpr std::array kStartCodeThree{
     std::byte{ 0 }, std::byte{ 0 }, std::byte{ 1 }
   };
+  constexpr std::uint32_t kMaxTemporaryPathAttempts = 64U;
+  std::atomic<std::uint64_t> gTemporaryPathSequence{ 0U };
 
   [[nodiscard]] auto StartCodeSize(std::span<std::byte const> bytes) noexcept -> size_t
   {
@@ -89,6 +95,37 @@ namespace {
 
 }// namespace
 
+H264Writer::~H264Writer()
+{
+  if (stream_.is_open()) { stream_.close(); }
+  if (!temporary_path_.empty()) {
+    std::error_code error;
+    std::filesystem::remove(temporary_path_, error);
+  }
+}
+
+H264Writer::H264Writer(H264Writer &&other) noexcept
+  : stream_{ std::move(other.stream_) }, path_{ std::move(other.path_) },
+    temporary_path_{ std::exchange(other.temporary_path_, {}) },
+    finished_{ other.finished_ }, seen_idr_{ other.seen_idr_ }
+{}
+
+auto H264Writer::operator=(H264Writer &&other) noexcept -> H264Writer &
+{
+  if (this == &other) { return *this; }
+  if (stream_.is_open()) { stream_.close(); }
+  if (!temporary_path_.empty()) {
+    std::error_code error;
+    std::filesystem::remove(temporary_path_, error);
+  }
+  stream_ = std::move(other.stream_);
+  path_ = std::move(other.path_);
+  temporary_path_ = std::exchange(other.temporary_path_, {});
+  finished_ = other.finished_;
+  seen_idr_ = other.seen_idr_;
+  return *this;
+}
+
 auto H264Writer::Open(std::string_view path, std::span<std::byte const> parameter_sets)
   -> std::expected<H264Writer, Error>
 {
@@ -97,12 +134,39 @@ auto H264Writer::Open(std::string_view path, std::span<std::byte const> paramete
     return std::unexpected(MakeError(std::errc::invalid_argument,
       "H.264 parameter data must contain Annex B SPS and PPS NAL units"));
   }
-  std::ofstream stream{ std::string{ path }, std::ios::binary | std::ios::trunc };
-  if (!stream) { return std::unexpected(MakeError(std::errc::io_error, "failed to open H.264 output")); }
-  if (auto written = WriteBytes(stream, parameter_sets); !written) {
+  if (path.empty()) {
+    return std::unexpected(MakeError(std::errc::invalid_argument, "H.264 output path is empty"));
+  }
+  std::filesystem::path destination{ path };
+  std::error_code path_error;
+  if (std::filesystem::exists(destination, path_error)) {
+    return std::unexpected(MakeError(std::errc::file_exists, "H.264 output already exists"));
+  }
+  if (path_error) { return std::unexpected(MakeError(path_error, "inspect H.264 output path failed")); }
+  std::filesystem::path temporary_path;
+  std::ofstream stream;
+  for (std::uint32_t attempt = 0U; attempt < kMaxTemporaryPathAttempts; ++attempt) {
+    auto candidate = destination;
+    candidate += ".partial." + std::to_string(gTemporaryPathSequence.fetch_add(1U));
+    stream.open(candidate, std::ios::out | std::ios::binary | std::ios::noreplace);
+    if (stream) {
+      temporary_path = std::move(candidate);
+      break;
+    }
+    stream.clear();
+    std::error_code candidate_error;
+    if (!std::filesystem::exists(candidate, candidate_error) || candidate_error) {
+      return std::unexpected(MakeError(std::errc::io_error, "reserve H.264 temporary output failed"));
+    }
+  }
+  if (temporary_path.empty()) {
+    return std::unexpected(MakeError(std::errc::file_exists, "no free H.264 temporary output name"));
+  }
+  H264Writer writer{ std::move(stream), std::move(destination), std::move(temporary_path) };
+  if (auto written = WriteBytes(writer.stream_, parameter_sets); !written) {
     return std::unexpected(written.error());
   }
-  return H264Writer{ std::move(stream) };
+  return std::move(writer);
 }
 
 auto H264Writer::WriteFrame(std::span<std::byte const> picture) -> std::expected<void, Error>
@@ -128,6 +192,11 @@ auto H264Writer::Finish() -> std::expected<void, Error>
   stream_.close();
   finished_ = true;
   if (!stream_) { return std::unexpected(MakeError(std::errc::io_error, "failed to finalize H.264 output")); }
+  std::error_code error;
+  std::filesystem::create_hard_link(temporary_path_, path_, error);
+  if (error) { return std::unexpected(MakeError(error, "publish H.264 output failed")); }
+  std::filesystem::remove(temporary_path_, error);
+  if (!error) { temporary_path_.clear(); }
   return {};
 }
 

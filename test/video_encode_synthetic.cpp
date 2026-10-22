@@ -215,7 +215,10 @@ auto Run(std::filesystem::path const &output, bool gpu_only, bool color_conversi
     }
     gpu_source = std::move(*created_source);
   }
-  auto encoder = VideoEncoder::Create(context, std::move(device), kExtent);
+  constexpr std::uint32_t kFpsNumerator = 30U;
+  constexpr std::uint32_t kFpsDenominator = 1U;
+  auto encoder = VideoEncoder::Create(context, std::move(device), kExtent,
+    kFpsNumerator, kFpsDenominator);
   if (!encoder) {
     if (encoder.error().code() == std::make_error_code(std::errc::function_not_supported)) {
       std::cout << "SKIP: " << encoder.error().message() << '\n';

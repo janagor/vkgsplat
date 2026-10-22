@@ -3,6 +3,7 @@
 #include "vulkan_context.hpp"
 
 #include <cstddef>
+#include <limits>
 #include <string>
 #include <system_error>
 
@@ -18,6 +19,7 @@ namespace {
   constexpr std::uint8_t kParameterSetId = 0;
   constexpr std::uint8_t kMinimumFrameNumberBitsMinusFour = 0;
   constexpr std::uint8_t kMinimumPocBitsMinusFour = 0;
+  constexpr std::uint32_t kH264TicksPerFrame = 2U;
 
   [[nodiscard]] auto Failure(char const *operation, VkResult result) -> Error
   {
@@ -27,12 +29,17 @@ namespace {
 
   [[nodiscard]] auto CreateParameters(Context &context, VkVideoSessionKHR handle,
     StdVideoH264ProfileIdc profile, StdVideoH264LevelIdc level,
-    VkExtent2D extent) -> std::expected<VkVideoSessionParametersKHR, Error>
+    VkExtent2D extent, std::uint32_t fps_numerator, std::uint32_t fps_denominator)
+    -> std::expected<VkVideoSessionParametersKHR, Error>
   {
     StdVideoH264SequenceParameterSetVui vui{};
     vui.flags.video_signal_type_present_flag = 1;
     vui.flags.color_description_present_flag = 1;
     vui.flags.video_full_range_flag = 0;
+    vui.flags.timing_info_present_flag = 1;
+    vui.flags.fixed_frame_rate_flag = 1;
+    vui.num_units_in_tick = fps_denominator;
+    vui.time_scale = fps_numerator * kH264TicksPerFrame;
     vui.video_format = kUnspecifiedVideoFormat;
     vui.colour_primaries = kBt709;
     // The conversion path must consume BT.709-encoded RGB and produce limited-range YCbCr.
@@ -91,10 +98,15 @@ namespace {
 
 }// namespace
 
-auto VideoSession::Create(Context &context, EncodeDevice const &device, VkExtent2D extent)
+auto VideoSession::Create(Context &context, EncodeDevice const &device, VkExtent2D extent,
+  std::uint32_t fps_numerator, std::uint32_t fps_denominator)
   -> std::expected<std::unique_ptr<VideoSession>, Error>
 {
   auto const &selection = device.selection;
+  if (fps_numerator == 0U || fps_denominator == 0U
+      || fps_numerator > std::numeric_limits<std::uint32_t>::max() / kH264TicksPerFrame) {
+    return std::unexpected(MakeError(std::errc::invalid_argument, "invalid H.264 frame rate"));
+  }
   if (selection.profile_index >= device.capabilities.profiles.size()) {
     return std::unexpected(MakeError(std::errc::invalid_argument, "invalid H.264 profile selection"));
   }
@@ -220,7 +232,7 @@ auto VideoSession::Create(Context &context, EncodeDevice const &device, VkExtent
   }
   // PR4 uses the device's maximum level until frame-rate-aware level selection is introduced.
   auto parameters = CreateParameters(context, owned->session_, selection.profile,
-    profile.h264.maxLevelIdc, extent);
+    profile.h264.maxLevelIdc, extent, fps_numerator, fps_denominator);
   if (!parameters) { return std::unexpected(parameters.error()); }
   owned->parameters_ = *parameters;
 

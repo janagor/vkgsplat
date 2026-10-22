@@ -108,3 +108,6 @@ vkgsplat_headless --ply scene.ply --target offscreen --output orbit.mp4 \
 ```
 
 The same command with `orbit.h264` writes a raw Annex B stream without FFmpeg.
+Raw H.264 and MP4 recordings are published only after finalization. Publication
+uses a hard link from a temporary file in the output directory, so the output
+filesystem must support hard links; an existing destination is never replaced.

@@ -93,7 +93,8 @@ VideoRecorder::~VideoRecorder() noexcept = default;
 auto VideoRecorder::create(Renderer &renderer, VideoConfig config) -> std::expected<VideoRecorder, Error>
 {
   if (auto valid = Validate(config); !valid) { return std::unexpected(valid.error()); }
-  auto session = renderer.create_video_recording_session(config.width, config.height);
+  auto session = renderer.create_video_recording_session(config.width, config.height,
+    config.frame_rate.numerator, config.frame_rate.denominator);
   if (!session) { return std::unexpected(session.error()); }
   auto sink = OpenSink(config, (*session)->ParameterSets());
   if (!sink) { return std::unexpected(sink.error()); }

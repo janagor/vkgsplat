@@ -57,6 +57,16 @@ private:
   std::filesystem::path path_;
 };
 
+[[nodiscard]] auto PartialFileCount(std::filesystem::path const &path) -> std::size_t
+{
+  auto const prefix = path.filename().string() + ".partial.";
+  std::size_t count = 0U;
+  for (auto const &entry : std::filesystem::directory_iterator{ path.parent_path() }) {
+    if (entry.path().filename().string().starts_with(prefix)) { ++count; }
+  }
+  return count;
+}
+
 }// namespace
 
 TEST_CASE("H.264 writer preserves Annex B NAL order and closes on finish", "[video]")
@@ -116,4 +126,56 @@ TEST_CASE("H.264 writer accepts complete externally generated parameter sets", "
   REQUIRE(writer);
   REQUIRE(writer->Finish());
   CHECK(std::filesystem::file_size(file.path()) == kRealParameterSets.size());
+}
+
+TEST_CASE("H.264 writer publishes only a finished recording", "[video]")
+{
+  TemporaryFile const file;
+  {
+    auto writer = vkgsplat::H264Writer::Open(file.path().string(), kParameterSets);
+    REQUIRE(writer);
+    REQUIRE(writer->WriteFrame(kIdrPicture));
+    CHECK_FALSE(std::filesystem::exists(file.path()));
+  }
+  CHECK_FALSE(std::filesystem::exists(file.path()));
+  CHECK(PartialFileCount(file.path()) == 0U);
+  auto writer = vkgsplat::H264Writer::Open(file.path().string(), kParameterSets);
+  REQUIRE(writer);
+  REQUIRE(writer->WriteFrame(kIdrPicture));
+  REQUIRE(writer->Finish());
+  CHECK(std::filesystem::exists(file.path()));
+}
+
+TEST_CASE("H.264 writer preserves an existing recording", "[video]")
+{
+  TemporaryFile const file;
+  {
+    std::ofstream output{ file.path(), std::ios::binary };
+    REQUIRE(output);
+    output << "original";
+  }
+  CHECK_FALSE(vkgsplat::H264Writer::Open(file.path().string(), kParameterSets));
+  std::ifstream input{ file.path(), std::ios::binary };
+  REQUIRE(input);
+  CHECK(std::string{ std::istreambuf_iterator<char>{ input }, std::istreambuf_iterator<char>{} } == "original");
+}
+
+TEST_CASE("H.264 writer does not replace a file created before publication", "[video]")
+{
+  TemporaryFile const file;
+  {
+    auto writer = vkgsplat::H264Writer::Open(file.path().string(), kParameterSets);
+    REQUIRE(writer);
+    REQUIRE(writer->WriteFrame(kIdrPicture));
+    {
+      std::ofstream output{ file.path(), std::ios::binary | std::ios::noreplace };
+      REQUIRE(output);
+      output << "unrelated";
+    }
+    CHECK_FALSE(writer->Finish());
+  }
+  CHECK(PartialFileCount(file.path()) == 0U);
+  std::ifstream input{ file.path(), std::ios::binary };
+  REQUIRE(input);
+  CHECK(std::string{ std::istreambuf_iterator<char>{ input }, std::istreambuf_iterator<char>{} } == "unrelated");
 }

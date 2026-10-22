@@ -3,11 +3,13 @@
 
 #include <vkgsplat_headless/offscreen_platform.hpp>
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
 #include <iterator>
+#include <limits>
 #include <optional>
 #include <span>
 #include <string_view>
@@ -41,6 +43,17 @@ constexpr std::uint32_t kInitialScalingValue = 8;
 constexpr std::uint32_t kScaleModulus = 256;
 constexpr std::uint32_t kCropUnit420 = 2;
 constexpr std::uint32_t kSessionRepetitions = 3;
+constexpr std::uint32_t kFpsNumerator = 30U;
+constexpr std::uint32_t kFpsDenominator = 1U;
+constexpr std::uint32_t kFractionalFpsNumerator = 30'000U;
+constexpr std::uint32_t kFractionalFpsDenominator = 1'001U;
+constexpr std::uint32_t kAspectRatioExtendedSar = 255U;
+constexpr std::uint32_t kAspectRatioIdcBits = 8U;
+constexpr std::uint32_t kSarDimensionBits = 16U;
+constexpr std::uint32_t kVideoFormatBits = 3U;
+constexpr std::uint32_t kColourDescriptionBits = 8U;
+constexpr std::uint32_t kTimingValueBits = 32U;
+constexpr std::uint32_t kH264TicksPerFrame = 2U;
 constexpr std::string_view kUnsupportedDeviceMessage =
   "No rendering device supports required 8-bit 4:2:0 H.264 encoding and image formats.";
 
@@ -148,7 +161,54 @@ struct SpsInfo
   std::uint32_t id = 0;
   std::uint32_t width = 0;
   std::uint32_t height = 0;
+  std::uint32_t num_units_in_tick = 0;
+  std::uint32_t time_scale = 0;
+  bool timing_info_present = false;
+  bool fixed_frame_rate = false;
 };
+
+[[nodiscard]] auto ParseVuiTiming(BitReader &reader) -> std::optional<SpsInfo>
+{
+  SpsInfo timing{};
+  auto aspect_ratio_present = reader.Bits(1);
+  if (!aspect_ratio_present) { return std::nullopt; }
+  if (*aspect_ratio_present != 0U) {
+    auto aspect_ratio = reader.Bits(kAspectRatioIdcBits);
+    if (!aspect_ratio) { return std::nullopt; }
+    if (*aspect_ratio == kAspectRatioExtendedSar
+        && (!reader.Bits(kSarDimensionBits) || !reader.Bits(kSarDimensionBits))) { return std::nullopt; }
+  }
+  auto overscan_present = reader.Bits(1);
+  if (!overscan_present || (*overscan_present != 0U && !reader.Bits(1))) { return std::nullopt; }
+  auto video_signal_present = reader.Bits(1);
+  if (!video_signal_present) { return std::nullopt; }
+  if (*video_signal_present != 0U) {
+    auto video_format = reader.Bits(kVideoFormatBits);
+    auto full_range = reader.Bits(1);
+    auto colour_description_present = reader.Bits(1);
+    if (!video_format || !full_range || !colour_description_present) { return std::nullopt; }
+    if (*colour_description_present != 0U
+        && (!reader.Bits(kColourDescriptionBits) || !reader.Bits(kColourDescriptionBits)
+            || !reader.Bits(kColourDescriptionBits))) { return std::nullopt; }
+  }
+  auto chroma_location_present = reader.Bits(1);
+  if (!chroma_location_present) { return std::nullopt; }
+  if (*chroma_location_present != 0U
+      && (!reader.UnsignedGolomb() || !reader.UnsignedGolomb())) { return std::nullopt; }
+  auto timing_present = reader.Bits(1);
+  if (!timing_present) { return std::nullopt; }
+  timing.timing_info_present = *timing_present != 0U;
+  if (timing.timing_info_present) {
+    auto tick = reader.Bits(kTimingValueBits);
+    auto scale = reader.Bits(kTimingValueBits);
+    auto fixed = reader.Bits(1);
+    if (!tick || !scale || !fixed) { return std::nullopt; }
+    timing.num_units_in_tick = *tick;
+    timing.time_scale = *scale;
+    timing.fixed_frame_rate = *fixed != 0U;
+  }
+  return timing;
+}
 
 [[nodiscard]] auto ParseSps(BitReader &reader) -> std::optional<SpsInfo>
 {
@@ -208,9 +268,15 @@ struct SpsInfo
   auto const horizontal_crop = (left + right) * kCropUnit420;
   auto const vertical_crop = (top + bottom) * kCropUnit420;
   if (horizontal_crop >= coded_width || vertical_crop >= coded_height) { return std::nullopt; }
+  auto vui_present = reader.Bits(1);
+  if (!vui_present || *vui_present == 0U) { return std::nullopt; }
+  auto timing = ParseVuiTiming(reader);
+  if (!timing) { return std::nullopt; }
   return SpsInfo{ .profile = *profile, .level = *level, .id = *id,
-    .width = coded_width - horizontal_crop,
-    .height = coded_height - vertical_crop };
+    .width = coded_width - horizontal_crop, .height = coded_height - vertical_crop,
+    .num_units_in_tick = timing->num_units_in_tick, .time_scale = timing->time_scale,
+    .timing_info_present = timing->timing_info_present,
+    .fixed_frame_rate = timing->fixed_frame_rate };
 }
 
 [[nodiscard]] auto LevelNumber(StdVideoH264LevelIdc level) -> std::uint32_t
@@ -257,13 +323,27 @@ auto Run() -> int
   device.selection = *selection;
   auto invalid = device;
   invalid.selection.profile_index = invalid.capabilities.profiles.size();
-  if (vkgsplat::vulkan::video::VideoSession::Create(context, invalid, kExtent)) { return EXIT_FAILURE; }
+  if (vkgsplat::vulkan::video::VideoSession::Create(context, invalid, kExtent,
+        kFpsNumerator, kFpsDenominator)) { return EXIT_FAILURE; }
   VkExtent2D const unsupported_extent{ .width = 0, .height = kExtent.height };
-  if (vkgsplat::vulkan::video::VideoSession::Create(context, device, unsupported_extent)) {
+  if (vkgsplat::vulkan::video::VideoSession::Create(context, device, unsupported_extent,
+        kFpsNumerator, kFpsDenominator)) {
     return EXIT_FAILURE;
   }
+  if (vkgsplat::vulkan::video::VideoSession::Create(context, device, kExtent,
+        0U, kFpsDenominator)
+      || vkgsplat::vulkan::video::VideoSession::Create(context, device, kExtent,
+        kFpsNumerator, 0U)
+      || vkgsplat::vulkan::video::VideoSession::Create(context, device, kExtent,
+        std::numeric_limits<std::uint32_t>::max(), kFpsDenominator)) { return EXIT_FAILURE; }
+  constexpr std::array frame_rates{
+    std::pair{ kFpsNumerator, kFpsDenominator },
+    std::pair{ kFractionalFpsNumerator, kFractionalFpsDenominator },
+  };
   for (std::uint32_t repetition = 0; repetition < kSessionRepetitions; ++repetition) {
-    auto session = vkgsplat::vulkan::video::VideoSession::Create(context, device, kExtent);
+    auto const [fps_numerator, fps_denominator] = frame_rates[repetition % frame_rates.size()];
+    auto session = vkgsplat::vulkan::video::VideoSession::Create(context, device, kExtent,
+      fps_numerator, fps_denominator);
     if (!session) {
       std::cerr << session.error().message() << '\n';
       return EXIT_FAILURE;
@@ -281,7 +361,10 @@ auto Run() -> int
     if (parsed->profile != static_cast<std::uint32_t>(selection->profile)
         || parsed->level != LevelNumber(profile.h264.maxLevelIdc)
         || parsed->width != kExtent.width || parsed->height != kExtent.height
-        || parsed->id != 0 || *pps_id != 0 || *pps_sps_id != 0) { return EXIT_FAILURE; }
+        || parsed->id != 0 || *pps_id != 0 || *pps_sps_id != 0
+        || !parsed->timing_info_present || !parsed->fixed_frame_rate
+        || parsed->num_units_in_tick != fps_denominator
+        || parsed->time_scale != fps_numerator * kH264TicksPerFrame) { return EXIT_FAILURE; }
   }
   return EXIT_SUCCESS;
 }

@@ -108,7 +108,8 @@ public:
 
 private:
   friend class capture::VideoRecorder;
-  [[nodiscard]] auto create_video_recording_session(u32 width, u32 height)
+  [[nodiscard]] auto create_video_recording_session(u32 width, u32 height,
+    u32 fps_numerator, u32 fps_denominator)
     -> std::expected<std::unique_ptr<video::RecordingSession>, Error>;
   struct Impl;
   explicit Renderer(beman::indirect::indirect<Impl> impl);

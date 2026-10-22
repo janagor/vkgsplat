@@ -45,7 +45,8 @@ struct PreparedVideoFrame
 class VKGSPLAT_BACKEND_EXPORT VideoEncoder
 {
 public:
-  [[nodiscard]] static auto Create(Context &context, EncodeDevice device, VkExtent2D extent)
+  [[nodiscard]] static auto Create(Context &context, EncodeDevice device, VkExtent2D extent,
+    std::uint32_t fps_numerator, std::uint32_t fps_denominator)
     -> std::expected<std::unique_ptr<VideoEncoder>, Error>;
 
   [[nodiscard]] auto EncodeNv12(std::span<std::byte const> frame, std::uint64_t frame_index)
