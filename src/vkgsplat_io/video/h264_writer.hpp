@@ -9,13 +9,14 @@
 #include <string_view>
 #include <utility>
 
+#include <vkgsplat_io/vkgsplat_io_export.hpp>
 #include <vkgsplat_utility/error.hpp>
 
 namespace vkgsplat {
 
 // Writes already encoded Annex B NAL units in display order. The implementation
 // checks framing and NAL types; it does not validate H.264 syntax or decoding.
-class H264Writer
+class VKGSPLAT_IO_EXPORT H264Writer
 {
 public:
   [[nodiscard]] static auto Open(std::string_view path, std::span<std::byte const> parameter_sets)

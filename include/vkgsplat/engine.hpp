@@ -24,6 +24,8 @@ struct EngineConfig
   bool enable_validation = false;
   /// Request VK_EXT_present_timing; ignored when the device does not support it.
   bool request_present_timing = false;
+  /// kRequired guarantees a usable offline H.264 configuration at some extent;
+  /// VideoRecorder::create validates the requested recording dimensions.
   VideoEncodeSupport video_encode = VideoEncodeSupport::kDisabled;
 };
 

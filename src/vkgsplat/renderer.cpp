@@ -379,13 +379,7 @@ auto Renderer::create_video_recording_session(u32 width, u32 height, u32 fps_num
   }
   VkExtent2D const extent{ .width = width, .height = height };
   auto device = *context.video_encode;
-  auto selection = device.capabilities.select({
-    .require_conversion = true,
-    .require_references = false,
-    .required_format = VK_FORMAT_G8_B8R8_2PLANE_420_UNORM,
-    .require_transfer_destination = true,
-    .required_extent = extent,
-  });
+  auto selection = device.capabilities.select_offline_h264(extent);
   if (!selection) {
     return std::unexpected(
       MakeError(std::errc::function_not_supported, "no NV12 H.264 encoding profile supports this recording extent"));

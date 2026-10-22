@@ -105,6 +105,8 @@ struct Report
 
   [[nodiscard]] auto usable() const noexcept -> bool;
   [[nodiscard]] auto select(EncodeRequirements requirements = {}) const noexcept -> std::optional<EncodeSelection>;
+  [[nodiscard]] auto select_offline_h264(VkExtent2D extent = {}) const noexcept -> std::optional<EncodeSelection>;
+  [[nodiscard]] auto supports_offline_h264(VkExtent2D extent = {}) const noexcept -> bool;
   [[nodiscard]] auto selected_configuration() const noexcept -> std::optional<EncodeSelection>;
   [[nodiscard]] auto capture_conversion_supported() const noexcept -> bool;
   [[nodiscard]] auto reference_pictures_supported() const noexcept -> bool;

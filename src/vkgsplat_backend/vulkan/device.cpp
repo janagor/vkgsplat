@@ -243,9 +243,9 @@ namespace {
       auto const &candidate = candidates->at(index);
       auto report = vulkan::video::ProbeH264Capabilities(context.inst_disp, candidate.physical_device);
       if (!report) { return std::unexpected(report.error()); }
-      if (report->usable()) { return candidate; }
+      if (report->supports_offline_h264()) { return candidate; }
       if (!unavailable_devices.empty()) { unavailable_devices += "; "; }
-      unavailable_devices += report->device_name + ": " + report->unavailable_reason;
+      unavailable_devices += report->device_name + ": " + report->diagnostic();
     }
     return std::unexpected{ MakeError(std::errc::function_not_supported,
       "No rendering device supports required 8-bit 4:2:0 H.264 encoding and image formats. " + unavailable_devices) };
@@ -332,10 +332,10 @@ namespace {
     auto report = vulkan::video::ProbeH264Capabilities(context.inst_disp, physical_device.physical_device);
     if (!report) { return std::unexpected(report.error()); }
     context.video_encode_capabilities.diagnostic = report->diagnostic();
-    if (!report->usable()) {
+    if (!report->supports_offline_h264()) {
       if (support == VideoEncodeSupport::kRequired) {
-        return std::unexpected{ MakeError(
-          std::errc::function_not_supported, context.video_encode_capabilities.diagnostic) };
+        return std::unexpected{ MakeError(std::errc::function_not_supported,
+          context.video_encode_capabilities.diagnostic + "\nOffline H.264 recording requirements are unavailable") };
       }
       context.video_encode_capabilities.diagnostic += "\nStatus: H.264 unavailable";
       return {};
@@ -349,7 +349,7 @@ namespace {
       return std::unexpected{ MakeError(
         std::errc::function_not_supported, "H.264 extensions became unavailable during device creation") };
     }
-    auto const selected = report->selected_configuration();
+    auto const selected = report->select_offline_h264();
     auto const queue_family_index = vulkan::video::ChooseEncodeQueue(*report);
     if (!selected || !queue_family_index) {
       return std::unexpected{ MakeError(

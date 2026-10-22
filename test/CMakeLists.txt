@@ -120,8 +120,8 @@ endif()
 option(vkgsplat_ENABLE_HEADLESS_GPU_TESTS "Enable GPU-dependent headless integration tests" OFF)
 option(vkgsplat_HEADLESS_GPU_TEST_VALIDATION "Enable validation layers in the headless GPU test" ON)
 option(vkgsplat_ENABLE_VIDEO_GPU_TESTS "Enable Vulkan Video integration tests without a scene fixture" OFF)
-# Decoded-color fidelity is opt-in; the strict NV12 conversion test only needs Python3.
-option(vkgsplat_ENABLE_VIDEO_COLOR_FIDELITY_TESTS "Enable strict decoded H.264 color verification" OFF)
+option(vkgsplat_ENABLE_VIDEO_COLOR_FIDELITY_TESTS "Enable strict decoded H.264 color verification"
+       ${vkgsplat_ENABLE_VIDEO_GPU_TESTS})
 if(vkgsplat_ENABLE_VIDEO_COLOR_FIDELITY_TESTS AND NOT vkgsplat_ENABLE_VIDEO_GPU_TESTS)
   message(FATAL_ERROR "Video color fidelity tests require Vulkan Video GPU tests to be enabled")
 endif()

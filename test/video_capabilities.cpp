@@ -30,9 +30,12 @@ constexpr std::uint32_t kMaximumExtent = 1920U;
 constexpr std::uint32_t kAlternativeMaximumExtent = 3840U;
 constexpr std::uint32_t kSmallerDpbExtent = 1280U;
 constexpr std::uint32_t kTooSmallExtent = 32U;
+constexpr std::uint32_t kUnalignedExtent = kMinimumExtent + 1U;
 constexpr std::uint32_t kEncodeQueueFamily = 0U;
 constexpr std::uint32_t kPrimaryFormatCount = 1U;
 constexpr std::uint32_t kFormatCountWithAlternative = 2U;
+constexpr VkQueueFlags kGraphicsComputeFlags =
+  static_cast<VkQueueFlags>(VK_QUEUE_GRAPHICS_BIT) | static_cast<VkQueueFlags>(VK_QUEUE_COMPUTE_BIT);
 
 struct ProbeFixture
 {
@@ -42,6 +45,11 @@ struct ProbeFixture
     VK_KHR_VIDEO_ENCODE_H264_EXTENSION_NAME,
   };
   bool encode_queue = true;
+  bool graphics_compute_queue = true;
+  bool separate_graphics_queue = false;
+  bool disabled_rate_control = true;
+  bool bitstream_feedback = true;
+  bool valid_level = true;
   bool main_profile = true;
   bool baseline_profile = false;
   bool high_profile = false;
@@ -96,7 +104,7 @@ auto MakeQueries(ProbeFixture &fixture) -> video::Queries
     return VK_SUCCESS;
   };
   queries.queue_families = [&](VkPhysicalDevice, std::uint32_t *count, VkQueueFamilyProperties2 *properties) -> void {
-    *count = 1U;
+    *count = fixture.separate_graphics_queue ? 2U : 1U;
     if (properties == nullptr) { return; }
     auto &queue = *properties;
     queue.queueFamilyProperties.queueCount = 1U;
@@ -104,6 +112,15 @@ auto MakeQueries(ProbeFixture &fixture) -> video::Queries
     if (fixture.encode_queue) {
       queue.queueFamilyProperties.queueFlags = VK_QUEUE_VIDEO_ENCODE_BIT_KHR;
       video_properties->videoCodecOperations = VK_VIDEO_CODEC_OPERATION_ENCODE_H264_BIT_KHR;
+    }
+    if (fixture.graphics_compute_queue && !fixture.separate_graphics_queue) {
+      queue.queueFamilyProperties.queueFlags |= kGraphicsComputeFlags;
+    }
+    if (fixture.separate_graphics_queue) {
+      auto queues = std::span{ properties, *count };
+      auto &graphics = queues.back();
+      graphics.queueFamilyProperties.queueCount = 1U;
+      if (fixture.graphics_compute_queue) { graphics.queueFamilyProperties.queueFlags = kGraphicsComputeFlags; }
     }
   };
   if (!fixture.missing_video_entry_point) {
@@ -120,6 +137,15 @@ auto MakeQueries(ProbeFixture &fixture) -> video::Queries
       capabilities->maxCodedExtent = { .width = fixture.codec_max_extent, .height = fixture.codec_max_extent };
       capabilities->maxDpbSlots = fixture.max_dpb_slots;
       capabilities->maxActiveReferencePictures = fixture.max_active_references;
+      auto *encode = static_cast<VkVideoEncodeCapabilitiesKHR *>(capabilities->pNext);
+      encode->rateControlModes =
+        fixture.disabled_rate_control ? VK_VIDEO_ENCODE_RATE_CONTROL_MODE_DISABLED_BIT_KHR : 0U;
+      encode->supportedEncodeFeedbackFlags = fixture.bitstream_feedback
+                                               ? VK_VIDEO_ENCODE_FEEDBACK_BITSTREAM_BUFFER_OFFSET_BIT_KHR
+                                                   | VK_VIDEO_ENCODE_FEEDBACK_BITSTREAM_BYTES_WRITTEN_BIT_KHR
+                                               : 0U;
+      auto *h264 = static_cast<VkVideoEncodeH264CapabilitiesKHR *>(encode->pNext);
+      h264->maxLevelIdc = fixture.valid_level ? STD_VIDEO_H264_LEVEL_IDC_3_1 : STD_VIDEO_H264_LEVEL_IDC_INVALID;
       auto const header_name =
         h264_profile->stdProfileIdc == STD_VIDEO_H264_PROFILE_IDC_MAIN && !fixture.main_header_compatible
           ? std::string_view{ "unsupported header" }
@@ -239,6 +265,69 @@ TEST_CASE("Explicit NV12 upload selection searches later profiles")
   auto const &selected_configuration = selection.value();
   CHECK(selected_configuration.profile == STD_VIDEO_H264_PROFILE_IDC_BASELINE);
   CHECK(selected_configuration.source_format.transfer_destination);
+}
+
+TEST_CASE("Offline H.264 selection checks the recorder requirements")
+{
+  ProbeFixture fixture;
+  auto report = Probe(fixture);
+  REQUIRE(report);
+  CHECK(report->supports_offline_h264({ .width = kMinimumExtent, .height = kMinimumExtent }));
+  CHECK_FALSE(report->supports_offline_h264({ .width = kUnalignedExtent, .height = kMinimumExtent }));
+  CHECK_FALSE(report->supports_offline_h264({ .width = kAlternativeMaximumExtent, .height = kMinimumExtent }));
+
+  fixture.graphics_compute_queue = false;
+  report = Probe(fixture);
+  REQUIRE(report);
+  CHECK(report->usable());
+  CHECK_FALSE(report->supports_offline_h264());
+
+  fixture.graphics_compute_queue = true;
+  fixture.disabled_rate_control = false;
+  report = Probe(fixture);
+  REQUIRE(report);
+  CHECK_FALSE(report->supports_offline_h264());
+
+  fixture.disabled_rate_control = true;
+  fixture.bitstream_feedback = false;
+  report = Probe(fixture);
+  REQUIRE(report);
+  CHECK_FALSE(report->supports_offline_h264());
+
+  fixture.bitstream_feedback = true;
+  fixture.valid_level = false;
+  report = Probe(fixture);
+  REQUIRE(report);
+  CHECK_FALSE(report->supports_offline_h264());
+
+  fixture.valid_level = true;
+  fixture.nv12_transfer_destination = false;
+  report = Probe(fixture);
+  REQUIRE(report);
+  CHECK_FALSE(report->supports_offline_h264());
+}
+
+TEST_CASE("Offline H.264 supports separate graphics and encode queues")
+{
+  ProbeFixture fixture;
+  fixture.separate_graphics_queue = true;
+  auto report = Probe(fixture);
+  REQUIRE(report);
+  REQUIRE(report->encode_queue_families == std::vector<std::uint32_t>{ kEncodeQueueFamily });
+  CHECK(report->supports_offline_h264({ .width = kMinimumExtent, .height = kMinimumExtent }));
+}
+
+TEST_CASE("Diagnostic describes the selected offline H.264 profile")
+{
+  ProbeFixture fixture;
+  fixture.baseline_profile = true;
+  fixture.main_transfer_destination = false;
+  fixture.storage = true;
+  auto report = Probe(fixture);
+  REQUIRE(report);
+  REQUIRE(report->select_offline_h264());
+  CHECK(report->select_offline_h264()->profile == STD_VIDEO_H264_PROFILE_IDC_BASELINE);
+  CHECK(report->diagnostic().contains("H.264 profile: Baseline"));
 }
 
 TEST_CASE("Probe reports missing extensions and an unavailable encode queue")

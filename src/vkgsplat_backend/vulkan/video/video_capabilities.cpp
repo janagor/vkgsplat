@@ -25,6 +25,11 @@ namespace vkgsplat::vulkan::video {
 namespace {
 
   constexpr std::uint32_t kMaximumEnumerationAttempts = 4;
+  constexpr std::uint32_t kH264MacroblockSize = 16U;
+  constexpr VkVideoEncodeFeedbackFlagsKHR kRequiredFeedback =
+    VK_VIDEO_ENCODE_FEEDBACK_BITSTREAM_BUFFER_OFFSET_BIT_KHR | VK_VIDEO_ENCODE_FEEDBACK_BITSTREAM_BYTES_WRITTEN_BIT_KHR;
+  constexpr VkQueueFlags kGraphicsComputeFlags =
+    static_cast<VkQueueFlags>(VK_QUEUE_GRAPHICS_BIT) | static_cast<VkQueueFlags>(VK_QUEUE_COMPUTE_BIT);
   constexpr std::array kRequiredExtensions{
     VK_KHR_VIDEO_QUEUE_EXTENSION_NAME,
     VK_KHR_VIDEO_ENCODE_QUEUE_EXTENSION_NAME,
@@ -63,6 +68,24 @@ namespace {
       return {};
     }
     return maximum;
+  }
+
+  [[nodiscard]] auto
+    SupportsOfflineExtent(Profile const &profile, ImageFormat const &format, VkExtent2D extent) noexcept -> bool
+  {
+    auto const maximum = ExtentFor(profile, format);
+    if (extent.width != 0U) {
+      return extent.width >= profile.capabilities.minCodedExtent.width
+             && extent.height >= profile.capabilities.minCodedExtent.height && extent.width <= maximum.width
+             && extent.height <= maximum.height;
+    }
+    auto const minimum_width = std::max(profile.capabilities.minCodedExtent.width, kH264MacroblockSize);
+    auto const minimum_height = std::max(profile.capabilities.minCodedExtent.height, kH264MacroblockSize);
+    auto const aligned_width = (static_cast<std::uint64_t>(minimum_width) + kH264MacroblockSize - 1U)
+                               / kH264MacroblockSize * kH264MacroblockSize;
+    auto const aligned_height = (static_cast<std::uint64_t>(minimum_height) + kH264MacroblockSize - 1U)
+                                / kH264MacroblockSize * kH264MacroblockSize;
+    return aligned_width <= maximum.width && aligned_height <= maximum.height;
   }
 
   [[nodiscard]] auto ProfileName(StdVideoH264ProfileIdc profile) noexcept -> std::string_view
@@ -349,6 +372,47 @@ auto Report::select(EncodeRequirements requirements) const noexcept -> std::opti
   return std::nullopt;
 }
 
+auto Report::select_offline_h264(VkExtent2D extent) const noexcept -> std::optional<EncodeSelection>
+{
+  if (!missing_extensions.empty() || encode_queue_families.empty()
+      || !std::ranges::any_of(queue_families, [](QueueFamily const &family) -> bool {
+           return (family.flags & kGraphicsComputeFlags) == kGraphicsComputeFlags;
+         })) {
+    return std::nullopt;
+  }
+  if ((extent.width == 0U) != (extent.height == 0U)
+      || (extent.width != 0U
+          && (extent.width % kH264MacroblockSize != 0U || extent.height % kH264MacroblockSize != 0U))) {
+    return std::nullopt;
+  }
+  for (std::size_t index = 0U; index < profiles.size(); ++index) {
+    auto const &profile = profiles.at(index);
+    if (profile.h264.maxLevelIdc == STD_VIDEO_H264_LEVEL_IDC_INVALID
+        || (profile.encode.rateControlModes & VK_VIDEO_ENCODE_RATE_CONTROL_MODE_DISABLED_BIT_KHR) == 0U
+        || (profile.encode.supportedEncodeFeedbackFlags & kRequiredFeedback) != kRequiredFeedback) {
+      continue;
+    }
+    for (auto const &source : profile.source_formats) {
+      if (source.format != VK_FORMAT_G8_B8R8_2PLANE_420_UNORM || !source.transfer_destination) { continue; }
+      if (!SupportsOfflineExtent(profile, source, extent)) { continue; }
+      return EncodeSelection{
+        .profile_index = index,
+        .profile = profile.profile,
+        .source_format = source,
+        .dpb_format = std::nullopt,
+        .max_extent = ExtentFor(profile, source),
+        .upload_strategy = UploadStrategy::kTransferDestination,
+        .capture_conversion_supported = true,
+        .reference_pictures_supported = false,
+      };
+    }
+  }
+  return std::nullopt;
+}
+
+auto Report::supports_offline_h264(VkExtent2D extent) const noexcept -> bool
+{ return select_offline_h264(extent).has_value(); }
+
 auto Report::selected_configuration() const noexcept -> std::optional<EncodeSelection>
 {
   if (auto converted = select({ .require_conversion = true,
@@ -387,7 +451,15 @@ auto Report::diagnostic() const -> std::string
   std::string result = "Device: " + device_name;
   for (auto const &extension : missing_extensions) { result += "\nMissing extension: " + extension; }
   if (!usable() && !unavailable_reason.empty()) { result += "\nUnavailable: " + unavailable_reason; }
-  if (auto const selected = selected_configuration(); selected) {
+  auto selected = select_offline_h264();
+  if (selected) {
+    result += "\nOffline H.264 recording: available";
+  } else {
+    result += "\nOffline H.264 recording: unavailable";
+    selected = selected_configuration();
+    if (selected) { result += "\nConfiguration below describes generic H.264 support"; }
+  }
+  if (selected) {
     auto const &profile = profiles.at(selected->profile_index);
     result += "\nEncode queue family: " + std::to_string(encode_queue_families.front());
     result += "\nH.264 profile: " + std::string{ ProfileName(selected->profile) };
