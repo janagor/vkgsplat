@@ -97,6 +97,8 @@
           wayland-scanner
 
           vulkan-loader
+          ffmpeg-full.lib
+          ffmpeg-full.dev
         ]
         ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
           mesa
