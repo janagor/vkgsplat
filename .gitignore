@@ -5,6 +5,7 @@ out/coverage/*
 cmake-build-*/
 conan-cache/
 benchmark/__pycache__/*
+.cache/*
 
 # User spesific settings
 CMakeUserPresets.json
