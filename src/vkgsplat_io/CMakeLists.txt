@@ -47,7 +47,13 @@ target_include_directories(
 option(vkgsplat_ENABLE_MP4 "Enable MP4 output using FFmpeg" OFF)
 if(vkgsplat_ENABLE_MP4 AND NOT EMSCRIPTEN)
   find_package(PkgConfig REQUIRED)
-  pkg_check_modules(VKGSPLAT_FFMPEG REQUIRED IMPORTED_TARGET libavformat libavcodec libavutil)
+  pkg_check_modules(
+    VKGSPLAT_FFMPEG
+    REQUIRED
+    IMPORTED_TARGET
+    libavformat
+    libavcodec
+    libavutil)
   add_library(vkgsplat_video_io video/mp4_muxer.cpp)
   add_library(vkgsplat::vkgsplat_video_io ALIAS vkgsplat_video_io)
   generate_export_header(vkgsplat_video_io EXPORT_FILE_NAME
@@ -55,12 +61,15 @@ if(vkgsplat_ENABLE_MP4 AND NOT EMSCRIPTEN)
   if(NOT BUILD_SHARED_LIBS)
     target_compile_definitions(vkgsplat_video_io PUBLIC VKGSPLAT_VIDEO_IO_STATIC_DEFINE)
   endif()
-  target_link_libraries(vkgsplat_video_io PUBLIC vkgsplat::vkgsplat_utility
-                        PRIVATE vkgsplat::vkgsplat_options vkgsplat::vkgsplat_warnings PkgConfig::VKGSPLAT_FFMPEG)
+  target_link_libraries(
+    vkgsplat_video_io
+    PUBLIC vkgsplat::vkgsplat_utility
+    PRIVATE vkgsplat::vkgsplat_options vkgsplat::vkgsplat_warnings PkgConfig::VKGSPLAT_FFMPEG)
   target_compile_features(vkgsplat_video_io PUBLIC cxx_std_${CMAKE_CXX_STANDARD})
-  target_include_directories(vkgsplat_video_io PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
-                                               $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>
-                                               $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src/vkgsplat_io>)
+  target_include_directories(
+    vkgsplat_video_io
+    PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include> $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>
+           $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src/vkgsplat_io>)
 endif()
 
 add_executable(ply_load_test ply_load_test.cpp ply/miniply.cpp)

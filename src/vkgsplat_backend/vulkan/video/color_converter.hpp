@@ -107,16 +107,15 @@ struct ConvertedFrame
 // Each lease reserves one independent converter. The pool retains its RGBA
 // source until conversion has completed; the encoder retains the lease through
 // readback, after which the recording owner retires released slots.
-class VKGSPLAT_BACKEND_EXPORT GpuColorConverterPool final
-  : public std::enable_shared_from_this<GpuColorConverterPool>
+class VKGSPLAT_BACKEND_EXPORT GpuColorConverterPool final : public std::enable_shared_from_this<GpuColorConverterPool>
 {
 public:
-  [[nodiscard]] static auto Create(Context &context, EncodeDevice const &device,
-    VkExtent2D extent, std::size_t slot_count)
-    -> std::expected<std::shared_ptr<GpuColorConverterPool>, Error>;
-  [[nodiscard]] auto Convert(VkImage source, VkSemaphore ready_timeline,
-    std::uint64_t ready_value, std::shared_ptr<void> source_owner)
-    -> std::expected<ConvertedFrame, Error>;
+  [[nodiscard]] static auto
+    Create(Context &context, EncodeDevice const &device, VkExtent2D extent, std::size_t slot_count)
+      -> std::expected<std::shared_ptr<GpuColorConverterPool>, Error>;
+  [[nodiscard]] auto
+    Convert(VkImage source, VkSemaphore ready_timeline, std::uint64_t ready_value, std::shared_ptr<void> source_owner)
+      -> std::expected<ConvertedFrame, Error>;
   // Run on the recording owner thread after encoder completions or failures.
   // Waits for conversion before releasing an RGBA source. Recreates converters
   // whose binary semaphore was not consumed by an accepted encode submission.

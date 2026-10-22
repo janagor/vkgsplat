@@ -31,8 +31,8 @@ namespace vulkan {
   namespace video {
     class GpuColorConverter;
     class VideoEncoder;
-  }
-}
+  }// namespace video
+}// namespace vulkan
 struct RenderData;
 
 enum class CaptureOutcome : u8 { kSubmitted, kDropped, kSkipped };
@@ -73,20 +73,21 @@ public:
   [[nodiscard]] auto CaptureFrame(Camera const &camera, f64 aspect_ratio) -> std::expected<RgbaFrame, Error>;
   // A failed request retires the supplied encoder and converter. The caller
   // must keep both alive until this method returns, including during Stop().
-  [[nodiscard]] auto CaptureVideoFrame(Camera const &camera, f64 aspect_ratio,
-    vulkan::video::GpuColorConverter &converter, vulkan::video::VideoEncoder &encoder,
+  [[nodiscard]] auto CaptureVideoFrame(Camera const &camera,
+    f64 aspect_ratio,
+    vulkan::video::GpuColorConverter &converter,
+    vulkan::video::VideoEncoder &encoder,
     u64 frame_index) -> std::expected<EncodedPacket, Error>;
-  [[nodiscard]] auto CaptureVideoFrameForTest(Camera const &camera, f64 aspect_ratio,
-    u64 frame_index) -> std::expected<EncodedPacket, Error>;
+  [[nodiscard]] auto CaptureVideoFrameForTest(Camera const &camera, f64 aspect_ratio, u64 frame_index)
+    -> std::expected<EncodedPacket, Error>;
   // Invoked on the render worker after a normal windowed frame was submitted.
   // Requires an entirely detached previous session. Capture errors leave
   // rendering usable unless the device is lost.
-  [[nodiscard]] auto AttachInteractiveCapture(
-    std::function<std::expected<CaptureOutcome, Error>()> capture) -> std::expected<u64, Error>;
+  [[nodiscard]] auto AttachInteractiveCapture(std::function<std::expected<CaptureOutcome, Error>()> capture)
+    -> std::expected<u64, Error>;
   // Prevent new callbacks and wait until a callback already on the worker has returned.
   // The recording session must then drain its submitted GPU jobs separately.
-  [[nodiscard]] auto DetachInteractiveCapture(u64 generation)
-    -> std::expected<std::optional<Error>, Error>;
+  [[nodiscard]] auto DetachInteractiveCapture(u64 generation) -> std::expected<std::optional<Error>, Error>;
   [[nodiscard]] auto PollInteractiveCaptureError() const -> std::optional<Error>;
   [[nodiscard]] auto ReadLatestFrame() -> std::expected<RgbaFrame, Error>;
   // Drain queued frames, wait for GPU completion, then run without concurrent submission or readback.
@@ -147,7 +148,8 @@ private:
   auto ProcessVideoCapture(PendingFrame const &frame, std::expected<FrameOutcome, Error> &drawn) -> void;
   auto EncodeVideoCapture(VideoCaptureRequest const &request, std::expected<FrameOutcome, Error> &drawn)
     -> std::expected<EncodedPacket, Error>;
-  static auto RecoverVideoEncodeFailure(VideoCaptureRequest const &request, Error const &encode_error,
+  static auto RecoverVideoEncodeFailure(VideoCaptureRequest const &request,
+    Error const &encode_error,
     std::expected<FrameOutcome, Error> &drawn) -> std::expected<EncodedPacket, Error>;
   auto ProcessWaitIdle(std::unique_lock<std::mutex> &lock) -> void;
   auto ProcessReadback(std::unique_lock<std::mutex> &lock) -> void;
@@ -159,8 +161,10 @@ private:
     std::function<void()> wait_idle,
     std::function<std::expected<RgbaFrame, Error>()> readback_frame,
     std::function<std::expected<EncodedPacket, Error>()> video_frame) -> void;
-  [[nodiscard]] auto CaptureVideoFrameImpl(Camera const &camera, f64 aspect_ratio,
-    vulkan::video::GpuColorConverter *converter, vulkan::video::VideoEncoder *encoder,
+  [[nodiscard]] auto CaptureVideoFrameImpl(Camera const &camera,
+    f64 aspect_ratio,
+    vulkan::video::GpuColorConverter *converter,
+    vulkan::video::VideoEncoder *encoder,
     u64 frame_index) -> std::expected<EncodedPacket, Error>;
   auto FinishFrame(size_t frame_slot, std::expected<FrameOutcome, Error> const &drawn) -> void;
   [[nodiscard]] auto DrawFrameVulkan(size_t frame_slot) -> std::expected<FrameOutcome, Error>;

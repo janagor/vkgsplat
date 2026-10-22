@@ -14,8 +14,8 @@
 #include <vector>
 
 #include <VkBootstrap.h>
-#include <vulkan/vulkan_core.h>
 #include <vkgsplat_utility/error.hpp>
+#include <vulkan/vulkan_core.h>
 
 namespace vkgsplat::test {
 namespace {
@@ -39,14 +39,17 @@ namespace {
       std::string{ operation } + " failed (VkResult " + std::to_string(static_cast<int>(result)) + ")");
   }
 
-  [[nodiscard]] auto Allocate(vulkan::Context &context, VkMemoryRequirements const &requirements,
+  [[nodiscard]] auto Allocate(vulkan::Context &context,
+    VkMemoryRequirements const &requirements,
     VkMemoryPropertyFlags required) -> std::expected<VkDeviceMemory, Error>
   {
     VkPhysicalDeviceMemoryProperties properties{};
     context.inst_disp.getPhysicalDeviceMemoryProperties(context.device.physical_device, &properties);
     for (std::uint32_t index = 0U; index < properties.memoryTypeCount; ++index) {
       if ((requirements.memoryTypeBits & (1U << index)) == 0U
-          || (std::span{ properties.memoryTypes }.subspan(index).front().propertyFlags & required) != required) { continue; }
+          || (std::span{ properties.memoryTypes }.subspan(index).front().propertyFlags & required) != required) {
+        continue;
+      }
       VkMemoryAllocateInfo const allocation{
         .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
         .pNext = nullptr,
@@ -126,8 +129,7 @@ auto GpuColorSource::Create(vulkan::Context &context, VkExtent2D extent)
   result = context.disp.createBuffer(&buffer, nullptr, &source->upload_);
   if (result != VK_SUCCESS) { return std::unexpected(Failure("create color test upload", result)); }
   context.disp.getBufferMemoryRequirements(source->upload_, &requirements);
-  memory = Allocate(context, requirements,
-    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+  memory = Allocate(context, requirements, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
   if (!memory) { return std::unexpected(memory.error()); }
   source->upload_memory_ = *memory;
   result = context.disp.bindBufferMemory(source->upload_, source->upload_memory_, 0U);
@@ -177,8 +179,8 @@ auto GpuColorSource::Prepare() -> std::expected<void, Error>
   auto const pixel_bytes = std::span{ pixels, static_cast<std::size_t>(upload_size) };
   for (std::uint32_t row = 0U; row < extent_.height; ++row) {
     for (std::uint32_t column = 0U; column < extent_.width; ++column) {
-      auto const quadrant = (row >= extent_.height / kHalf ? kHalf : 0U)
-                            + (column >= extent_.width / kHalf ? kOneResource : 0U);
+      auto const quadrant =
+        (row >= extent_.height / kHalf ? kHalf : 0U) + (column >= extent_.width / kHalf ? kOneResource : 0U);
       auto const offset = ((static_cast<std::size_t>(row) * extent_.width) + column) * kRgbaBytesPerPixel;
       for (std::size_t channel = 0U; channel < kRgbaBytesPerPixel; ++channel) {
         pixel_bytes.subspan(offset + channel).front() = kColors.at(quadrant).at(channel);
@@ -205,8 +207,11 @@ auto GpuColorSource::Prepare() -> std::expected<void, Error>
     .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
     .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
     .image = image_,
-    .subresourceRange = { .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 0U,
-      .levelCount = kOneResource, .baseArrayLayer = 0U, .layerCount = kOneResource },
+    .subresourceRange = { .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+      .baseMipLevel = 0U,
+      .levelCount = kOneResource,
+      .baseArrayLayer = 0U,
+      .layerCount = kOneResource },
   };
   VkDependencyInfo const dependency{
     .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
@@ -219,8 +224,8 @@ auto GpuColorSource::Prepare() -> std::expected<void, Error>
   region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   region.imageSubresource.layerCount = kOneResource;
   region.imageExtent = { .width = extent_.width, .height = extent_.height, .depth = kOneResource };
-  context_.disp.cmdCopyBufferToImage(command_, upload_, image_, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-    kOneResource, &region);
+  context_.disp.cmdCopyBufferToImage(
+    command_, upload_, image_, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, kOneResource, &region);
   barrier.srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
   barrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
   barrier.dstStageMask = VK_PIPELINE_STAGE_2_NONE;
@@ -257,8 +262,7 @@ auto GpuColorSource::Prepare() -> std::expected<void, Error>
   return {};
 }
 
-auto GpuColorSource::ReadNv12Buffer(VkBuffer source, VkDeviceSize size)
-  -> std::expected<std::vector<std::byte>, Error>
+auto GpuColorSource::ReadNv12Buffer(VkBuffer source, VkDeviceSize size) -> std::expected<std::vector<std::byte>, Error>
 {
   if (!submitted_ || source == VK_NULL_HANDLE || size == 0U) {
     return std::unexpected(MakeError(std::errc::invalid_argument, "invalid converted NV12 readback"));
@@ -293,8 +297,8 @@ auto GpuColorSource::ReadNv12Buffer(VkBuffer source, VkDeviceSize size)
   if (result != VK_SUCCESS) { return std::unexpected(Failure("create NV12 test readback", result)); }
   VkMemoryRequirements requirements{};
   context_.disp.getBufferMemoryRequirements(readback.buffer, &requirements);
-  auto memory = Allocate(context_, requirements,
-    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+  auto memory =
+    Allocate(context_, requirements, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
   if (!memory) { return std::unexpected(memory.error()); }
   readback.memory = *memory;
   result = context_.disp.bindBufferMemory(readback.buffer, readback.memory, 0U);

@@ -21,8 +21,11 @@ namespace vkgsplat {
 class VKGSPLAT_VIDEO_IO_EXPORT Mp4Muxer final : public VideoSink
 {
 public:
-  [[nodiscard]] static auto Open(std::filesystem::path path, std::uint32_t width, std::uint32_t height,
-    std::uint32_t fps_numerator, std::uint32_t fps_denominator,
+  [[nodiscard]] static auto Open(std::filesystem::path path,
+    std::uint32_t width,
+    std::uint32_t height,
+    std::uint32_t fps_numerator,
+    std::uint32_t fps_denominator,
     std::span<std::byte const> parameter_sets) -> std::expected<std::unique_ptr<Mp4Muxer>, Error>;
 
   ~Mp4Muxer() override;

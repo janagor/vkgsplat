@@ -6,9 +6,9 @@
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat/frame.hpp>
 #include <vkgsplat/renderer.hpp>
-#include <vkgsplat_video/encoded_packet.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
+#include <vkgsplat_video/encoded_packet.hpp>
 
 #include <vkexec/error.hpp>
 #include <vulkan/vulkan_core.h>
@@ -85,21 +85,22 @@ struct FrameBarrier
 TEST_CASE("interactive capture detach waits for its callback", "[render]")
 {
   vkgsplat::RenderThread worker;
-  worker.StartForTest(vkgsplat::FrameSubmissionPolicy::kLossless,
-    []() -> std::expected<void, vkgsplat::Error> { return {}; });
+  worker.StartForTest(
+    vkgsplat::FrameSubmissionPolicy::kLossless, []() -> std::expected<void, vkgsplat::Error> { return {}; });
   FrameBarrier callback;
-  auto const generation = worker.AttachInteractiveCapture([&callback]()
-    -> std::expected<vkgsplat::CaptureOutcome, vkgsplat::Error> {
-    callback.Wait();
-    return vkgsplat::CaptureOutcome::kDropped;
-  });
+  auto const generation =
+    worker.AttachInteractiveCapture([&callback]() -> std::expected<vkgsplat::CaptureOutcome, vkgsplat::Error> {
+      callback.Wait();
+      return vkgsplat::CaptureOutcome::kDropped;
+    });
   REQUIRE(generation);
   vkgsplat::Camera const camera{ vkgsplat::CameraConfig{} };
   REQUIRE(worker.SubmitFrame(camera, camera.aspect_ratio()));
   callback.WaitUntilEntered();
-  auto detached = std::async(std::launch::async, [&worker, generation]() -> decltype(worker.DetachInteractiveCapture(*generation)) {
-    return worker.DetachInteractiveCapture(*generation);
-  });
+  auto detached =
+    std::async(std::launch::async, [&worker, generation]() -> decltype(worker.DetachInteractiveCapture(*generation)) {
+      return worker.DetachInteractiveCapture(*generation);
+    });
   constexpr auto kDetachObservationInterval = std::chrono::milliseconds{ 10 };
   auto const pending = detached.wait_for(kDetachObservationInterval) == std::future_status::timeout;
   callback.Release();
@@ -114,30 +115,26 @@ TEST_CASE("interactive capture detach waits for its callback", "[render]")
 TEST_CASE("interactive capture cannot be replaced during a callback", "[render]")
 {
   vkgsplat::RenderThread worker;
-  worker.StartForTest(vkgsplat::FrameSubmissionPolicy::kLossless,
-    []() -> std::expected<void, vkgsplat::Error> { return {}; });
+  worker.StartForTest(
+    vkgsplat::FrameSubmissionPolicy::kLossless, []() -> std::expected<void, vkgsplat::Error> { return {}; });
   FrameBarrier callback;
-  auto first = worker.AttachInteractiveCapture([&callback]()
-    -> std::expected<vkgsplat::CaptureOutcome, vkgsplat::Error> {
-    callback.Wait();
-    return vkgsplat::CaptureOutcome::kSubmitted;
-  });
+  auto first =
+    worker.AttachInteractiveCapture([&callback]() -> std::expected<vkgsplat::CaptureOutcome, vkgsplat::Error> {
+      callback.Wait();
+      return vkgsplat::CaptureOutcome::kSubmitted;
+    });
   REQUIRE(first);
   vkgsplat::Camera const camera{ vkgsplat::CameraConfig{} };
   REQUIRE(worker.SubmitFrame(camera, camera.aspect_ratio()));
   callback.WaitUntilEntered();
-  auto replacement = worker.AttachInteractiveCapture([]()
-    -> std::expected<vkgsplat::CaptureOutcome, vkgsplat::Error> {
-    return vkgsplat::CaptureOutcome::kSkipped;
-  });
+  auto replacement = worker.AttachInteractiveCapture(
+    []() -> std::expected<vkgsplat::CaptureOutcome, vkgsplat::Error> { return vkgsplat::CaptureOutcome::kSkipped; });
   REQUIRE_FALSE(replacement);
   REQUIRE(replacement.error().code() == std::errc::device_or_resource_busy);
   callback.Release();
   REQUIRE(worker.DetachInteractiveCapture(*first));
-  auto second = worker.AttachInteractiveCapture([]()
-    -> std::expected<vkgsplat::CaptureOutcome, vkgsplat::Error> {
-    return vkgsplat::CaptureOutcome::kSkipped;
-  });
+  auto second = worker.AttachInteractiveCapture(
+    []() -> std::expected<vkgsplat::CaptureOutcome, vkgsplat::Error> { return vkgsplat::CaptureOutcome::kSkipped; });
   REQUIRE(second);
   REQUIRE(worker.DetachInteractiveCapture(*second));
   worker.Stop();
@@ -146,27 +143,25 @@ TEST_CASE("interactive capture cannot be replaced during a callback", "[render]"
 TEST_CASE("interactive capture detach does not remove a newer callback", "[render]")
 {
   vkgsplat::RenderThread worker;
-  worker.StartForTest(vkgsplat::FrameSubmissionPolicy::kLossless,
-    []() -> std::expected<void, vkgsplat::Error> { return {}; });
-  auto const old_generation = worker.AttachInteractiveCapture([]()
-    -> std::expected<vkgsplat::CaptureOutcome, vkgsplat::Error> {
-    return vkgsplat::CaptureOutcome::kSkipped;
-  });
+  worker.StartForTest(
+    vkgsplat::FrameSubmissionPolicy::kLossless, []() -> std::expected<void, vkgsplat::Error> { return {}; });
+  auto const old_generation = worker.AttachInteractiveCapture(
+    []() -> std::expected<vkgsplat::CaptureOutcome, vkgsplat::Error> { return vkgsplat::CaptureOutcome::kSkipped; });
   REQUIRE(old_generation);
   std::atomic_uint new_callback_count{ 0U };
-  auto rejected_replacement = worker.AttachInteractiveCapture([&new_callback_count]()
-    -> std::expected<vkgsplat::CaptureOutcome, vkgsplat::Error> {
-    ++new_callback_count;
-    return vkgsplat::CaptureOutcome::kDropped;
-  });
+  auto rejected_replacement = worker.AttachInteractiveCapture(
+    [&new_callback_count]() -> std::expected<vkgsplat::CaptureOutcome, vkgsplat::Error> {
+      ++new_callback_count;
+      return vkgsplat::CaptureOutcome::kDropped;
+    });
   REQUIRE_FALSE(rejected_replacement);
   REQUIRE(rejected_replacement.error().code() == std::errc::device_or_resource_busy);
   REQUIRE(worker.DetachInteractiveCapture(*old_generation));
-  auto const new_generation = worker.AttachInteractiveCapture([&new_callback_count]()
-    -> std::expected<vkgsplat::CaptureOutcome, vkgsplat::Error> {
-    ++new_callback_count;
-    return vkgsplat::CaptureOutcome::kDropped;
-  });
+  auto const new_generation = worker.AttachInteractiveCapture(
+    [&new_callback_count]() -> std::expected<vkgsplat::CaptureOutcome, vkgsplat::Error> {
+      ++new_callback_count;
+      return vkgsplat::CaptureOutcome::kDropped;
+    });
   REQUIRE(new_generation);
   REQUIRE_FALSE(worker.DetachInteractiveCapture(*old_generation));
   vkgsplat::Camera const camera{ vkgsplat::CameraConfig{} };
@@ -180,16 +175,16 @@ TEST_CASE("interactive capture detach does not remove a newer callback", "[rende
 TEST_CASE("interactive capture callback cannot detach itself", "[render]")
 {
   vkgsplat::RenderThread worker;
-  worker.StartForTest(vkgsplat::FrameSubmissionPolicy::kLossless,
-    []() -> std::expected<void, vkgsplat::Error> { return {}; });
+  worker.StartForTest(
+    vkgsplat::FrameSubmissionPolicy::kLossless, []() -> std::expected<void, vkgsplat::Error> { return {}; });
   vkgsplat::u64 generation = 0U;
   std::atomic_bool rejected{ false };
-  auto attached = worker.AttachInteractiveCapture([&worker, &generation, &rejected]()
-    -> std::expected<vkgsplat::CaptureOutcome, vkgsplat::Error> {
-    auto result = worker.DetachInteractiveCapture(generation);
-    rejected = !result && result.error().code() == std::errc::operation_not_permitted;
-    return vkgsplat::CaptureOutcome::kSkipped;
-  });
+  auto attached = worker.AttachInteractiveCapture(
+    [&worker, &generation, &rejected]() -> std::expected<vkgsplat::CaptureOutcome, vkgsplat::Error> {
+      auto result = worker.DetachInteractiveCapture(generation);
+      rejected = !result && result.error().code() == std::errc::operation_not_permitted;
+      return vkgsplat::CaptureOutcome::kSkipped;
+    });
   REQUIRE(attached);
   generation = *attached;
   vkgsplat::Camera const camera{ vkgsplat::CameraConfig{} };
@@ -442,11 +437,13 @@ TEST_CASE("queued screenshot survives ordinary submissions in latest mode", "[re
   std::atomic<int> draw_count{ 0 };
   std::atomic<int> readback_count{ 0 };
   vkgsplat::RenderThread worker;
-  worker.StartForTest(vkgsplat::FrameSubmissionPolicy::kLatest,
+  worker.StartForTest(
+    vkgsplat::FrameSubmissionPolicy::kLatest,
     [&]() -> std::expected<void, vkgsplat::Error> {
       if (draw_count.fetch_add(1) == 0) { draw_barrier.Wait(); }
       return {};
-    }, {},
+    },
+    {},
     [&]() -> std::expected<vkgsplat::RgbaFrame, vkgsplat::Error> {
       ++readback_count;
       return vkgsplat::RgbaFrame{ .width = kReadbackTestWidth,
@@ -482,11 +479,13 @@ TEST_CASE("shutdown cancels a queued screenshot and rejects later submissions", 
   FrameBarrier draw_barrier;
   std::atomic<int> readback_count{ 0 };
   vkgsplat::RenderThread worker;
-  worker.StartForTest(vkgsplat::FrameSubmissionPolicy::kLossless,
+  worker.StartForTest(
+    vkgsplat::FrameSubmissionPolicy::kLossless,
     [&]() -> std::expected<void, vkgsplat::Error> {
       draw_barrier.Wait();
       return {};
-    }, {},
+    },
+    {},
     [&]() -> std::expected<vkgsplat::RgbaFrame, vkgsplat::Error> {
       ++readback_count;
       return vkgsplat::RgbaFrame{ .width = kReadbackTestWidth,
@@ -519,8 +518,10 @@ TEST_CASE("shutdown waits for executing screenshot readback", "[render]")
   FrameBarrier readback_barrier;
   std::atomic<bool> stop_returned{ false };
   vkgsplat::RenderThread worker;
-  worker.StartForTest(vkgsplat::FrameSubmissionPolicy::kLossless,
-    []() -> std::expected<void, vkgsplat::Error> { return {}; }, {},
+  worker.StartForTest(
+    vkgsplat::FrameSubmissionPolicy::kLossless,
+    []() -> std::expected<void, vkgsplat::Error> { return {}; },
+    {},
     [&]() -> std::expected<vkgsplat::RgbaFrame, vkgsplat::Error> {
       readback_barrier.Wait();
       return vkgsplat::RgbaFrame{ .width = kReadbackTestWidth,
@@ -550,11 +551,14 @@ TEST_CASE("queued video capture is canceled after shutdown", "[render]")
   FrameBarrier draw_barrier;
   std::atomic<int> encoded_count{ 0 };
   vkgsplat::RenderThread worker;
-  worker.StartForTest(vkgsplat::FrameSubmissionPolicy::kLatest,
+  worker.StartForTest(
+    vkgsplat::FrameSubmissionPolicy::kLatest,
     [&]() -> std::expected<void, vkgsplat::Error> {
       draw_barrier.Wait();
       return {};
-    }, {}, {},
+    },
+    {},
+    {},
     [&]() -> std::expected<vkgsplat::EncodedPacket, vkgsplat::Error> {
       ++encoded_count;
       return vkgsplat::EncodedPacket{};
@@ -584,11 +588,14 @@ TEST_CASE("queued video capture blocks ordinary submissions in latest mode", "[r
   std::atomic<int> draw_count{ 0 };
   std::atomic<int> encoded_count{ 0 };
   vkgsplat::RenderThread worker;
-  worker.StartForTest(vkgsplat::FrameSubmissionPolicy::kLatest,
+  worker.StartForTest(
+    vkgsplat::FrameSubmissionPolicy::kLatest,
     [&]() -> std::expected<void, vkgsplat::Error> {
       if (draw_count.fetch_add(1) == 0) { draw_barrier.Wait(); }
       return {};
-    }, {}, {},
+    },
+    {},
+    {},
     [&]() -> std::expected<vkgsplat::EncodedPacket, vkgsplat::Error> {
       ++encoded_count;
       return vkgsplat::EncodedPacket{};
@@ -621,8 +628,11 @@ TEST_CASE("shutdown waits for executing video capture", "[render]")
   FrameBarrier encode_barrier;
   std::atomic<bool> stop_returned{ false };
   vkgsplat::RenderThread worker;
-  worker.StartForTest(vkgsplat::FrameSubmissionPolicy::kLossless,
-    []() -> std::expected<void, vkgsplat::Error> { return {}; }, {}, {},
+  worker.StartForTest(
+    vkgsplat::FrameSubmissionPolicy::kLossless,
+    []() -> std::expected<void, vkgsplat::Error> { return {}; },
+    {},
+    {},
     [&]() -> std::expected<vkgsplat::EncodedPacket, vkgsplat::Error> {
       encode_barrier.Wait();
       return vkgsplat::EncodedPacket{};
@@ -650,8 +660,11 @@ TEST_CASE("shutdown waits for executing video capture", "[render]")
 TEST_CASE("video device loss is terminal to later frame submissions", "[render]")
 {
   vkgsplat::RenderThread worker;
-  worker.StartForTest(vkgsplat::FrameSubmissionPolicy::kLossless,
-    []() -> std::expected<void, vkgsplat::Error> { return {}; }, {}, {},
+  worker.StartForTest(
+    vkgsplat::FrameSubmissionPolicy::kLossless,
+    []() -> std::expected<void, vkgsplat::Error> { return {}; },
+    {},
+    {},
     []() -> std::expected<vkgsplat::EncodedPacket, vkgsplat::Error> {
       return std::unexpected{ vkgsplat::MakeError(std::errc::no_such_device, "injected device loss") };
     });
@@ -679,8 +692,11 @@ TEST_CASE("recording-local failure releases video admission without stopping ren
 {
   vkgsplat::RenderThread worker;
   std::atomic<int> encode_count{ 0 };
-  worker.StartForTest(vkgsplat::FrameSubmissionPolicy::kLossless,
-    []() -> std::expected<void, vkgsplat::Error> { return {}; }, {}, {},
+  worker.StartForTest(
+    vkgsplat::FrameSubmissionPolicy::kLossless,
+    []() -> std::expected<void, vkgsplat::Error> { return {}; },
+    {},
+    {},
     [&]() -> std::expected<vkgsplat::EncodedPacket, vkgsplat::Error> {
       ++encode_count;
       return std::unexpected{ vkgsplat::MakeError(std::errc::io_error, "injected encode failure") };
@@ -700,14 +716,14 @@ TEST_CASE("frame failure resolves a queued screenshot and blocked producer", "[r
 {
   FrameBarrier draw_barrier;
   vkgsplat::RenderThread worker;
-  worker.StartForTest(vkgsplat::FrameSubmissionPolicy::kLossless,
+  worker.StartForTest(
+    vkgsplat::FrameSubmissionPolicy::kLossless,
     [&]() -> std::expected<void, vkgsplat::Error> {
       draw_barrier.Wait();
       return std::unexpected{ vkgsplat::MakeError(std::errc::io_error, "injected draw failure") };
-    }, {},
-    []() -> std::expected<vkgsplat::RgbaFrame, vkgsplat::Error> {
-      return vkgsplat::RgbaFrame{};
-    });
+    },
+    {},
+    []() -> std::expected<vkgsplat::RgbaFrame, vkgsplat::Error> { return vkgsplat::RgbaFrame{}; });
   vkgsplat::Camera const camera{ vkgsplat::CameraConfig{} };
   REQUIRE(worker.SubmitFrame(camera, camera.aspect_ratio()));
   draw_barrier.WaitUntilEntered();

@@ -19,8 +19,7 @@ public:
   [[nodiscard]] static auto Create(vulkan::Context &context, VkExtent2D extent)
     -> std::expected<std::unique_ptr<GpuColorSource>, Error>;
   [[nodiscard]] auto Prepare() -> std::expected<void, Error>;
-  [[nodiscard]] auto ReadNv12Buffer(VkBuffer source, VkDeviceSize size)
-    -> std::expected<std::vector<std::byte>, Error>;
+  [[nodiscard]] auto ReadNv12Buffer(VkBuffer source, VkDeviceSize size) -> std::expected<std::vector<std::byte>, Error>;
   [[nodiscard]] auto Image() const noexcept -> VkImage { return image_; }
   [[nodiscard]] auto ReadyTimeline() const noexcept -> VkSemaphore { return ready_; }
   [[nodiscard]] static auto ReadyValue() noexcept -> std::uint64_t { return kReadyValue; }

@@ -68,19 +68,26 @@ namespace {
   [[nodiscard]] auto ProfileName(StdVideoH264ProfileIdc profile) noexcept -> std::string_view
   {
     switch (profile) {
-    case STD_VIDEO_H264_PROFILE_IDC_BASELINE: return "Baseline";
-    case STD_VIDEO_H264_PROFILE_IDC_MAIN: return "Main";
-    case STD_VIDEO_H264_PROFILE_IDC_HIGH: return "High";
-    default: return "Unknown";
+    case STD_VIDEO_H264_PROFILE_IDC_BASELINE:
+      return "Baseline";
+    case STD_VIDEO_H264_PROFILE_IDC_MAIN:
+      return "Main";
+    case STD_VIDEO_H264_PROFILE_IDC_HIGH:
+      return "High";
+    default:
+      return "Unknown";
     }
   }
 
   [[nodiscard]] auto FormatName(VkFormat format) -> std::string
   {
     switch (format) {
-    case VK_FORMAT_G8_B8R8_2PLANE_420_UNORM: return "VK_FORMAT_G8_B8R8_2PLANE_420_UNORM";
-    case VK_FORMAT_G8_B8_R8_3PLANE_420_UNORM: return "VK_FORMAT_G8_B8_R8_3PLANE_420_UNORM";
-    default: return "VkFormat(" + std::to_string(static_cast<int>(format)) + ")";
+    case VK_FORMAT_G8_B8R8_2PLANE_420_UNORM:
+      return "VK_FORMAT_G8_B8R8_2PLANE_420_UNORM";
+    case VK_FORMAT_G8_B8_R8_3PLANE_420_UNORM:
+      return "VK_FORMAT_G8_B8_R8_3PLANE_420_UNORM";
+    default:
+      return "VkFormat(" + std::to_string(static_cast<int>(format)) + ")";
     }
   }
 
@@ -103,10 +110,13 @@ namespace {
     return std::unexpected(QueryError("Vulkan device extension enumeration remained incomplete"));
   }
 
-  [[nodiscard]] auto SupportsImageUsage(Queries const &queries, VkPhysicalDevice device,
-    VkVideoProfileListInfoKHR const &profile_list, VkVideoFormatPropertiesKHR const &entry,
-    VkImageUsageFlags usage, VkImageUsageFlags extra, VkImageFormatProperties2 *properties)
-    -> std::expected<bool, Error>
+  [[nodiscard]] auto SupportsImageUsage(Queries const &queries,
+    VkPhysicalDevice device,
+    VkVideoProfileListInfoKHR const &profile_list,
+    VkVideoFormatPropertiesKHR const &entry,
+    VkImageUsageFlags usage,
+    VkImageUsageFlags extra,
+    VkImageFormatProperties2 *properties) -> std::expected<bool, Error>
   {
     if ((entry.imageUsageFlags & extra) != extra) { return false; }
     VkPhysicalDeviceImageFormatInfo2 const image_info{
@@ -123,14 +133,14 @@ namespace {
     if (properties == nullptr) { properties = &scratch; }
     auto const result = queries.image_format(device, &image_info, properties);
     if (result == VK_SUCCESS) { return true; }
-    if (result == VK_ERROR_FORMAT_NOT_SUPPORTED || result == VK_ERROR_IMAGE_USAGE_NOT_SUPPORTED_KHR) {
-      return false;
-    }
+    if (result == VK_ERROR_FORMAT_NOT_SUPPORTED || result == VK_ERROR_IMAGE_USAGE_NOT_SUPPORTED_KHR) { return false; }
     return std::unexpected(QueryError("Vulkan video image format compatibility query", result));
   }
 
-  [[nodiscard]] auto SelectImageFormats(Queries const &queries, VkPhysicalDevice device,
-    VkVideoProfileListInfoKHR const &profile_list, VkImageUsageFlags usage,
+  [[nodiscard]] auto SelectImageFormats(Queries const &queries,
+    VkPhysicalDevice device,
+    VkVideoProfileListInfoKHR const &profile_list,
+    VkImageUsageFlags usage,
     std::vector<VkVideoFormatPropertiesKHR> const &properties) -> std::expected<std::vector<ImageFormat>, Error>
   {
     std::vector<ImageFormat> formats;
@@ -140,11 +150,11 @@ namespace {
       auto base_usage = SupportsImageUsage(queries, device, profile_list, entry, usage, 0, &base_image_properties);
       if (!base_usage) { return std::unexpected(base_usage.error()); }
       if (!*base_usage) { continue; }
-      auto transfer_destination = SupportsImageUsage(queries, device, profile_list, entry, usage,
-        VK_IMAGE_USAGE_TRANSFER_DST_BIT, nullptr);
+      auto transfer_destination =
+        SupportsImageUsage(queries, device, profile_list, entry, usage, VK_IMAGE_USAGE_TRANSFER_DST_BIT, nullptr);
       if (!transfer_destination) { return std::unexpected(transfer_destination.error()); }
-      auto storage = SupportsImageUsage(queries, device, profile_list, entry, usage,
-        VK_IMAGE_USAGE_STORAGE_BIT, nullptr);
+      auto storage =
+        SupportsImageUsage(queries, device, profile_list, entry, usage, VK_IMAGE_USAGE_STORAGE_BIT, nullptr);
       if (!storage) { return std::unexpected(storage.error()); }
       formats.push_back(ImageFormat{ .format = entry.format,
         .image_type = entry.imageType,
@@ -198,9 +208,7 @@ namespace {
 
 auto Profile::preferred_source_format() const noexcept -> ImageFormat const *
 {
-  auto const suitable = [&](ImageFormat const &format) -> bool {
-    return ExtentFor(*this, format).width != 0;
-  };
+  auto const suitable = [&](ImageFormat const &format) -> bool { return ExtentFor(*this, format).width != 0; };
   auto const nv12 = std::ranges::find_if(source_formats, [&](ImageFormat const &format) -> bool {
     return format.format == VK_FORMAT_G8_B8R8_2PLANE_420_UNORM && suitable(format);
   });
@@ -223,9 +231,7 @@ auto Profile::preferred_conversion_format() const noexcept -> ImageFormat const 
 }
 
 auto Profile::preferred_dpb_format() const noexcept -> ImageFormat const *
-{
-  return dpb_formats.empty() ? nullptr : &dpb_formats.front();
-}
+{ return dpb_formats.empty() ? nullptr : &dpb_formats.front(); }
 
 auto Profile::usable_extent() const noexcept -> VkExtent2D
 {
@@ -235,8 +241,8 @@ auto Profile::usable_extent() const noexcept -> VkExtent2D
 
 auto Profile::supports_extent(VkExtent2D extent) const noexcept -> bool
 {
-  if (extent.width == 0 || extent.height == 0
-      || extent.width < capabilities.minCodedExtent.width || extent.height < capabilities.minCodedExtent.height) {
+  if (extent.width == 0 || extent.height == 0 || extent.width < capabilities.minCodedExtent.width
+      || extent.height < capabilities.minCodedExtent.height) {
     return false;
   }
   return std::ranges::any_of(source_formats, [&](ImageFormat const &format) -> bool {
@@ -253,8 +259,7 @@ namespace {
     VkExtent2D extent{};
   };
 
-  [[nodiscard]] auto SelectSource(Profile const &profile, EncodeRequirements const &requirements)
-    -> ImageFormat const *
+  [[nodiscard]] auto SelectSource(Profile const &profile, EncodeRequirements const &requirements) -> ImageFormat const *
   {
     if (!requirements.required_format && !requirements.require_transfer_destination
         && requirements.required_extent.width == 0 && requirements.required_extent.height == 0) {
@@ -316,8 +321,8 @@ auto Report::select(EncodeRequirements requirements) const noexcept -> std::opti
     auto maximum = ExtentFor(profile, *source);
     auto const dpb = SelectDpb(profile, maximum);
     if (requirements.require_references && dpb.format == nullptr) { continue; }
-    bool references_at_maximum = dpb.format != nullptr && dpb.extent.width == maximum.width
-                                 && dpb.extent.height == maximum.height;
+    bool references_at_maximum =
+      dpb.format != nullptr && dpb.extent.width == maximum.width && dpb.extent.height == maximum.height;
     if (requirements.require_references) {
       maximum = dpb.extent;
       references_at_maximum = true;
@@ -325,8 +330,11 @@ auto Report::select(EncodeRequirements requirements) const noexcept -> std::opti
     std::optional<ImageFormat> selected_dpb;
     if (references_at_maximum) { selected_dpb = *dpb.format; }
     auto upload_strategy = UploadStrategy::kUnavailable;
-    if (source->transfer_destination) { upload_strategy = UploadStrategy::kTransferDestination; }
-    else if (source->storage) { upload_strategy = UploadStrategy::kStorageWrite; }
+    if (source->transfer_destination) {
+      upload_strategy = UploadStrategy::kTransferDestination;
+    } else if (source->storage) {
+      upload_strategy = UploadStrategy::kStorageWrite;
+    }
     return EncodeSelection{
       .profile_index = index,
       .profile = profile.profile,
@@ -343,9 +351,14 @@ auto Report::select(EncodeRequirements requirements) const noexcept -> std::opti
 
 auto Report::selected_configuration() const noexcept -> std::optional<EncodeSelection>
 {
-  if (auto converted = select({ .require_conversion = true, .require_references = false,
-        .required_format = std::nullopt, .require_transfer_destination = false,
-        .required_extent = {} }); converted) { return converted; }
+  if (auto converted = select({ .require_conversion = true,
+        .require_references = false,
+        .required_format = std::nullopt,
+        .require_transfer_destination = false,
+        .required_extent = {} });
+    converted) {
+    return converted;
+  }
   return select();
 }
 
@@ -389,12 +402,18 @@ auto Report::diagnostic() const -> std::string
     result += "\nEncode source formats: " + std::to_string(profile.source_formats.size());
     result += "\nDPB formats: " + std::to_string(profile.dpb_formats.size());
     switch (selected->upload_strategy) {
-    case UploadStrategy::kTransferDestination: result += "\nEncode image upload: transfer destination"; break;
-    case UploadStrategy::kStorageWrite: result += "\nEncode image upload: storage write"; break;
-    case UploadStrategy::kUnavailable: result += "\nEncode image upload: unavailable"; break;
+    case UploadStrategy::kTransferDestination:
+      result += "\nEncode image upload: transfer destination";
+      break;
+    case UploadStrategy::kStorageWrite:
+      result += "\nEncode image upload: storage write";
+      break;
+    case UploadStrategy::kUnavailable:
+      result += "\nEncode image upload: unavailable";
+      break;
     }
-    result += selected->reference_pictures_supported ? "\nReference pictures: supported"
-                                                     : "\nReference pictures: unavailable";
+    result +=
+      selected->reference_pictures_supported ? "\nReference pictures: supported" : "\nReference pictures: unavailable";
   }
   return result;
 }
@@ -418,18 +437,17 @@ namespace {
     for (std::uint32_t index = 0; index < queue_count; ++index) {
       auto const &queue = queues.at(index).queueFamilyProperties;
       auto const codec_operations = video_queues.at(index).videoCodecOperations;
-      report.queue_families.push_back(Report::QueueFamily{
-        .index = index, .flags = queue.queueFlags, .codec_operations = codec_operations });
+      report.queue_families.push_back(
+        Report::QueueFamily{ .index = index, .flags = queue.queueFlags, .codec_operations = codec_operations });
       if ((queue.queueFlags & VK_QUEUE_VIDEO_ENCODE_BIT_KHR) != 0
-          && (codec_operations & VK_VIDEO_CODEC_OPERATION_ENCODE_H264_BIT_KHR) != 0
-          && queue.queueCount != 0) {
+          && (codec_operations & VK_VIDEO_CODEC_OPERATION_ENCODE_H264_BIT_KHR) != 0 && queue.queueCount != 0) {
         report.encode_queue_families.push_back(index);
       }
     }
   }
 
-  auto ProbeProfile(Queries const &queries, VkPhysicalDevice device,
-    StdVideoH264ProfileIdc profile_id, Report &report) -> std::expected<void, Error>
+  auto ProbeProfile(Queries const &queries, VkPhysicalDevice device, StdVideoH264ProfileIdc profile_id, Report &report)
+    -> std::expected<void, Error>
   {
     VkVideoEncodeH264ProfileInfoKHR h264_profile{
       .sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_H264_PROFILE_INFO_KHR,
@@ -480,8 +498,7 @@ namespace {
 
 }// namespace
 
-auto ProbeH264Capabilities(Queries const &queries, VkPhysicalDevice device)
-  -> std::expected<Report, Error>
+auto ProbeH264Capabilities(Queries const &queries, VkPhysicalDevice device) -> std::expected<Report, Error>
 {
   Report report;
   VkPhysicalDeviceProperties properties{};
@@ -518,8 +535,9 @@ auto ProbeH264Capabilities(Queries const &queries, VkPhysicalDevice device)
     auto result = ProbeProfile(queries, device, profile_id, report);
     if (!result) { return std::unexpected(result.error()); }
   }
-  if (report.usable()) { report.unavailable_reason.clear(); }
-  else if (report.profiles.empty() && report.unavailable_reason.empty()) {
+  if (report.usable()) {
+    report.unavailable_reason.clear();
+  } else if (report.profiles.empty() && report.unavailable_reason.empty()) {
     report.unavailable_reason = "No supported 8-bit 4:2:0 H.264 profile";
   } else if (!report.profiles.empty() && report.preferred_profile() == nullptr) {
     report.unavailable_reason = "No profile has an encode-source format with a valid coded extent";
@@ -534,14 +552,12 @@ auto ProbeH264Capabilities(vkb::InstanceDispatchTable const &dispatch, VkPhysica
   queries.device_properties = [&](VkPhysicalDevice physical_device, VkPhysicalDeviceProperties *properties) -> void {
     dispatch.getPhysicalDeviceProperties(physical_device, properties);
   };
-  queries.extensions = [&](VkPhysicalDevice physical_device,
-                         std::uint32_t *count,
-                         VkExtensionProperties *properties) -> VkResult {
+  queries.extensions =
+    [&](VkPhysicalDevice physical_device, std::uint32_t *count, VkExtensionProperties *properties) -> VkResult {
     return dispatch.enumerateDeviceExtensionProperties(physical_device, nullptr, count, properties);
   };
-  queries.queue_families = [&](VkPhysicalDevice physical_device,
-                             std::uint32_t *count,
-                             VkQueueFamilyProperties2 *properties) -> void {
+  queries.queue_families =
+    [&](VkPhysicalDevice physical_device, std::uint32_t *count, VkQueueFamilyProperties2 *properties) -> void {
     dispatch.getPhysicalDeviceQueueFamilyProperties2(physical_device, count, properties);
   };
   if (dispatch.fp_vkGetPhysicalDeviceVideoCapabilitiesKHR != nullptr) {

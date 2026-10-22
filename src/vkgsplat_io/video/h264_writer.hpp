@@ -31,7 +31,8 @@ public:
 
 private:
   H264Writer(std::ofstream stream, std::filesystem::path path, std::filesystem::path temporary_path)
-    : stream_{ std::move(stream) }, path_{ std::move(path) }, temporary_path_{ std::move(temporary_path) } {}
+    : stream_{ std::move(stream) }, path_{ std::move(path) }, temporary_path_{ std::move(temporary_path) }
+  {}
 
   std::ofstream stream_;
   std::filesystem::path path_;

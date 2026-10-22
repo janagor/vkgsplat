@@ -6,9 +6,9 @@
 #include <span>
 #include <string_view>
 
+#include <vkgsplat_io/vkgsplat_io_export.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
-#include <vkgsplat_io/vkgsplat_io_export.hpp>
 
 namespace vkgsplat {
 

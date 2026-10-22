@@ -1,6 +1,6 @@
-#include <vkgsplat_capture/video_recorder.hpp>
-#include <vkgsplat_capture/video_config.hpp>
 #include "video_recorder_test_access.hpp"
+#include <vkgsplat_capture/video_config.hpp>
+#include <vkgsplat_capture/video_recorder.hpp>
 
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat/renderer.hpp>
@@ -12,8 +12,8 @@
 #include "video/mp4_muxer.hpp"
 #endif
 
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 #include <expected>
 #include <limits>
 #include <memory>
@@ -30,28 +30,28 @@ namespace {
 
   [[nodiscard]] auto Validate(VideoConfig const &config) -> std::expected<void, Error>
   {
-    if (config.output_path.empty() || config.width == 0U || config.height == 0U
-        || config.frame_rate.numerator == 0U || config.frame_rate.denominator == 0U
+    if (config.output_path.empty() || config.width == 0U || config.height == 0U || config.frame_rate.numerator == 0U
+        || config.frame_rate.denominator == 0U
         || config.frame_rate.numerator > static_cast<u32>(std::numeric_limits<int>::max())
         || config.frame_rate.denominator > static_cast<u32>(std::numeric_limits<int>::max())) {
-      return std::unexpected(MakeError(std::errc::invalid_argument,
-        "video output path, extent and rational frame rate must be valid"));
+      return std::unexpected(
+        MakeError(std::errc::invalid_argument, "video output path, extent and rational frame rate must be valid"));
     }
     if (config.gop.enable_p_frames || config.gop.idr_interval != 1U) {
       return std::unexpected(MakeError(std::errc::function_not_supported,
         "this H.264 encoder supports IDR-only recording; disable P frames and use IDR interval 1"));
     }
     if (config.rate_control.mode != RateControlMode::kDefault) {
-      return std::unexpected(MakeError(std::errc::function_not_supported,
-        "explicit video rate-control modes are not implemented"));
+      return std::unexpected(
+        MakeError(std::errc::function_not_supported, "explicit video rate-control modes are not implemented"));
     }
     if (config.container != VideoContainer::kH264 && config.container != VideoContainer::kMp4) {
       return std::unexpected(MakeError(std::errc::invalid_argument, "unknown video container"));
     }
 #ifndef VKGSPLAT_ENABLE_MP4
     if (config.container == VideoContainer::kMp4) {
-      return std::unexpected(MakeError(std::errc::function_not_supported,
-        "MP4 output requires a build with vkgsplat_ENABLE_MP4"));
+      return std::unexpected(
+        MakeError(std::errc::function_not_supported, "MP4 output requires a build with vkgsplat_ENABLE_MP4"));
     }
 #endif
     return {};
@@ -66,8 +66,12 @@ namespace {
       return std::unique_ptr<VideoSink>{ std::make_unique<H264StreamSink>(std::move(*raw)) };
     }
 #ifdef VKGSPLAT_ENABLE_MP4
-    auto mp4 = Mp4Muxer::Open(config.output_path, config.width, config.height,
-      config.frame_rate.numerator, config.frame_rate.denominator, parameter_sets);
+    auto mp4 = Mp4Muxer::Open(config.output_path,
+      config.width,
+      config.height,
+      config.frame_rate.numerator,
+      config.frame_rate.denominator,
+      parameter_sets);
     if (!mp4) { return std::unexpected(mp4.error()); }
     return std::unique_ptr<VideoSink>{ std::move(*mp4) };
 #else
@@ -98,19 +102,17 @@ VideoRecorder::~VideoRecorder() noexcept = default;
 auto VideoRecorder::create(Renderer &renderer, VideoConfig const &config) -> std::expected<VideoRecorder, Error>
 {
   if (auto valid = Validate(config); !valid) { return std::unexpected(valid.error()); }
-  auto session = renderer.create_video_recording_session(config.width, config.height,
-    config.frame_rate.numerator, config.frame_rate.denominator);
+  auto session = renderer.create_video_recording_session(
+    config.width, config.height, config.frame_rate.numerator, config.frame_rate.denominator);
   if (!session) { return std::unexpected(session.error()); }
   auto sink = OpenSink(config, (*session)->ParameterSets());
   if (!sink) { return std::unexpected(sink.error()); }
   return VideoRecorder{ std::make_unique<Impl>(std::move(*sink), std::move(*session)) };
 }
 
-auto VideoRecorderTestAccess::Create(std::unique_ptr<video::RecordingSession> session,
-  std::unique_ptr<VideoSink> sink) -> VideoRecorder
-{
-  return VideoRecorder{ std::make_unique<VideoRecorder::Impl>(std::move(sink), std::move(session)) };
-}
+auto VideoRecorderTestAccess::Create(std::unique_ptr<video::RecordingSession> session, std::unique_ptr<VideoSink> sink)
+  -> VideoRecorder
+{ return VideoRecorder{ std::make_unique<VideoRecorder::Impl>(std::move(sink), std::move(session)) }; }
 
 auto VideoRecorder::record_frame(Camera const &camera) -> std::expected<void, Error>
 {

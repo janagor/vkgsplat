@@ -1,13 +1,13 @@
 // NOLINTBEGIN(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)
-#include "../src/vkgsplat_backend/vulkan/video/video_encoder.hpp"
-#include "../src/vkgsplat_backend/vulkan/video/video_device.hpp"
-#include "../src/vkgsplat_backend/vulkan/video/video_capabilities.hpp"
 #include "../src/vkgsplat_backend/vulkan/video/color_converter.hpp"
+#include "../src/vkgsplat_backend/vulkan/video/video_capabilities.hpp"
+#include "../src/vkgsplat_backend/vulkan/video/video_device.hpp"
+#include "../src/vkgsplat_backend/vulkan/video/video_encoder.hpp"
 #include "../src/vkgsplat_backend/vulkan/vulkan_context.hpp"
 #include "../src/vkgsplat_backend/vulkan/vulkan_driver.hpp"
 #include "../src/vkgsplat_io/video/h264_writer.hpp"
-#include "video_encode_gpu_source.hpp"
 #include "video_encode_color_source.hpp"
+#include "video_encode_gpu_source.hpp"
 
 #include <vkgsplat_headless/offscreen_platform.hpp>
 
@@ -15,8 +15,8 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <cstdlib>
+#include <cstring>
 #include <expected>
 #include <filesystem>
 #include <fstream>
@@ -29,11 +29,11 @@
 #include <utility>
 #include <vector>
 
-#include <vulkan/vk_platform.h>
-#include <vulkan/vulkan_core.h>
 #include <vkgsplat/video_capabilities.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_video/encoded_packet.hpp>
+#include <vulkan/vk_platform.h>
+#include <vulkan/vulkan_core.h>
 
 namespace {
 
@@ -67,9 +67,10 @@ public:
     VkDebugUtilsMessengerCreateInfoEXT create{};
     create.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
     create.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-    create.messageType = static_cast<VkDebugUtilsMessageTypeFlagsEXT>(VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT)
-                         | static_cast<VkDebugUtilsMessageTypeFlagsEXT>(VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT)
-                         | static_cast<VkDebugUtilsMessageTypeFlagsEXT>(VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT);
+    create.messageType =
+      static_cast<VkDebugUtilsMessageTypeFlagsEXT>(VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT)
+      | static_cast<VkDebugUtilsMessageTypeFlagsEXT>(VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT)
+      | static_cast<VkDebugUtilsMessageTypeFlagsEXT>(VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT);
     create.pfnUserCallback = &ValidationErrorCounter::Callback;
     create.pUserData = this;
     result_ = context_.inst_disp.createDebugUtilsMessengerEXT(&create, nullptr, &messenger_);
@@ -90,7 +91,8 @@ public:
 
 private:
   static VKAPI_ATTR auto VKAPI_CALL Callback(VkDebugUtilsMessageSeverityFlagBitsEXT /*severity*/,
-    VkDebugUtilsMessageTypeFlagsEXT /*types*/, VkDebugUtilsMessengerCallbackDataEXT const * /*data*/,
+    VkDebugUtilsMessageTypeFlagsEXT /*types*/,
+    VkDebugUtilsMessengerCallbackDataEXT const * /*data*/,
     void *user_data) -> VkBool32
   {
     auto *counter = static_cast<ValidationErrorCounter *>(user_data);
@@ -117,16 +119,20 @@ auto PrintSelectionDetails(EncodeDevice const &device) -> void
   for (auto const &profile : device.capabilities.profiles) {
     std::cout << "H.264 profile " << static_cast<int>(profile.profile) << " source formats:";
     for (auto const &format : profile.source_formats) {
-      std::cout << ' ' << static_cast<int>(format.format)
-                << "(transfer destination=" << format.transfer_destination << ')';
+      std::cout << ' ' << static_cast<int>(format.format) << "(transfer destination=" << format.transfer_destination
+                << ')';
     }
     std::cout << '\n';
   }
 }
 
-[[nodiscard]] auto EncodeFrame(VideoEncoder &encoder, vkgsplat::test::GpuVideoSource &gpu_source,
-  std::vector<std::byte> &cpu_frame, std::size_t y_size, std::uint64_t index,
-  std::uint8_t luma, bool gpu_only) -> std::expected<vkgsplat::EncodedPacket, vkgsplat::Error>
+[[nodiscard]] auto EncodeFrame(VideoEncoder &encoder,
+  vkgsplat::test::GpuVideoSource &gpu_source,
+  std::vector<std::byte> &cpu_frame,
+  std::size_t y_size,
+  std::uint64_t index,
+  std::uint8_t luma,
+  bool gpu_only) -> std::expected<vkgsplat::EncodedPacket, vkgsplat::Error>
 {
   if (!gpu_only && index % kGpuSourcePeriod == 0U) {
     std::fill_n(cpu_frame.begin(), y_size, std::byte{ luma });
@@ -139,14 +145,17 @@ auto PrintSelectionDetails(EncodeDevice const &device) -> void
   return packet;
 }
 
-auto Run(std::filesystem::path const &output, bool gpu_only, bool color_conversion,
-  bool repeat_conversion, std::string_view failure_mode, bool asynchronous,
+auto Run(std::filesystem::path const &output,
+  bool gpu_only,
+  bool color_conversion,
+  bool repeat_conversion,
+  std::string_view failure_mode,
+  bool asynchronous,
   bool asynchronous_color) -> int
 {
   if (repeat_conversion || !failure_mode.empty()) {
     std::cout << "Vulkan validation checking "
-              << (VKGSPLAT_TEST_VIDEO_VALIDATION ? "enabled" : "disabled; checking functional cleanup only")
-              << '\n';
+              << (VKGSPLAT_TEST_VIDEO_VALIDATION ? "enabled" : "disabled; checking functional cleanup only") << '\n';
   }
   std::error_code remove_error;
   std::filesystem::remove(output, remove_error);
@@ -157,8 +166,7 @@ auto Run(std::filesystem::path const &output, bool gpu_only, bool color_conversi
   auto platform = vkgsplat::OffscreenPlatform::create({ .width = kExtent.width, .height = kExtent.height });
   if (!platform) { return EXIT_FAILURE; }
   auto driver = vkgsplat::vulkan::VulkanDriver::create(*platform,
-    { .enable_validation = VKGSPLAT_TEST_VIDEO_VALIDATION,
-      .video_encode = vkgsplat::VideoEncodeSupport::kRequired });
+    { .enable_validation = VKGSPLAT_TEST_VIDEO_VALIDATION, .video_encode = vkgsplat::VideoEncodeSupport::kRequired });
   if (!driver) {
     if (driver.error().code() == std::make_error_code(std::errc::function_not_supported)
         && std::string_view{ driver.error().message() }.starts_with(kUnsupportedDeviceMessage)
@@ -194,10 +202,9 @@ auto Run(std::filesystem::path const &output, bool gpu_only, bool color_conversi
       || kExtent.width > selection->max_extent.width || kExtent.height > selection->max_extent.height) {
     PrintSelectionDetails(device);
     std::cout << "1280x720 NV12 transfer destination unavailable: selected format "
-              << static_cast<int>(selection->source_format.format)
-              << ", upload strategy " << static_cast<int>(selection->upload_strategy)
-              << ", maximum extent " << selection->max_extent.width << 'x'
-              << selection->max_extent.height << '\n';
+              << static_cast<int>(selection->source_format.format) << ", upload strategy "
+              << static_cast<int>(selection->upload_strategy) << ", maximum extent " << selection->max_extent.width
+              << 'x' << selection->max_extent.height << '\n';
     return RequireVideoEncode() ? EXIT_FAILURE : kSkipped;
   }
   device.selection = *selection;
@@ -206,11 +213,8 @@ auto Run(std::filesystem::path const &output, bool gpu_only, bool color_conversi
     auto const &components = device.selection.source_format.components;
     std::cout << "Color encode device: " << device.capabilities.device_name
               << ", driver version: " << device.capabilities.driver_version
-              << ", NV12 component mapping: "
-              << static_cast<int>(components.r) << ','
-              << static_cast<int>(components.g) << ','
-              << static_cast<int>(components.b) << ','
-              << static_cast<int>(components.a) << '\n';
+              << ", NV12 component mapping: " << static_cast<int>(components.r) << ',' << static_cast<int>(components.g)
+              << ',' << static_cast<int>(components.b) << ',' << static_cast<int>(components.a) << '\n';
   }
   std::unique_ptr<vkgsplat::test::GpuVideoSource> gpu_source;
   std::unique_ptr<vkgsplat::test::GpuColorSource> color_source;
@@ -238,8 +242,11 @@ auto Run(std::filesystem::path const &output, bool gpu_only, bool color_conversi
   }
   constexpr std::uint32_t kFpsNumerator = 30U;
   constexpr std::uint32_t kFpsDenominator = 1U;
-  auto encoder = VideoEncoder::Create(context, std::move(device), kExtent,
-    kFpsNumerator, kFpsDenominator,
+  auto encoder = VideoEncoder::Create(context,
+    std::move(device),
+    kExtent,
+    kFpsNumerator,
+    kFpsDenominator,
     asynchronous ? kAsyncSlotCount : VideoEncoder::kOfflineInFlightFrames,
     !asynchronous);
   if (!encoder) {
@@ -270,12 +277,12 @@ auto Run(std::filesystem::path const &output, bool gpu_only, bool color_conversi
     return EXIT_FAILURE;
   }
   if (asynchronous_color) {
-    auto created_pool = vkgsplat::vulkan::video::GpuColorConverterPool::Create(
-      context, async_device, kExtent, kConverterPoolSlotCount);
+    auto created_pool =
+      vkgsplat::vulkan::video::GpuColorConverterPool::Create(context, async_device, kExtent, kConverterPoolSlotCount);
     if (!created_pool) { return EXIT_FAILURE; }
     auto pool = std::move(*created_pool);
-    auto create_source = [&context]()
-      -> std::expected<std::shared_ptr<vkgsplat::test::GpuColorSource>, vkgsplat::Error> {
+    auto create_source =
+      [&context]() -> std::expected<std::shared_ptr<vkgsplat::test::GpuColorSource>, vkgsplat::Error> {
       auto created = vkgsplat::test::GpuColorSource::Create(context, kExtent);
       if (!created) { return std::unexpected(created.error()); }
       return std::shared_ptr<vkgsplat::test::GpuColorSource>{ std::move(*created) };
@@ -284,10 +291,14 @@ auto Run(std::filesystem::path const &output, bool gpu_only, bool color_conversi
     if (!rejected_source || !(*rejected_source)->Prepare()) { return EXIT_FAILURE; }
     {
       auto converted = pool->Convert((*rejected_source)->Image(),
-        (*rejected_source)->ReadyTimeline(), (*rejected_source)->ReadyValue(), *rejected_source);
+        (*rejected_source)->ReadyTimeline(),
+        (*rejected_source)->ReadyValue(),
+        *rejected_source);
       if (!converted) { return EXIT_FAILURE; }
       auto unavailable = pool->Convert((*rejected_source)->Image(),
-        (*rejected_source)->ReadyTimeline(), (*rejected_source)->ReadyValue(), *rejected_source);
+        (*rejected_source)->ReadyTimeline(),
+        (*rejected_source)->ReadyValue(),
+        *rejected_source);
       if (unavailable || unavailable.error().code() != std::errc::resource_unavailable_try_again) {
         return EXIT_FAILURE;
       }
@@ -296,24 +307,26 @@ auto Run(std::filesystem::path const &output, bool gpu_only, bool color_conversi
           .encode_index = kRejectedEncodeIndex,
           .presentation_timestamp = 0,
           .duration = kPacketDuration,
-        }, converted->lease);
-      if (rejected || rejected.error().code() != std::errc::operation_not_permitted) {
-        return EXIT_FAILURE;
-      }
+        },
+        converted->lease);
+      if (rejected || rejected.error().code() != std::errc::operation_not_permitted) { return EXIT_FAILURE; }
     }
     if (auto retired = pool->RetireReleased(); !retired) { return EXIT_FAILURE; }
     rejected_source->reset();
     auto accepted_source = create_source();
     if (!accepted_source || !(*accepted_source)->Prepare()) { return EXIT_FAILURE; }
     auto converted = pool->Convert((*accepted_source)->Image(),
-      (*accepted_source)->ReadyTimeline(), (*accepted_source)->ReadyValue(), *accepted_source);
+      (*accepted_source)->ReadyTimeline(),
+      (*accepted_source)->ReadyValue(),
+      *accepted_source);
     if (!converted) { return EXIT_FAILURE; }
     auto submitted = (*encoder)->SubmitImage(converted->prepared,
       vkgsplat::vulkan::video::PictureMetadata{
         .encode_index = 0U,
         .presentation_timestamp = 0,
         .duration = kPacketDuration,
-      }, converted->lease);
+      },
+      converted->lease);
     if (!submitted) { return EXIT_FAILURE; }
     converted->lease->MarkEncodeSubmitted();
     converted->lease.reset();
@@ -341,7 +354,8 @@ auto Run(std::filesystem::path const &output, bool gpu_only, bool color_conversi
           .encode_index = slot,
           .presentation_timestamp = static_cast<std::int64_t>(slot) * kAsyncTimestampStep,
           .duration = kPacketDuration,
-        }, source);
+        },
+        source);
       if (!submitted) { return EXIT_FAILURE; }
       prepared_frames.push_back(*prepared);
       sources.push_back(std::move(source));
@@ -351,10 +365,9 @@ auto Run(std::filesystem::path const &output, bool gpu_only, bool color_conversi
       vkgsplat::vulkan::video::PictureMetadata{
         .encode_index = kAsyncSlotCount,
         .presentation_timestamp = static_cast<std::int64_t>(kAsyncSlotCount) * kAsyncTimestampStep,
-      }, sources.front());
-    if (exhausted || exhausted.error().code() != std::errc::resource_unavailable_try_again) {
-      return EXIT_FAILURE;
-    }
+      },
+      sources.front());
+    if (exhausted || exhausted.error().code() != std::errc::resource_unavailable_try_again) { return EXIT_FAILURE; }
     for (std::size_t slot = 0U; slot < kAsyncSlotCount; ++slot) {
       auto ready = (*encoder)->TryCompleteImage();
       if (!ready) { return EXIT_FAILURE; }
@@ -364,7 +377,9 @@ auto Run(std::filesystem::path const &output, bool gpu_only, bool color_conversi
       if (!completed) { return EXIT_FAILURE; }
       auto packet = std::move(*completed);
       if (packet.frame_index != slot || packet.pts != static_cast<std::int64_t>(slot) * kAsyncTimestampStep
-          || packet.dts != packet.pts || packet.duration != kPacketDuration) { return EXIT_FAILURE; }
+          || packet.dts != packet.pts || packet.duration != kPacketDuration) {
+        return EXIT_FAILURE;
+      }
       sources.at(slot)->Complete();
       if (auto written = writer->WriteFrame(packet.data); !written) { return EXIT_FAILURE; }
     }
@@ -377,9 +392,7 @@ auto Run(std::filesystem::path const &output, bool gpu_only, bool color_conversi
     auto const luma = static_cast<std::uint8_t>(kFirstLuma + index);
     auto packet = [&]() -> std::expected<vkgsplat::EncodedPacket, vkgsplat::Error> {
       if (!color_conversion) { return EncodeFrame(**encoder, *gpu_source, frame, y_size, index, luma, gpu_only); }
-      if (index != kFirstGpuColorFrameIndex && !repeat_conversion) {
-        return (*encoder)->EncodeNv12(frame, index);
-      }
+      if (index != kFirstGpuColorFrameIndex && !repeat_conversion) { return (*encoder)->EncodeNv12(frame, index); }
       if (index != kFirstGpuColorFrameIndex) {
         color_source.reset();
         auto created_source = vkgsplat::test::GpuColorSource::Create(context, kExtent);
@@ -387,12 +400,10 @@ auto Run(std::filesystem::path const &output, bool gpu_only, bool color_conversi
         color_source = std::move(*created_source);
       }
       if (auto prepared = color_source->Prepare(); !prepared) { return std::unexpected(prepared.error()); }
-      auto converted = converter->Convert(color_source->Image(),
-        color_source->ReadyTimeline(), color_source->ReadyValue());
+      auto converted =
+        converter->Convert(color_source->Image(), color_source->ReadyTimeline(), color_source->ReadyValue());
       if (!converted) { return std::unexpected(converted.error()); }
-      if (auto released = converter->WaitForSourceRelease(); !released) {
-        return std::unexpected(released.error());
-      }
+      if (auto released = converter->WaitForSourceRelease(); !released) { return std::unexpected(released.error()); }
       auto const nv12_size = static_cast<VkDeviceSize>(y_size + (y_size / kChromaSubsamplingDivisor));
       auto converted_bytes = color_source->ReadNv12Buffer(converter->Nv12BufferForTest(), nv12_size);
       if (!converted_bytes) { return std::unexpected(converted_bytes.error()); }
@@ -403,8 +414,7 @@ auto Run(std::filesystem::path const &output, bool gpu_only, bool color_conversi
         std::memcpy(bytes.data(), frame.data(), frame.size());
         nv12.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
         if (!nv12) {
-          return std::unexpected(vkgsplat::MakeError(std::errc::io_error,
-            "write converted NV12 test output failed"));
+          return std::unexpected(vkgsplat::MakeError(std::errc::io_error, "write converted NV12 test output failed"));
         }
       }
       auto encoded = (*encoder)->EncodeImage(*converted, index);
@@ -441,8 +451,8 @@ auto Run(std::filesystem::path const &output, bool gpu_only, bool color_conversi
         if (retired_encode || retired_encode.error().code() != std::errc::state_not_recoverable) {
           return EXIT_FAILURE;
         }
-        auto retired_convert = converter->Convert(color_source->Image(),
-          color_source->ReadyTimeline(), color_source->ReadyValue());
+        auto retired_convert =
+          converter->Convert(color_source->Image(), color_source->ReadyTimeline(), color_source->ReadyValue());
         if (retired_convert || retired_convert.error().code() != std::errc::state_not_recoverable) {
           return EXIT_FAILURE;
         }
@@ -462,9 +472,8 @@ auto Run(std::filesystem::path const &output, bool gpu_only, bool color_conversi
       std::cerr << packet.error().message() << '\n';
       return EXIT_FAILURE;
     }
-    if (packet->frame_index != index || std::cmp_not_equal(packet->pts, index)
-        || packet->dts != packet->pts || packet->duration != kPacketDuration
-        || !packet->keyframe || packet->data.empty()) {
+    if (packet->frame_index != index || std::cmp_not_equal(packet->pts, index) || packet->dts != packet->pts
+        || packet->duration != kPacketDuration || !packet->keyframe || packet->data.empty()) {
       std::cerr << "invalid H.264 packet metadata at frame " << index << '\n';
       return EXIT_FAILURE;
     }
@@ -502,18 +511,20 @@ auto main(int argc, char **argv) -> int
   constexpr std::size_t kModeArgumentIndex = 2U;
   if (argc != kDefaultArguments && argc != kModeArguments) { return EXIT_FAILURE; }
   auto const arguments = std::span{ argv, static_cast<std::size_t>(argc) };
-  auto const mode = argc == kModeArguments
-                      ? std::string_view{ arguments.subspan(kModeArgumentIndex).front() }
-                      : std::string_view{};
-  if (!mode.empty() && mode != "--gpu-only" && mode != "--color-conversion"
-      && mode != "--async" && mode != "--async-color"
-      && mode != "--repeat-color-conversion" && mode != "--fault-converter-submit"
-      && mode != "--fault-video-submit" && mode != "--fault-readback-submit"
-      && mode != "--fault-readback-destructor") { return EXIT_FAILURE; }
+  auto const mode =
+    argc == kModeArguments ? std::string_view{ arguments.subspan(kModeArgumentIndex).front() } : std::string_view{};
+  if (!mode.empty() && mode != "--gpu-only" && mode != "--color-conversion" && mode != "--async"
+      && mode != "--async-color" && mode != "--repeat-color-conversion" && mode != "--fault-converter-submit"
+      && mode != "--fault-video-submit" && mode != "--fault-readback-submit" && mode != "--fault-readback-destructor") {
+    return EXIT_FAILURE;
+  }
   auto const failure_mode = mode.starts_with("--fault-") ? mode : std::string_view{};
-  return Run(arguments.subspan(kOutputArgumentIndex).front(), mode == "--gpu-only",
+  return Run(arguments.subspan(kOutputArgumentIndex).front(),
+    mode == "--gpu-only",
     mode == "--color-conversion" || mode == "--repeat-color-conversion" || !failure_mode.empty(),
-    mode == "--repeat-color-conversion", failure_mode,
-    mode == "--async" || mode == "--async-color", mode == "--async-color");
+    mode == "--repeat-color-conversion",
+    failure_mode,
+    mode == "--async" || mode == "--async-color",
+    mode == "--async-color");
 }
 // NOLINTEND(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)

@@ -16,7 +16,8 @@ namespace vkgsplat::test {
 class GpuVideoSource
 {
 public:
-  [[nodiscard]] static auto Create(vulkan::Context &context, vulkan::video::EncodeDevice const &device,
+  [[nodiscard]] static auto Create(vulkan::Context &context,
+    vulkan::video::EncodeDevice const &device,
     VkExtent2D extent) -> std::expected<std::unique_ptr<GpuVideoSource>, Error>;
   [[nodiscard]] auto Prepare(std::uint8_t luma) -> std::expected<vulkan::video::PreparedVideoFrame, Error>;
   auto Complete() noexcept -> void { in_flight_ = false; }

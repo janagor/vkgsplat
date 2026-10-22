@@ -1,12 +1,20 @@
 include(GenerateExportHeader)
 find_package(Threads REQUIRED)
 
-add_library(vkgsplat_capture screenshot.cpp frame_sequence.cpp png_sequence_writer.cpp video_recorder.cpp)
+add_library(
+  vkgsplat_capture
+  screenshot.cpp
+  frame_sequence.cpp
+  png_sequence_writer.cpp
+  video_recorder.cpp)
 add_library(vkgsplat::vkgsplat_capture ALIAS vkgsplat_capture)
 
 target_link_libraries(
   vkgsplat_capture
-  PRIVATE vkgsplat::vkgsplat_options vkgsplat::vkgsplat_warnings vkgsplat::vkgsplat_io Threads::Threads
+  PRIVATE vkgsplat::vkgsplat_options
+          vkgsplat::vkgsplat_warnings
+          vkgsplat::vkgsplat_io
+          Threads::Threads
   PUBLIC vkgsplat::vkgsplat)
 
 vkgsplat_configure_linker(vkgsplat_capture)

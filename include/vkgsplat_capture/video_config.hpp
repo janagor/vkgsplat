@@ -1,8 +1,8 @@
 #ifndef VKGSPLAT_CAPTURE_VIDEO_CONFIG_HPP
 #define VKGSPLAT_CAPTURE_VIDEO_CONFIG_HPP
 
-#include <filesystem>
 #include <cstdint>
+#include <filesystem>
 
 #include <vkgsplat_capture/frame_rate.hpp>
 #include <vkgsplat_utility/types.hpp>

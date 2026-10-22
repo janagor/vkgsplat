@@ -38,11 +38,14 @@ namespace {
       std::string{ operation } + " failed (VkResult " + std::to_string(static_cast<int>(result)) + ")");
   }
 
-  [[nodiscard]] auto CreateParameters(Context &context, VkVideoSessionKHR handle,
-    StdVideoH264ProfileIdc profile, StdVideoH264LevelIdc level,
-    VkExtent2D extent, std::uint32_t fps_numerator, std::uint32_t fps_denominator,
-    bool fixed_frame_rate)
-    -> std::expected<VkVideoSessionParametersKHR, Error>
+  [[nodiscard]] auto CreateParameters(Context &context,
+    VkVideoSessionKHR handle,
+    StdVideoH264ProfileIdc profile,
+    StdVideoH264LevelIdc level,
+    VkExtent2D extent,
+    std::uint32_t fps_numerator,
+    std::uint32_t fps_denominator,
+    bool fixed_frame_rate) -> std::expected<VkVideoSessionParametersKHR, Error>
   {
     StdVideoH264SequenceParameterSetVui vui{};
     vui.flags.video_signal_type_present_flag = 1;
@@ -80,7 +83,7 @@ namespace {
     StdVideoH264PictureParameterSet pps{};
     pps.seq_parameter_set_id = kParameterSetId;
     pps.pic_parameter_set_id = kParameterSetId;
-    pps.flags.entropy_coding_mode_flag = 0; // CAVLC, including Baseline profile.
+    pps.flags.entropy_coding_mode_flag = 0;// CAVLC, including Baseline profile.
     pps.flags.transform_8x8_mode_flag = 0;
     pps.pic_init_qp_minus26 = 0;
     VkVideoEncodeH264SessionParametersAddInfoKHR const add{
@@ -111,8 +114,10 @@ namespace {
     return parameters;
   }
 
-  [[nodiscard]] auto ValidateSessionConfiguration(EncodeDevice const &device, VkExtent2D extent,
-    std::uint32_t fps_numerator, std::uint32_t fps_denominator) -> std::expected<void, Error>
+  [[nodiscard]] auto ValidateSessionConfiguration(EncodeDevice const &device,
+    VkExtent2D extent,
+    std::uint32_t fps_numerator,
+    std::uint32_t fps_denominator) -> std::expected<void, Error>
   {
     auto const &selection = device.selection;
     if (fps_numerator == 0U || fps_denominator == 0U
@@ -128,11 +133,10 @@ namespace {
     }
     if (extent.width == 0 || extent.height == 0 || extent.width % kMacroblockSize != 0
         || extent.height % kMacroblockSize != 0 || extent.width > selection.max_extent.width
-        || extent.height > selection.max_extent.height
-        || extent.width < profile.capabilities.minCodedExtent.width
+        || extent.height > selection.max_extent.height || extent.width < profile.capabilities.minCodedExtent.width
         || extent.height < profile.capabilities.minCodedExtent.height) {
-      return std::unexpected(MakeError(std::errc::invalid_argument,
-        "H.264 coded extent must be supported and divisible by 16"));
+      return std::unexpected(
+        MakeError(std::errc::invalid_argument, "H.264 coded extent must be supported and divisible by 16"));
     }
     if (selection.source_format.format != VK_FORMAT_G8_B8R8_2PLANE_420_UNORM
         || selection.upload_strategy != UploadStrategy::kTransferDestination) {
@@ -140,15 +144,15 @@ namespace {
         "all-intra H.264 requires an NV12 encode source with transfer-destination support"));
     }
     if ((profile.encode.rateControlModes & VK_VIDEO_ENCODE_RATE_CONTROL_MODE_DISABLED_BIT_KHR) == 0) {
-      return std::unexpected(MakeError(std::errc::function_not_supported,
-        "all-intra H.264 requires disabled rate control"));
+      return std::unexpected(
+        MakeError(std::errc::function_not_supported, "all-intra H.264 requires disabled rate control"));
     }
     constexpr VkVideoEncodeFeedbackFlagsKHR kFeedback =
       static_cast<VkVideoEncodeFeedbackFlagsKHR>(VK_VIDEO_ENCODE_FEEDBACK_BITSTREAM_BUFFER_OFFSET_BIT_KHR)
       | static_cast<VkVideoEncodeFeedbackFlagsKHR>(VK_VIDEO_ENCODE_FEEDBACK_BITSTREAM_BYTES_WRITTEN_BIT_KHR);
     if ((profile.encode.supportedEncodeFeedbackFlags & kFeedback) != kFeedback) {
-      return std::unexpected(MakeError(std::errc::function_not_supported,
-        "H.264 bitstream offset and byte-count feedback are unavailable"));
+      return std::unexpected(
+        MakeError(std::errc::function_not_supported, "H.264 bitstream offset and byte-count feedback are unavailable"));
     }
     return {};
   }
@@ -261,8 +265,8 @@ auto VideoSession::BindMemory(VideoSession &owned) -> std::expected<void, Error>
     });
   }
   if (!bindings.empty()) {
-    auto result = owned.context_.disp.bindVideoSessionMemoryKHR(owned.session_,
-      static_cast<std::uint32_t>(bindings.size()), bindings.data());
+    auto result = owned.context_.disp.bindVideoSessionMemoryKHR(
+      owned.session_, static_cast<std::uint32_t>(bindings.size()), bindings.data());
     if (result != VK_SUCCESS) { return std::unexpected(Failure("bind video session memory", result)); }
   }
   return {};
@@ -293,12 +297,11 @@ auto VideoSession::RetrieveParameterSets(VideoSession &owned) -> std::expected<v
       return std::unexpected(MakeError(std::errc::value_too_large, "invalid encoded SPS/PPS size"));
     }
     owned.parameter_sets_.resize(size);
-    result = owned.context_.disp.getEncodedVideoSessionParametersKHR(&get, nullptr, &size, owned.parameter_sets_.data());
+    result =
+      owned.context_.disp.getEncodedVideoSessionParametersKHR(&get, nullptr, &size, owned.parameter_sets_.data());
     if (result == VK_INCOMPLETE || size > owned.parameter_sets_.size()) { continue; }
     if (result != VK_SUCCESS) { return std::unexpected(Failure("retrieve encoded SPS/PPS", result)); }
-    if (size == 0) {
-      return std::unexpected(MakeError(std::errc::io_error, "empty encoded SPS/PPS"));
-    }
+    if (size == 0) { return std::unexpected(MakeError(std::errc::io_error, "empty encoded SPS/PPS")); }
     owned.parameter_sets_.resize(size);
     retrieved = true;
     break;
@@ -310,9 +313,12 @@ auto VideoSession::RetrieveParameterSets(VideoSession &owned) -> std::expected<v
 }
 
 // This function assembles the Vulkan session and its owned memory and parameter sets.
-auto VideoSession::Create(Context &context, EncodeDevice const &device, VkExtent2D extent,
-  std::uint32_t fps_numerator, std::uint32_t fps_denominator, bool fixed_frame_rate)
-  -> std::expected<std::unique_ptr<VideoSession>, Error>
+auto VideoSession::Create(Context &context,
+  EncodeDevice const &device,
+  VkExtent2D extent,
+  std::uint32_t fps_numerator,
+  std::uint32_t fps_denominator,
+  bool fixed_frame_rate) -> std::expected<std::unique_ptr<VideoSession>, Error>
 {
   if (auto valid = ValidateSessionConfiguration(device, extent, fps_numerator, fps_denominator); !valid) {
     return std::unexpected(valid.error());
@@ -323,8 +329,14 @@ auto VideoSession::Create(Context &context, EncodeDevice const &device, VkExtent
   auto const &selection = device.selection;
   auto const &profile = device.capabilities.profiles.at(selection.profile_index);
   // PR4 uses the device's maximum level until frame-rate-aware level selection is introduced.
-  auto parameters = CreateParameters(context, owned->session_, selection.profile,
-    profile.h264.maxLevelIdc, extent, fps_numerator, fps_denominator, fixed_frame_rate);
+  auto parameters = CreateParameters(context,
+    owned->session_,
+    selection.profile,
+    profile.h264.maxLevelIdc,
+    extent,
+    fps_numerator,
+    fps_denominator,
+    fixed_frame_rate);
   if (!parameters) { return std::unexpected(parameters.error()); }
   owned->parameters_ = *parameters;
 

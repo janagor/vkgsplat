@@ -3,6 +3,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstddef>
@@ -10,7 +11,6 @@
 #include <fstream>
 #include <ios>
 #include <iterator>
-#include <algorithm>
 #include <string>
 #include <system_error>
 #include <vector>
@@ -18,25 +18,66 @@
 namespace {
 
 constexpr std::array kParameterSets{
-  std::byte{ 0 }, std::byte{ 0 }, std::byte{ 0 }, std::byte{ 1 }, std::byte{ 0x67 }, std::byte{ 0x42 },
-  std::byte{ 0 }, std::byte{ 0 }, std::byte{ 1 }, std::byte{ 0x68 }, std::byte{ 0xce },
+  std::byte{ 0 },
+  std::byte{ 0 },
+  std::byte{ 0 },
+  std::byte{ 1 },
+  std::byte{ 0x67 },
+  std::byte{ 0x42 },
+  std::byte{ 0 },
+  std::byte{ 0 },
+  std::byte{ 1 },
+  std::byte{ 0x68 },
+  std::byte{ 0xce },
 };
 constexpr std::array kIdrPicture{
-  std::byte{ 0 }, std::byte{ 0 }, std::byte{ 1 }, std::byte{ 0x65 }, std::byte{ 0x88 },
+  std::byte{ 0 },
+  std::byte{ 0 },
+  std::byte{ 1 },
+  std::byte{ 0x65 },
+  std::byte{ 0x88 },
 };
 constexpr std::array kInvalidPicture{
-  std::byte{ 0 }, std::byte{ 0 }, std::byte{ 1 }, std::byte{ 0x41 }, std::byte{ 0x88 },
+  std::byte{ 0 },
+  std::byte{ 0 },
+  std::byte{ 1 },
+  std::byte{ 0x41 },
+  std::byte{ 0x88 },
 };
 // SPS/PPS from a 16x16 Baseline H.264 frame encoded by FFmpeg/libx264.
 constexpr std::array kRealParameterSets{
-  std::byte{ 0x00 }, std::byte{ 0x00 }, std::byte{ 0x00 }, std::byte{ 0x01 },
-  std::byte{ 0x67 }, std::byte{ 0x42 }, std::byte{ 0xc0 }, std::byte{ 0x0a },
-  std::byte{ 0xdd }, std::byte{ 0xec }, std::byte{ 0x04 }, std::byte{ 0x40 },
-  std::byte{ 0x00 }, std::byte{ 0x00 }, std::byte{ 0x03 }, std::byte{ 0x00 },
-  std::byte{ 0x40 }, std::byte{ 0x00 }, std::byte{ 0x00 }, std::byte{ 0x03 },
-  std::byte{ 0x00 }, std::byte{ 0x83 }, std::byte{ 0xc4 }, std::byte{ 0x89 },
-  std::byte{ 0xe0 }, std::byte{ 0x00 }, std::byte{ 0x00 }, std::byte{ 0x00 },
-  std::byte{ 0x01 }, std::byte{ 0x68 }, std::byte{ 0xce }, std::byte{ 0x0f },
+  std::byte{ 0x00 },
+  std::byte{ 0x00 },
+  std::byte{ 0x00 },
+  std::byte{ 0x01 },
+  std::byte{ 0x67 },
+  std::byte{ 0x42 },
+  std::byte{ 0xc0 },
+  std::byte{ 0x0a },
+  std::byte{ 0xdd },
+  std::byte{ 0xec },
+  std::byte{ 0x04 },
+  std::byte{ 0x40 },
+  std::byte{ 0x00 },
+  std::byte{ 0x00 },
+  std::byte{ 0x03 },
+  std::byte{ 0x00 },
+  std::byte{ 0x40 },
+  std::byte{ 0x00 },
+  std::byte{ 0x00 },
+  std::byte{ 0x03 },
+  std::byte{ 0x00 },
+  std::byte{ 0x83 },
+  std::byte{ 0xc4 },
+  std::byte{ 0x89 },
+  std::byte{ 0xe0 },
+  std::byte{ 0x00 },
+  std::byte{ 0x00 },
+  std::byte{ 0x00 },
+  std::byte{ 0x01 },
+  std::byte{ 0x68 },
+  std::byte{ 0xce },
+  std::byte{ 0x0f },
   std::byte{ 0xc8 },
 };
 
@@ -58,6 +99,7 @@ public:
   TemporaryFile(TemporaryFile &&) = delete;
   auto operator=(TemporaryFile &&) -> TemporaryFile & = delete;
   [[nodiscard]] auto path() const -> std::filesystem::path const & { return path_; }
+
 private:
   std::filesystem::path path_;
 };

@@ -7,11 +7,11 @@
 namespace vkgsplat {
 class Camera;
 namespace benchmark {
-struct BenchmarkProfile;
-auto RegisterCaptureSequence(BenchmarkProfile const &profile,
-  std::filesystem::path const &scene_path,
-  Camera const &camera,
-  std::atomic_bool &failed) -> void;
+  struct BenchmarkProfile;
+  auto RegisterCaptureSequence(BenchmarkProfile const &profile,
+    std::filesystem::path const &scene_path,
+    Camera const &camera,
+    std::atomic_bool &failed) -> void;
 }// namespace benchmark
 }// namespace vkgsplat
 

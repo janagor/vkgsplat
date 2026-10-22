@@ -1,7 +1,7 @@
 #include "mp4_muxer.hpp"
 
-#include <atomic>
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -59,13 +59,13 @@ namespace {
     for (std::size_t index = 0; index + kShortStartCodeSize < data.size(); ++index) {
       auto const bytes = data.subspan(index);
       if (bytes.front() != std::byte{} || bytes.subspan(1U).front() != std::byte{}) { continue; }
-      auto const long_code = index + kLongStartCodeSize < data.size()
-                             && bytes.subspan(2U).front() == std::byte{}
+      auto const long_code = index + kLongStartCodeSize < data.size() && bytes.subspan(2U).front() == std::byte{}
                              && bytes.subspan(kShortStartCodeSize).front() == std::byte{ 1 };
       auto const short_code = bytes.subspan(2U).front() == std::byte{ 1 };
       if ((long_code || short_code)
           && (std::to_integer<std::uint8_t>(bytes.subspan(long_code ? kLongStartCodeSize : kShortStartCodeSize).front())
-              & kH264NalTypeMask) == type) {
+               & kH264NalTypeMask)
+               == type) {
         return true;
       }
     }
@@ -74,8 +74,7 @@ namespace {
 
 }// namespace
 
-Mp4Muxer::Mp4Muxer(std::filesystem::path path, std::uint32_t fps_numerator,
-  std::uint32_t fps_denominator) noexcept
+Mp4Muxer::Mp4Muxer(std::filesystem::path path, std::uint32_t fps_numerator, std::uint32_t fps_denominator) noexcept
   : path_{ std::move(path) }, fps_numerator_{ fps_numerator }, fps_denominator_{ fps_denominator }
 {}
 
@@ -94,8 +93,11 @@ Mp4Muxer::~Mp4Muxer()
   }
 }
 
-auto Mp4Muxer::Open(std::filesystem::path path, std::uint32_t width, std::uint32_t height,
-  std::uint32_t fps_numerator, std::uint32_t fps_denominator,
+auto Mp4Muxer::Open(std::filesystem::path path,
+  std::uint32_t width,
+  std::uint32_t height,
+  std::uint32_t fps_numerator,
+  std::uint32_t fps_denominator,
   std::span<std::byte const> parameter_sets) -> std::expected<std::unique_ptr<Mp4Muxer>, Error>
 {
   if (path.empty() || width == 0 || height == 0 || fps_numerator == 0 || fps_denominator == 0
@@ -131,9 +133,7 @@ auto Mp4Muxer::Open(std::filesystem::path path, std::uint32_t width, std::uint32
   }
   auto const output = muxer->temporary_path_.string();
   auto result = avformat_alloc_output_context2(&muxer->context_, nullptr, "mp4", output.c_str());
-  if (result < 0 || muxer->context_ == nullptr) {
-    return std::unexpected(FfmpegError("allocate MP4 context", result));
-  }
+  if (result < 0 || muxer->context_ == nullptr) { return std::unexpected(FfmpegError("allocate MP4 context", result)); }
   muxer->stream_ = avformat_new_stream(muxer->context_, nullptr);
   if (muxer->stream_ == nullptr) {
     return std::unexpected(MakeError(std::errc::not_enough_memory, "create MP4 video stream failed"));
@@ -150,10 +150,10 @@ auto Mp4Muxer::Open(std::filesystem::path path, std::uint32_t width, std::uint32
   }
   std::memcpy(parameters->extradata, parameter_sets.data(), parameter_sets.size());
   parameters->extradata_size = static_cast<int>(parameter_sets.size());
-  muxer->stream_->time_base = AVRational{ .num = static_cast<int>(fps_denominator),
-    .den = static_cast<int>(fps_numerator) };
-  muxer->stream_->avg_frame_rate = AVRational{ .num = static_cast<int>(fps_numerator),
-    .den = static_cast<int>(fps_denominator) };
+  muxer->stream_->time_base =
+    AVRational{ .num = static_cast<int>(fps_denominator), .den = static_cast<int>(fps_numerator) };
+  muxer->stream_->avg_frame_rate =
+    AVRational{ .num = static_cast<int>(fps_numerator), .den = static_cast<int>(fps_denominator) };
   if ((static_cast<unsigned int>(muxer->context_->oformat->flags) & static_cast<unsigned int>(AVFMT_NOFILE)) == 0U) {
     result = avio_open(&muxer->context_->pb, output.c_str(), AVIO_FLAG_WRITE);
     if (result < 0) { return std::unexpected(FfmpegError("open MP4 output", result)); }
@@ -169,18 +169,17 @@ auto Mp4Muxer::Write(EncodedPacket const &encoded) -> std::expected<void, Error>
   if (finished_ || failed_ || context_ == nullptr) {
     return std::unexpected(MakeError(std::errc::operation_not_permitted, "MP4 output is finalized"));
   }
-  if (encoded.frame_index != next_index_ || encoded.pts != encoded.dts
-      || encoded.pts < next_minimum_pts_
+  if (encoded.frame_index != next_index_ || encoded.pts != encoded.dts || encoded.pts < next_minimum_pts_
       || encoded.frame_index > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())
-      || encoded.duration <= 0
-      || encoded.pts > std::numeric_limits<std::int64_t>::max() - encoded.duration
-      || encoded.data.empty()
-      || encoded.data.size() > static_cast<std::size_t>(std::numeric_limits<int>::max())
+      || encoded.duration <= 0 || encoded.pts > std::numeric_limits<std::int64_t>::max() - encoded.duration
+      || encoded.data.empty() || encoded.data.size() > static_cast<std::size_t>(std::numeric_limits<int>::max())
       || (next_index_ == 0 && !encoded.keyframe)) {
     return std::unexpected(MakeError(std::errc::invalid_argument, "invalid or out-of-order MP4 video packet"));
   }
   auto *packet = av_packet_alloc();
-  if (packet == nullptr) { return std::unexpected(MakeError(std::errc::not_enough_memory, "allocate MP4 packet failed")); }
+  if (packet == nullptr) {
+    return std::unexpected(MakeError(std::errc::not_enough_memory, "allocate MP4 packet failed"));
+  }
   auto const allocated = av_new_packet(packet, static_cast<int>(encoded.data.size()));
   if (allocated < 0) {
     av_packet_free(&packet);
@@ -192,8 +191,8 @@ auto Mp4Muxer::Write(EncodedPacket const &encoded) -> std::expected<void, Error>
   packet->duration = encoded.duration;
   packet->stream_index = stream_->index;
   if (encoded.keyframe) {
-    packet->flags = static_cast<int>(static_cast<unsigned int>(packet->flags)
-                                     | static_cast<unsigned int>(AV_PKT_FLAG_KEY));
+    packet->flags =
+      static_cast<int>(static_cast<unsigned int>(packet->flags) | static_cast<unsigned int>(AV_PKT_FLAG_KEY));
   }
   av_packet_rescale_ts(packet,
     AVRational{ .num = static_cast<int>(fps_denominator_), .den = static_cast<int>(fps_numerator_) },

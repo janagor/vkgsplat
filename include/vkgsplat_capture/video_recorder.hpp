@@ -14,29 +14,29 @@ class Camera;
 class Renderer;
 
 namespace capture {
-struct VideoRecorderTestAccess;
+  struct VideoRecorderTestAccess;
 
-// Blocking offline recorder. The borrowed renderer must outlive the recorder.
-class VKGSPLAT_CAPTURE_EXPORT VideoRecorder
-{
-public:
-  [[nodiscard]] static auto create(Renderer &renderer, VideoConfig const &config)
-    -> std::expected<VideoRecorder, Error>;
-  [[nodiscard]] auto record_frame(Camera const &camera) -> std::expected<void, Error>;
-  [[nodiscard]] auto finish() -> std::expected<void, Error>;
+  // Blocking offline recorder. The borrowed renderer must outlive the recorder.
+  class VKGSPLAT_CAPTURE_EXPORT VideoRecorder
+  {
+  public:
+    [[nodiscard]] static auto create(Renderer &renderer, VideoConfig const &config)
+      -> std::expected<VideoRecorder, Error>;
+    [[nodiscard]] auto record_frame(Camera const &camera) -> std::expected<void, Error>;
+    [[nodiscard]] auto finish() -> std::expected<void, Error>;
 
-  VideoRecorder(VideoRecorder &&) noexcept;
-  auto operator=(VideoRecorder &&) noexcept -> VideoRecorder &;
-  VideoRecorder(VideoRecorder const &) = delete;
-  auto operator=(VideoRecorder const &) -> VideoRecorder & = delete;
-  ~VideoRecorder() noexcept;
+    VideoRecorder(VideoRecorder &&) noexcept;
+    auto operator=(VideoRecorder &&) noexcept -> VideoRecorder &;
+    VideoRecorder(VideoRecorder const &) = delete;
+    auto operator=(VideoRecorder const &) -> VideoRecorder & = delete;
+    ~VideoRecorder() noexcept;
 
-private:
-  friend struct VideoRecorderTestAccess;
-  struct Impl;
-  explicit VideoRecorder(std::unique_ptr<Impl> impl) noexcept;
-  std::unique_ptr<Impl> impl_;
-};
+  private:
+    friend struct VideoRecorderTestAccess;
+    struct Impl;
+    explicit VideoRecorder(std::unique_ptr<Impl> impl) noexcept;
+    std::unique_ptr<Impl> impl_;
+  };
 
 }// namespace capture
 }// namespace vkgsplat

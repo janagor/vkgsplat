@@ -91,7 +91,8 @@ constexpr vkgsplat::f32 kCompactShDc = 1.0F / vkgsplat::gs::kShC0;
   auto const byte_count = static_cast<size_t>(width) * static_cast<size_t>(height) * kRgbaChannels;
   std::span<stbi_uc const> const pixel_bytes{ pixels.get(), byte_count };
   return vkgsplat::RgbaFrame{ .width = static_cast<vkgsplat::u32>(width),
-    .height = static_cast<vkgsplat::u32>(height), .pixels = { pixel_bytes.begin(), pixel_bytes.end() } };
+    .height = static_cast<vkgsplat::u32>(height),
+    .pixels = { pixel_bytes.begin(), pixel_bytes.end() } };
 }
 
 [[nodiscard]] auto HasScenePixels(vkgsplat::RgbaFrame const &frame,
@@ -132,8 +133,7 @@ constexpr vkgsplat::f32 kCompactShDc = 1.0F / vkgsplat::gs::kShC0;
     maximum_delta = std::max(maximum_delta, delta);
   }
   auto const mean_delta = static_cast<double>(total_delta) / static_cast<double>(reference.pixels.size());
-  if (mean_delta > kRepeatedFrameMeanChannelTolerance
-      || maximum_delta > kRepeatedFrameMaximumChannelTolerance) {
+  if (mean_delta > kRepeatedFrameMeanChannelTolerance || maximum_delta > kRepeatedFrameMaximumChannelTolerance) {
     std::cerr << description << " differs: mean channel delta=" << mean_delta
               << ", maximum channel delta=" << maximum_delta << '\n';
     return false;
@@ -141,8 +141,8 @@ constexpr vkgsplat::f32 kCompactShDc = 1.0F / vkgsplat::gs::kShC0;
   return true;
 }
 
-[[nodiscard]] auto CheckVideoConfigRejections(vkgsplat::Renderer &renderer,
-  std::filesystem::path const &output_path) -> bool
+[[nodiscard]] auto CheckVideoConfigRejections(vkgsplat::Renderer &renderer, std::filesystem::path const &output_path)
+  -> bool
 {
   using vkgsplat::capture::VideoConfig;
   using vkgsplat::capture::VideoRecorder;
@@ -183,7 +183,8 @@ constexpr vkgsplat::f32 kCompactShDc = 1.0F / vkgsplat::gs::kShC0;
   invalid.gop.idr_interval = kUnsupportedIdrInterval;
   if (!rejected(invalid, std::errc::function_not_supported)) { return false; }
   for (auto const mode : { vkgsplat::capture::RateControlMode::kConstantQp,
-         vkgsplat::capture::RateControlMode::kCbr, vkgsplat::capture::RateControlMode::kVbr }) {
+         vkgsplat::capture::RateControlMode::kCbr,
+         vkgsplat::capture::RateControlMode::kVbr }) {
     invalid = base;
     invalid.rate_control.mode = mode;
     if (!rejected(invalid, std::errc::function_not_supported)) { return false; }
@@ -244,9 +245,7 @@ auto Run(std::string const &scene_path, std::string const &compact_path, bool va
       std::cerr << frame.error().message() << '\n';
       return EXIT_FAILURE;
     }
-    if (!RepeatedFrameMatches(*first, *frame, "Repeated camera")) {
-      return EXIT_FAILURE;
-    }
+    if (!RepeatedFrameMatches(*first, *frame, "Repeated camera")) { return EXIT_FAILURE; }
   }
   if (renderer->completed_frame_count() != kFrameCount) {
     std::cerr << "Capture count differs from request count\n";
@@ -270,14 +269,13 @@ auto Run(std::string const &scene_path, std::string const &compact_path, bool va
     std::cerr << captured_b.error().message() << '\n';
     return EXIT_FAILURE;
   }
-  if (!RepeatedFrameMatches(*frame_b, *captured_b, "Interleaved camera")) {
-    return EXIT_FAILURE;
-  }
+  if (!RepeatedFrameMatches(*frame_b, *captured_b, "Interleaved camera")) { return EXIT_FAILURE; }
   if (renderer->completed_frame_count() != kFrameCount + kInterleavedFrameCount) {
     std::cerr << "Interleaved frame count differs from request count\n";
     return EXIT_FAILURE;
   }
-  auto const sequence_path = std::filesystem::temp_directory_path()
+  auto const sequence_path =
+    std::filesystem::temp_directory_path()
     / ("vkgsplat-offscreen-sequence-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
   auto sequence = vkgsplat::capture::FrameSequence::create(*renderer, { .output_directory = sequence_path });
   if (!sequence) {
@@ -345,19 +343,19 @@ auto Run(std::string const &scene_path, std::string const &compact_path, bool va
     std::cerr << "Unexpected quilt extent\n";
     return EXIT_FAILURE;
   }
-  auto const quilt_sequence_path = std::filesystem::temp_directory_path()
+  auto const quilt_sequence_path =
+    std::filesystem::temp_directory_path()
     / ("vkgsplat-quilt-sequence-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
-  auto quilt_sequence = vkgsplat::capture::FrameSequence::create(*quilt_renderer,
-    { .output_directory = quilt_sequence_path });
+  auto quilt_sequence =
+    vkgsplat::capture::FrameSequence::create(*quilt_renderer, { .output_directory = quilt_sequence_path });
   if (!quilt_sequence) {
     std::cerr << quilt_sequence.error().message() << '\n';
     return EXIT_FAILURE;
   }
   auto quilt_recorded = quilt_sequence->record_frame(camera_a);
   auto quilt_finished = quilt_sequence->finish();
-  if (!quilt_recorded || quilt_recorded->width != kTestWidth || quilt_recorded->height != kTestHeight
-      || !quilt_finished || quilt_finished->frame_count != 1U
-      || !std::filesystem::is_regular_file(quilt_recorded->path)) {
+  if (!quilt_recorded || quilt_recorded->width != kTestWidth || quilt_recorded->height != kTestHeight || !quilt_finished
+      || quilt_finished->frame_count != 1U || !std::filesystem::is_regular_file(quilt_recorded->path)) {
     std::cerr << "Quilt sequence capture failed\n";
     return EXIT_FAILURE;
   }

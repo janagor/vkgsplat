@@ -1,9 +1,9 @@
 #include "readback.hpp"
 
 #include "app_state.hpp"
+#include "vkexec_error.hpp"
 #include "vulkan/gpu_buffers.hpp"
 #include "vulkan_context.hpp"
-#include "vkexec_error.hpp"
 
 #include <array>
 #include <cstddef>
@@ -42,15 +42,12 @@ namespace {
     if (!data.frame_ring.has_value()) { return {}; }
     auto &ring = *data.frame_ring;
     for (std::size_t slot = 0; slot < ring.slot_count(); ++slot) {
-      if (auto waited = ring.wait_slot(slot); !waited) {
-        return std::unexpected{ VkexecFailure(waited.error()) };
-      }
+      if (auto waited = ring.wait_slot(slot); !waited) { return std::unexpected{ VkexecFailure(waited.error()) }; }
     }
     return {};
   }
 
-  [[nodiscard]] auto ValidateReadback(Context const &context, RenderData const &data)
-    -> std::expected<void, Error>
+  [[nodiscard]] auto ValidateReadback(Context const &context, RenderData const &data) -> std::expected<void, Error>
   {
     if (data.color_format != VK_FORMAT_R8G8B8A8_UNORM) {
       return std::unexpected{ MakeError(std::errc::not_supported, "readback currently requires R8G8B8A8_UNORM") };
@@ -64,8 +61,11 @@ namespace {
     return {};
   }
 
-  [[nodiscard]] auto RecordReadbackCommands(Context &context, RenderData &data,
-    VkCommandBuffer cmd, VkImage color_image, VkBuffer staging_buffer) -> std::expected<void, Error>
+  [[nodiscard]] auto RecordReadbackCommands(Context &context,
+    RenderData &data,
+    VkCommandBuffer cmd,
+    VkImage color_image,
+    VkBuffer staging_buffer) -> std::expected<void, Error>
   {
     VkCommandBufferBeginInfo const begin_info{
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -130,7 +130,7 @@ auto ReadColorTargetRgba8(Context &context, RenderData &data) -> std::expected<R
   if (!data.command_pool.has_value()) {
     return std::unexpected{ MakeError(std::errc::state_not_recoverable, "command pool missing for readback") };
   }
-  auto* const color_image = data.color_image->handle();
+  auto *const color_image = data.color_image->handle();
   auto &command_pool = *data.command_pool;
   if (auto valid = ValidateReadback(context, data); !valid) { return std::unexpected{ valid.error() }; }
   if (auto waited = WaitForPriorFrames(data); !waited) { return std::unexpected{ waited.error() }; }
@@ -190,8 +190,8 @@ auto ReadColorTargetRgba8(Context &context, RenderData &data) -> std::expected<R
   auto const waited = context.disp.waitSemaphores(&wait_info, UINT64_MAX);
   if (waited != VK_SUCCESS) {
     auto const drained = context.disp.deviceWaitIdle();
-    auto const code = waited == VK_ERROR_DEVICE_LOST || drained == VK_ERROR_DEVICE_LOST
-                        ? std::errc::no_such_device : std::errc::io_error;
+    auto const code = waited == VK_ERROR_DEVICE_LOST || drained == VK_ERROR_DEVICE_LOST ? std::errc::no_such_device
+                                                                                        : std::errc::io_error;
     if (drained != VK_SUCCESS) {
       // Keep the staging allocation and command buffer alive until renderer teardown.
       data.in_flight_readbacks.push_back(std::move(*staging));

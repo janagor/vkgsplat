@@ -18,8 +18,7 @@ namespace {
 
 }// namespace
 
-auto H264Gop::Create(std::uint32_t idr_interval, bool enable_p_frames)
-  -> std::expected<H264Gop, Error>
+auto H264Gop::Create(std::uint32_t idr_interval, bool enable_p_frames) -> std::expected<H264Gop, Error>
 {
   if (idr_interval == 0U) {
     return std::unexpected(MakeError(std::errc::invalid_argument, "IDR interval must be positive"));

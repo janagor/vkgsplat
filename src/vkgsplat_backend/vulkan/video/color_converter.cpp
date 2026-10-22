@@ -1,9 +1,9 @@
 #include "color_converter.hpp"
 
+#include "shader.hpp"
 #include "video_capabilities.hpp"
 #include "video_device.hpp"
 #include "video_encoder.hpp"
-#include "shader.hpp"
 #include "vulkan_context.hpp"
 
 #include <vkgsplat/example_config.h>
@@ -17,8 +17,8 @@
 #include <memory>
 #include <mutex>
 #include <optional>
-#include <string>
 #include <span>
+#include <string>
 #include <system_error>
 #include <utility>
 #include <vector>
@@ -47,8 +47,11 @@ namespace {
       std::string{ operation } + " failed (VkResult " + std::to_string(static_cast<int>(result)) + ")");
   }
 
-  [[nodiscard]] auto Allocate(Context &context, VkMemoryRequirements const &requirements,
-    VkMemoryPropertyFlags required, VkImage image, VkBuffer buffer) -> std::expected<VkDeviceMemory, Error>
+  [[nodiscard]] auto Allocate(Context &context,
+    VkMemoryRequirements const &requirements,
+    VkMemoryPropertyFlags required,
+    VkImage image,
+    VkBuffer buffer) -> std::expected<VkDeviceMemory, Error>
   {
     VkPhysicalDeviceMemoryProperties properties{};
     context.inst_disp.getPhysicalDeviceMemoryProperties(context.device.physical_device, &properties);
@@ -74,8 +77,11 @@ namespace {
     return std::unexpected(MakeError(std::errc::not_enough_memory, "no video conversion memory type"));
   }
 
-  [[nodiscard]] auto CreateBuffer(Context &context, VkDeviceSize size, VkBufferUsageFlags usage,
-    VkBuffer &buffer, VkDeviceMemory &memory) -> std::expected<void, Error>
+  [[nodiscard]] auto CreateBuffer(Context &context,
+    VkDeviceSize size,
+    VkBufferUsageFlags usage,
+    VkBuffer &buffer,
+    VkDeviceMemory &memory) -> std::expected<void, Error>
   {
     VkBufferCreateInfo create{};
     create.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -157,24 +163,34 @@ auto GpuColorConverter::Create(Context &context, EncodeDevice const &device, VkE
   std::uint32_t family_count = 0U;
   context.inst_disp.getPhysicalDeviceQueueFamilyProperties(context.device.physical_device, &family_count, nullptr);
   std::vector<VkQueueFamilyProperties> families_properties(family_count);
-  context.inst_disp.getPhysicalDeviceQueueFamilyProperties(context.device.physical_device,
-    &family_count, families_properties.data());
+  context.inst_disp.getPhysicalDeviceQueueFamilyProperties(
+    context.device.physical_device, &family_count, families_properties.data());
   if (graphics->second >= family_count
       || (families_properties.at(graphics->second).queueFlags & VK_QUEUE_COMPUTE_BIT) == 0U) {
-    return std::unexpected(MakeError(std::errc::function_not_supported,
-      "graphics queue does not support compute color conversion"));
+    return std::unexpected(
+      MakeError(std::errc::function_not_supported, "graphics queue does not support compute color conversion"));
   }
   auto converter = std::unique_ptr<GpuColorConverter>{ new GpuColorConverter{ context, extent } };
   converter->graphics_queue_ = graphics->first;
   auto const y_bytes = static_cast<VkDeviceSize>(extent.width) * extent.height;
   auto const rgba_bytes = y_bytes * kRgbaBytesPerPixel;
   auto const nv12_bytes = y_bytes + (y_bytes / kChromaDivisor);
-  if (auto created = CreateBuffer(context, rgba_bytes,
+  if (auto created = CreateBuffer(context,
+        rgba_bytes,
         VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-        converter->rgba_buffer_, converter->rgba_memory_); !created) { return std::unexpected(created.error()); }
-  if (auto created = CreateBuffer(context, nv12_bytes,
+        converter->rgba_buffer_,
+        converter->rgba_memory_);
+    !created) {
+    return std::unexpected(created.error());
+  }
+  if (auto created = CreateBuffer(context,
+        nv12_bytes,
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        converter->nv12_buffer_, converter->nv12_memory_); !created) { return std::unexpected(created.error()); }
+        converter->nv12_buffer_,
+        converter->nv12_memory_);
+    !created) {
+    return std::unexpected(created.error());
+  }
 
   VkVideoEncodeH264ProfileInfoKHR h264{
     .sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_H264_PROFILE_INFO_KHR,
@@ -216,8 +232,8 @@ auto GpuColorConverter::Create(Context &context, EncodeDevice const &device, VkE
   if (result != VK_SUCCESS) { return std::unexpected(Failure("create converted NV12 image", result)); }
   VkMemoryRequirements requirements{};
   context.disp.getImageMemoryRequirements(converter->output_, &requirements);
-  auto memory = Allocate(context, requirements, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-    converter->output_, VK_NULL_HANDLE);
+  auto memory =
+    Allocate(context, requirements, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, converter->output_, VK_NULL_HANDLE);
   if (!memory) { return std::unexpected(memory.error()); }
   converter->output_memory_ = *memory;
   result = context.disp.bindImageMemory(converter->output_, converter->output_memory_, 0U);
@@ -299,15 +315,16 @@ auto GpuColorConverter::Create(Context &context, EncodeDevice const &device, VkE
     .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
     .pNext = nullptr,
     .flags = 0,
-    .stage = VkPipelineShaderStageCreateInfo{
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-      .pNext = nullptr,
-      .flags = 0,
-      .stage = VK_SHADER_STAGE_COMPUTE_BIT,
-      .module = *module,
-      .pName = "main",
-      .pSpecializationInfo = nullptr,
-    },
+    .stage =
+      VkPipelineShaderStageCreateInfo{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+        .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+        .module = *module,
+        .pName = "main",
+        .pSpecializationInfo = nullptr,
+      },
     .layout = converter->pipeline_layout_,
     .basePipelineHandle = VK_NULL_HANDLE,
     .basePipelineIndex = 0,
@@ -349,9 +366,7 @@ auto GpuColorConverter::WaitForSourceRelease() -> std::expected<void, Error>
     // reading it. A queue-wide wait is reserved for this exceptional path.
     auto const queue_lock = context_.vkexec_context->lock_queue(graphics_queue_);
     auto const idle = context_.disp.queueWaitIdle(graphics_queue_);
-    if (idle != VK_SUCCESS) {
-      return std::unexpected(Failure("retire failed GPU color conversion", idle));
-    }
+    if (idle != VK_SUCCESS) { return std::unexpected(Failure("retire failed GPU color conversion", idle)); }
   }
   return {};
 }
@@ -367,8 +382,8 @@ auto GpuColorConverter::Convert(VkImage source, VkSemaphore ready_timeline, std:
   -> std::expected<PreparedVideoFrame, Error>
 {
   if (failed_) {
-    return std::unexpected(MakeError(std::errc::state_not_recoverable,
-      "GPU color converter failed; create a new recording session"));
+    return std::unexpected(
+      MakeError(std::errc::state_not_recoverable, "GPU color converter failed; create a new recording session"));
   }
   if (in_flight_ || source == VK_NULL_HANDLE || ready_timeline == VK_NULL_HANDLE) {
     return std::unexpected(MakeError(std::errc::invalid_argument, "invalid or busy GPU color conversion"));
@@ -385,8 +400,8 @@ auto GpuColorConverter::Convert(VkImage source, VkSemaphore ready_timeline, std:
   rgba_copy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   rgba_copy.imageSubresource.layerCount = kOneResource;
   rgba_copy.imageExtent = { .width = extent_.width, .height = extent_.height, .depth = kOneResource };
-  context_.disp.cmdCopyImageToBuffer(command_, source, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-    rgba_buffer_, kOneResource, &rgba_copy);
+  context_.disp.cmdCopyImageToBuffer(
+    command_, source, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, rgba_buffer_, kOneResource, &rgba_copy);
   VkBufferMemoryBarrier2 rgba_barrier{};
   rgba_barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
   rgba_barrier.srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
@@ -403,10 +418,10 @@ auto GpuColorConverter::Convert(VkImage source, VkSemaphore ready_timeline, std:
   dependency.pBufferMemoryBarriers = &rgba_barrier;
   context_.disp.cmdPipelineBarrier2(command_, &dependency);
   context_.disp.cmdBindPipeline(command_, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline_);
-  context_.disp.cmdBindDescriptorSets(command_, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline_layout_,
-    0U, kOneResource, &descriptor_set_, 0U, nullptr);
-  context_.disp.cmdPushConstants(command_, pipeline_layout_, VK_SHADER_STAGE_COMPUTE_BIT,
-    0U, sizeof(extent_), &extent_);
+  context_.disp.cmdBindDescriptorSets(
+    command_, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline_layout_, 0U, kOneResource, &descriptor_set_, 0U, nullptr);
+  context_.disp.cmdPushConstants(
+    command_, pipeline_layout_, VK_SHADER_STAGE_COMPUTE_BIT, 0U, sizeof(extent_), &extent_);
   auto const groups_x = ((extent_.width / kMacroWidth) + kWorkgroupWidth - 1U) / kWorkgroupWidth;
   auto const groups_y = ((extent_.height / kMacroHeight) + kWorkgroupHeight - 1U) / kWorkgroupHeight;
   context_.disp.cmdDispatch(command_, groups_x, groups_y, kOneResource);
@@ -447,10 +462,15 @@ auto GpuColorConverter::Convert(VkImage source, VkSemaphore ready_timeline, std:
   chroma_copy.bufferOffset = y_bytes;
   chroma_copy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_PLANE_1_BIT;
   chroma_copy.imageSubresource.layerCount = kOneResource;
-  chroma_copy.imageExtent = { .width = extent_.width / kChromaDivisor,
-    .height = extent_.height / kChromaDivisor, .depth = kOneResource };
-  context_.disp.cmdCopyBufferToImage(command_, nv12_buffer_, output_, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-    static_cast<std::uint32_t>(copies.size()), copies.data());
+  chroma_copy.imageExtent = {
+    .width = extent_.width / kChromaDivisor, .height = extent_.height / kChromaDivisor, .depth = kOneResource
+  };
+  context_.disp.cmdCopyBufferToImage(command_,
+    nv12_buffer_,
+    output_,
+    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+    static_cast<std::uint32_t>(copies.size()),
+    copies.data());
   image_barrier.srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
   image_barrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
   image_barrier.dstStageMask = VK_PIPELINE_STAGE_2_NONE;
@@ -512,9 +532,10 @@ GpuColorConverterPool::GpuColorConverterPool(Context &context, EncodeDevice devi
   : context_{ context }, device_{ std::move(device) }, extent_{ extent }
 {}
 
-auto GpuColorConverterPool::Create(Context &context, EncodeDevice const &device,
-  VkExtent2D extent, std::size_t slot_count)
-  -> std::expected<std::shared_ptr<GpuColorConverterPool>, Error>
+auto GpuColorConverterPool::Create(Context &context,
+  EncodeDevice const &device,
+  VkExtent2D extent,
+  std::size_t slot_count) -> std::expected<std::shared_ptr<GpuColorConverterPool>, Error>
 {
   if (slot_count == 0U || slot_count > VideoEncoder::kMaximumInFlightFrames) {
     return std::unexpected(MakeError(std::errc::invalid_argument, "invalid conversion slot count"));
@@ -532,13 +553,14 @@ auto GpuColorConverterPool::Create(Context &context, EncodeDevice const &device,
   return pool;
 }
 
-auto GpuColorConverterPool::Convert(VkImage source, VkSemaphore ready_timeline,
-  std::uint64_t ready_value, std::shared_ptr<void> source_owner)
-  -> std::expected<ConvertedFrame, Error>
+auto GpuColorConverterPool::Convert(VkImage source,
+  VkSemaphore ready_timeline,
+  std::uint64_t ready_value,
+  std::shared_ptr<void> source_owner) -> std::expected<ConvertedFrame, Error>
 {
   if (!source_owner) {
-    return std::unexpected(MakeError(std::errc::invalid_argument,
-      "asynchronous conversion requires an owned RGBA source"));
+    return std::unexpected(
+      MakeError(std::errc::invalid_argument, "asynchronous conversion requires an owned RGBA source"));
   }
   std::unique_lock lock{ mutex_ };
   if (failure_) { return std::unexpected(*failure_); }
@@ -556,8 +578,7 @@ auto GpuColorConverterPool::Convert(VkImage source, VkSemaphore ready_timeline,
     }
     return ConvertedFrame{ .prepared = *prepared, .lease = std::move(lease) };
   }
-  return std::unexpected(MakeError(std::errc::resource_unavailable_try_again,
-    "all GPU conversion slots are busy"));
+  return std::unexpected(MakeError(std::errc::resource_unavailable_try_again, "all GPU conversion slots are busy"));
 }
 
 auto GpuColorConverterPool::Release(std::size_t slot, bool encode_submitted) noexcept -> void
@@ -571,9 +592,7 @@ auto GpuColorConverterPool::RetireReleased() -> std::expected<void, Error>
 {
   {
     std::scoped_lock const lock{ mutex_ };
-    if (failure_ && failure_->code() == std::errc::no_such_device) {
-      return std::unexpected(*failure_);
-    }
+    if (failure_ && failure_->code() == std::errc::no_such_device) { return std::unexpected(*failure_); }
   }
   for (std::size_t slot = 0U; slot < converters_.size(); ++slot) {
     bool encode_submitted = false;

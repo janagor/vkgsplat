@@ -1,8 +1,8 @@
 #ifndef VKGSPLAT_BACKEND_VULKAN_VIDEO_DEVICE_HPP
 #define VKGSPLAT_BACKEND_VULKAN_VIDEO_DEVICE_HPP
 
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <span>
 #include <string_view>

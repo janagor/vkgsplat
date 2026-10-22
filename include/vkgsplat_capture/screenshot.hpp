@@ -14,11 +14,11 @@ struct RgbaFrame;
 
 namespace capture {
 
-[[nodiscard]] VKGSPLAT_CAPTURE_EXPORT auto SavePng(Renderer &renderer, std::string_view path)
-  -> std::expected<void, Error>;
+  [[nodiscard]] VKGSPLAT_CAPTURE_EXPORT auto SavePng(Renderer &renderer, std::string_view path)
+    -> std::expected<void, Error>;
 
-[[nodiscard]] VKGSPLAT_CAPTURE_EXPORT auto WritePng(RgbaFrame const &frame, std::string_view path)
-  -> std::expected<void, Error>;
+  [[nodiscard]] VKGSPLAT_CAPTURE_EXPORT auto WritePng(RgbaFrame const &frame, std::string_view path)
+    -> std::expected<void, Error>;
 
 }// namespace capture
 }// namespace vkgsplat

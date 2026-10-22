@@ -1,16 +1,16 @@
 #ifndef VKGSPLAT_BACKEND_VULKAN_VIDEO_CAPABILITIES_HPP
 #define VKGSPLAT_BACKEND_VULKAN_VIDEO_CAPABILITIES_HPP
 
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 #include <expected>
 #include <functional>
 #include <optional>
 #include <string>
 #include <vector>
 
-#include <vulkan/vulkan_core.h>
 #include <VkBootstrapDispatch.h>
+#include <vulkan/vulkan_core.h>
 
 #include <vkgsplat_utility/error.hpp>
 
@@ -23,8 +23,11 @@ struct Queries
   std::function<VkResult(VkPhysicalDevice, std::uint32_t *, VkExtensionProperties *)> extensions;
   std::function<void(VkPhysicalDevice, std::uint32_t *, VkQueueFamilyProperties2 *)> queue_families;
   std::function<VkResult(VkPhysicalDevice, VkVideoProfileInfoKHR const *, VkVideoCapabilitiesKHR *)> capabilities;
-  std::function<VkResult(VkPhysicalDevice, VkPhysicalDeviceVideoFormatInfoKHR const *, std::uint32_t *,
-    VkVideoFormatPropertiesKHR *)> formats;
+  std::function<VkResult(VkPhysicalDevice,
+    VkPhysicalDeviceVideoFormatInfoKHR const *,
+    std::uint32_t *,
+    VkVideoFormatPropertiesKHR *)>
+    formats;
   std::function<VkResult(VkPhysicalDevice, VkPhysicalDeviceImageFormatInfo2 const *, VkImageFormatProperties2 *)>
     image_format;
 };

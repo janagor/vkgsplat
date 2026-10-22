@@ -5,10 +5,10 @@
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat/renderer.hpp>
 
+#include <expected>
 #include <limits>
 #include <memory>
 #include <optional>
-#include <expected>
 #include <system_error>
 #include <utility>
 
@@ -37,7 +37,10 @@ auto FrameSequence::create(Renderer &renderer, FrameSequenceConfig config) -> st
   auto writer = PngSequenceWriter::create(std::move(config));
   if (!writer) { return std::unexpected{ writer.error() }; }
   return FrameSequence{ std::make_unique<Impl>(Impl{ .renderer = &renderer,
-    .writer = std::move(*writer), .summary = { .frame_rate = rate }, .finished = false, .error = {} }) };
+    .writer = std::move(*writer),
+    .summary = { .frame_rate = rate },
+    .finished = false,
+    .error = {} }) };
 }
 
 auto FrameSequence::record_frame(Camera const &camera) -> std::expected<FrameMetadata, Error>

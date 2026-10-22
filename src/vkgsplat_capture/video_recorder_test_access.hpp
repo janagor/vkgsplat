@@ -7,15 +7,17 @@
 
 namespace vkgsplat {
 class VideoSink;
-namespace video { class RecordingSession; }
+namespace video {
+  class RecordingSession;
 }
+}// namespace vkgsplat
 
 namespace vkgsplat::capture {
 
 struct VKGSPLAT_CAPTURE_EXPORT VideoRecorderTestAccess
 {
-  [[nodiscard]] static auto Create(std::unique_ptr<video::RecordingSession> session,
-    std::unique_ptr<VideoSink> sink) -> VideoRecorder;
+  [[nodiscard]] static auto Create(std::unique_ptr<video::RecordingSession> session, std::unique_ptr<VideoSink> sink)
+    -> VideoRecorder;
 };
 
 }// namespace vkgsplat::capture

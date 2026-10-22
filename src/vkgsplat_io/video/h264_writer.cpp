@@ -22,12 +22,8 @@
 namespace vkgsplat {
 namespace {
 
-  constexpr std::array kStartCodeFour{
-    std::byte{ 0 }, std::byte{ 0 }, std::byte{ 0 }, std::byte{ 1 }
-  };
-  constexpr std::array kStartCodeThree{
-    std::byte{ 0 }, std::byte{ 0 }, std::byte{ 1 }
-  };
+  constexpr std::array kStartCodeFour{ std::byte{ 0 }, std::byte{ 0 }, std::byte{ 0 }, std::byte{ 1 } };
+  constexpr std::array kStartCodeThree{ std::byte{ 0 }, std::byte{ 0 }, std::byte{ 1 } };
   constexpr std::uint32_t kMaxTemporaryPathAttempts = 64U;
 
   [[nodiscard]] auto TemporaryPathSequence() noexcept -> std::atomic<std::uint64_t> &
@@ -96,8 +92,7 @@ namespace {
     return types;
   }
 
-  [[nodiscard]] auto WriteBytes(std::ofstream &stream, std::span<std::byte const> bytes)
-    -> std::expected<void, Error>
+  [[nodiscard]] auto WriteBytes(std::ofstream &stream, std::span<std::byte const> bytes) -> std::expected<void, Error>
   {
     if (bytes.size() > static_cast<std::size_t>(std::numeric_limits<std::streamsize>::max())) {
       return std::unexpected(MakeError(std::errc::value_too_large, "H.264 data is too large to write"));
@@ -125,8 +120,8 @@ H264Writer::~H264Writer()
 
 H264Writer::H264Writer(H264Writer &&other) noexcept
   : stream_{ std::move(other.stream_) }, path_{ std::move(other.path_) },
-    temporary_path_{ std::exchange(other.temporary_path_, {}) },
-    finished_{ other.finished_ }, seen_idr_{ other.seen_idr_ }
+    temporary_path_{ std::exchange(other.temporary_path_, {}) }, finished_{ other.finished_ },
+    seen_idr_{ other.seen_idr_ }
 {}
 
 auto H264Writer::operator=(H264Writer &&other) noexcept -> H264Writer &
@@ -150,12 +145,10 @@ auto H264Writer::Open(std::string_view path, std::span<std::byte const> paramete
 {
   auto const types = ScanAnnexB(parameter_sets);
   if (!types || !types->sps || !types->pps) {
-    return std::unexpected(MakeError(std::errc::invalid_argument,
-      "H.264 parameter data must contain Annex B SPS and PPS NAL units"));
+    return std::unexpected(
+      MakeError(std::errc::invalid_argument, "H.264 parameter data must contain Annex B SPS and PPS NAL units"));
   }
-  if (path.empty()) {
-    return std::unexpected(MakeError(std::errc::invalid_argument, "H.264 output path is empty"));
-  }
+  if (path.empty()) { return std::unexpected(MakeError(std::errc::invalid_argument, "H.264 output path is empty")); }
   std::filesystem::path destination{ path };
   std::error_code path_error;
   if (std::filesystem::exists(destination, path_error)) {
@@ -182,9 +175,7 @@ auto H264Writer::Open(std::string_view path, std::span<std::byte const> paramete
     return std::unexpected(MakeError(std::errc::file_exists, "no free H.264 temporary output name"));
   }
   H264Writer writer{ std::move(stream), std::move(destination), std::move(temporary_path) };
-  if (auto written = WriteBytes(writer.stream_, parameter_sets); !written) {
-    return std::unexpected(written.error());
-  }
+  if (auto written = WriteBytes(writer.stream_, parameter_sets); !written) { return std::unexpected(written.error()); }
   return writer;
 }
 
@@ -195,8 +186,8 @@ auto H264Writer::WriteFrame(std::span<std::byte const> picture) -> std::expected
   }
   auto const types = ScanAnnexB(picture);
   if (!types || !types->picture || (!seen_idr_ && !types->idr)) {
-    return std::unexpected(MakeError(std::errc::invalid_argument,
-      "H.264 picture must contain an Annex B slice, beginning with IDR"));
+    return std::unexpected(
+      MakeError(std::errc::invalid_argument, "H.264 picture must contain an Annex B slice, beginning with IDR"));
   }
   if (auto result = WriteBytes(stream_, picture); !result) { return result; }
   seen_idr_ |= types->idr;

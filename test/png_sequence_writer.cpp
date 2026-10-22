@@ -12,15 +12,15 @@
 #include <stb_image.h>
 
 #include <chrono>
-#include <cstddef>
 #include <condition_variable>
+#include <cstddef>
 #include <cstdint>
-#include <limits>
 #include <expected>
 #include <filesystem>
-#include <fstream>
 #include <format>
+#include <fstream>
 #include <future>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <span>
@@ -56,14 +56,14 @@ public:
   TemporaryDirectory(TemporaryDirectory &&) = delete;
   auto operator=(TemporaryDirectory &&) -> TemporaryDirectory & = delete;
   [[nodiscard]] auto path() const -> std::filesystem::path const & { return path_; }
+
 private:
   std::filesystem::path path_;
 };
 
 [[nodiscard]] auto MakeFrame(std::uint8_t value) -> vkgsplat::RgbaFrame
 {
-  return { .width = kWidth, .height = kHeight,
-    .pixels = { value, 0U, 0U, kOpaqueAlpha, value, 0U, 0U, kOpaqueAlpha } };
+  return { .width = kWidth, .height = kHeight, .pixels = { value, 0U, 0U, kOpaqueAlpha, value, 0U, 0U, kOpaqueAlpha } };
 }
 
 class WriteGate
@@ -89,6 +89,7 @@ public:
     }
     condition_.notify_all();
   }
+
 private:
   std::mutex mutex_;
   std::condition_variable condition_;
@@ -101,8 +102,10 @@ TEST_CASE("PNG sequence preserves order and pixels with a bounded queue", "[capt
 {
   TemporaryDirectory const output;
   auto writer = vkgsplat::capture::PngSequenceWriter::create({
-    .output_directory = output.path(), .start_index = kFirstFileIndex,
-    .filename_digits = kFilenameDigits, .max_pending_frames = 1U,
+    .output_directory = output.path(),
+    .start_index = kFirstFileIndex,
+    .filename_digits = kFilenameDigits,
+    .max_pending_frames = 1U,
   });
   REQUIRE(writer);
   for (vkgsplat::u64 index = 0U; index < kFrameCount; ++index) {
@@ -212,7 +215,8 @@ TEST_CASE("Destroying an unfinished PNG writer drains accepted frames", "[captur
   std::filesystem::path last_frame;
   {
     auto writer = vkgsplat::capture::PngSequenceWriter::create({
-      .output_directory = output.path(), .max_pending_frames = 1U,
+      .output_directory = output.path(),
+      .max_pending_frames = 1U,
     });
     REQUIRE(writer);
     for (vkgsplat::u64 index = 0U; index < kFrameCount; ++index) {
@@ -230,13 +234,17 @@ TEST_CASE("A full PNG queue blocks the producer until the worker advances", "[ca
   WriteGate gate;
   std::promise<void> queue_full;
   auto queue_full_future = queue_full.get_future();
-  auto writer = vkgsplat::capture::PngSequenceWriter::create({
-    .output_directory = output.path(), .max_pending_frames = 1U,
-  }, [&gate](vkgsplat::RgbaFrame const &frame, std::filesystem::path const &path)
-       -> std::expected<void, vkgsplat::Error> {
-    gate.enter_and_wait();
-    return vkgsplat::capture::WritePng(frame, path.string());
-  }, [&queue_full]() -> void { queue_full.set_value(); });
+  auto writer = vkgsplat::capture::PngSequenceWriter::create(
+    {
+      .output_directory = output.path(),
+      .max_pending_frames = 1U,
+    },
+    [&gate](
+      vkgsplat::RgbaFrame const &frame, std::filesystem::path const &path) -> std::expected<void, vkgsplat::Error> {
+      gate.enter_and_wait();
+      return vkgsplat::capture::WritePng(frame, path.string());
+    },
+    [&queue_full]() -> void { queue_full.set_value(); });
   REQUIRE(writer);
   REQUIRE((*writer)->submit({ .sequence_index = 0U, .frame = MakeFrame(0U) }));
   gate.wait_until_entered();
@@ -258,16 +266,19 @@ TEST_CASE("A throwing PNG writer cleans partial files and releases a blocked pro
   WriteGate gate;
   std::promise<void> queue_full;
   auto queue_full_future = queue_full.get_future();
-  auto writer = vkgsplat::capture::PngSequenceWriter::create({
-    .output_directory = output.path(), .max_pending_frames = 1U,
-  }, [&gate](vkgsplat::RgbaFrame const &, std::filesystem::path const &path)
-       -> std::expected<void, vkgsplat::Error> {
-    gate.enter_and_wait();
-    std::ofstream partial{ path };
-    partial << "partial";
-    partial.close();
-    throw std::runtime_error{ "Injected writer exception" };
-  }, [&queue_full]() -> void { queue_full.set_value(); });
+  auto writer = vkgsplat::capture::PngSequenceWriter::create(
+    {
+      .output_directory = output.path(),
+      .max_pending_frames = 1U,
+    },
+    [&gate](vkgsplat::RgbaFrame const &, std::filesystem::path const &path) -> std::expected<void, vkgsplat::Error> {
+      gate.enter_and_wait();
+      std::ofstream partial{ path };
+      partial << "partial";
+      partial.close();
+      throw std::runtime_error{ "Injected writer exception" };
+    },
+    [&queue_full]() -> void { queue_full.set_value(); });
   REQUIRE(writer);
   REQUIRE((*writer)->submit({ .sequence_index = 0U, .frame = MakeFrame(0U) }));
   gate.wait_until_entered();
@@ -290,7 +301,8 @@ TEST_CASE("PNG filename padding has a practical upper bound", "[capture]")
   TemporaryDirectory const output;
   constexpr vkgsplat::u32 kExcessiveDigits = 21U;
   auto writer = vkgsplat::capture::PngSequenceWriter::create({
-    .output_directory = output.path(), .filename_digits = kExcessiveDigits,
+    .output_directory = output.path(),
+    .filename_digits = kExcessiveDigits,
   });
   CHECK_FALSE(writer);
   CHECK_FALSE(std::filesystem::exists(output.path()));

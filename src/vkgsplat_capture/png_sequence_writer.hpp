@@ -27,8 +27,9 @@ public:
   // Internal test hook. Called with mutex_ held; it must not re-enter or throw.
   using QueueFullObserver = std::function<void()>;
 
-  [[nodiscard]] static auto create(FrameSequenceConfig config, WriteOperation write = {}, QueueFullObserver on_queue_full = {})
-    -> std::expected<std::unique_ptr<PngSequenceWriter>, Error>;
+  [[nodiscard]] static auto create(FrameSequenceConfig config,
+    WriteOperation write = {},
+    QueueFullObserver on_queue_full = {}) -> std::expected<std::unique_ptr<PngSequenceWriter>, Error>;
   [[nodiscard]] auto submit(FramePacket packet) -> std::expected<std::filesystem::path, Error>;
   [[nodiscard]] auto finish() -> std::expected<void, Error>;
   [[nodiscard]] auto path_for(u64 sequence_index) const -> std::filesystem::path;

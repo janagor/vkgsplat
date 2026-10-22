@@ -2,15 +2,15 @@
 #define VKGSPLAT_RENDERER_HPP
 
 #include <expected>
-#include <optional>
 #include <memory>
+#include <optional>
 #include <string>
 
 #include <beman/indirect/indirect.hpp>
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat/engine.hpp>
-#include <vkgsplat/frame_rate.hpp>
 #include <vkgsplat/frame.hpp>
+#include <vkgsplat/frame_rate.hpp>
 #include <vkgsplat/gpu_timings.hpp>
 #include <vkgsplat/lfd_config.hpp>
 #include <vkgsplat/platform.hpp>
@@ -25,8 +25,12 @@
 
 namespace vkgsplat {
 
-namespace capture { class VideoRecorder; }
-namespace video { class RecordingSession; }
+namespace capture {
+  class VideoRecorder;
+}
+namespace video {
+  class RecordingSession;
+}
 
 enum class FrameSubmissionPolicy : u8 { kLatest, kLossless };
 
@@ -108,8 +112,7 @@ public:
 
 private:
   friend class capture::VideoRecorder;
-  [[nodiscard]] auto create_video_recording_session(u32 width, u32 height,
-    u32 fps_numerator, u32 fps_denominator)
+  [[nodiscard]] auto create_video_recording_session(u32 width, u32 height, u32 fps_numerator, u32 fps_denominator)
     -> std::expected<std::unique_ptr<video::RecordingSession>, Error>;
   struct Impl;
   explicit Renderer(beman::indirect::indirect<Impl> impl);

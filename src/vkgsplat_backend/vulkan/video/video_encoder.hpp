@@ -12,8 +12,8 @@
 #include <span>
 #include <vector>
 
-#include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_backend/vkgsplat_backend_export.hpp>
+#include <vkgsplat_utility/error.hpp>
 
 #include <vkgsplat_video/encoded_packet.hpp>
 
@@ -56,11 +56,13 @@ class VKGSPLAT_BACKEND_EXPORT VideoEncoder
 public:
   static constexpr std::size_t kOfflineInFlightFrames = 1U;
   static constexpr std::size_t kMaximumInFlightFrames = 8U;
-  [[nodiscard]] static auto Create(Context &context, EncodeDevice device, VkExtent2D extent,
-    std::uint32_t fps_numerator, std::uint32_t fps_denominator,
+  [[nodiscard]] static auto Create(Context &context,
+    EncodeDevice device,
+    VkExtent2D extent,
+    std::uint32_t fps_numerator,
+    std::uint32_t fps_denominator,
     std::size_t max_in_flight_frames = kOfflineInFlightFrames,
-    bool fixed_frame_rate = true)
-    -> std::expected<std::unique_ptr<VideoEncoder>, Error>;
+    bool fixed_frame_rate = true) -> std::expected<std::unique_ptr<VideoEncoder>, Error>;
 
   [[nodiscard]] auto EncodeNv12(std::span<std::byte const> frame, std::uint64_t frame_index)
     -> std::expected<EncodedPacket, Error>;
@@ -68,9 +70,9 @@ public:
     -> std::expected<EncodedPacket, Error>;
   // One thread owns this encoder. The source image must remain alive until
   // the matching packet is completed or failed in-flight work is drained.
-  [[nodiscard]] auto SubmitImage(PreparedVideoFrame const &frame, PictureMetadata metadata,
-    std::shared_ptr<void> source_owner)
-    -> std::expected<void, Error>;
+  [[nodiscard]] auto SubmitImage(PreparedVideoFrame const &frame,
+    PictureMetadata metadata,
+    std::shared_ptr<void> source_owner) -> std::expected<void, Error>;
   [[nodiscard]] auto CompleteImage() -> std::expected<EncodedPacket, Error>;
   [[nodiscard]] auto TryCompleteImage() -> std::expected<std::optional<EncodedPacket>, Error>;
   [[nodiscard]] auto WaitForInFlightWork() -> std::expected<void, Error>;
@@ -87,13 +89,19 @@ public:
   auto operator=(VideoEncoder &&) -> VideoEncoder & = delete;
 
 private:
-  VideoEncoder(Context &context, EncodeDevice device, VkExtent2D extent,
+  VideoEncoder(Context &context,
+    EncodeDevice device,
+    VkExtent2D extent,
     std::unique_ptr<VideoSession> session) noexcept;
-  [[nodiscard]] auto EncodeSource(VkImageView source_view, VkSemaphore ready_semaphore,
-    std::span<std::byte const> frame, std::uint64_t frame_index) -> std::expected<EncodedPacket, Error>;
+  [[nodiscard]] auto EncodeSource(VkImageView source_view,
+    VkSemaphore ready_semaphore,
+    std::span<std::byte const> frame,
+    std::uint64_t frame_index) -> std::expected<EncodedPacket, Error>;
   [[nodiscard]] auto CompleteReadyImage() -> std::expected<EncodedPacket, Error>;
-  [[nodiscard]] auto SubmitImageImpl(PreparedVideoFrame const &frame, PictureMetadata metadata,
-    std::shared_ptr<void> source_owner, bool require_owner) -> std::expected<void, Error>;
+  [[nodiscard]] auto SubmitImageImpl(PreparedVideoFrame const &frame,
+    PictureMetadata metadata,
+    std::shared_ptr<void> source_owner,
+    bool require_owner) -> std::expected<void, Error>;
 
   Context &context_;
   EncodeDevice device_;

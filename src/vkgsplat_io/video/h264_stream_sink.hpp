@@ -18,8 +18,8 @@ namespace vkgsplat {
 class VKGSPLAT_IO_EXPORT H264StreamSink final : public VideoSink
 {
 public:
-  [[nodiscard]] static auto Open(std::filesystem::path const &path,
-    std::span<std::byte const> parameter_sets) -> std::expected<H264StreamSink, Error>;
+  [[nodiscard]] static auto Open(std::filesystem::path const &path, std::span<std::byte const> parameter_sets)
+    -> std::expected<H264StreamSink, Error>;
 
   auto Write(EncodedPacket const &packet) -> std::expected<void, Error> override;
   auto Finish() -> std::expected<void, Error> override;

@@ -20,10 +20,9 @@ namespace {
 constexpr int kRgbaChannels = 4;
 constexpr int kArgumentCount = 5;
 
-[[nodiscard]] auto Verify(std::filesystem::path const &directory,
-  vkgsplat::u32 width,
-  vkgsplat::u32 height,
-  vkgsplat::u32 frame_count) -> bool
+[[nodiscard]] auto
+  Verify(std::filesystem::path const &directory, vkgsplat::u32 width, vkgsplat::u32 height, vkgsplat::u32 frame_count)
+    -> bool
 {
   std::vector<std::uint8_t> first_pixels;
   bool changed = false;
@@ -43,8 +42,11 @@ constexpr int kArgumentCount = 5;
     auto const byte_count = static_cast<size_t>(width) * height * static_cast<size_t>(kRgbaChannels);
     std::span<stbi_uc const> const pixel_bytes{ pixels.get(), byte_count };
     std::vector<std::uint8_t> const decoded{ pixel_bytes.begin(), pixel_bytes.end() };
-    if (index == 0U) { first_pixels = decoded; }
-    else if (decoded != first_pixels) { changed = true; }
+    if (index == 0U) {
+      first_pixels = decoded;
+    } else if (decoded != first_pixels) {
+      changed = true;
+    }
   }
   size_t file_count = 0U;
   for (auto const &entry : std::filesystem::directory_iterator(directory)) {

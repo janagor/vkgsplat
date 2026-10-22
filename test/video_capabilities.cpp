@@ -4,19 +4,19 @@
 #include "vulkan/video/video_capabilities.hpp"
 #include "vulkan/video/video_device.hpp"
 
-#include <vulkan/vulkan_core.h>
 #include <vk_video/vulkan_video_codec_h264std.h>
 #include <vk_video/vulkan_video_codec_h264std_encode.h>
+#include <vulkan/vulkan_core.h>
 
 #include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
-#include <span>
-#include <string_view>
 #include <optional>
+#include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <vkgsplat_utility/error.hpp>
@@ -95,9 +95,7 @@ auto MakeQueries(ProbeFixture &fixture) -> video::Queries
     }
     return VK_SUCCESS;
   };
-  queries.queue_families = [&](VkPhysicalDevice,
-                             std::uint32_t *count,
-                             VkQueueFamilyProperties2 *properties) -> void {
+  queries.queue_families = [&](VkPhysicalDevice, std::uint32_t *count, VkQueueFamilyProperties2 *properties) -> void {
     *count = 1U;
     if (properties == nullptr) { return; }
     auto &queue = *properties;
@@ -109,9 +107,8 @@ auto MakeQueries(ProbeFixture &fixture) -> video::Queries
     }
   };
   if (!fixture.missing_video_entry_point) {
-    queries.capabilities = [&](VkPhysicalDevice,
-                             VkVideoProfileInfoKHR const *profile,
-                             VkVideoCapabilitiesKHR *capabilities) -> VkResult {
+    queries.capabilities =
+      [&](VkPhysicalDevice, VkVideoProfileInfoKHR const *profile, VkVideoCapabilitiesKHR *capabilities) -> VkResult {
       if (fixture.capability_error != VK_SUCCESS) { return fixture.capability_error; }
       auto const *h264_profile = static_cast<VkVideoEncodeH264ProfileInfoKHR const *>(profile->pNext);
       if ((h264_profile->stdProfileIdc == STD_VIDEO_H264_PROFILE_IDC_MAIN && !fixture.main_profile)
@@ -123,10 +120,10 @@ auto MakeQueries(ProbeFixture &fixture) -> video::Queries
       capabilities->maxCodedExtent = { .width = fixture.codec_max_extent, .height = fixture.codec_max_extent };
       capabilities->maxDpbSlots = fixture.max_dpb_slots;
       capabilities->maxActiveReferencePictures = fixture.max_active_references;
-      auto const header_name = h264_profile->stdProfileIdc == STD_VIDEO_H264_PROFILE_IDC_MAIN
-                                && !fixture.main_header_compatible
-                              ? std::string_view{ "unsupported header" }
-                              : std::string_view{ VK_STD_VULKAN_VIDEO_CODEC_H264_ENCODE_EXTENSION_NAME };
+      auto const header_name =
+        h264_profile->stdProfileIdc == STD_VIDEO_H264_PROFILE_IDC_MAIN && !fixture.main_header_compatible
+          ? std::string_view{ "unsupported header" }
+          : std::string_view{ VK_STD_VULKAN_VIDEO_CODEC_H264_ENCODE_EXTENSION_NAME };
       std::ranges::copy(header_name, std::span{ capabilities->stdHeaderVersion.extensionName }.begin());
       capabilities->stdHeaderVersion.specVersion = VK_STD_VULKAN_VIDEO_CODEC_H264_ENCODE_SPEC_VERSION;
       return VK_SUCCESS;
@@ -141,8 +138,11 @@ auto MakeQueries(ProbeFixture &fixture) -> video::Queries
       bool const main = h264_profile->stdProfileIdc == STD_VIDEO_H264_PROFILE_IDC_MAIN;
       bool const baseline = h264_profile->stdProfileIdc == STD_VIDEO_H264_PROFILE_IDC_BASELINE;
       bool dpb_available = fixture.high_dpb_format;
-      if (main) { dpb_available = fixture.main_dpb_format; }
-      else if (baseline) { dpb_available = fixture.baseline_dpb_format; }
+      if (main) {
+        dpb_available = fixture.main_dpb_format;
+      } else if (baseline) {
+        dpb_available = fixture.baseline_dpb_format;
+      }
       bool const available = source ? fixture.source_format : fixture.dpb_format && dpb_available;
       bool const second_format = source ? fixture.alternative_source_format : fixture.alternative_dpb_format;
       *count = 0U;
@@ -151,22 +151,25 @@ auto MakeQueries(ProbeFixture &fixture) -> video::Queries
       ++fixture.format_fills;
       if (fixture.incomplete_formats && fixture.format_fills == 1U) { return VK_INCOMPLETE; }
       bool profile_transfer = fixture.high_transfer_destination;
-      if (main) { profile_transfer = fixture.main_transfer_destination; }
-      else if (baseline) { profile_transfer = fixture.baseline_transfer_destination; }
+      if (main) {
+        profile_transfer = fixture.main_transfer_destination;
+      } else if (baseline) {
+        profile_transfer = fixture.baseline_transfer_destination;
+      }
       auto &primary_format = *properties;
       primary_format.format = VK_FORMAT_G8_B8R8_2PLANE_420_UNORM;
       primary_format.imageType = VK_IMAGE_TYPE_2D;
       primary_format.imageTiling = VK_IMAGE_TILING_OPTIMAL;
-      primary_format.imageCreateFlags = fixture.supports_disjoint_images
-                                       ? VK_IMAGE_CREATE_DISJOINT_BIT : VkImageCreateFlags{ 0U };
+      primary_format.imageCreateFlags =
+        fixture.supports_disjoint_images ? VK_IMAGE_CREATE_DISJOINT_BIT : VkImageCreateFlags{ 0U };
       primary_format.imageUsageFlags = info->imageUsage;
       if (fixture.transfer_destination && profile_transfer && fixture.nv12_transfer_destination) {
         primary_format.imageUsageFlags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
       }
       if (fixture.storage) { primary_format.imageUsageFlags |= VK_IMAGE_USAGE_STORAGE_BIT; }
       if (second_format) {
-        auto &alternative_format = std::span{ properties, kFormatCountWithAlternative }
-                                     .subspan(kPrimaryFormatCount).front();
+        auto &alternative_format =
+          std::span{ properties, kFormatCountWithAlternative }.subspan(kPrimaryFormatCount).front();
         alternative_format = primary_format;
         alternative_format.format = VK_FORMAT_G8_B8_R8_3PLANE_420_UNORM;
         alternative_format.imageUsageFlags = info->imageUsage;
@@ -182,16 +185,13 @@ auto MakeQueries(ProbeFixture &fixture) -> video::Queries
                            VkPhysicalDeviceImageFormatInfo2 const *info,
                            VkImageFormatProperties2 *properties) -> VkResult {
     if (info->flags != 0) { fixture.queried_optional_create_flags = true; }
-    if (fixture.supports_disjoint_images && info->flags != 0) {
-      return VK_ERROR_FORMAT_NOT_SUPPORTED;
-    }
+    if (fixture.supports_disjoint_images && info->flags != 0) { return VK_ERROR_FORMAT_NOT_SUPPORTED; }
     auto constexpr kExtraUsage = static_cast<VkImageUsageFlags>(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
                                  | static_cast<VkImageUsageFlags>(VK_IMAGE_USAGE_STORAGE_BIT);
     bool const extra_usage = (info->usage & kExtraUsage) != 0U;
     if (extra_usage && fixture.extra_usage_error != VK_SUCCESS) { return fixture.extra_usage_error; }
-    auto const format_maximum = info->format == VK_FORMAT_G8_B8_R8_3PLANE_420_UNORM
-                                  ? fixture.alternative_max_extent
-                                  : fixture.nv12_max_extent;
+    auto const format_maximum =
+      info->format == VK_FORMAT_G8_B8_R8_3PLANE_420_UNORM ? fixture.alternative_max_extent : fixture.nv12_max_extent;
     auto const maximum = std::min(fixture.format_max_extent, format_maximum);
     properties->imageFormatProperties.maxExtent = { .width = maximum, .height = maximum, .depth = 1U };
     return VK_SUCCESS;
@@ -366,9 +366,8 @@ TEST_CASE("Required selection retains the renderer's preferred GPU and ranks fal
 {
   std::array candidates{
     video::CandidateInfo{ .device_type = VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU, .name = "z" },
-    video::CandidateInfo{ .preferred_rendering_device = true,
-      .device_type = VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU,
-      .name = "preferred" },
+    video::CandidateInfo{
+      .preferred_rendering_device = true, .device_type = VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU, .name = "preferred" },
     video::CandidateInfo{ .device_type = VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU, .name = "b" },
     video::CandidateInfo{ .device_type = VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU, .name = "a" },
   };
@@ -399,8 +398,11 @@ TEST_CASE("Selected profile keeps conversion and reference flags with its own fo
   CHECK(main_configuration.profile == STD_VIDEO_H264_PROFILE_IDC_MAIN);
   CHECK_FALSE(main_configuration.capture_conversion_supported);
   CHECK_FALSE(main_configuration.reference_pictures_supported);
-  auto references = report->select({ .require_conversion = false, .require_references = true,
-    .required_format = std::nullopt, .require_transfer_destination = false, .required_extent = {} });
+  auto references = report->select({ .require_conversion = false,
+    .require_references = true,
+    .required_format = std::nullopt,
+    .require_transfer_destination = false,
+    .required_extent = {} });
   REQUIRE(references);
   auto const &reference_configuration = references.value();
   CHECK(reference_configuration.profile == STD_VIDEO_H264_PROFILE_IDC_BASELINE);
@@ -468,8 +470,11 @@ TEST_CASE("Reference selection prefers the DPB format covering the source extent
   fixture.alternative_max_extent = kAlternativeMaximumExtent;
   auto report = Probe(fixture);
   REQUIRE(report);
-  auto selected = report->select({ .require_conversion = true, .require_references = true,
-    .required_format = std::nullopt, .require_transfer_destination = false, .required_extent = {} });
+  auto selected = report->select({ .require_conversion = true,
+    .require_references = true,
+    .required_format = std::nullopt,
+    .require_transfer_destination = false,
+    .required_extent = {} });
   REQUIRE(selected);
   REQUIRE(selected->dpb_format);
   auto const &selected_configuration = selected.value();
@@ -490,8 +495,11 @@ TEST_CASE("Combined requirements select one profile satisfying both")
   fixture.max_active_references = 1U;
   auto report = Probe(fixture);
   REQUIRE(report);
-  auto selected = report->select({ .require_conversion = true, .require_references = true,
-    .required_format = std::nullopt, .require_transfer_destination = false, .required_extent = {} });
+  auto selected = report->select({ .require_conversion = true,
+    .require_references = true,
+    .required_format = std::nullopt,
+    .require_transfer_destination = false,
+    .required_extent = {} });
   REQUIRE(selected);
   REQUIRE(selected->dpb_format);
   auto const &selected_configuration = selected.value();

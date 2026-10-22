@@ -23,13 +23,13 @@ struct GopPicture
 class H264Gop
 {
 public:
-  [[nodiscard]] static auto Create(std::uint32_t idr_interval, bool enable_p_frames)
-    -> std::expected<H264Gop, Error>;
+  [[nodiscard]] static auto Create(std::uint32_t idr_interval, bool enable_p_frames) -> std::expected<H264Gop, Error>;
   [[nodiscard]] auto picture(std::uint64_t frame_index) const noexcept -> GopPicture;
 
 private:
   H264Gop(std::uint32_t idr_interval, bool enable_p_frames) noexcept
-    : idr_interval_{ idr_interval }, enable_p_frames_{ enable_p_frames } {}
+    : idr_interval_{ idr_interval }, enable_p_frames_{ enable_p_frames }
+  {}
 
   std::uint32_t idr_interval_{};
   bool enable_p_frames_ = false;

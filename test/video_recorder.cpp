@@ -1,14 +1,14 @@
 // NOLINTBEGIN(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)
-#include "../src/vkgsplat_io/video/video_sink.hpp"
 #include "../src/vkgsplat_capture/video_recorder_test_access.hpp"
+#include "../src/vkgsplat_io/video/video_sink.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat_capture/video_recorder.hpp>
-#include <vkgsplat_video/recording_session.hpp>
-#include <vkgsplat_video/encoded_packet.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
+#include <vkgsplat_video/encoded_packet.hpp>
+#include <vkgsplat_video/recording_session.hpp>
 
 #include <cstddef>
 #include <expected>

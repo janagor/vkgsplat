@@ -10,8 +10,8 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
-#include <iterator>
 #include <ios>
+#include <iterator>
 #include <string>
 #include <system_error>
 #include <vector>
@@ -19,14 +19,38 @@
 namespace {
 
 constexpr std::array kParameterSets{
-  std::byte{ 0x00 }, std::byte{ 0x00 }, std::byte{ 0x00 }, std::byte{ 0x01 },
-  std::byte{ 0x67 }, std::byte{ 0x42 }, std::byte{ 0xc0 }, std::byte{ 0x0a },
-  std::byte{ 0xdd }, std::byte{ 0xec }, std::byte{ 0x04 }, std::byte{ 0x40 },
-  std::byte{ 0x00 }, std::byte{ 0x00 }, std::byte{ 0x03 }, std::byte{ 0x00 },
-  std::byte{ 0x40 }, std::byte{ 0x00 }, std::byte{ 0x00 }, std::byte{ 0x03 },
-  std::byte{ 0x00 }, std::byte{ 0x83 }, std::byte{ 0xc4 }, std::byte{ 0x89 },
-  std::byte{ 0xe0 }, std::byte{ 0x00 }, std::byte{ 0x00 }, std::byte{ 0x00 },
-  std::byte{ 0x01 }, std::byte{ 0x68 }, std::byte{ 0xce }, std::byte{ 0x0f },
+  std::byte{ 0x00 },
+  std::byte{ 0x00 },
+  std::byte{ 0x00 },
+  std::byte{ 0x01 },
+  std::byte{ 0x67 },
+  std::byte{ 0x42 },
+  std::byte{ 0xc0 },
+  std::byte{ 0x0a },
+  std::byte{ 0xdd },
+  std::byte{ 0xec },
+  std::byte{ 0x04 },
+  std::byte{ 0x40 },
+  std::byte{ 0x00 },
+  std::byte{ 0x00 },
+  std::byte{ 0x03 },
+  std::byte{ 0x00 },
+  std::byte{ 0x40 },
+  std::byte{ 0x00 },
+  std::byte{ 0x00 },
+  std::byte{ 0x03 },
+  std::byte{ 0x00 },
+  std::byte{ 0x83 },
+  std::byte{ 0xc4 },
+  std::byte{ 0x89 },
+  std::byte{ 0xe0 },
+  std::byte{ 0x00 },
+  std::byte{ 0x00 },
+  std::byte{ 0x00 },
+  std::byte{ 0x01 },
+  std::byte{ 0x68 },
+  std::byte{ 0xce },
+  std::byte{ 0x0f },
   std::byte{ 0xc8 },
 };
 constexpr std::uint32_t kVideoWidth = 16U;
@@ -38,7 +62,11 @@ constexpr std::ptrdiff_t kSingleOutputFileCount = 1;
 constexpr std::ptrdiff_t kOccupiedOutputAndTemporaryFileCount = 2;
 constexpr char kOccupiedOutputByte = 'x';
 constexpr std::array kIdrPicture{
-  std::byte{ 0x00 }, std::byte{ 0x00 }, std::byte{ 0x01 }, std::byte{ 0x65 }, std::byte{ 0x88 },
+  std::byte{ 0x00 },
+  std::byte{ 0x00 },
+  std::byte{ 0x01 },
+  std::byte{ 0x65 },
+  std::byte{ 0x88 },
 };
 
 class TemporaryDirectory
@@ -72,14 +100,14 @@ TEST_CASE("failed unfinished MP4 removes its temporary output", "[video]")
   TemporaryDirectory const directory;
   auto const output = directory.path() / "unfinished.mp4";
   {
-    auto muxer = vkgsplat::Mp4Muxer::Open(output, kVideoWidth, kVideoHeight,
-      kFrameRateNumerator, kFrameRateDenominator, kParameterSets);
+    auto muxer = vkgsplat::Mp4Muxer::Open(
+      output, kVideoWidth, kVideoHeight, kFrameRateNumerator, kFrameRateDenominator, kParameterSets);
     REQUIRE(muxer);
     REQUIRE_FALSE((*muxer)->Write(vkgsplat::EncodedPacket{}));
     REQUIRE_FALSE((*muxer)->Finish());
     REQUIRE_FALSE(std::filesystem::exists(output));
-    auto const entry_count = std::distance(std::filesystem::directory_iterator{ directory.path() },
-      std::filesystem::directory_iterator{});
+    auto const entry_count =
+      std::distance(std::filesystem::directory_iterator{ directory.path() }, std::filesystem::directory_iterator{});
     REQUIRE(entry_count == kReservedTemporaryFileCount);
   }
   REQUIRE_FALSE(std::filesystem::exists(output));
@@ -91,8 +119,8 @@ TEST_CASE("MP4 publication failure is sticky and removes temporary output", "[vi
   TemporaryDirectory const directory;
   auto const output = directory.path() / "occupied.mp4";
   {
-    auto muxer = vkgsplat::Mp4Muxer::Open(output, kVideoWidth, kVideoHeight,
-      kFrameRateNumerator, kFrameRateDenominator, kParameterSets);
+    auto muxer = vkgsplat::Mp4Muxer::Open(
+      output, kVideoWidth, kVideoHeight, kFrameRateNumerator, kFrameRateDenominator, kParameterSets);
     REQUIRE(muxer);
     vkgsplat::EncodedPacket const packet{
       .data = std::vector<std::byte>{ kIdrPicture.begin(), kIdrPicture.end() },
@@ -119,8 +147,8 @@ TEST_CASE("MP4 publication failure is sticky and removes temporary output", "[vi
     auto written = (*muxer)->Write(packet);
     REQUIRE_FALSE(written);
     REQUIRE(written.error().code() == failed.error().code());
-    auto const entry_count = std::distance(std::filesystem::directory_iterator{ directory.path() },
-      std::filesystem::directory_iterator{});
+    auto const entry_count =
+      std::distance(std::filesystem::directory_iterator{ directory.path() }, std::filesystem::directory_iterator{});
     REQUIRE(entry_count == kOccupiedOutputAndTemporaryFileCount);
   }
   REQUIRE(std::filesystem::exists(output));
@@ -128,8 +156,8 @@ TEST_CASE("MP4 publication failure is sticky and removes temporary output", "[vi
   REQUIRE(occupied);
   REQUIRE(occupied.get() == kOccupiedOutputByte);
   REQUIRE(occupied.peek() == std::char_traits<char>::eof());
-  auto const entry_count = std::distance(std::filesystem::directory_iterator{ directory.path() },
-    std::filesystem::directory_iterator{});
+  auto const entry_count =
+    std::distance(std::filesystem::directory_iterator{ directory.path() }, std::filesystem::directory_iterator{});
   REQUIRE(entry_count == kSingleOutputFileCount);
 }
 
@@ -138,8 +166,8 @@ TEST_CASE("successful MP4 publication removes its temporary output", "[video]")
   TemporaryDirectory const directory;
   auto const output = directory.path() / "completed.mp4";
   {
-    auto muxer = vkgsplat::Mp4Muxer::Open(output, kVideoWidth, kVideoHeight,
-      kFrameRateNumerator, kFrameRateDenominator, kParameterSets);
+    auto muxer = vkgsplat::Mp4Muxer::Open(
+      output, kVideoWidth, kVideoHeight, kFrameRateNumerator, kFrameRateDenominator, kParameterSets);
     REQUIRE(muxer);
     vkgsplat::EncodedPacket const packet{
       .data = std::vector<std::byte>{ kIdrPicture.begin(), kIdrPicture.end() },
@@ -152,13 +180,13 @@ TEST_CASE("successful MP4 publication removes its temporary output", "[video]")
     REQUIRE((*muxer)->Write(packet));
     REQUIRE((*muxer)->Finish());
     REQUIRE(std::filesystem::exists(output));
-    auto const entry_count = std::distance(std::filesystem::directory_iterator{ directory.path() },
-      std::filesystem::directory_iterator{});
+    auto const entry_count =
+      std::distance(std::filesystem::directory_iterator{ directory.path() }, std::filesystem::directory_iterator{});
     REQUIRE(entry_count == kSingleOutputFileCount);
   }
   REQUIRE(std::filesystem::exists(output));
-  auto const entry_count = std::distance(std::filesystem::directory_iterator{ directory.path() },
-    std::filesystem::directory_iterator{});
+  auto const entry_count =
+    std::distance(std::filesystem::directory_iterator{ directory.path() }, std::filesystem::directory_iterator{});
   REQUIRE(entry_count == kSingleOutputFileCount);
 }
 
@@ -166,8 +194,8 @@ TEST_CASE("MP4 accepts timestamp gaps with consecutive encode indices", "[video]
 {
   TemporaryDirectory const directory;
   auto const output = directory.path() / "timestamp-gaps.mp4";
-  auto muxer = vkgsplat::Mp4Muxer::Open(output, kVideoWidth, kVideoHeight,
-    kFrameRateNumerator, kFrameRateDenominator, kParameterSets);
+  auto muxer = vkgsplat::Mp4Muxer::Open(
+    output, kVideoWidth, kVideoHeight, kFrameRateNumerator, kFrameRateDenominator, kParameterSets);
   REQUIRE(muxer);
   constexpr std::int64_t kFirstTimestamp = 0;
   constexpr std::int64_t kSecondTimestamp = 3;

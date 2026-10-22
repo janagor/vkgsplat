@@ -15,22 +15,22 @@ class Camera;
 
 namespace video {
 
-// Internal bridge owned by the capture module; its implementation owns the
-// Vulkan encoder and converter and borrows the renderer.
-class RecordingSession
-{
-public:
-  RecordingSession() = default;
-  virtual ~RecordingSession() = default;
-  RecordingSession(RecordingSession const &) = delete;
-  auto operator=(RecordingSession const &) -> RecordingSession & = delete;
-  RecordingSession(RecordingSession &&) = delete;
-  auto operator=(RecordingSession &&) -> RecordingSession & = delete;
-  [[nodiscard]] virtual auto CaptureFrame(Camera const &camera, u64 frame_index)
-    -> std::expected<EncodedPacket, Error> = 0;
-  [[nodiscard]] virtual auto Finish() -> std::expected<void, Error> = 0;
-  [[nodiscard]] virtual auto ParameterSets() const noexcept -> std::span<std::byte const> = 0;
-};
+  // Internal bridge owned by the capture module; its implementation owns the
+  // Vulkan encoder and converter and borrows the renderer.
+  class RecordingSession
+  {
+  public:
+    RecordingSession() = default;
+    virtual ~RecordingSession() = default;
+    RecordingSession(RecordingSession const &) = delete;
+    auto operator=(RecordingSession const &) -> RecordingSession & = delete;
+    RecordingSession(RecordingSession &&) = delete;
+    auto operator=(RecordingSession &&) -> RecordingSession & = delete;
+    [[nodiscard]] virtual auto CaptureFrame(Camera const &camera, u64 frame_index)
+      -> std::expected<EncodedPacket, Error> = 0;
+    [[nodiscard]] virtual auto Finish() -> std::expected<void, Error> = 0;
+    [[nodiscard]] virtual auto ParameterSets() const noexcept -> std::span<std::byte const> = 0;
+  };
 
 }// namespace video
 }// namespace vkgsplat

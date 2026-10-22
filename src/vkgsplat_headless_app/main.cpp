@@ -3,13 +3,13 @@
 #include <vkgsplat/frame_rate.hpp>
 #include <vkgsplat/platform.hpp>
 #include <vkgsplat/renderer.hpp>
-#include <vkgsplat_headless/headless_platform.hpp>
-#include <vkgsplat_headless/offscreen_platform.hpp>
+#include <vkgsplat/video_capabilities.hpp>
 #include <vkgsplat_capture/frame_sequence.hpp>
 #include <vkgsplat_capture/screenshot.hpp>
-#include <vkgsplat_capture/video_recorder.hpp>
 #include <vkgsplat_capture/video_config.hpp>
-#include <vkgsplat/video_capabilities.hpp>
+#include <vkgsplat_capture/video_recorder.hpp>
+#include <vkgsplat_headless/headless_platform.hpp>
+#include <vkgsplat_headless/offscreen_platform.hpp>
 #include <vkgsplat_utility/types.hpp>
 
 #include <CLI/CLI.hpp>
@@ -17,12 +17,12 @@
 
 #include <array>
 #include <cmath>
-#include <expected>
 #include <exception>
+#include <expected>
 #include <filesystem>
-#include <optional>
-#include <numbers>
 #include <memory>
+#include <numbers>
+#include <optional>
 #include <print>
 #include <string>
 #include <utility>
@@ -43,17 +43,22 @@ constexpr vkgsplat::f64 kRadiansPerCircle = 2.0 * std::numbers::pi_v<vkgsplat::f
 }
 
 [[nodiscard]] auto OrbitCamera(std::array<vkgsplat::f64, 3> const &position,
-  std::array<vkgsplat::f64, 3> const &target, vkgsplat::u32 width, vkgsplat::u32 height,
-  vkgsplat::u64 index, vkgsplat::u64 frames, vkgsplat::f64 degrees) -> vkgsplat::Camera
+  std::array<vkgsplat::f64, 3> const &target,
+  vkgsplat::u32 width,
+  vkgsplat::u32 height,
+  vkgsplat::u64 index,
+  vkgsplat::u64 frames,
+  vkgsplat::f64 degrees) -> vkgsplat::Camera
 {
   auto const radians_per_degree = kRadiansPerCircle / kFullCircleDegrees;
   auto const horizontal_x = position.at(0) - target.at(0);
   auto const horizontal_z = position.at(2) - target.at(2);
-  auto const angle = static_cast<vkgsplat::f64>(index) / static_cast<vkgsplat::f64>(frames)
-                     * degrees * radians_per_degree;
+  auto const angle =
+    static_cast<vkgsplat::f64>(index) / static_cast<vkgsplat::f64>(frames) * degrees * radians_per_degree;
   return vkgsplat::Camera{ vkgsplat::CameraConfig{
     .position = { target.at(0) + (horizontal_x * std::cos(angle)) + (horizontal_z * std::sin(angle)),
-      position.at(1), target.at(2) - (horizontal_x * std::sin(angle)) + (horizontal_z * std::cos(angle)) },
+      position.at(1),
+      target.at(2) - (horizontal_x * std::sin(angle)) + (horizontal_z * std::cos(angle)) },
     .target = { target.at(0), target.at(1), target.at(2) },
     .aspect_ratio = static_cast<vkgsplat::f64>(width) / static_cast<vkgsplat::f64>(height),
   } };
@@ -84,28 +89,32 @@ struct OrbitSettings
   return std::make_unique<vkgsplat::HeadlessPlatform>(std::move(*created));
 }
 
-auto RecordOrbitFrames(vkgsplat::Renderer &renderer, std::string const &output,
-  std::string const &sequence_dir, std::filesystem::path const &extension,
-  bool video_mode, OrbitSettings const &settings) -> int
+auto RecordOrbitFrames(vkgsplat::Renderer &renderer,
+  std::string const &output,
+  std::string const &sequence_dir,
+  std::filesystem::path const &extension,
+  bool video_mode,
+  OrbitSettings const &settings) -> int
 {
   if (video_mode) {
-    auto recorder = vkgsplat::capture::VideoRecorder::create(renderer, {
-      .output_path = output,
-      .container = extension == ".mp4" ? vkgsplat::capture::VideoContainer::kMp4
-                                     : vkgsplat::capture::VideoContainer::kH264,
-      .width = settings.width,
-      .height = settings.height,
-      .frame_rate = { .numerator = settings.fps, .denominator = settings.fps_denominator },
-      .rate_control = {},
-      .gop = {},
-    });
+    auto recorder = vkgsplat::capture::VideoRecorder::create(renderer,
+      {
+        .output_path = output,
+        .container =
+          extension == ".mp4" ? vkgsplat::capture::VideoContainer::kMp4 : vkgsplat::capture::VideoContainer::kH264,
+        .width = settings.width,
+        .height = settings.height,
+        .frame_rate = { .numerator = settings.fps, .denominator = settings.fps_denominator },
+        .rate_control = {},
+        .gop = {},
+      });
     if (!recorder) {
       std::println(stderr, "{}", recorder.error().message());
       return 1;
     }
     for (vkgsplat::u64 index = 0U; index < settings.frames; ++index) {
-      auto const orbit_camera = OrbitCamera(settings.position, settings.target,
-        settings.width, settings.height, index, settings.frames, settings.degrees);
+      auto const orbit_camera = OrbitCamera(
+        settings.position, settings.target, settings.width, settings.height, index, settings.frames, settings.degrees);
       if (auto recorded = recorder->record_frame(orbit_camera); !recorded) {
         std::println(stderr, "{}", recorded.error().message());
         return 1;
@@ -119,17 +128,18 @@ auto RecordOrbitFrames(vkgsplat::Renderer &renderer, std::string const &output,
     return 0;
   }
   if (!sequence_dir.empty()) {
-    auto sequence = vkgsplat::capture::FrameSequence::create(renderer, {
-      .output_directory = sequence_dir,
-      .frame_rate = { .numerator = settings.fps, .denominator = settings.fps_denominator },
-    });
+    auto sequence = vkgsplat::capture::FrameSequence::create(renderer,
+      {
+        .output_directory = sequence_dir,
+        .frame_rate = { .numerator = settings.fps, .denominator = settings.fps_denominator },
+      });
     if (!sequence) {
       std::println(stderr, "{}", sequence.error().message());
       return 1;
     }
     for (vkgsplat::u64 index = 0U; index < settings.frames; ++index) {
-      auto const orbit_camera = OrbitCamera(settings.position, settings.target,
-        settings.width, settings.height, index, settings.frames, settings.degrees);
+      auto const orbit_camera = OrbitCamera(
+        settings.position, settings.target, settings.width, settings.height, index, settings.frames, settings.degrees);
       auto recorded = sequence->record_frame(orbit_camera);
       if (!recorded) {
         std::println(stderr, "{}", recorded.error().message());
@@ -188,8 +198,8 @@ auto RunHeadless(int argc, char **argv) -> int
 
   auto const extension = std::filesystem::path{ output }.extension();
   auto const video_mode = extension == ".h264" || extension == ".mp4";
-  if ((output.empty() && sequence_dir.empty()) || width == 0U || height == 0U || fps == 0U
-      || fps_denominator == 0U || !std::isfinite(orbit_degrees)
+  if ((output.empty() && sequence_dir.empty()) || width == 0U || height == 0U || fps == 0U || fps_denominator == 0U
+      || !std::isfinite(orbit_degrees)
       || ((!sequence_dir.empty() || video_mode) && (target != "offscreen" || frames == 0U))) {
     std::println(stderr, "Invalid output mode, positive width and height, frame count, frame rate, or orbit angle");
     return 1;
@@ -211,19 +221,21 @@ auto RunHeadless(int argc, char **argv) -> int
   };
   std::optional<vkgsplat::Engine> video_engine;
   if (video_mode) {
-    auto created = vkgsplat::Engine::create({
-      .enable_validation = validation,
-      .request_present_timing = false,
-      .video_encode = vkgsplat::VideoEncodeSupport::kRequired,
-    }, **platform);
+    auto created = vkgsplat::Engine::create(
+      {
+        .enable_validation = validation,
+        .request_present_timing = false,
+        .video_encode = vkgsplat::VideoEncodeSupport::kRequired,
+      },
+      **platform);
     if (!created) {
       std::println(stderr, "{}", created.error().message());
       return 1;
     }
     video_engine.emplace(std::move(*created));
   }
-  auto renderer = video_engine ? vkgsplat::Renderer::create(config, *video_engine)
-                               : vkgsplat::Renderer::create(config, **platform);
+  auto renderer =
+    video_engine ? vkgsplat::Renderer::create(config, *video_engine) : vkgsplat::Renderer::create(config, **platform);
   if (!renderer) {
     std::println(stderr, "{}", renderer.error().message());
     return 1;
@@ -234,9 +246,19 @@ auto RunHeadless(int argc, char **argv) -> int
     .aspect_ratio = static_cast<vkgsplat::f64>(width) / static_cast<vkgsplat::f64>(height),
   } };
   if (video_mode || !sequence_dir.empty()) {
-    return RecordOrbitFrames(*renderer, output, sequence_dir, extension, video_mode,
-      { .position = camera_position, .target = camera_target, .width = width, .height = height,
-        .frames = frames, .fps = fps, .fps_denominator = fps_denominator, .degrees = orbit_degrees });
+    return RecordOrbitFrames(*renderer,
+      output,
+      sequence_dir,
+      extension,
+      video_mode,
+      { .position = camera_position,
+        .target = camera_target,
+        .width = width,
+        .height = height,
+        .frames = frames,
+        .fps = fps,
+        .fps_denominator = fps_denominator,
+        .degrees = orbit_degrees });
   }
   if (target == "offscreen") {
     auto frame = renderer->render_frame(camera);

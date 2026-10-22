@@ -1,24 +1,24 @@
 // NOLINTBEGIN(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)
 #include <vkgsplat/frame.hpp>
-#include <vkgsplat_utility/types.hpp>
 #include <vkgsplat_capture/screenshot.hpp>
+#include <vkgsplat_utility/types.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
-#include <utility>
-#include <algorithm>
 #include <span>
 #include <string>
 #include <system_error>
+#include <utility>
 
 namespace {
 
@@ -60,11 +60,24 @@ private:
 TEST_CASE("capture writes RGBA pixels with the original dimensions", "[capture]")
 {
   std::array<std::uint8_t, kPixelBytes> const expected{
-    255U, 0U, 0U, 255U, 0U, 255U, 0U, 128U,
-    0U, 0U, 255U, 64U, 255U, 255U, 255U, 0U,
+    255U,
+    0U,
+    0U,
+    255U,
+    0U,
+    255U,
+    0U,
+    128U,
+    0U,
+    0U,
+    255U,
+    64U,
+    255U,
+    255U,
+    255U,
+    0U,
   };
-  vkgsplat::RgbaFrame const frame{ .width = kWidth, .height = kHeight,
-    .pixels = { expected.begin(), expected.end() } };
+  vkgsplat::RgbaFrame const frame{ .width = kWidth, .height = kHeight, .pixels = { expected.begin(), expected.end() } };
   TemporaryPng const output;
   auto const filename = output.path().string();
 
@@ -96,8 +109,9 @@ TEST_CASE("capture propagates PNG validation and output errors", "[capture]")
   REQUIRE_FALSE(invalid_pixels);
   CHECK(invalid_pixels.error().code() == std::make_error_code(std::errc::invalid_argument));
 
-  vkgsplat::RgbaFrame const valid{ .width = kSinglePixelDimension, .height = kSinglePixelDimension,
-    .pixels = { 0U, 0U, 0U, 255U } };
+  vkgsplat::RgbaFrame const valid{
+    .width = kSinglePixelDimension, .height = kSinglePixelDimension, .pixels = { 0U, 0U, 0U, 255U }
+  };
   auto invalid_path = vkgsplat::capture::WritePng(valid, (output.path() / "missing.png").string());
   REQUIRE_FALSE(invalid_path);
   CHECK(invalid_path.error().code() == std::make_error_code(std::errc::io_error));

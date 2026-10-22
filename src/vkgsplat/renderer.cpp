@@ -43,10 +43,10 @@
 #include "vulkan/render_thread.hpp"
 #include "vulkan/renderer.hpp"
 #include "vulkan/sphere_setup.hpp"
-#include "vulkan/vulkan_context.hpp"
-#include "vulkan/vulkan_driver.hpp"
 #include "vulkan/video/color_converter.hpp"
 #include "vulkan/video/video_encoder.hpp"
+#include "vulkan/vulkan_context.hpp"
+#include "vulkan/vulkan_driver.hpp"
 #include <vkgsplat_io/load_splats.hpp>
 #include <vkgsplat_io/splat_cpu.hpp>
 #include <vkgsplat_video/recording_session.hpp>
@@ -237,7 +237,8 @@ namespace {
   class VulkanVideoRecordingSession final : public video::RecordingSession
   {
   public:
-    VulkanVideoRecordingSession(RenderThread &worker, VkExtent2D extent,
+    VulkanVideoRecordingSession(RenderThread &worker,
+      VkExtent2D extent,
       std::unique_ptr<vulkan::video::GpuColorConverter> converter,
       std::unique_ptr<vulkan::video::VideoEncoder> encoder) noexcept
       : worker_{ &worker }, extent_{ extent }, converter_{ std::move(converter) }, encoder_{ std::move(encoder) }
@@ -247,8 +248,8 @@ namespace {
       -> std::expected<EncodedPacket, Error> override
     {
       if (finished_ || failed_) {
-        return std::unexpected(MakeError(std::errc::operation_not_permitted,
-          "video recording session is finished or failed"));
+        return std::unexpected(
+          MakeError(std::errc::operation_not_permitted, "video recording session is finished or failed"));
       }
       auto const aspect_ratio = static_cast<f64>(extent_.width) / static_cast<f64>(extent_.height);
       auto packet = worker_->CaptureVideoFrame(camera, aspect_ratio, *converter_, *encoder_, frame_index);
@@ -259,8 +260,8 @@ namespace {
     [[nodiscard]] auto Finish() -> std::expected<void, Error> override
     {
       if (finished_ || failed_) {
-        return std::unexpected(MakeError(std::errc::operation_not_permitted,
-          "video recording session is finished or failed"));
+        return std::unexpected(
+          MakeError(std::errc::operation_not_permitted, "video recording session is finished or failed"));
       }
       auto finished = encoder_->Finish();
       if (!finished) {
@@ -363,19 +364,18 @@ auto Renderer::render_frame(Camera const &camera) -> std::expected<RgbaFrame, Er
   return impl_->render_thread->CaptureFrame(camera, aspect_ratio);
 }
 
-auto Renderer::create_video_recording_session(u32 width, u32 height,
-  u32 fps_numerator, u32 fps_denominator)
+auto Renderer::create_video_recording_session(u32 width, u32 height, u32 fps_numerator, u32 fps_denominator)
   -> std::expected<std::unique_ptr<video::RecordingSession>, Error>
 {
   auto &context = AsVulkanDriver(impl_->engine->driver()).context();
   if (!context.video_encode) {
-    return std::unexpected(MakeError(std::errc::function_not_supported,
-      "renderer engine was not created with H.264 video encoding enabled"));
+    return std::unexpected(MakeError(
+      std::errc::function_not_supported, "renderer engine was not created with H.264 video encoding enabled"));
   }
   if (context.swapchain != nullptr || width == 0U || height == 0U || width != impl_->render_data.color_width
       || height != impl_->render_data.color_height) {
-    return std::unexpected(MakeError(std::errc::invalid_argument,
-      "video recording requires an offscreen renderer with matching dimensions"));
+    return std::unexpected(MakeError(
+      std::errc::invalid_argument, "video recording requires an offscreen renderer with matching dimensions"));
   }
   VkExtent2D const extent{ .width = width, .height = height };
   auto device = *context.video_encode;
@@ -387,18 +387,17 @@ auto Renderer::create_video_recording_session(u32 width, u32 height,
     .required_extent = extent,
   });
   if (!selection) {
-    return std::unexpected(MakeError(std::errc::function_not_supported,
-      "no NV12 H.264 encoding profile supports this recording extent"));
+    return std::unexpected(
+      MakeError(std::errc::function_not_supported, "no NV12 H.264 encoding profile supports this recording extent"));
   }
   device.selection = *selection;
   auto converter = vulkan::video::GpuColorConverter::Create(context, device, extent);
   if (!converter) { return std::unexpected(converter.error()); }
-  auto encoder = vulkan::video::VideoEncoder::Create(context, std::move(device), extent,
-    fps_numerator, fps_denominator);
+  auto encoder =
+    vulkan::video::VideoEncoder::Create(context, std::move(device), extent, fps_numerator, fps_denominator);
   if (!encoder) { return std::unexpected(encoder.error()); }
-  return std::unique_ptr<video::RecordingSession>{
-    std::make_unique<VulkanVideoRecordingSession>(*impl_->render_thread,
-      extent, std::move(*converter), std::move(*encoder)) };
+  return std::unique_ptr<video::RecordingSession>{ std::make_unique<VulkanVideoRecordingSession>(
+    *impl_->render_thread, extent, std::move(*converter), std::move(*encoder)) };
 }
 
 auto Renderer::poll_error() const -> std::optional<Error> { return impl_->render_thread->PollError(); }

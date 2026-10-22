@@ -15,8 +15,8 @@
 #include <system_error>
 
 #include <VkBootstrap.h>
-#include <vulkan/vulkan_core.h>
 #include <vkgsplat_utility/error.hpp>
+#include <vulkan/vulkan_core.h>
 
 namespace vkgsplat::test {
 namespace {
@@ -34,14 +34,19 @@ namespace {
       std::string{ operation } + " failed (VkResult " + std::to_string(static_cast<int>(result)) + ")");
   }
 
-  [[nodiscard]] auto AllocateMemory(vulkan::Context &context, VkMemoryRequirements const &requirements,
-    VkMemoryPropertyFlags required, VkImage image, VkBuffer buffer) -> std::expected<VkDeviceMemory, Error>
+  [[nodiscard]] auto AllocateMemory(vulkan::Context &context,
+    VkMemoryRequirements const &requirements,
+    VkMemoryPropertyFlags required,
+    VkImage image,
+    VkBuffer buffer) -> std::expected<VkDeviceMemory, Error>
   {
     VkPhysicalDeviceMemoryProperties properties{};
     context.inst_disp.getPhysicalDeviceMemoryProperties(context.device.physical_device, &properties);
     for (std::uint32_t index = 0U; index < properties.memoryTypeCount; ++index) {
       if ((requirements.memoryTypeBits & (1U << index)) == 0U
-          || (std::span{ properties.memoryTypes }.subspan(index).front().propertyFlags & required) != required) { continue; }
+          || (std::span{ properties.memoryTypes }.subspan(index).front().propertyFlags & required) != required) {
+        continue;
+      }
       VkMemoryDedicatedAllocateInfo const dedicated{
         .sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO,
         .pNext = nullptr,
@@ -80,13 +85,13 @@ GpuVideoSource::~GpuVideoSource()
   if (image_memory_ != VK_NULL_HANDLE) { context_.disp.freeMemory(image_memory_, nullptr); }
 }
 
-auto GpuVideoSource::Create(vulkan::Context &context, vulkan::video::EncodeDevice const &device,
-  VkExtent2D extent) -> std::expected<std::unique_ptr<GpuVideoSource>, Error>
+auto GpuVideoSource::Create(vulkan::Context &context, vulkan::video::EncodeDevice const &device, VkExtent2D extent)
+  -> std::expected<std::unique_ptr<GpuVideoSource>, Error>
 {
   if (device.selection.source_format.format != VK_FORMAT_G8_B8R8_2PLANE_420_UNORM
       || !device.selection.source_format.transfer_destination) {
-    return std::unexpected(MakeError(std::errc::function_not_supported,
-      "external GPU test source requires a two-plane NV12 transfer destination"));
+    return std::unexpected(MakeError(
+      std::errc::function_not_supported, "external GPU test source requires a two-plane NV12 transfer destination"));
   }
   auto graphics = context.device.get_queue_and_index(vkb::QueueType::graphics);
   if (!graphics || device.queue == VK_NULL_HANDLE) {
@@ -150,8 +155,11 @@ auto GpuVideoSource::Create(vulkan::Context &context, vulkan::video::EncodeDevic
     .viewType = VK_IMAGE_VIEW_TYPE_2D,
     .format = format.format,
     .components = format.components,
-    .subresourceRange = { .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 0U,
-      .levelCount = kOneResource, .baseArrayLayer = 0U, .layerCount = kOneResource },
+    .subresourceRange = { .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+      .baseMipLevel = 0U,
+      .levelCount = kOneResource,
+      .baseArrayLayer = 0U,
+      .layerCount = kOneResource },
   };
   result = context.disp.createImageView(&view, nullptr, &source->view_);
   if (result != VK_SUCCESS) { return std::unexpected(Failure("create external NV12 image view", result)); }
@@ -168,9 +176,11 @@ auto GpuVideoSource::Create(vulkan::Context &context, vulkan::video::EncodeDevic
   result = context.disp.createBuffer(&buffer, nullptr, &source->upload_);
   if (result != VK_SUCCESS) { return std::unexpected(Failure("create external NV12 upload", result)); }
   context.disp.getBufferMemoryRequirements(source->upload_, &requirements);
-  memory = AllocateMemory(context, requirements,
+  memory = AllocateMemory(context,
+    requirements,
     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-    VK_NULL_HANDLE, source->upload_);
+    VK_NULL_HANDLE,
+    source->upload_);
   if (!memory) { return std::unexpected(memory.error()); }
   source->upload_memory_ = *memory;
   result = context.disp.bindBufferMemory(source->upload_, source->upload_memory_, 0U);
@@ -210,7 +220,8 @@ auto GpuVideoSource::Prepare(std::uint8_t luma) -> std::expected<vulkan::video::
   if (result != VK_SUCCESS) { return std::unexpected(Failure("map external NV12 upload", result)); }
   std::memset(mapped, luma, static_cast<std::size_t>(y_size));
   auto const upload_bytes = std::span{ static_cast<std::byte *>(mapped), static_cast<std::size_t>(upload_size) };
-  std::memset(upload_bytes.subspan(static_cast<std::size_t>(y_size)).data(), kNeutralChroma,
+  std::memset(upload_bytes.subspan(static_cast<std::size_t>(y_size)).data(),
+    kNeutralChroma,
     static_cast<std::size_t>(upload_size - y_size));
   context_.disp.unmapMemory(upload_memory_);
   result = context_.disp.resetCommandBuffer(command_, 0U);
@@ -234,8 +245,11 @@ auto GpuVideoSource::Prepare(std::uint8_t luma) -> std::expected<vulkan::video::
     .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
     .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
     .image = image_,
-    .subresourceRange = { .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 0U,
-      .levelCount = kOneResource, .baseArrayLayer = 0U, .layerCount = kOneResource },
+    .subresourceRange = { .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+      .baseMipLevel = 0U,
+      .levelCount = kOneResource,
+      .baseArrayLayer = 0U,
+      .layerCount = kOneResource },
   };
   VkDependencyInfo const dependency{
     .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
@@ -253,10 +267,15 @@ auto GpuVideoSource::Prepare(std::uint8_t luma) -> std::expected<vulkan::video::
   chroma_region.bufferOffset = y_size;
   chroma_region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_PLANE_1_BIT;
   chroma_region.imageSubresource.layerCount = kOneResource;
-  chroma_region.imageExtent = { .width = extent_.width / kChromaDivisor,
-    .height = extent_.height / kChromaDivisor, .depth = kOneResource };
-  context_.disp.cmdCopyBufferToImage(command_, upload_, image_, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-    static_cast<std::uint32_t>(regions.size()), regions.data());
+  chroma_region.imageExtent = {
+    .width = extent_.width / kChromaDivisor, .height = extent_.height / kChromaDivisor, .depth = kOneResource
+  };
+  context_.disp.cmdCopyBufferToImage(command_,
+    upload_,
+    image_,
+    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+    static_cast<std::uint32_t>(regions.size()),
+    regions.data());
   barrier.srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
   barrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
   barrier.dstStageMask = VK_PIPELINE_STAGE_2_NONE;
