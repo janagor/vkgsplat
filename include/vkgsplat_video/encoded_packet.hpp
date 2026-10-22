@@ -7,7 +7,8 @@
 
 namespace vkgsplat {
 
-// One complete H.264 access unit. Timestamps use the configured frame-rate time base.
+// One complete H.264 access unit. Frame indices are consecutive for accepted
+// pictures; timestamps use the configured frame-rate time base and may have gaps.
 struct EncodedPacket
 {
   std::vector<std::byte> data;

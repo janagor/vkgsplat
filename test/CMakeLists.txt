@@ -164,6 +164,18 @@ if(vkgsplat_ENABLE_VIDEO_GPU_TESTS)
            COMMAND $<TARGET_FILE:vkgsplat_video_encode_synthetic_test>
                    ${CMAKE_CURRENT_BINARY_DIR}/video-gpu-source-smoke.h264 --gpu-only)
   set_tests_properties(video.encode.gpu_source.smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300)
+  add_test(NAME video.encode.async_slots.smoke
+           COMMAND $<TARGET_FILE:vkgsplat_video_encode_synthetic_test>
+                   ${CMAKE_CURRENT_BINARY_DIR}/video-async-slots-smoke.h264 --async)
+  set_tests_properties(video.encode.async_slots.smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300
+                       FAIL_REGULAR_EXPRESSION "\\[ERROR: .*Validation"
+                       ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1")
+  add_test(NAME video.encode.converter_pool.smoke
+           COMMAND $<TARGET_FILE:vkgsplat_video_encode_synthetic_test>
+                   ${CMAKE_CURRENT_BINARY_DIR}/video-converter-pool-smoke.h264 --async-color)
+  set_tests_properties(video.encode.converter_pool.smoke PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300
+                       FAIL_REGULAR_EXPRESSION "\\[ERROR: .*Validation"
+                       ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1")
   add_test(NAME video.encode.color_conversion.smoke
            COMMAND $<TARGET_FILE:vkgsplat_video_encode_synthetic_test>
                    ${CMAKE_CURRENT_BINARY_DIR}/video-color-conversion-smoke.h264 --color-conversion)

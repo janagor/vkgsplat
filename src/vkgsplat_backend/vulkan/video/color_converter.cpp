@@ -5,12 +5,14 @@
 
 #include <vkgsplat/example_config.h>
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <string>
 #include <system_error>
+#include <utility>
 #include <vector>
 
 namespace vkgsplat::vulkan::video {
@@ -306,7 +308,15 @@ auto GpuColorConverter::WaitForSourceRelease() -> std::expected<void, Error>
 {
   if (!in_flight_) { return {}; }
   auto const result = context_.disp.waitForFences(kOneResource, &converted_done_, VK_TRUE, UINT64_MAX);
-  if (result != VK_SUCCESS) { return std::unexpected(Failure("wait for GPU color conversion", result)); }
+  if (result != VK_SUCCESS) {
+    // A lease may release its RGBA source only after conversion has stopped
+    // reading it. A queue-wide wait is reserved for this exceptional path.
+    auto const queue_lock = context_.vkexec_context->lock_queue(graphics_queue_);
+    auto const idle = context_.disp.queueWaitIdle(graphics_queue_);
+    if (idle != VK_SUCCESS) {
+      return std::unexpected(Failure("retire failed GPU color conversion", idle));
+    }
+  }
   return {};
 }
 
@@ -451,6 +461,131 @@ auto GpuColorConverter::Convert(VkImage source, VkSemaphore ready_timeline, std:
     .layout = VK_IMAGE_LAYOUT_VIDEO_ENCODE_SRC_KHR,
     .ready_binary_semaphore = converted_,
   };
+}
+
+ConversionLease::ConversionLease(std::shared_ptr<GpuColorConverterPool> pool, std::size_t slot) noexcept
+  : pool_{ std::move(pool) }, slot_{ slot }
+{}
+
+ConversionLease::~ConversionLease() noexcept { pool_->Release(slot_, encode_submitted_); }
+
+GpuColorConverterPool::GpuColorConverterPool(Context &context, EncodeDevice device, VkExtent2D extent)
+  : context_{ context }, device_{ std::move(device) }, extent_{ extent }
+{}
+
+auto GpuColorConverterPool::Create(Context &context, EncodeDevice const &device,
+  VkExtent2D extent, std::size_t slot_count)
+  -> std::expected<std::shared_ptr<GpuColorConverterPool>, Error>
+{
+  if (slot_count == 0U || slot_count > VideoEncoder::kMaximumInFlightFrames) {
+    return std::unexpected(MakeError(std::errc::invalid_argument, "invalid conversion slot count"));
+  }
+  auto pool = std::shared_ptr<GpuColorConverterPool>{ new GpuColorConverterPool{ context, device, extent } };
+  pool->source_owners_.resize(slot_count);
+  pool->converters_.reserve(slot_count);
+  pool->states_.resize(slot_count, SlotState::kFree);
+  pool->encode_submitted_.resize(slot_count, false);
+  for (std::size_t slot = 0U; slot < slot_count; ++slot) {
+    auto converter = GpuColorConverter::Create(context, device, extent);
+    if (!converter) { return std::unexpected(converter.error()); }
+    pool->converters_.push_back(std::move(*converter));
+  }
+  return pool;
+}
+
+auto GpuColorConverterPool::Convert(VkImage source, VkSemaphore ready_timeline,
+  std::uint64_t ready_value, std::shared_ptr<void> source_owner)
+  -> std::expected<ConvertedFrame, Error>
+{
+  if (!source_owner) {
+    return std::unexpected(MakeError(std::errc::invalid_argument,
+      "asynchronous conversion requires an owned RGBA source"));
+  }
+  std::unique_lock lock{ mutex_ };
+  if (failure_) { return std::unexpected(*failure_); }
+  for (std::size_t slot = 0U; slot < converters_.size(); ++slot) {
+    if (states_.at(slot) != SlotState::kFree) { continue; }
+    auto lease = std::shared_ptr<ConversionLease>{ new ConversionLease{ shared_from_this(), slot } };
+    states_.at(slot) = SlotState::kLeased;
+    source_owners_.at(slot) = std::move(source_owner);
+    lock.unlock();
+    auto prepared = converters_.at(slot)->Convert(source, ready_timeline, ready_value);
+    if (!prepared) {
+      std::scoped_lock const failure_lock{ mutex_ };
+      failure_ = prepared.error();
+      return std::unexpected(prepared.error());
+    }
+    return ConvertedFrame{ .prepared = *prepared, .lease = std::move(lease) };
+  }
+  return std::unexpected(MakeError(std::errc::resource_unavailable_try_again,
+    "all GPU conversion slots are busy"));
+}
+
+auto GpuColorConverterPool::Release(std::size_t slot, bool encode_submitted) noexcept -> void
+{
+  std::scoped_lock const lock{ mutex_ };
+  encode_submitted_.at(slot) = encode_submitted;
+  states_.at(slot) = SlotState::kRetiring;
+}
+
+auto GpuColorConverterPool::RetireReleased() -> std::expected<void, Error>
+{
+  {
+    std::scoped_lock const lock{ mutex_ };
+    if (failure_ && failure_->code() == std::errc::no_such_device) {
+      return std::unexpected(*failure_);
+    }
+  }
+  for (std::size_t slot = 0U; slot < converters_.size(); ++slot) {
+    bool encode_submitted = false;
+    {
+      std::scoped_lock const lock{ mutex_ };
+      if (states_.at(slot) != SlotState::kRetiring && states_.at(slot) != SlotState::kFailed) { continue; }
+      states_.at(slot) = SlotState::kRetiringGpu;
+      encode_submitted = encode_submitted_.at(slot);
+    }
+    std::expected<void, Error> completed;
+    if (converters_.at(slot) != nullptr) { completed = converters_.at(slot)->Complete(); }
+    if (!completed) {
+      std::scoped_lock const lock{ mutex_ };
+      states_.at(slot) = SlotState::kFailed;
+      failure_ = completed.error();
+      return std::unexpected(completed.error());
+    }
+    source_owners_.at(slot).reset();
+    if (!encode_submitted) {
+      // Destroying the completed converter discards its unconsumed binary
+      // semaphore. A fresh converter has a fresh semaphore and command state.
+      converters_.at(slot).reset();
+      auto replacement = GpuColorConverter::Create(context_, device_, extent_);
+      if (!replacement) {
+        std::scoped_lock const lock{ mutex_ };
+        states_.at(slot) = SlotState::kFailed;
+        failure_ = replacement.error();
+        return std::unexpected(replacement.error());
+      }
+      converters_.at(slot) = std::move(*replacement);
+    }
+    {
+      std::scoped_lock const lock{ mutex_ };
+      states_.at(slot) = SlotState::kFree;
+      encode_submitted_.at(slot) = false;
+    }
+  }
+  {
+    std::scoped_lock const lock{ mutex_ };
+    auto const still_retiring = std::any_of(states_.begin(), states_.end(), [](SlotState state) -> bool {
+      return state == SlotState::kRetiring || state == SlotState::kRetiringGpu || state == SlotState::kFailed;
+    });
+    if (!still_retiring) { failure_.reset(); }
+  }
+  return {};
+}
+
+auto GpuColorConverterPool::PollError() const -> std::optional<Error>
+{
+  std::scoped_lock const lock{ mutex_ };
+  return failure_;
 }
 
 }// namespace vkgsplat::vulkan::video

@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <expected>
 #include <functional>
 #include <memory>
@@ -277,6 +278,7 @@ auto RenderThread::StartWorker(vulkan::Context *context,
 void RenderThread::Stop()
 {
   if (!thread_.joinable()) {
+    ClearInteractiveCaptureAfterStop();
     std::scoped_lock const lock{ control_mutex_ };
     context_ = nullptr;
     data_ = nullptr;
@@ -317,6 +319,7 @@ void RenderThread::Stop()
   }
   control_cv_.notify_all();
 
+  ClearInteractiveCaptureAfterStop();
   context_ = nullptr;
   data_ = nullptr;
   draw_frame_override_ = {};
@@ -407,6 +410,64 @@ auto RenderThread::CaptureVideoFrameForTest(Camera const &camera, f64 aspect_rat
   u64 frame_index) -> std::expected<EncodedPacket, Error>
 {
   return CaptureVideoFrameImpl(camera, aspect_ratio, nullptr, nullptr, frame_index);
+}
+
+auto RenderThread::AttachInteractiveCapture(
+  std::function<std::expected<CaptureOutcome, Error>()> capture) -> std::expected<u64, Error>
+{
+  if (!capture) {
+    return std::unexpected(MakeError(std::errc::invalid_argument,
+      "interactive capture callback is empty"));
+  }
+  std::scoped_lock const lock{ control_mutex_ };
+  if (interactive_capture_ || interactive_capture_callbacks_in_progress_ != 0U) {
+    return std::unexpected(MakeError(std::errc::device_or_resource_busy,
+      "detach the previous interactive capture before attaching another"));
+  }
+  interactive_capture_ = std::move(capture);
+  ++interactive_capture_generation_;
+  interactive_capture_active_ = true;
+  interactive_capture_error_.reset();
+  return interactive_capture_generation_;
+}
+
+auto RenderThread::ClearInteractiveCaptureAfterStop() -> void
+{
+  std::function<std::expected<CaptureOutcome, Error>()> previous;
+  {
+    std::scoped_lock const lock{ control_mutex_ };
+    previous.swap(interactive_capture_);
+    interactive_capture_active_ = false;
+    ++interactive_capture_generation_;
+  }
+}
+
+auto RenderThread::PollInteractiveCaptureError() const -> std::optional<Error>
+{
+  std::scoped_lock const lock{ control_mutex_ };
+  return interactive_capture_error_;
+}
+
+auto RenderThread::DetachInteractiveCapture(u64 generation)
+  -> std::expected<std::optional<Error>, Error>
+{
+  if (std::this_thread::get_id() == thread_.get_id()) {
+    return std::unexpected(MakeError(std::errc::operation_not_permitted,
+      "interactive capture must be detached outside the render worker"));
+  }
+  std::function<std::expected<CaptureOutcome, Error>()> previous;
+  std::unique_lock lock{ control_mutex_ };
+  if (generation != interactive_capture_generation_) {
+    return std::unexpected(MakeError(std::errc::operation_not_permitted,
+      "interactive capture generation was replaced"));
+  }
+  previous.swap(interactive_capture_);
+  interactive_capture_active_ = false;
+  ++interactive_capture_generation_;
+  control_cv_.wait(lock, [this, generation]() -> bool {
+    return interactive_capture_callbacks_in_progress_ == 0U || active_capture_generation_ != generation;
+  });
+  return interactive_capture_error_;
 }
 
 auto RenderThread::CaptureVideoFrameImpl(Camera const &camera, f64 aspect_ratio,
@@ -800,6 +861,52 @@ auto RenderThread::ProcessFrame(size_t frame_slot, PendingFrame const &frame) ->
   auto drawn = draw_frame_override_
                  ? draw_frame_override_().transform([]() -> FrameOutcome { return FrameOutcome::kSubmitted; })
                  : DrawFrameVulkan(frame_slot);
+
+  if (drawn && drawn.value() == FrameOutcome::kSubmitted
+      && (test_mode_ || (context_ != nullptr && context_->swapchain != nullptr && data_ != nullptr))) {
+    std::function<std::expected<CaptureOutcome, Error>()> capture;
+    u64 capture_generation = 0U;
+    {
+      std::scoped_lock const lock{ control_mutex_ };
+      if (interactive_capture_active_) {
+        capture = interactive_capture_;
+        capture_generation = interactive_capture_generation_;
+        active_capture_generation_ = capture_generation;
+        ++interactive_capture_callbacks_in_progress_;
+      }
+    }
+    if (capture) {
+      auto complete_callback = [this](void *) noexcept -> void {
+        {
+          std::scoped_lock const lock{ control_mutex_ };
+          --interactive_capture_callbacks_in_progress_;
+        }
+        control_cv_.notify_all();
+      };
+      std::unique_ptr<void, decltype(complete_callback)> completion{ this, complete_callback };
+      std::expected<CaptureOutcome, Error> captured = CaptureOutcome::kSkipped;
+      try {
+        captured = capture();
+      } catch (std::exception const &exception) {
+        captured = std::unexpected(MakeError(std::errc::io_error,
+          "interactive capture callback threw: " + std::string{ exception.what() }));
+      } catch (...) {
+        captured = std::unexpected(MakeError(std::errc::io_error, "interactive capture callback threw"));
+      }
+      if (!captured) {
+        {
+          std::scoped_lock const lock{ control_mutex_ };
+          if (capture_generation == interactive_capture_generation_) {
+            if (!interactive_capture_error_) { interactive_capture_error_ = captured.error(); }
+            interactive_capture_active_ = false;
+          }
+        }
+        if (captured.error().code() == std::errc::no_such_device) {
+          drawn = std::unexpected(captured.error());
+        }
+      }
+    }
+  }
 
   if (frame.capture != nullptr) {
     auto captured = drawn && drawn.value() == FrameOutcome::kSubmitted

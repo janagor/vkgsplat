@@ -44,7 +44,6 @@ struct EncoderResources
   VkDeviceSize upload_size = 0;
   VkDeviceSize bitstream_size = 0;
   bool in_flight = false;
-  bool rate_control_configured = false;
   VkImage image = VK_NULL_HANDLE;
   VkImageView view = VK_NULL_HANDLE;
   VkDeviceMemory image_memory = VK_NULL_HANDLE;
@@ -396,7 +395,7 @@ namespace {
 
 [[nodiscard]] auto RecordEncode(Context &context, EncoderResources &resources, VideoSession const &session,
   EncodeDevice const &device, VkDeviceSize bitstream_size, VkExtent2D extent,
-  VkImageView source_view) -> std::expected<void, Error>
+  VkImageView source_view, bool has_prior_submission) -> std::expected<void, Error>
 {
   auto result = BeginCommand(context, resources.video_cmd);
   if (!result) { return result; }
@@ -406,7 +405,7 @@ namespace {
   rate.rateControlMode = VK_VIDEO_ENCODE_RATE_CONTROL_MODE_DISABLED_BIT_KHR;
   VkVideoBeginCodingInfoKHR begin{};
   begin.sType = VK_STRUCTURE_TYPE_VIDEO_BEGIN_CODING_INFO_KHR;
-  begin.pNext = resources.rate_control_configured ? &rate : nullptr;
+  begin.pNext = has_prior_submission ? &rate : nullptr;
   begin.videoSession = session.handle();
   begin.videoSessionParameters = session.parameters();
   context.disp.cmdBeginVideoCodingKHR(resources.video_cmd, &begin);
@@ -505,11 +504,12 @@ namespace {
   return {};
 }
 
-[[nodiscard]] auto EncodePicture(Context &context, EncodeDevice const &device,
+[[nodiscard]] auto SubmitPicture(Context &context, EncodeDevice const &device,
   VideoSession const &session, VkExtent2D extent, VkImageView source_view,
   VkSemaphore ready_semaphore, std::span<std::byte const> frame,
-  EncoderResources &resources, EncodeFailurePointForTest failure_point)
-  -> std::expected<std::vector<std::byte>, Error>
+  EncoderResources &resources, EncodeFailurePointForTest failure_point,
+  bool has_prior_submission)
+  -> std::expected<void, Error>
 {
   auto const y_size = static_cast<VkDeviceSize>(extent.width) * extent.height;
   auto const upload_size = resources.upload_size;
@@ -531,7 +531,8 @@ namespace {
       return std::unexpected(recorded.error());
     }
   }
-  if (auto recorded = RecordEncode(context, resources, session, device, bitstream_size, extent, source_view); !recorded) {
+  if (auto recorded = RecordEncode(context, resources, session, device, bitstream_size, extent,
+        source_view, has_prior_submission); !recorded) {
     return std::unexpected(recorded.error());
   }
   if (auto recorded = RecordReadback(context, resources, bitstream_size); !recorded) {
@@ -562,17 +563,21 @@ namespace {
         VK_NULL_HANDLE, resources.readback_done); !submitted) {
     return std::unexpected(submitted.error());
   }
-  auto result = context.disp.waitForFences(kOneResource, &resources.readback_done, VK_TRUE, UINT64_MAX);
-  if (result != VK_SUCCESS) { return std::unexpected(Failure("wait for encoded picture", result)); }
+  return {};
+}
+
+[[nodiscard]] auto ReadPicture(Context &context, EncoderResources &resources)
+  -> std::expected<std::vector<std::byte>, Error>
+{
+  auto const bitstream_size = resources.bitstream_size;
   resources.in_flight = false;
-  resources.rate_control_configured = true;
   struct Feedback
   {
     std::uint32_t offset;
     std::uint32_t size;
     VkQueryResultStatusKHR status;
   } feedback{};
-  result = context.disp.getQueryPoolResults(resources.feedback, 0, kOneResource,
+  auto result = context.disp.getQueryPoolResults(resources.feedback, 0, kOneResource,
     sizeof(feedback), &feedback, sizeof(feedback), VK_QUERY_RESULT_WITH_STATUS_BIT_KHR);
   if (result != VK_SUCCESS) { return std::unexpected(Failure("read encode feedback", result)); }
   if (feedback.status != VK_QUERY_RESULT_STATUS_COMPLETE_KHR || feedback.size == 0
@@ -598,6 +603,14 @@ namespace {
   return picture;
 }
 
+[[nodiscard]] auto CompletePicture(Context &context, EncoderResources &resources)
+  -> std::expected<std::vector<std::byte>, Error>
+{
+  auto const result = context.disp.waitForFences(kOneResource, &resources.readback_done, VK_TRUE, UINT64_MAX);
+  if (result != VK_SUCCESS) { return std::unexpected(Failure("wait for encoded picture", result)); }
+  return ReadPicture(context, resources);
+}
+
 }// namespace
 
 VideoEncoder::VideoEncoder(Context &context, EncodeDevice device, VkExtent2D extent,
@@ -608,9 +621,13 @@ VideoEncoder::VideoEncoder(Context &context, EncodeDevice device, VkExtent2D ext
 VideoEncoder::~VideoEncoder() = default;
 
 auto VideoEncoder::Create(Context &context, EncodeDevice device, VkExtent2D extent,
-  std::uint32_t fps_numerator, std::uint32_t fps_denominator)
+  std::uint32_t fps_numerator, std::uint32_t fps_denominator, std::size_t max_in_flight_frames,
+  bool fixed_frame_rate)
   -> std::expected<std::unique_ptr<VideoEncoder>, Error>
 {
+  if (max_in_flight_frames == 0U || max_in_flight_frames > kMaximumInFlightFrames) {
+    return std::unexpected(MakeError(std::errc::invalid_argument, "invalid H.264 resource slot count"));
+  }
   if (device.selection.profile_index >= device.capabilities.profiles.size()) {
     return std::unexpected(MakeError(std::errc::invalid_argument, "invalid H.264 encode profile selection"));
   }
@@ -620,14 +637,19 @@ auto VideoEncoder::Create(Context &context, EncodeDevice device, VkExtent2D exte
     return std::unexpected(MakeError(std::errc::function_not_supported,
       "H.264 encoder requires an NV12 encode source with transfer-destination support"));
   }
-  auto session = VideoSession::Create(context, device, extent, fps_numerator, fps_denominator);
+  auto session = VideoSession::Create(context, device, extent, fps_numerator, fps_denominator, fixed_frame_rate);
   if (!session) { return std::unexpected(session.error()); }
-  auto resources = std::make_unique<EncoderResources>(context);
-  if (auto created = InitializeEncoderResources(context, device, extent, *resources); !created) {
-    return std::unexpected(created.error());
-  }
   auto encoder = std::unique_ptr<VideoEncoder>{ new VideoEncoder{ context, std::move(device), extent, std::move(*session) } };
-  encoder->resources_ = std::move(resources);
+  encoder->resources_.reserve(max_in_flight_frames);
+  encoder->source_owners_.resize(max_in_flight_frames);
+  encoder->pending_metadata_.resize(max_in_flight_frames);
+  for (std::size_t slot = 0U; slot < max_in_flight_frames; ++slot) {
+    auto resources = std::make_unique<EncoderResources>(context);
+    if (auto created = InitializeEncoderResources(context, encoder->device_, extent, *resources); !created) {
+      return std::unexpected(created.error());
+    }
+    encoder->resources_.push_back(std::move(resources));
+  }
   return encoder;
 }
 
@@ -639,12 +661,42 @@ auto VideoEncoder::EncodeNv12(std::span<std::byte const> frame, std::uint64_t fr
   if (frame.size() != expected_size) {
     return std::unexpected(MakeError(std::errc::invalid_argument, "NV12 frame size does not match coded extent"));
   }
-  return EncodeSource(resources_->view, VK_NULL_HANDLE, frame, frame_index);
+  return EncodeSource(resources_.front()->view, VK_NULL_HANDLE, frame, frame_index);
 }
 
 auto VideoEncoder::EncodeImage(PreparedVideoFrame const &frame, std::uint64_t frame_index)
   -> std::expected<EncodedPacket, Error>
 {
+  if (next_submit_index_ != next_index_) {
+    return std::unexpected(MakeError(std::errc::operation_not_permitted,
+      "synchronous H.264 encoding requires all asynchronous pictures to be completed"));
+  }
+  if (frame_index > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())) {
+    return std::unexpected(MakeError(std::errc::value_too_large, "H.264 frame index exceeds timestamp range"));
+  }
+  auto const timestamp = static_cast<std::int64_t>(frame_index);
+  if (auto submitted = SubmitImageImpl(frame, PictureMetadata{
+        .encode_index = frame_index,
+        .presentation_timestamp = timestamp,
+      }, {}, false); !submitted) { return std::unexpected(submitted.error()); }
+  return CompleteImage();
+}
+
+auto VideoEncoder::SubmitImage(PreparedVideoFrame const &frame, PictureMetadata metadata,
+  std::shared_ptr<void> source_owner)
+  -> std::expected<void, Error>
+{
+  return SubmitImageImpl(frame, metadata, std::move(source_owner), true);
+}
+
+auto VideoEncoder::SubmitImageImpl(PreparedVideoFrame const &frame, PictureMetadata metadata,
+  std::shared_ptr<void> source_owner, bool require_owner)
+  -> std::expected<void, Error>
+{
+  if (require_owner && !source_owner) {
+    return std::unexpected(MakeError(std::errc::invalid_argument,
+      "asynchronous H.264 submission requires a source owner"));
+  }
   if (frame.image_view == VK_NULL_HANDLE || frame.ready_binary_semaphore == VK_NULL_HANDLE
       || frame.format != device_.selection.source_format.format
       || frame.layout != VK_IMAGE_LAYOUT_VIDEO_ENCODE_SRC_KHR
@@ -652,20 +704,103 @@ auto VideoEncoder::EncodeImage(PreparedVideoFrame const &frame, std::uint64_t fr
     return std::unexpected(MakeError(std::errc::invalid_argument,
       "prepared video frame requires a matching NV12 image, encode-source layout and ready semaphore"));
   }
-  return EncodeSource(frame.image_view, frame.ready_binary_semaphore, {}, frame_index);
+  if (failed_ || finished_ || metadata.encode_index != next_submit_index_
+      || metadata.encode_index > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())
+      || metadata.presentation_timestamp < next_minimum_timestamp_ || metadata.duration <= 0
+      || metadata.presentation_timestamp > std::numeric_limits<std::int64_t>::max() - metadata.duration) {
+    return std::unexpected(MakeError(std::errc::operation_not_permitted,
+      "H.264 encoder cannot accept this picture"));
+  }
+  if (next_submit_index_ - next_index_ >= resources_.size()) {
+    return std::unexpected(MakeError(std::errc::resource_unavailable_try_again,
+      "all H.264 encoding resource slots are busy"));
+  }
+  auto const slot = static_cast<std::size_t>(metadata.encode_index % resources_.size());
+  auto &resources = *resources_.at(slot);
+  source_owners_.at(slot) = std::move(source_owner);
+  auto submitted = SubmitPicture(context_, device_, *session_, extent_, frame.image_view,
+    frame.ready_binary_semaphore, {}, resources, failure_point_for_test_, next_submit_index_ != 0U);
+  failure_point_for_test_ = EncodeFailurePointForTest::kNone;
+  if (!submitted) {
+    failed_ = true;
+    return std::unexpected(submitted.error());
+  }
+  pending_metadata_.at(slot) = metadata;
+  next_minimum_timestamp_ = metadata.presentation_timestamp + metadata.duration;
+  ++next_submit_index_;
+  return {};
+}
+
+auto VideoEncoder::CompleteImage() -> std::expected<EncodedPacket, Error>
+{
+  if (next_index_ == next_submit_index_ || failed_) {
+    return std::unexpected(MakeError(std::errc::operation_not_permitted, "no H.264 picture is pending"));
+  }
+  auto &resources = *resources_.at(static_cast<std::size_t>(next_index_ % resources_.size()));
+  auto const waited = context_.disp.waitForFences(kOneResource, &resources.readback_done, VK_TRUE, UINT64_MAX);
+  if (waited != VK_SUCCESS) {
+    failed_ = true;
+    return std::unexpected(Failure("wait for encoded picture", waited));
+  }
+  return CompleteReadyImage();
+}
+
+auto VideoEncoder::TryCompleteImage() -> std::expected<std::optional<EncodedPacket>, Error>
+{
+  if (next_index_ == next_submit_index_ || failed_) {
+    return std::unexpected(MakeError(std::errc::operation_not_permitted, "no H.264 picture is pending"));
+  }
+  auto &resources = *resources_.at(static_cast<std::size_t>(next_index_ % resources_.size()));
+  auto const status = context_.disp.getFenceStatus(resources.readback_done);
+  if (status == VK_NOT_READY) { return std::nullopt; }
+  if (status != VK_SUCCESS) {
+    failed_ = true;
+    return std::unexpected(Failure("poll encoded picture", status));
+  }
+  auto completed = CompleteReadyImage();
+  if (!completed) { return std::unexpected(completed.error()); }
+  return std::optional<EncodedPacket>{ std::move(*completed) };
+}
+
+auto VideoEncoder::CompleteReadyImage() -> std::expected<EncodedPacket, Error>
+{
+  auto const slot = static_cast<std::size_t>(next_index_ % resources_.size());
+  auto &resources = *resources_.at(slot);
+  auto picture = ReadPicture(context_, resources);
+  if (!picture) {
+    failed_ = true;
+    return std::unexpected(picture.error());
+  }
+  auto const metadata = *pending_metadata_.at(slot);
+  pending_metadata_.at(slot).reset();
+  source_owners_.at(slot).reset();
+  EncodedPacket packet{
+    .data = std::move(*picture),
+    .frame_index = metadata.encode_index,
+    .pts = metadata.presentation_timestamp,
+    .dts = metadata.presentation_timestamp,
+    .duration = metadata.duration,
+    .keyframe = true,
+  };
+  ++next_index_;
+  return packet;
 }
 
 auto VideoEncoder::WaitForInFlightWork() -> std::expected<void, Error>
 {
-  if (!resources_->in_flight) { return {}; }
-  for (auto queue : { resources_->graphics_queue, resources_->video_queue }) {
+  bool in_flight = false;
+  for (auto const &resources : resources_) { in_flight = in_flight || resources->in_flight; }
+  if (!in_flight) { return {}; }
+  auto const &first = *resources_.front();
+  for (auto queue : { first.graphics_queue, first.video_queue }) {
     if (queue == VK_NULL_HANDLE) { continue; }
     auto const queue_lock = context_.vkexec_context->lock_queue(queue);
     auto const result = context_.disp.queueWaitIdle(queue);
     if (result != VK_SUCCESS) { return std::unexpected(Failure("wait for video encode work", result)); }
-    if (queue == resources_->video_queue && resources_->video_queue == resources_->graphics_queue) { break; }
+    if (queue == first.video_queue && first.video_queue == first.graphics_queue) { break; }
   }
-  resources_->in_flight = false;
+  for (auto &resources : resources_) { resources->in_flight = false; }
+  for (auto &owner : source_owners_) { owner.reset(); }
   return {};
 }
 
@@ -676,13 +811,18 @@ auto VideoEncoder::EncodeSource(VkImageView source_view, VkSemaphore ready_semap
     return std::unexpected(MakeError(std::errc::state_not_recoverable,
       "H.264 encoder failed; create a new recording session"));
   }
-  if (finished_ || frame_index != next_index_
-      || frame_index > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())) {
+  if (finished_ || next_submit_index_ != next_index_ || frame_index != next_index_
+      || frame_index >= static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())) {
     return std::unexpected(MakeError(std::errc::invalid_argument, "invalid or out-of-order H.264 frame"));
   }
-  auto picture = EncodePicture(context_, device_, *session_, extent_, source_view,
-    ready_semaphore, frame, *resources_, failure_point_for_test_);
+  auto submitted = SubmitPicture(context_, device_, *session_, extent_, source_view,
+    ready_semaphore, frame, *resources_.front(), failure_point_for_test_, next_submit_index_ != 0U);
   failure_point_for_test_ = EncodeFailurePointForTest::kNone;
+  if (!submitted) {
+    failed_ = true;
+    return std::unexpected(submitted.error());
+  }
+  auto picture = CompletePicture(context_, *resources_.front());
   if (!picture) {
     failed_ = true;
     return std::unexpected(picture.error());
@@ -696,6 +836,8 @@ auto VideoEncoder::EncodeSource(VkImageView source_view, VkSemaphore ready_semap
     .keyframe = true,
   };
   ++next_index_;
+  ++next_submit_index_;
+  next_minimum_timestamp_ = packet.pts + packet.duration;
   return packet;
 }
 
@@ -705,7 +847,7 @@ auto VideoEncoder::Finish() -> std::expected<void, Error>
     return std::unexpected(MakeError(std::errc::state_not_recoverable,
       "H.264 encoder failed; create a new recording session"));
   }
-  if (finished_) {
+  if (finished_ || next_submit_index_ != next_index_) {
     return std::unexpected(MakeError(std::errc::operation_not_permitted, "H.264 encoder is finalized"));
   }
   finished_ = true;

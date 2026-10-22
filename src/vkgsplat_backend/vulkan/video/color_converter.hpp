@@ -3,9 +3,13 @@
 
 #include "video_encoder.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <expected>
 #include <memory>
+#include <mutex>
+#include <optional>
+#include <vector>
 
 #include <vkgsplat_backend/vkgsplat_backend_export.hpp>
 
@@ -66,6 +70,70 @@ private:
   bool in_flight_ = false;
   bool failed_ = false;
   bool fail_next_submission_for_test_ = false;
+};
+
+class GpuColorConverterPool;
+
+class VKGSPLAT_BACKEND_EXPORT ConversionLease final
+{
+public:
+  ~ConversionLease() noexcept;
+  ConversionLease(ConversionLease const &) = delete;
+  auto operator=(ConversionLease const &) -> ConversionLease & = delete;
+
+  // Call only after the encoder has accepted the prepared frame. An
+  // unaccepted signal requires replacement of this converter's semaphore.
+  auto MarkEncodeSubmitted() noexcept -> void { encode_submitted_ = true; }
+
+private:
+  friend class GpuColorConverterPool;
+  ConversionLease(std::shared_ptr<GpuColorConverterPool> pool, std::size_t slot) noexcept;
+
+  std::shared_ptr<GpuColorConverterPool> pool_;
+  std::size_t slot_{};
+  bool encode_submitted_ = false;
+};
+
+struct ConvertedFrame
+{
+  PreparedVideoFrame prepared;
+  std::shared_ptr<ConversionLease> lease;
+};
+
+// Each lease reserves one independent converter. The pool retains its RGBA
+// source until conversion has completed; the encoder retains the lease through
+// readback, after which the recording owner retires released slots.
+class VKGSPLAT_BACKEND_EXPORT GpuColorConverterPool final
+  : public std::enable_shared_from_this<GpuColorConverterPool>
+{
+public:
+  [[nodiscard]] static auto Create(Context &context, EncodeDevice const &device,
+    VkExtent2D extent, std::size_t slot_count)
+    -> std::expected<std::shared_ptr<GpuColorConverterPool>, Error>;
+  [[nodiscard]] auto Convert(VkImage source, VkSemaphore ready_timeline,
+    std::uint64_t ready_value, std::shared_ptr<void> source_owner)
+    -> std::expected<ConvertedFrame, Error>;
+  // Run on the recording owner thread after encoder completions or failures.
+  // Waits for conversion before releasing an RGBA source. Recreates converters
+  // whose binary semaphore was not consumed by an accepted encode submission.
+  [[nodiscard]] auto RetireReleased() -> std::expected<void, Error>;
+  [[nodiscard]] auto PollError() const -> std::optional<Error>;
+
+private:
+  friend class ConversionLease;
+  enum class SlotState : std::uint8_t { kFree, kLeased, kRetiring, kRetiringGpu, kFailed };
+  GpuColorConverterPool(Context &context, EncodeDevice device, VkExtent2D extent);
+  auto Release(std::size_t slot, bool encode_submitted) noexcept -> void;
+
+  Context &context_;
+  EncodeDevice device_;
+  VkExtent2D extent_{};
+  mutable std::mutex mutex_;
+  std::vector<std::shared_ptr<void>> source_owners_;
+  std::vector<std::unique_ptr<GpuColorConverter>> converters_;
+  std::vector<SlotState> states_;
+  std::vector<bool> encode_submitted_;
+  std::optional<Error> failure_;
 };
 
 }// namespace vkgsplat::vulkan::video

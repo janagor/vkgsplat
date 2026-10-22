@@ -8,7 +8,9 @@
 #include <cstdint>
 #include <expected>
 #include <memory>
+#include <optional>
 #include <span>
+#include <vector>
 
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_backend/vkgsplat_backend_export.hpp>
@@ -40,19 +42,37 @@ struct PreparedVideoFrame
   VkSemaphore ready_binary_semaphore = VK_NULL_HANDLE;
 };
 
-// Blocking all-intra H.264 encoder. The caller supplies a tightly packed NV12 frame.
-// This API also establishes the session and packet contract for a future GPU source.
+struct PictureMetadata
+{
+  std::uint64_t encode_index{};
+  std::int64_t presentation_timestamp{};
+  std::int64_t duration = 1;
+};
+
+// All-intra H.264 encoder. A single owner submits and completes GPU pictures
+// in encode order; the synchronous methods preserve offline export behavior.
 class VKGSPLAT_BACKEND_EXPORT VideoEncoder
 {
 public:
+  static constexpr std::size_t kOfflineInFlightFrames = 1U;
+  static constexpr std::size_t kMaximumInFlightFrames = 8U;
   [[nodiscard]] static auto Create(Context &context, EncodeDevice device, VkExtent2D extent,
-    std::uint32_t fps_numerator, std::uint32_t fps_denominator)
+    std::uint32_t fps_numerator, std::uint32_t fps_denominator,
+    std::size_t max_in_flight_frames = kOfflineInFlightFrames,
+    bool fixed_frame_rate = true)
     -> std::expected<std::unique_ptr<VideoEncoder>, Error>;
 
   [[nodiscard]] auto EncodeNv12(std::span<std::byte const> frame, std::uint64_t frame_index)
     -> std::expected<EncodedPacket, Error>;
   [[nodiscard]] auto EncodeImage(PreparedVideoFrame const &frame, std::uint64_t frame_index)
     -> std::expected<EncodedPacket, Error>;
+  // One thread owns this encoder. The source image must remain alive until
+  // the matching packet is completed or failed in-flight work is drained.
+  [[nodiscard]] auto SubmitImage(PreparedVideoFrame const &frame, PictureMetadata metadata,
+    std::shared_ptr<void> source_owner)
+    -> std::expected<void, Error>;
+  [[nodiscard]] auto CompleteImage() -> std::expected<EncodedPacket, Error>;
+  [[nodiscard]] auto TryCompleteImage() -> std::expected<std::optional<EncodedPacket>, Error>;
   [[nodiscard]] auto WaitForInFlightWork() -> std::expected<void, Error>;
   auto Abort() noexcept -> void { failed_ = true; }
   auto FailSubmissionForTest(EncodeFailurePointForTest point) noexcept -> void { failure_point_for_test_ = point; }
@@ -69,13 +89,20 @@ private:
     std::unique_ptr<VideoSession> session) noexcept;
   [[nodiscard]] auto EncodeSource(VkImageView source_view, VkSemaphore ready_semaphore,
     std::span<std::byte const> frame, std::uint64_t frame_index) -> std::expected<EncodedPacket, Error>;
+  [[nodiscard]] auto CompleteReadyImage() -> std::expected<EncodedPacket, Error>;
+  [[nodiscard]] auto SubmitImageImpl(PreparedVideoFrame const &frame, PictureMetadata metadata,
+    std::shared_ptr<void> source_owner, bool require_owner) -> std::expected<void, Error>;
 
   Context &context_;
   EncodeDevice device_;
   VkExtent2D extent_{};
   std::unique_ptr<VideoSession> session_;
-  std::unique_ptr<EncoderResources> resources_;
+  std::vector<std::shared_ptr<void>> source_owners_;
+  std::vector<std::unique_ptr<EncoderResources>> resources_;
+  std::vector<std::optional<PictureMetadata>> pending_metadata_;
   std::uint64_t next_index_{};
+  std::uint64_t next_submit_index_{};
+  std::int64_t next_minimum_timestamp_{};
   bool finished_ = false;
   bool failed_ = false;
   EncodeFailurePointForTest failure_point_for_test_ = EncodeFailurePointForTest::kNone;

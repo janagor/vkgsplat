@@ -38,6 +38,10 @@ constexpr std::uint64_t kNextFrameIncrement = 1U;
 constexpr std::uint8_t kFirstLuma = 64U;
 constexpr std::int64_t kPacketDuration = 1;
 constexpr std::uint64_t kGpuSourcePeriod = 2U;
+constexpr std::size_t kAsyncSlotCount = 3U;
+constexpr std::size_t kConverterPoolSlotCount = 1U;
+constexpr std::uint64_t kRejectedEncodeIndex = 1U;
+constexpr std::int64_t kAsyncTimestampStep = 2;
 constexpr std::string_view kUnsupportedDeviceMessage =
   "No rendering device supports required 8-bit 4:2:0 H.264 encoding and image formats.";
 
@@ -121,7 +125,8 @@ auto PrintSelectionDetails(EncodeDevice const &device) -> void
 }
 
 auto Run(std::filesystem::path const &output, bool gpu_only, bool color_conversion,
-  bool repeat_conversion, std::string_view failure_mode) -> int
+  bool repeat_conversion, std::string_view failure_mode, bool asynchronous,
+  bool asynchronous_color) -> int
 {
   if (repeat_conversion || !failure_mode.empty()) {
     std::cout << "Vulkan validation checking "
@@ -181,7 +186,8 @@ auto Run(std::filesystem::path const &output, bool gpu_only, bool color_conversi
     return RequireVideoEncode() ? EXIT_FAILURE : kSkipped;
   }
   device.selection = *selection;
-  if (color_conversion) {
+  auto async_device = device;
+  if (color_conversion && !asynchronous_color) {
     auto const &components = device.selection.source_format.components;
     std::cout << "Color encode device: " << device.capabilities.device_name
               << ", driver version: " << device.capabilities.driver_version
@@ -194,7 +200,7 @@ auto Run(std::filesystem::path const &output, bool gpu_only, bool color_conversi
   std::unique_ptr<vkgsplat::test::GpuVideoSource> gpu_source;
   std::unique_ptr<vkgsplat::test::GpuColorSource> color_source;
   std::unique_ptr<vkgsplat::vulkan::video::GpuColorConverter> converter;
-  if (color_conversion) {
+  if (color_conversion && !asynchronous_color) {
     auto created_source = vkgsplat::test::GpuColorSource::Create(context, kExtent);
     if (!created_source) {
       std::cerr << created_source.error().message() << '\n';
@@ -207,7 +213,7 @@ auto Run(std::filesystem::path const &output, bool gpu_only, bool color_conversi
       return EXIT_FAILURE;
     }
     converter = std::move(*created_converter);
-  } else {
+  } else if (!asynchronous_color) {
     auto created_source = vkgsplat::test::GpuVideoSource::Create(context, device, kExtent);
     if (!created_source) {
       std::cerr << created_source.error().message() << '\n';
@@ -218,7 +224,9 @@ auto Run(std::filesystem::path const &output, bool gpu_only, bool color_conversi
   constexpr std::uint32_t kFpsNumerator = 30U;
   constexpr std::uint32_t kFpsDenominator = 1U;
   auto encoder = VideoEncoder::Create(context, std::move(device), kExtent,
-    kFpsNumerator, kFpsDenominator);
+    kFpsNumerator, kFpsDenominator,
+    asynchronous ? kAsyncSlotCount : VideoEncoder::kOfflineInFlightFrames,
+    !asynchronous);
   if (!encoder) {
     if (encoder.error().code() == std::make_error_code(std::errc::function_not_supported)) {
       std::cout << "SKIP: " << encoder.error().message() << '\n';
@@ -245,6 +253,109 @@ auto Run(std::filesystem::path const &output, bool gpu_only, bool color_conversi
   if (!writer) {
     std::cerr << "open H.264 output: " << writer.error().message() << '\n';
     return EXIT_FAILURE;
+  }
+  if (asynchronous_color) {
+    auto created_pool = vkgsplat::vulkan::video::GpuColorConverterPool::Create(
+      context, async_device, kExtent, kConverterPoolSlotCount);
+    if (!created_pool) { return EXIT_FAILURE; }
+    auto pool = std::move(*created_pool);
+    auto create_source = [&context]()
+      -> std::expected<std::shared_ptr<vkgsplat::test::GpuColorSource>, vkgsplat::Error> {
+      auto created = vkgsplat::test::GpuColorSource::Create(context, kExtent);
+      if (!created) { return std::unexpected(created.error()); }
+      return std::shared_ptr<vkgsplat::test::GpuColorSource>{ std::move(*created) };
+    };
+    auto rejected_source = create_source();
+    if (!rejected_source || !(*rejected_source)->Prepare()) { return EXIT_FAILURE; }
+    {
+      auto converted = pool->Convert((*rejected_source)->Image(),
+        (*rejected_source)->ReadyTimeline(), (*rejected_source)->ReadyValue(), *rejected_source);
+      if (!converted) { return EXIT_FAILURE; }
+      auto unavailable = pool->Convert((*rejected_source)->Image(),
+        (*rejected_source)->ReadyTimeline(), (*rejected_source)->ReadyValue(), *rejected_source);
+      if (unavailable || unavailable.error().code() != std::errc::resource_unavailable_try_again) {
+        return EXIT_FAILURE;
+      }
+      auto rejected = (*encoder)->SubmitImage(converted->prepared,
+        vkgsplat::vulkan::video::PictureMetadata{
+          .encode_index = kRejectedEncodeIndex,
+          .presentation_timestamp = 0,
+          .duration = kPacketDuration,
+        }, converted->lease);
+      if (rejected || rejected.error().code() != std::errc::operation_not_permitted) {
+        return EXIT_FAILURE;
+      }
+    }
+    if (auto retired = pool->RetireReleased(); !retired) { return EXIT_FAILURE; }
+    rejected_source->reset();
+    auto accepted_source = create_source();
+    if (!accepted_source || !(*accepted_source)->Prepare()) { return EXIT_FAILURE; }
+    auto converted = pool->Convert((*accepted_source)->Image(),
+      (*accepted_source)->ReadyTimeline(), (*accepted_source)->ReadyValue(), *accepted_source);
+    if (!converted) { return EXIT_FAILURE; }
+    auto submitted = (*encoder)->SubmitImage(converted->prepared,
+      vkgsplat::vulkan::video::PictureMetadata{
+        .encode_index = 0U,
+        .presentation_timestamp = 0,
+        .duration = kPacketDuration,
+      }, converted->lease);
+    if (!submitted) { return EXIT_FAILURE; }
+    converted->lease->MarkEncodeSubmitted();
+    converted->lease.reset();
+    auto packet = (*encoder)->CompleteImage();
+    if (!packet || packet->frame_index != 0U) { return EXIT_FAILURE; }
+    if (auto retired = pool->RetireReleased(); !retired) { return EXIT_FAILURE; }
+    if (auto written = writer->WriteFrame(packet->data); !written) { return EXIT_FAILURE; }
+    if (auto finished = (*encoder)->Finish(); !finished) { return EXIT_FAILURE; }
+    if (auto finished = writer->Finish(); !finished) { return EXIT_FAILURE; }
+    return validation_errors.Count() == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
+  }
+  if (asynchronous) {
+    std::vector<std::shared_ptr<vkgsplat::test::GpuVideoSource>> sources;
+    std::vector<vkgsplat::vulkan::video::PreparedVideoFrame> prepared_frames;
+    sources.reserve(kAsyncSlotCount);
+    prepared_frames.reserve(kAsyncSlotCount);
+    for (std::size_t slot = 0U; slot < kAsyncSlotCount; ++slot) {
+      auto created = vkgsplat::test::GpuVideoSource::Create(context, async_device, kExtent);
+      if (!created) { return EXIT_FAILURE; }
+      auto source = std::shared_ptr<vkgsplat::test::GpuVideoSource>{ std::move(*created) };
+      auto prepared = source->Prepare(static_cast<std::uint8_t>(kFirstLuma + slot));
+      if (!prepared) { return EXIT_FAILURE; }
+      auto submitted = (*encoder)->SubmitImage(*prepared,
+        vkgsplat::vulkan::video::PictureMetadata{
+          .encode_index = slot,
+          .presentation_timestamp = static_cast<std::int64_t>(slot) * kAsyncTimestampStep,
+          .duration = kPacketDuration,
+        }, source);
+      if (!submitted) { return EXIT_FAILURE; }
+      prepared_frames.push_back(*prepared);
+      sources.push_back(std::move(source));
+    }
+    if ((*encoder)->EncodeImage({}, kAsyncSlotCount)) { return EXIT_FAILURE; }
+    auto const exhausted = (*encoder)->SubmitImage(prepared_frames.front(),
+      vkgsplat::vulkan::video::PictureMetadata{
+        .encode_index = kAsyncSlotCount,
+        .presentation_timestamp = static_cast<std::int64_t>(kAsyncSlotCount) * kAsyncTimestampStep,
+      }, sources.front());
+    if (exhausted || exhausted.error().code() != std::errc::resource_unavailable_try_again) {
+      return EXIT_FAILURE;
+    }
+    for (std::size_t slot = 0U; slot < kAsyncSlotCount; ++slot) {
+      auto ready = (*encoder)->TryCompleteImage();
+      if (!ready) { return EXIT_FAILURE; }
+      auto completed = ready->has_value()
+                         ? std::expected<vkgsplat::EncodedPacket, vkgsplat::Error>{ std::move(**ready) }
+                         : (*encoder)->CompleteImage();
+      if (!completed) { return EXIT_FAILURE; }
+      auto packet = std::move(*completed);
+      if (packet.frame_index != slot || packet.pts != static_cast<std::int64_t>(slot) * kAsyncTimestampStep
+          || packet.dts != packet.pts || packet.duration != kPacketDuration) { return EXIT_FAILURE; }
+      sources.at(slot)->Complete();
+      if (auto written = writer->WriteFrame(packet.data); !written) { return EXIT_FAILURE; }
+    }
+    if (auto finished = (*encoder)->Finish(); !finished) { return EXIT_FAILURE; }
+    if (auto finished = writer->Finish(); !finished) { return EXIT_FAILURE; }
+    return validation_errors.Count() == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
   }
   auto const frame_count = color_conversion ? kColorFrameCount : kFrameCount;
   for (std::uint64_t index = 0U; index < frame_count; ++index) {
@@ -373,11 +484,13 @@ auto main(int argc, char **argv) -> int
   if (argc != kDefaultArguments && argc != kModeArguments) { return EXIT_FAILURE; }
   auto const mode = argc == kModeArguments ? std::string_view{ argv[2] } : std::string_view{};
   if (!mode.empty() && mode != "--gpu-only" && mode != "--color-conversion"
+      && mode != "--async" && mode != "--async-color"
       && mode != "--repeat-color-conversion" && mode != "--fault-converter-submit"
       && mode != "--fault-video-submit" && mode != "--fault-readback-submit"
       && mode != "--fault-readback-destructor") { return EXIT_FAILURE; }
   auto const failure_mode = mode.starts_with("--fault-") ? mode : std::string_view{};
   return Run(argv[1], mode == "--gpu-only",
     mode == "--color-conversion" || mode == "--repeat-color-conversion" || !failure_mode.empty(),
-    mode == "--repeat-color-conversion", failure_mode);
+    mode == "--repeat-color-conversion", failure_mode,
+    mode == "--async" || mode == "--async-color", mode == "--async-color");
 }

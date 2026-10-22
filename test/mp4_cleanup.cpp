@@ -156,3 +156,31 @@ TEST_CASE("successful MP4 publication removes its temporary output", "[video]")
     std::filesystem::directory_iterator{});
   REQUIRE(entry_count == kSingleOutputFileCount);
 }
+
+TEST_CASE("MP4 accepts timestamp gaps with consecutive encode indices", "[video]")
+{
+  TemporaryDirectory const directory;
+  auto const output = directory.path() / "timestamp-gaps.mp4";
+  auto muxer = vkgsplat::Mp4Muxer::Open(output, kVideoWidth, kVideoHeight,
+    kFrameRateNumerator, kFrameRateDenominator, kParameterSets);
+  REQUIRE(muxer);
+  constexpr std::int64_t kFirstTimestamp = 0;
+  constexpr std::int64_t kSecondTimestamp = 3;
+  constexpr std::int64_t kFrameDuration = 1;
+  vkgsplat::EncodedPacket first{
+    .data = std::vector<std::byte>{ kIdrPicture.begin(), kIdrPicture.end() },
+    .frame_index = 0U,
+    .pts = kFirstTimestamp,
+    .dts = kFirstTimestamp,
+    .duration = kFrameDuration,
+    .keyframe = true,
+  };
+  REQUIRE((*muxer)->Write(first));
+  auto second = first;
+  second.frame_index = 1U;
+  second.pts = kSecondTimestamp;
+  second.dts = kSecondTimestamp;
+  REQUIRE((*muxer)->Write(second));
+  REQUIRE((*muxer)->Finish());
+  REQUIRE(std::filesystem::exists(output));
+}

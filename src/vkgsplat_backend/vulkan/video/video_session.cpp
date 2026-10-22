@@ -29,7 +29,8 @@ namespace {
 
   [[nodiscard]] auto CreateParameters(Context &context, VkVideoSessionKHR handle,
     StdVideoH264ProfileIdc profile, StdVideoH264LevelIdc level,
-    VkExtent2D extent, std::uint32_t fps_numerator, std::uint32_t fps_denominator)
+    VkExtent2D extent, std::uint32_t fps_numerator, std::uint32_t fps_denominator,
+    bool fixed_frame_rate)
     -> std::expected<VkVideoSessionParametersKHR, Error>
   {
     StdVideoH264SequenceParameterSetVui vui{};
@@ -37,7 +38,7 @@ namespace {
     vui.flags.color_description_present_flag = 1;
     vui.flags.video_full_range_flag = 0;
     vui.flags.timing_info_present_flag = 1;
-    vui.flags.fixed_frame_rate_flag = 1;
+    vui.flags.fixed_frame_rate_flag = fixed_frame_rate;
     vui.num_units_in_tick = fps_denominator;
     vui.time_scale = fps_numerator * kH264TicksPerFrame;
     vui.video_format = kUnspecifiedVideoFormat;
@@ -99,7 +100,7 @@ namespace {
 }// namespace
 
 auto VideoSession::Create(Context &context, EncodeDevice const &device, VkExtent2D extent,
-  std::uint32_t fps_numerator, std::uint32_t fps_denominator)
+  std::uint32_t fps_numerator, std::uint32_t fps_denominator, bool fixed_frame_rate)
   -> std::expected<std::unique_ptr<VideoSession>, Error>
 {
   auto const &selection = device.selection;
@@ -232,7 +233,7 @@ auto VideoSession::Create(Context &context, EncodeDevice const &device, VkExtent
   }
   // PR4 uses the device's maximum level until frame-rate-aware level selection is introduced.
   auto parameters = CreateParameters(context, owned->session_, selection.profile,
-    profile.h264.maxLevelIdc, extent, fps_numerator, fps_denominator);
+    profile.h264.maxLevelIdc, extent, fps_numerator, fps_denominator, fixed_frame_rate);
   if (!parameters) { return std::unexpected(parameters.error()); }
   owned->parameters_ = *parameters;
 

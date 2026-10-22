@@ -146,10 +146,11 @@ auto Mp4Muxer::Write(EncodedPacket const &encoded) -> std::expected<void, Error>
     return std::unexpected(MakeError(std::errc::operation_not_permitted, "MP4 output is finalized"));
   }
   if (encoded.frame_index != next_index_ || encoded.pts != encoded.dts
-      || encoded.pts < 0
+      || encoded.pts < next_minimum_pts_
       || encoded.frame_index > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())
-      || encoded.pts != static_cast<std::int64_t>(encoded.frame_index)
-      || encoded.duration != 1 || encoded.data.empty()
+      || encoded.duration <= 0
+      || encoded.pts > std::numeric_limits<std::int64_t>::max() - encoded.duration
+      || encoded.data.empty()
       || encoded.data.size() > static_cast<std::size_t>(std::numeric_limits<int>::max())
       || (next_index_ == 0 && !encoded.keyframe)) {
     return std::unexpected(MakeError(std::errc::invalid_argument, "invalid or out-of-order MP4 video packet"));
@@ -175,6 +176,7 @@ auto Mp4Muxer::Write(EncodedPacket const &encoded) -> std::expected<void, Error>
     failed_ = true;
     return std::unexpected(FfmpegError("write MP4 packet", result));
   }
+  next_minimum_pts_ = encoded.pts + encoded.duration;
   ++next_index_;
   return {};
 }

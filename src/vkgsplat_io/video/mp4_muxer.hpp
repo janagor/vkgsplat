@@ -42,6 +42,7 @@ private:
   std::uint32_t fps_numerator_{};
   std::uint32_t fps_denominator_{};
   std::uint64_t next_index_{};
+  std::int64_t next_minimum_pts_{};
   bool finished_ = false;
   bool failed_ = false;
   std::optional<Error> publish_failure_;

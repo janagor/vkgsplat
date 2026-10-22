@@ -35,6 +35,8 @@ namespace vulkan {
 }
 struct RenderData;
 
+enum class CaptureOutcome : u8 { kSubmitted, kDropped, kSkipped };
+
 // Dedicated thread for Vulkan queue and command-buffer work.
 // Presentation uses frame_ring; offscreen output uses a timeline semaphore.
 class VKGSPLAT_BACKEND_EXPORT RenderThread
@@ -75,6 +77,16 @@ public:
     u64 frame_index) -> std::expected<EncodedPacket, Error>;
   [[nodiscard]] auto CaptureVideoFrameForTest(Camera const &camera, f64 aspect_ratio,
     u64 frame_index) -> std::expected<EncodedPacket, Error>;
+  // Invoked on the render worker after a normal windowed frame was submitted.
+  // Requires an entirely detached previous session. Capture errors leave
+  // rendering usable unless the device is lost.
+  [[nodiscard]] auto AttachInteractiveCapture(
+    std::function<std::expected<CaptureOutcome, Error>()> capture) -> std::expected<u64, Error>;
+  // Prevent new callbacks and wait until a callback already on the worker has returned.
+  // The recording session must then drain its submitted GPU jobs separately.
+  [[nodiscard]] auto DetachInteractiveCapture(u64 generation)
+    -> std::expected<std::optional<Error>, Error>;
+  [[nodiscard]] auto PollInteractiveCaptureError() const -> std::optional<Error>;
   [[nodiscard]] auto ReadLatestFrame() -> std::expected<RgbaFrame, Error>;
   // Drain queued frames, wait for GPU completion, then run without concurrent submission or readback.
   [[nodiscard]] auto RunExclusive(std::function<std::expected<void, Error>()> action) -> std::expected<void, Error>;
@@ -148,6 +160,7 @@ private:
   [[nodiscard]] auto DrawFrameOffscreen(size_t frame_slot) -> std::expected<FrameOutcome, Error>;
   [[nodiscard]] auto ReadFrameOnWorker() -> std::expected<RgbaFrame, Error>;
   auto PublishGpuTiming(std::optional<GpuFrameTimings> sample) -> void;
+  auto ClearInteractiveCaptureAfterStop() -> void;
 
   vulkan::Context *context_{ nullptr };
   RenderData *data_{ nullptr };
@@ -156,6 +169,12 @@ private:
   std::function<void()> wait_idle_override_;
   std::function<std::expected<RgbaFrame, Error>()> readback_frame_override_;
   std::function<std::expected<EncodedPacket, Error>()> video_frame_override_;
+  std::function<std::expected<CaptureOutcome, Error>()> interactive_capture_;
+  std::optional<Error> interactive_capture_error_;
+  bool interactive_capture_active_{ false };
+  u64 interactive_capture_generation_{ 0U };
+  u64 active_capture_generation_{ 0U };
+  size_t interactive_capture_callbacks_in_progress_{ 0U };
 
   mutable std::mutex control_mutex_;
   mutable std::mutex operation_mutex_;

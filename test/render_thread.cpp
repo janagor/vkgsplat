@@ -11,9 +11,11 @@
 #include <array>
 #include <atomic>
 #include <barrier>
+#include <chrono>
 #include <condition_variable>
 #include <cstdint>
 #include <expected>
+#include <future>
 #include <mutex>
 #include <optional>
 #include <system_error>
@@ -74,6 +76,124 @@ struct FrameBarrier
 }
 
 }// namespace
+
+TEST_CASE("interactive capture detach waits for its callback", "[render]")
+{
+  vkgsplat::RenderThread worker;
+  worker.StartForTest(vkgsplat::FrameSubmissionPolicy::kLossless,
+    []() -> std::expected<void, vkgsplat::Error> { return {}; });
+  FrameBarrier callback;
+  auto const generation = worker.AttachInteractiveCapture([&callback]()
+    -> std::expected<vkgsplat::CaptureOutcome, vkgsplat::Error> {
+    callback.Wait();
+    return vkgsplat::CaptureOutcome::kDropped;
+  });
+  REQUIRE(generation);
+  vkgsplat::Camera const camera{ vkgsplat::CameraConfig{} };
+  REQUIRE(worker.SubmitFrame(camera, camera.aspect_ratio()));
+  callback.WaitUntilEntered();
+  auto detached = std::async(std::launch::async, [&worker, generation]() -> decltype(worker.DetachInteractiveCapture(*generation)) {
+    return worker.DetachInteractiveCapture(*generation);
+  });
+  constexpr auto kDetachObservationInterval = std::chrono::milliseconds{ 10 };
+  auto const pending = detached.wait_for(kDetachObservationInterval) == std::future_status::timeout;
+  callback.Release();
+  auto result = detached.get();
+  REQUIRE(pending);
+  REQUIRE(result);
+  REQUIRE_FALSE(result->has_value());
+  REQUIRE(worker.WaitIdle());
+  worker.Stop();
+}
+
+TEST_CASE("interactive capture cannot be replaced during a callback", "[render]")
+{
+  vkgsplat::RenderThread worker;
+  worker.StartForTest(vkgsplat::FrameSubmissionPolicy::kLossless,
+    []() -> std::expected<void, vkgsplat::Error> { return {}; });
+  FrameBarrier callback;
+  auto first = worker.AttachInteractiveCapture([&callback]()
+    -> std::expected<vkgsplat::CaptureOutcome, vkgsplat::Error> {
+    callback.Wait();
+    return vkgsplat::CaptureOutcome::kSubmitted;
+  });
+  REQUIRE(first);
+  vkgsplat::Camera const camera{ vkgsplat::CameraConfig{} };
+  REQUIRE(worker.SubmitFrame(camera, camera.aspect_ratio()));
+  callback.WaitUntilEntered();
+  auto replacement = worker.AttachInteractiveCapture([]()
+    -> std::expected<vkgsplat::CaptureOutcome, vkgsplat::Error> {
+    return vkgsplat::CaptureOutcome::kSkipped;
+  });
+  REQUIRE_FALSE(replacement);
+  REQUIRE(replacement.error().code() == std::errc::device_or_resource_busy);
+  callback.Release();
+  REQUIRE(worker.DetachInteractiveCapture(*first));
+  auto second = worker.AttachInteractiveCapture([]()
+    -> std::expected<vkgsplat::CaptureOutcome, vkgsplat::Error> {
+    return vkgsplat::CaptureOutcome::kSkipped;
+  });
+  REQUIRE(second);
+  REQUIRE(worker.DetachInteractiveCapture(*second));
+  worker.Stop();
+}
+
+TEST_CASE("interactive capture detach does not remove a newer callback", "[render]")
+{
+  vkgsplat::RenderThread worker;
+  worker.StartForTest(vkgsplat::FrameSubmissionPolicy::kLossless,
+    []() -> std::expected<void, vkgsplat::Error> { return {}; });
+  auto const old_generation = worker.AttachInteractiveCapture([]()
+    -> std::expected<vkgsplat::CaptureOutcome, vkgsplat::Error> {
+    return vkgsplat::CaptureOutcome::kSkipped;
+  });
+  REQUIRE(old_generation);
+  std::atomic_uint new_callback_count{ 0U };
+  auto rejected_replacement = worker.AttachInteractiveCapture([&new_callback_count]()
+    -> std::expected<vkgsplat::CaptureOutcome, vkgsplat::Error> {
+    ++new_callback_count;
+    return vkgsplat::CaptureOutcome::kDropped;
+  });
+  REQUIRE_FALSE(rejected_replacement);
+  REQUIRE(rejected_replacement.error().code() == std::errc::device_or_resource_busy);
+  REQUIRE(worker.DetachInteractiveCapture(*old_generation));
+  auto const new_generation = worker.AttachInteractiveCapture([&new_callback_count]()
+    -> std::expected<vkgsplat::CaptureOutcome, vkgsplat::Error> {
+    ++new_callback_count;
+    return vkgsplat::CaptureOutcome::kDropped;
+  });
+  REQUIRE(new_generation);
+  REQUIRE_FALSE(worker.DetachInteractiveCapture(*old_generation));
+  vkgsplat::Camera const camera{ vkgsplat::CameraConfig{} };
+  REQUIRE(worker.SubmitFrame(camera, camera.aspect_ratio()));
+  REQUIRE(worker.WaitIdle());
+  REQUIRE(new_callback_count.load() == 1U);
+  REQUIRE(worker.DetachInteractiveCapture(*new_generation));
+  worker.Stop();
+}
+
+TEST_CASE("interactive capture callback cannot detach itself", "[render]")
+{
+  vkgsplat::RenderThread worker;
+  worker.StartForTest(vkgsplat::FrameSubmissionPolicy::kLossless,
+    []() -> std::expected<void, vkgsplat::Error> { return {}; });
+  vkgsplat::u64 generation = 0U;
+  std::atomic_bool rejected{ false };
+  auto attached = worker.AttachInteractiveCapture([&worker, &generation, &rejected]()
+    -> std::expected<vkgsplat::CaptureOutcome, vkgsplat::Error> {
+    auto result = worker.DetachInteractiveCapture(generation);
+    rejected = !result && result.error().code() == std::errc::operation_not_permitted;
+    return vkgsplat::CaptureOutcome::kSkipped;
+  });
+  REQUIRE(attached);
+  generation = *attached;
+  vkgsplat::Camera const camera{ vkgsplat::CameraConfig{} };
+  REQUIRE(worker.SubmitFrame(camera, camera.aspect_ratio()));
+  REQUIRE(worker.WaitIdle());
+  REQUIRE(rejected.load());
+  REQUIRE(worker.DetachInteractiveCapture(generation));
+  worker.Stop();
+}
 
 TEST_CASE("render thread admits concurrent producers without frame replacement", "[render]")
 {

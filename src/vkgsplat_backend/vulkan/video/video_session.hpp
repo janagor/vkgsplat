@@ -22,7 +22,7 @@ class VideoSession
 {
 public:
   [[nodiscard]] static auto Create(Context &context, EncodeDevice const &device, VkExtent2D extent,
-    std::uint32_t fps_numerator, std::uint32_t fps_denominator)
+    std::uint32_t fps_numerator, std::uint32_t fps_denominator, bool fixed_frame_rate = true)
     -> std::expected<std::unique_ptr<VideoSession>, Error>;
 
   ~VideoSession();
