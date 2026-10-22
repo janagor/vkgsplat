@@ -6,8 +6,14 @@
 #include <vkgsplat/renderer.hpp>
 
 #include <limits>
+#include <memory>
 #include <optional>
+#include <expected>
+#include <system_error>
 #include <utility>
+
+#include <vkgsplat_utility/error.hpp>
+#include <vkgsplat_utility/types.hpp>
 
 namespace vkgsplat::capture {
 

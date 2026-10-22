@@ -1,12 +1,16 @@
+// NOLINTBEGIN(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)
 #include <vkgsplat/engine.hpp>
 #include <vkgsplat/renderer.hpp>
+#include <vkgsplat/video_capabilities.hpp>
 #include <vkgsplat_capture/video_recorder.hpp>
 #include <vkgsplat_headless/offscreen_platform.hpp>
+#include <vkgsplat_utility/types.hpp>
 
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
+#include <span>
 #include <system_error>
 #include <utility>
 #include <vector>
@@ -55,7 +59,7 @@ auto Run(char const *scene_path) -> int
       std::cerr << optional.error().message() << '\n';
       return EXIT_FAILURE;
     }
-    optional_enabled = optional->video_encode_capabilities().h264_enabled;
+    optional_enabled |= optional->video_encode_capabilities().h264_enabled;
     if (optional_enabled && (optional->video_encode_capabilities().max_width == 0
                              || optional->video_encode_capabilities().max_height == 0)) {
       return EXIT_FAILURE;
@@ -110,5 +114,6 @@ auto Run(char const *scene_path) -> int
 auto main(int argc, char **argv) -> int
 {
   if (argc != kExpectedArguments) { return EXIT_FAILURE; }
-  return Run(argv[1]);
+  return Run(std::span{ argv, static_cast<std::size_t>(argc) }.subspan(1U).front());
 }
+// NOLINTEND(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)

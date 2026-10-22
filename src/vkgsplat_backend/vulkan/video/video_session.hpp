@@ -28,6 +28,8 @@ public:
   ~VideoSession();
   VideoSession(VideoSession const &) = delete;
   auto operator=(VideoSession const &) -> VideoSession & = delete;
+  VideoSession(VideoSession &&) = delete;
+  auto operator=(VideoSession &&) -> VideoSession & = delete;
 
   [[nodiscard]] auto handle() const noexcept -> VkVideoSessionKHR { return session_; }
   [[nodiscard]] auto parameters() const noexcept -> VkVideoSessionParametersKHR { return parameters_; }
@@ -35,6 +37,11 @@ public:
 
 private:
   explicit VideoSession(Context &context) noexcept : context_{ context } {}
+
+  [[nodiscard]] static auto CreateHandle(VideoSession &owned, EncodeDevice const &device, VkExtent2D extent)
+    -> std::expected<void, Error>;
+  [[nodiscard]] static auto BindMemory(VideoSession &owned) -> std::expected<void, Error>;
+  [[nodiscard]] static auto RetrieveParameterSets(VideoSession &owned) -> std::expected<void, Error>;
 
   Context &context_;
   VkVideoSessionKHR session_ = VK_NULL_HANDLE;

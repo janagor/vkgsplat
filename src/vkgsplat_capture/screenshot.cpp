@@ -11,17 +11,17 @@
 
 namespace vkgsplat::capture {
 
-auto save_png(Renderer &renderer, std::string_view path) -> std::expected<void, Error>
+auto SavePng(Renderer &renderer, std::string_view path) -> std::expected<void, Error>
 {
   auto frame = renderer.capture_latest_frame();
   if (!frame) { return std::unexpected{ frame.error() }; }
-  return write_png(*frame, path);
+  return WritePng(*frame, path);
 }
 
-auto write_png(RgbaFrame const &frame, std::string_view path) -> std::expected<void, Error>
+auto WritePng(RgbaFrame const &frame, std::string_view path) -> std::expected<void, Error>
 {
   constexpr u32 kRgbaChannels = 4U;
-  return WritePng(path, frame.width, frame.height, kRgbaChannels, frame.pixels);
+  return vkgsplat::WritePng(path, frame.width, frame.height, kRgbaChannels, frame.pixels);
 }
 
 }// namespace vkgsplat::capture

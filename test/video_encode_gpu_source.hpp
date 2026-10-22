@@ -1,3 +1,4 @@
+// NOLINTBEGIN(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)
 #ifndef VKGSPLAT_TEST_VIDEO_ENCODE_GPU_SOURCE_HPP
 #define VKGSPLAT_TEST_VIDEO_ENCODE_GPU_SOURCE_HPP
 
@@ -23,6 +24,8 @@ public:
   ~GpuVideoSource();
   GpuVideoSource(GpuVideoSource const &) = delete;
   auto operator=(GpuVideoSource const &) -> GpuVideoSource & = delete;
+  GpuVideoSource(GpuVideoSource &&) = delete;
+  auto operator=(GpuVideoSource &&) -> GpuVideoSource & = delete;
 
 private:
   GpuVideoSource(vulkan::Context &context, VkExtent2D extent) noexcept;
@@ -44,3 +47,4 @@ private:
 }// namespace vkgsplat::test
 
 #endif// VKGSPLAT_TEST_VIDEO_ENCODE_GPU_SOURCE_HPP
+// NOLINTEND(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)

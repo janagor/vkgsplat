@@ -1,5 +1,8 @@
 #include "color_converter.hpp"
 
+#include "video_capabilities.hpp"
+#include "video_device.hpp"
+#include "video_encoder.hpp"
 #include "shader.hpp"
 #include "vulkan_context.hpp"
 
@@ -10,10 +13,21 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <expected>
+#include <memory>
+#include <mutex>
+#include <optional>
 #include <string>
+#include <span>
 #include <system_error>
 #include <utility>
 #include <vector>
+
+#include <vulkan/vulkan_core.h>
+
+#include <VkBootstrap.h>
+
+#include <vkgsplat_utility/error.hpp>
 
 namespace vkgsplat::vulkan::video {
 namespace {
@@ -40,7 +54,9 @@ namespace {
     context.inst_disp.getPhysicalDeviceMemoryProperties(context.device.physical_device, &properties);
     for (std::uint32_t index = 0U; index < properties.memoryTypeCount; ++index) {
       if ((requirements.memoryTypeBits & (1U << index)) == 0U
-          || (properties.memoryTypes[index].propertyFlags & required) != required) { continue; }
+          || (std::span{ properties.memoryTypes }.subspan(index).front().propertyFlags & required) != required) {
+        continue;
+      }
       VkMemoryDedicatedAllocateInfo dedicated{};
       dedicated.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO;
       dedicated.image = image;
@@ -144,7 +160,7 @@ auto GpuColorConverter::Create(Context &context, EncodeDevice const &device, VkE
   context.inst_disp.getPhysicalDeviceQueueFamilyProperties(context.device.physical_device,
     &family_count, families_properties.data());
   if (graphics->second >= family_count
-      || (families_properties[graphics->second].queueFlags & VK_QUEUE_COMPUTE_BIT) == 0U) {
+      || (families_properties.at(graphics->second).queueFlags & VK_QUEUE_COMPUTE_BIT) == 0U) {
     return std::unexpected(MakeError(std::errc::function_not_supported,
       "graphics queue does not support compute color conversion"));
   }
@@ -152,7 +168,7 @@ auto GpuColorConverter::Create(Context &context, EncodeDevice const &device, VkE
   converter->graphics_queue_ = graphics->first;
   auto const y_bytes = static_cast<VkDeviceSize>(extent.width) * extent.height;
   auto const rgba_bytes = y_bytes * kRgbaBytesPerPixel;
-  auto const nv12_bytes = y_bytes + y_bytes / kChromaDivisor;
+  auto const nv12_bytes = y_bytes + (y_bytes / kChromaDivisor);
   if (auto created = CreateBuffer(context, rgba_bytes,
         VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
         converter->rgba_buffer_, converter->rgba_memory_); !created) { return std::unexpected(created.error()); }
@@ -160,9 +176,11 @@ auto GpuColorConverter::Create(Context &context, EncodeDevice const &device, VkE
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         converter->nv12_buffer_, converter->nv12_memory_); !created) { return std::unexpected(created.error()); }
 
-  VkVideoEncodeH264ProfileInfoKHR h264{};
-  h264.sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_H264_PROFILE_INFO_KHR;
-  h264.stdProfileIdc = device.selection.profile;
+  VkVideoEncodeH264ProfileInfoKHR h264{
+    .sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_H264_PROFILE_INFO_KHR,
+    .pNext = nullptr,
+    .stdProfileIdc = device.selection.profile,
+  };
   VkVideoProfileInfoKHR profile{};
   profile.sType = VK_STRUCTURE_TYPE_VIDEO_PROFILE_INFO_KHR;
   profile.pNext = &h264;
@@ -177,21 +195,23 @@ auto GpuColorConverter::Create(Context &context, EncodeDevice const &device, VkE
   std::array const families{ graphics->second, device.queue_family_index };
   auto const sharing = families.front() == families.back() ? VK_SHARING_MODE_EXCLUSIVE : VK_SHARING_MODE_CONCURRENT;
   auto const &format = device.selection.source_format;
-  VkImageCreateInfo image{};
-  image.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-  image.pNext = &profiles;
-  image.imageType = format.image_type;
-  image.format = format.format;
-  image.extent = { extent.width, extent.height, kOneResource };
-  image.mipLevels = kOneResource;
-  image.arrayLayers = kOneResource;
-  image.samples = VK_SAMPLE_COUNT_1_BIT;
-  image.tiling = format.tiling;
-  image.usage = VK_IMAGE_USAGE_VIDEO_ENCODE_SRC_BIT_KHR | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-  image.sharingMode = sharing;
-  image.queueFamilyIndexCount = sharing == VK_SHARING_MODE_CONCURRENT ? kPlaneCount : 0U;
-  image.pQueueFamilyIndices = sharing == VK_SHARING_MODE_CONCURRENT ? families.data() : nullptr;
-  image.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  VkImageCreateInfo const image{
+    .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+    .pNext = &profiles,
+    .flags = 0,
+    .imageType = format.image_type,
+    .format = format.format,
+    .extent = { .width = extent.width, .height = extent.height, .depth = kOneResource },
+    .mipLevels = kOneResource,
+    .arrayLayers = kOneResource,
+    .samples = VK_SAMPLE_COUNT_1_BIT,
+    .tiling = format.tiling,
+    .usage = VK_IMAGE_USAGE_VIDEO_ENCODE_SRC_BIT_KHR | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+    .sharingMode = sharing,
+    .queueFamilyIndexCount = sharing == VK_SHARING_MODE_CONCURRENT ? kPlaneCount : 0U,
+    .pQueueFamilyIndices = sharing == VK_SHARING_MODE_CONCURRENT ? families.data() : nullptr,
+    .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+  };
   auto result = context.disp.createImage(&image, nullptr, &converter->output_);
   if (result != VK_SUCCESS) { return std::unexpected(Failure("create converted NV12 image", result)); }
   VkMemoryRequirements requirements{};
@@ -215,19 +235,23 @@ auto GpuColorConverter::Create(Context &context, EncodeDevice const &device, VkE
   if (result != VK_SUCCESS) { return std::unexpected(Failure("create converted NV12 image view", result)); }
 
   std::array<VkDescriptorSetLayoutBinding, kPlaneCount> bindings{};
-  for (std::uint32_t index = 0U; index < bindings.size(); ++index) {
-    bindings[index].binding = index;
-    bindings[index].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    bindings[index].descriptorCount = kOneResource;
-    bindings[index].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-  }
+  std::uint32_t binding_index = 0U;
+  std::ranges::for_each(bindings, [&binding_index](VkDescriptorSetLayoutBinding &binding) -> void {
+    binding.binding = binding_index++;
+    binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    binding.descriptorCount = kOneResource;
+    binding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+  });
   VkDescriptorSetLayoutCreateInfo set_layout{};
   set_layout.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
   set_layout.bindingCount = static_cast<std::uint32_t>(bindings.size());
   set_layout.pBindings = bindings.data();
   result = context.disp.createDescriptorSetLayout(&set_layout, nullptr, &converter->set_layout_);
   if (result != VK_SUCCESS) { return std::unexpected(Failure("create conversion descriptor layout", result)); }
-  VkDescriptorPoolSize pool_size{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, kPlaneCount };
+  VkDescriptorPoolSize const pool_size{
+    .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+    .descriptorCount = kPlaneCount,
+  };
   VkDescriptorPoolCreateInfo pool{};
   pool.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
   pool.maxSets = kOneResource;
@@ -242,19 +266,21 @@ auto GpuColorConverter::Create(Context &context, EncodeDevice const &device, VkE
   set_allocate.pSetLayouts = &converter->set_layout_;
   result = context.disp.allocateDescriptorSets(&set_allocate, &converter->descriptor_set_);
   if (result != VK_SUCCESS) { return std::unexpected(Failure("allocate conversion descriptor set", result)); }
-  std::array<VkDescriptorBufferInfo, kPlaneCount> buffer_infos{
-    VkDescriptorBufferInfo{ converter->rgba_buffer_, 0U, rgba_bytes },
-    VkDescriptorBufferInfo{ converter->nv12_buffer_, 0U, nv12_bytes },
+  std::array<VkDescriptorBufferInfo, kPlaneCount> const buffer_infos{
+    VkDescriptorBufferInfo{ .buffer = converter->rgba_buffer_, .offset = 0U, .range = rgba_bytes },
+    VkDescriptorBufferInfo{ .buffer = converter->nv12_buffer_, .offset = 0U, .range = nv12_bytes },
   };
   std::array<VkWriteDescriptorSet, kPlaneCount> writes{};
-  for (std::uint32_t index = 0U; index < writes.size(); ++index) {
-    writes[index].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    writes[index].dstSet = converter->descriptor_set_;
-    writes[index].dstBinding = index;
-    writes[index].descriptorCount = kOneResource;
-    writes[index].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    writes[index].pBufferInfo = &buffer_infos[index];
-  }
+  std::uint32_t write_index = 0U;
+  std::ranges::for_each(writes, [&write_index, &converter, &buffer_infos](VkWriteDescriptorSet &write) -> void {
+    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write.dstSet = converter->descriptor_set_;
+    write.dstBinding = write_index;
+    write.descriptorCount = kOneResource;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    write.pBufferInfo = &buffer_infos.at(write_index);
+    ++write_index;
+  });
   context.disp.updateDescriptorSets(static_cast<std::uint32_t>(writes.size()), writes.data(), 0U, nullptr);
   VkPushConstantRange push{};
   push.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
@@ -269,13 +295,23 @@ auto GpuColorConverter::Create(Context &context, EncodeDevice const &device, VkE
   if (result != VK_SUCCESS) { return std::unexpected(Failure("create conversion pipeline layout", result)); }
   auto module = LoadShader(context);
   if (!module) { return std::unexpected(module.error()); }
-  VkComputePipelineCreateInfo compute{};
-  compute.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-  compute.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-  compute.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-  compute.stage.module = *module;
-  compute.stage.pName = "main";
-  compute.layout = converter->pipeline_layout_;
+  VkComputePipelineCreateInfo const compute{
+    .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+    .pNext = nullptr,
+    .flags = 0,
+    .stage = VkPipelineShaderStageCreateInfo{
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+      .pNext = nullptr,
+      .flags = 0,
+      .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+      .module = *module,
+      .pName = "main",
+      .pSpecializationInfo = nullptr,
+    },
+    .layout = converter->pipeline_layout_,
+    .basePipelineHandle = VK_NULL_HANDLE,
+    .basePipelineIndex = 0,
+  };
   result = context.disp.createComputePipelines(VK_NULL_HANDLE, kOneResource, &compute, nullptr, &converter->pipeline_);
   context.disp.destroyShaderModule(*module, nullptr);
   if (result != VK_SUCCESS) { return std::unexpected(Failure("create RGBA-to-NV12 pipeline", result)); }
@@ -348,7 +384,7 @@ auto GpuColorConverter::Convert(VkImage source, VkSemaphore ready_timeline, std:
   VkBufferImageCopy rgba_copy{};
   rgba_copy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   rgba_copy.imageSubresource.layerCount = kOneResource;
-  rgba_copy.imageExtent = { extent_.width, extent_.height, kOneResource };
+  rgba_copy.imageExtent = { .width = extent_.width, .height = extent_.height, .depth = kOneResource };
   context_.disp.cmdCopyImageToBuffer(command_, source, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
     rgba_buffer_, kOneResource, &rgba_copy);
   VkBufferMemoryBarrier2 rgba_barrier{};
@@ -371,8 +407,8 @@ auto GpuColorConverter::Convert(VkImage source, VkSemaphore ready_timeline, std:
     0U, kOneResource, &descriptor_set_, 0U, nullptr);
   context_.disp.cmdPushConstants(command_, pipeline_layout_, VK_SHADER_STAGE_COMPUTE_BIT,
     0U, sizeof(extent_), &extent_);
-  auto const groups_x = (extent_.width / kMacroWidth + kWorkgroupWidth - 1U) / kWorkgroupWidth;
-  auto const groups_y = (extent_.height / kMacroHeight + kWorkgroupHeight - 1U) / kWorkgroupHeight;
+  auto const groups_x = ((extent_.width / kMacroWidth) + kWorkgroupWidth - 1U) / kWorkgroupWidth;
+  auto const groups_y = ((extent_.height / kMacroHeight) + kWorkgroupHeight - 1U) / kWorkgroupHeight;
   context_.disp.cmdDispatch(command_, groups_x, groups_y, kOneResource);
   VkBufferMemoryBarrier2 nv12_barrier{};
   nv12_barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
@@ -383,7 +419,7 @@ auto GpuColorConverter::Convert(VkImage source, VkSemaphore ready_timeline, std:
   nv12_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   nv12_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   nv12_barrier.buffer = nv12_buffer_;
-  nv12_barrier.size = y_bytes + y_bytes / kChromaDivisor;
+  nv12_barrier.size = y_bytes + (y_bytes / kChromaDivisor);
   VkImageMemoryBarrier2 image_barrier{};
   image_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
   image_barrier.srcStageMask = VK_PIPELINE_STAGE_2_NONE;
@@ -403,13 +439,16 @@ auto GpuColorConverter::Convert(VkImage source, VkSemaphore ready_timeline, std:
   dependency.pImageMemoryBarriers = &image_barrier;
   context_.disp.cmdPipelineBarrier2(command_, &dependency);
   std::array<VkBufferImageCopy, kPlaneCount> copies{};
-  copies[0].imageSubresource.aspectMask = VK_IMAGE_ASPECT_PLANE_0_BIT;
-  copies[0].imageSubresource.layerCount = kOneResource;
-  copies[0].imageExtent = { extent_.width, extent_.height, kOneResource };
-  copies[1].bufferOffset = y_bytes;
-  copies[1].imageSubresource.aspectMask = VK_IMAGE_ASPECT_PLANE_1_BIT;
-  copies[1].imageSubresource.layerCount = kOneResource;
-  copies[1].imageExtent = { extent_.width / kChromaDivisor, extent_.height / kChromaDivisor, kOneResource };
+  auto &luma_copy = copies.at(0U);
+  luma_copy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_PLANE_0_BIT;
+  luma_copy.imageSubresource.layerCount = kOneResource;
+  luma_copy.imageExtent = { .width = extent_.width, .height = extent_.height, .depth = kOneResource };
+  auto &chroma_copy = copies.at(1U);
+  chroma_copy.bufferOffset = y_bytes;
+  chroma_copy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_PLANE_1_BIT;
+  chroma_copy.imageSubresource.layerCount = kOneResource;
+  chroma_copy.imageExtent = { .width = extent_.width / kChromaDivisor,
+    .height = extent_.height / kChromaDivisor, .depth = kOneResource };
   context_.disp.cmdCopyBufferToImage(command_, nv12_buffer_, output_, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
     static_cast<std::uint32_t>(copies.size()), copies.data());
   image_barrier.srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
@@ -574,7 +613,7 @@ auto GpuColorConverterPool::RetireReleased() -> std::expected<void, Error>
   }
   {
     std::scoped_lock const lock{ mutex_ };
-    auto const still_retiring = std::any_of(states_.begin(), states_.end(), [](SlotState state) -> bool {
+    auto const still_retiring = std::ranges::any_of(states_, [](SlotState state) -> bool {
       return state == SlotState::kRetiring || state == SlotState::kRetiringGpu || state == SlotState::kFailed;
     });
     if (!still_retiring) { failure_.reset(); }

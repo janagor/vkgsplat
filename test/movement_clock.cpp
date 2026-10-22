@@ -1,3 +1,4 @@
+// NOLINTBEGIN(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat_input_handler/movement_clock.hpp>
 #include <vkgsplat_utility/input_control.hpp>
@@ -76,3 +77,4 @@ TEST_CASE("delayed callback timestamps cannot recover physical hold time", "[inp
   clock.set_pressed(vkgsplat::MovementClock::kForwardIndex, false, kDispatchTimeSeconds);
   REQUIRE(clock.consume_duration(vkgsplat::MovementClock::kForwardIndex) == Catch::Approx(kStartTimeSeconds));
 }
+// NOLINTEND(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)

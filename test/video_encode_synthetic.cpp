@@ -1,5 +1,9 @@
+// NOLINTBEGIN(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)
 #include "../src/vkgsplat_backend/vulkan/video/video_encoder.hpp"
+#include "../src/vkgsplat_backend/vulkan/video/video_device.hpp"
+#include "../src/vkgsplat_backend/vulkan/video/video_capabilities.hpp"
 #include "../src/vkgsplat_backend/vulkan/video/color_converter.hpp"
+#include "../src/vkgsplat_backend/vulkan/vulkan_context.hpp"
 #include "../src/vkgsplat_backend/vulkan/vulkan_driver.hpp"
 #include "../src/vkgsplat_io/video/h264_writer.hpp"
 #include "video_encode_gpu_source.hpp"
@@ -11,16 +15,25 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <cstdlib>
 #include <expected>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <span>
+#include <string>
 #include <string_view>
 #include <system_error>
 #include <utility>
 #include <vector>
+
+#include <vulkan/vk_platform.h>
+#include <vulkan/vulkan_core.h>
+#include <vkgsplat/video_capabilities.hpp>
+#include <vkgsplat_utility/error.hpp>
+#include <vkgsplat_video/encoded_packet.hpp>
 
 namespace {
 
@@ -54,9 +67,9 @@ public:
     VkDebugUtilsMessengerCreateInfoEXT create{};
     create.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
     create.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-    create.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT
-                         | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT
-                         | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+    create.messageType = static_cast<VkDebugUtilsMessageTypeFlagsEXT>(VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT)
+                         | static_cast<VkDebugUtilsMessageTypeFlagsEXT>(VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT)
+                         | static_cast<VkDebugUtilsMessageTypeFlagsEXT>(VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT);
     create.pfnUserCallback = &ValidationErrorCounter::Callback;
     create.pUserData = this;
     result_ = context_.inst_disp.createDebugUtilsMessengerEXT(&create, nullptr, &messenger_);
@@ -69,13 +82,15 @@ public:
 
   ValidationErrorCounter(ValidationErrorCounter const &) = delete;
   auto operator=(ValidationErrorCounter const &) -> ValidationErrorCounter & = delete;
+  ValidationErrorCounter(ValidationErrorCounter &&) = delete;
+  auto operator=(ValidationErrorCounter &&) -> ValidationErrorCounter & = delete;
   [[nodiscard]] auto Ready() const noexcept -> bool
   { return result_ == VK_SUCCESS && (!VKGSPLAT_TEST_VIDEO_VALIDATION || messenger_ != VK_NULL_HANDLE); }
   [[nodiscard]] auto Count() const noexcept -> int { return errors_.load(); }
 
 private:
-  static VKAPI_ATTR auto VKAPI_CALL Callback(VkDebugUtilsMessageSeverityFlagBitsEXT,
-    VkDebugUtilsMessageTypeFlagsEXT, VkDebugUtilsMessengerCallbackDataEXT const *,
+  static VKAPI_ATTR auto VKAPI_CALL Callback(VkDebugUtilsMessageSeverityFlagBitsEXT /*severity*/,
+    VkDebugUtilsMessageTypeFlagsEXT /*types*/, VkDebugUtilsMessengerCallbackDataEXT const * /*data*/,
     void *user_data) -> VkBool32
   {
     auto *counter = static_cast<ValidationErrorCounter *>(user_data);
@@ -91,7 +106,7 @@ private:
 
 [[nodiscard]] auto RequireVideoEncode() -> bool
 {
-  auto const *value = std::getenv("VKGSPLAT_TEST_REQUIRE_VIDEO_ENCODE");
+  auto const *value = std::getenv("VKGSPLAT_TEST_REQUIRE_VIDEO_ENCODE");// NOLINT(concurrency-mt-unsafe)
   return value != nullptr && std::string_view{ value } == "1";
 }
 
@@ -155,7 +170,7 @@ auto Run(std::filesystem::path const &output, bool gpu_only, bool color_conversi
     return EXIT_FAILURE;
   }
   auto &context = (*driver)->context();
-  ValidationErrorCounter validation_errors{ context };
+  ValidationErrorCounter validation_errors{ context };// NOLINT(misc-const-correctness)
   if (!validation_errors.Ready()) {
     std::cerr << "failed to install Vulkan validation error counter\n";
     return EXIT_FAILURE;
@@ -247,7 +262,7 @@ auto Run(std::filesystem::path const &output, bool gpu_only, bool color_conversi
   if (failure_mode == "--fault-readback-submit" || failure_mode == "--fault-readback-destructor") {
     (*encoder)->FailSubmissionForTest(vkgsplat::vulkan::video::EncodeFailurePointForTest::kReadbackSubmission);
   }
-  std::vector<std::byte> frame(y_size + y_size / kChromaSubsamplingDivisor);
+  std::vector<std::byte> frame(y_size + (y_size / kChromaSubsamplingDivisor));
   std::fill(frame.begin() + static_cast<std::ptrdiff_t>(y_size), frame.end(), std::byte{ kNeutralChroma });
   auto writer = vkgsplat::H264Writer::Open(output.string(), (*encoder)->ParameterSets());
   if (!writer) {
@@ -378,14 +393,15 @@ auto Run(std::filesystem::path const &output, bool gpu_only, bool color_conversi
       if (auto released = converter->WaitForSourceRelease(); !released) {
         return std::unexpected(released.error());
       }
-      auto const nv12_size = static_cast<VkDeviceSize>(y_size + y_size / kChromaSubsamplingDivisor);
+      auto const nv12_size = static_cast<VkDeviceSize>(y_size + (y_size / kChromaSubsamplingDivisor));
       auto converted_bytes = color_source->ReadNv12Buffer(converter->Nv12BufferForTest(), nv12_size);
       if (!converted_bytes) { return std::unexpected(converted_bytes.error()); }
       frame = std::move(*converted_bytes);
       if (index == kFirstGpuColorFrameIndex) {
         std::ofstream nv12{ output.string() + ".nv12", std::ios::binary | std::ios::trunc };
-        nv12.write(reinterpret_cast<char const *>(frame.data()),
-          static_cast<std::streamsize>(frame.size()));
+        std::string bytes(frame.size(), '\0');
+        std::memcpy(bytes.data(), frame.data(), frame.size());
+        nv12.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
         if (!nv12) {
           return std::unexpected(vkgsplat::MakeError(std::errc::io_error,
             "write converted NV12 test output failed"));
@@ -398,11 +414,12 @@ auto Run(std::filesystem::path const &output, bool gpu_only, bool color_conversi
     }();
     if (!packet) {
       if (!failure_mode.empty()) {
-        auto const expected_message = failure_mode == "--fault-converter-submit"
-                                        ? "injected conversion submission failure"
-                                      : failure_mode == "--fault-video-submit"
-                                        ? "injected video submission failure"
-                                        : "injected bitstream readback submission failure";
+        auto const *expected_message = "injected bitstream readback submission failure";
+        if (failure_mode == "--fault-converter-submit") {
+          expected_message = "injected conversion submission failure";
+        } else if (failure_mode == "--fault-video-submit") {
+          expected_message = "injected video submission failure";
+        }
         if (packet.error().message() != expected_message) {
           std::cerr << packet.error().message() << '\n';
           return EXIT_FAILURE;
@@ -445,7 +462,7 @@ auto Run(std::filesystem::path const &output, bool gpu_only, bool color_conversi
       std::cerr << packet.error().message() << '\n';
       return EXIT_FAILURE;
     }
-    if (packet->frame_index != index || packet->pts != static_cast<std::int64_t>(index)
+    if (packet->frame_index != index || std::cmp_not_equal(packet->pts, index)
         || packet->dts != packet->pts || packet->duration != kPacketDuration
         || !packet->keyframe || packet->data.empty()) {
       std::cerr << "invalid H.264 packet metadata at frame " << index << '\n';
@@ -481,16 +498,22 @@ auto main(int argc, char **argv) -> int
 {
   constexpr int kDefaultArguments = 2;
   constexpr int kModeArguments = 3;
+  constexpr std::size_t kOutputArgumentIndex = 1U;
+  constexpr std::size_t kModeArgumentIndex = 2U;
   if (argc != kDefaultArguments && argc != kModeArguments) { return EXIT_FAILURE; }
-  auto const mode = argc == kModeArguments ? std::string_view{ argv[2] } : std::string_view{};
+  auto const arguments = std::span{ argv, static_cast<std::size_t>(argc) };
+  auto const mode = argc == kModeArguments
+                      ? std::string_view{ arguments.subspan(kModeArgumentIndex).front() }
+                      : std::string_view{};
   if (!mode.empty() && mode != "--gpu-only" && mode != "--color-conversion"
       && mode != "--async" && mode != "--async-color"
       && mode != "--repeat-color-conversion" && mode != "--fault-converter-submit"
       && mode != "--fault-video-submit" && mode != "--fault-readback-submit"
       && mode != "--fault-readback-destructor") { return EXIT_FAILURE; }
   auto const failure_mode = mode.starts_with("--fault-") ? mode : std::string_view{};
-  return Run(argv[1], mode == "--gpu-only",
+  return Run(arguments.subspan(kOutputArgumentIndex).front(), mode == "--gpu-only",
     mode == "--color-conversion" || mode == "--repeat-color-conversion" || !failure_mode.empty(),
     mode == "--repeat-color-conversion", failure_mode,
     mode == "--async" || mode == "--async-color", mode == "--async-color");
 }
+// NOLINTEND(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)

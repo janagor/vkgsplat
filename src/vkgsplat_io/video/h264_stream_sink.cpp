@@ -1,8 +1,19 @@
 #include "h264_stream_sink.hpp"
 
+#include "h264_writer.hpp"
+
+#include <vkgsplat_video/encoded_packet.hpp>
+
+#include <cstddef>
+#include <cstdint>
+#include <expected>
+#include <filesystem>
 #include <limits>
+#include <span>
 #include <system_error>
 #include <utility>
+
+#include <vkgsplat_utility/error.hpp>
 
 namespace vkgsplat {
 
@@ -19,10 +30,11 @@ auto H264StreamSink::Open(std::filesystem::path const &path,
 
 auto H264StreamSink::Write(EncodedPacket const &packet) -> std::expected<void, Error>
 {
+  constexpr std::int64_t kFrameDuration = 1;
   if (finished_ || packet.frame_index != next_index_
       || packet.frame_index > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())
-      || packet.pts != static_cast<std::int64_t>(packet.frame_index)
-      || packet.dts != packet.pts || packet.duration != 1 || packet.data.empty()
+      || std::cmp_not_equal(packet.pts, packet.frame_index)
+      || packet.dts != packet.pts || packet.duration != kFrameDuration || packet.data.empty()
       || (next_index_ == 0U && !packet.keyframe)) {
     return std::unexpected(MakeError(std::errc::invalid_argument, "invalid or out-of-order H.264 packet"));
   }

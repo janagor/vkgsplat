@@ -4,10 +4,12 @@
 #include <array>
 #include <cstdint>
 #include <expected>
+#include <iterator>
 #include <print>
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <utility>
 #include <vector>
 #include <optional>
 
@@ -19,6 +21,7 @@
 #include "video/video_device.hpp"
 #include <vkgsplat/driver.hpp>
 #include <vkgsplat/platform.hpp>
+#include <vkgsplat/video_capabilities.hpp>
 #include <vkgsplat_utility/error.hpp>
 
 #include <vulkan/vulkan_core.h>
@@ -215,8 +218,184 @@ namespace {
     return {};
   }
 
+  [[nodiscard]] auto SelectRenderingDevice(vulkan::Context const &context,
+    vkb::PhysicalDeviceSelector &phys_device_selector, VideoEncodeSupport video_encode)
+    -> std::expected<vkb::PhysicalDevice, Error>
+  {
+    if (video_encode != VideoEncodeSupport::kRequired) {
+      return VKBResultToExpected(phys_device_selector.select());
+    }
+    auto candidates = VKBResultToExpected(phys_device_selector.select_devices());
+    if (!candidates) { return std::unexpected(candidates.error()); }
+    auto preferred = VKBResultToExpected(phys_device_selector.select());
+    if (!preferred) { return std::unexpected(preferred.error()); }
+    std::vector<vulkan::video::CandidateInfo> candidate_info;
+    candidate_info.reserve(candidates->size());
+    std::ranges::transform(*candidates, std::back_inserter(candidate_info),
+      [&preferred](vkb::PhysicalDevice const &candidate) -> vulkan::video::CandidateInfo {
+      return vulkan::video::CandidateInfo{
+        .preferred_rendering_device = candidate.physical_device == preferred->physical_device,
+        .device_type = candidate.properties.deviceType,
+        .name = candidate.name,
+      };
+    });
+    std::string unavailable_devices;
+    for (auto const index : vulkan::video::RankCandidates(candidate_info)) {
+      auto const &candidate = candidates->at(index);
+      auto report = vulkan::video::ProbeH264Capabilities(context.inst_disp, candidate.physical_device);
+      if (!report) { return std::unexpected(report.error()); }
+      if (report->usable()) { return candidate; }
+      if (!unavailable_devices.empty()) { unavailable_devices += "; "; }
+      unavailable_devices += report->device_name + ": " + report->unavailable_reason;
+    }
+    return std::unexpected{ MakeError(std::errc::function_not_supported,
+      "No rendering device supports required 8-bit 4:2:0 H.264 encoding and image formats. "
+        + unavailable_devices) };
+  }
+
+  [[nodiscard]] auto CreateInstance(DriverConfig const &config, SurfaceMode mode)
+    -> std::expected<vkb::Instance, Error>
+  {
+    auto const requirements = vulkan::MakeVkexecRequirements();
+    bool const headless = mode == SurfaceMode::kHeadless;
+    bool const offscreen = mode == SurfaceMode::kOffscreen;
+    if (headless) {
+      if (auto checked = CheckHeadlessExtension(); !checked) { return std::unexpected(checked.error()); }
+    }
+
+    vkb::InstanceBuilder builder;
+    builder.require_api_version(requirements.api_version_major, requirements.api_version_minor, 0);
+    if (headless || offscreen) { builder.set_headless(true); }
+    if (headless) {
+      builder.enable_extension(VK_KHR_SURFACE_EXTENSION_NAME);
+      builder.enable_extension(VK_EXT_HEADLESS_SURFACE_EXTENSION_NAME);
+    }
+    if (config.request_present_timing && !offscreen) {
+      builder.enable_extension(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME);
+    }
+    if (config.enable_validation) {
+      std::println("Vulkan validation layers enabled");
+      builder.enable_validation_layers().use_default_debug_messenger();
+    } else {
+      std::println("Vulkan validation layers disabled");
+    }
+    return VKBResultToExpected(builder.build());
+  }
+
+  [[nodiscard]] auto SelectPhysicalDevice(vulkan::Context &context, DriverConfig const &config,
+    vkb::Instance const &instance, bool offscreen) -> std::expected<vkb::PhysicalDevice, Error>
+  {
+    auto const requirements = vulkan::MakeVkexecRequirements();
+    context.instance = instance;
+    context.inst_disp = context.instance.make_table();
+    if (!offscreen) {
+      auto surface = vulkan::CreateSurface(context.instance, *context.platform);
+      if (!surface) { return std::unexpected{ surface.error() }; }
+      context.surface = *surface;
+    }
+
+    vkb::PhysicalDeviceSelector selector(context.instance);
+    if (!offscreen) { selector.set_surface(context.surface); }
+    selector.require_present(!offscreen);
+    selector.set_minimum_version(requirements.api_version_major, requirements.api_version_minor);
+    for (char const *extension : requirements.device_extensions) { selector.add_required_extension(extension); }
+    VkPhysicalDeviceDescriptorHeapFeaturesEXT descriptor_heap_features{};
+    descriptor_heap_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_FEATURES_EXT;
+    descriptor_heap_features.descriptorHeap = VK_TRUE;
+    selector.add_required_extension_features(descriptor_heap_features);
+
+    VkPhysicalDeviceShaderUntypedPointersFeaturesKHR untyped_pointers_features{};
+    untyped_pointers_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_UNTYPED_POINTERS_FEATURES_KHR;
+    untyped_pointers_features.shaderUntypedPointers = VK_TRUE;
+    selector.add_required_extension_features(untyped_pointers_features);
+
+    VkPhysicalDeviceVulkan12Features features_12{};
+    features_12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+    features_12.bufferDeviceAddress = VK_TRUE;
+    features_12.timelineSemaphore = VK_TRUE;
+    selector.add_required_extension_features(features_12);
+
+    VkPhysicalDeviceVulkan13Features features_13{};
+    features_13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+    features_13.synchronization2 = VK_TRUE;
+    features_13.dynamicRendering = VK_TRUE;
+    features_13.shaderDemoteToHelperInvocation = VK_TRUE;
+    features_13.maintenance4 = VK_TRUE;
+    selector.add_required_extension_features(features_13);
+    return SelectRenderingDevice(context, selector, config.video_encode);
+  }
+
+  [[nodiscard]] auto ConfigureVideoEncoding(vulkan::Context &context, VideoEncodeSupport support,
+    vkb::PhysicalDevice &physical_device) -> std::expected<void, Error>
+  {
+    if (support == VideoEncodeSupport::kDisabled) { return {}; }
+    auto report = vulkan::video::ProbeH264Capabilities(context.inst_disp, physical_device.physical_device);
+    if (!report) { return std::unexpected(report.error()); }
+    context.video_encode_capabilities.diagnostic = report->diagnostic();
+    if (!report->usable()) {
+      if (support == VideoEncodeSupport::kRequired) {
+        return std::unexpected{ MakeError(std::errc::function_not_supported,
+          context.video_encode_capabilities.diagnostic) };
+      }
+      context.video_encode_capabilities.diagnostic += "\nStatus: H.264 unavailable";
+      return {};
+    }
+    constexpr std::array kVideoExtensions{
+      VK_KHR_VIDEO_QUEUE_EXTENSION_NAME,
+      VK_KHR_VIDEO_ENCODE_QUEUE_EXTENSION_NAME,
+      VK_KHR_VIDEO_ENCODE_H264_EXTENSION_NAME,
+    };
+    if (!physical_device.enable_extensions_if_present(kVideoExtensions.size(), kVideoExtensions.data())) {
+      return std::unexpected{ MakeError(std::errc::function_not_supported,
+        "H.264 extensions became unavailable during device creation") };
+    }
+    auto const selected = report->selected_configuration();
+    auto const queue_family_index = vulkan::video::ChooseEncodeQueue(*report);
+    if (!selected || !queue_family_index) {
+      return std::unexpected{ MakeError(std::errc::state_not_recoverable,
+        "usable H.264 device has no selected configuration or encode queue") };
+    }
+    context.video_encode_capabilities.max_width = selected->max_extent.width;
+    context.video_encode_capabilities.max_height = selected->max_extent.height;
+    context.video_encode_capabilities.capture_conversion_supported = selected->capture_conversion_supported;
+    context.video_encode_capabilities.reference_pictures_supported = selected->reference_pictures_supported;
+    context.video_encode.emplace(vulkan::video::EncodeDevice{
+      .queue = VK_NULL_HANDLE,
+      .queue_family_index = *queue_family_index,
+      .selection = *selected,
+      .capabilities = std::move(*report),
+    });
+    return {};
+  }
+
+  [[nodiscard]] auto CreateLogicalDevice(vulkan::Context &context, DriverConfig const &config,
+    vkb::PhysicalDevice physical_device, bool offscreen) -> std::expected<vkb::Device, Error>
+  {
+    if (config.request_present_timing && !offscreen) { TryEnablePresentTiming(context, physical_device); }
+    if (auto configured = ConfigureVideoEncoding(context, config.video_encode, physical_device); !configured) {
+      return std::unexpected(configured.error());
+    }
+    vkb::DeviceBuilder const builder{ physical_device };
+    return VKBResultToExpected(builder.build());
+  }
+
+  [[nodiscard]] auto FinalizeDeviceContext(vulkan::Context &context, vkb::Device const &device)
+    -> std::expected<void, Error>
+  {
+    if (auto initialized = InitializeDeviceContext(context, device); !initialized) { return initialized; }
+    if (!context.video_encode) { return {}; }
+    vkGetDeviceQueue(device.device, context.video_encode->queue_family_index, 0, &context.video_encode->queue);
+    if (context.video_encode->queue == VK_NULL_HANDLE) {
+      return std::unexpected{ MakeError(std::errc::state_not_recoverable,
+        "H.264 encode queue was not created") };
+    }
+    context.video_encode_capabilities.h264_enabled = true;
+    context.video_encode_capabilities.diagnostic += "\nStatus: H.264 enabled";
+    return {};
+  }
 }// namespace
 
+// This function coordinates instance, physical-device, logical-device, and optional video setup.
 auto DeviceInitialization(vulkan::Context &context, DriverConfig const &config) -> std::expected<void, Error>
 {
   if (config.video_encode == VideoEncodeSupport::kDisabled) {
@@ -225,155 +404,14 @@ auto DeviceInitialization(vulkan::Context &context, DriverConfig const &config) 
   if (context.platform == nullptr) {
     return std::unexpected{ Error{ std::make_error_code(std::errc::invalid_argument), "Platform is required" } };
   }
-
-  auto const requirements = vulkan::MakeVkexecRequirements();
-
-  bool const headless = context.platform->surface_mode() == SurfaceMode::kHeadless;
   bool const offscreen = context.platform->surface_mode() == SurfaceMode::kOffscreen;
-  if (headless) {
-    if (auto checked = CheckHeadlessExtension(); !checked) { return std::unexpected(checked.error()); }
-  }
-
-  vkb::InstanceBuilder instance_builder;
-  instance_builder.require_api_version(requirements.api_version_major, requirements.api_version_minor, 0);
-  if (headless || offscreen) { instance_builder.set_headless(true); }
-  if (headless) {
-    instance_builder.enable_extension(VK_KHR_SURFACE_EXTENSION_NAME);
-    instance_builder.enable_extension(VK_EXT_HEADLESS_SURFACE_EXTENSION_NAME);
-  }
-  if (config.request_present_timing && !offscreen) {
-    // Required to query present-timing / present-id2 surface capabilities.
-    instance_builder.enable_extension(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME);
-  }
-  if (config.enable_validation) {
-    std::println("Vulkan validation layers enabled");
-    instance_builder.enable_validation_layers().use_default_debug_messenger();
-  } else {
-    std::println("Vulkan validation layers disabled");
-  }
-  return VKBResultToExpected(instance_builder.build())
-    .and_then([&](vkb::Instance const &instance) -> std::expected<vkb::PhysicalDevice, Error> {
-      context.instance = instance;
-      context.inst_disp = context.instance.make_table();
-
-      if (!offscreen) {
-        auto surface = vulkan::CreateSurface(context.instance, *context.platform);
-        if (!surface) { return std::unexpected{ surface.error() }; }
-        context.surface = *surface;
-      }
-
-      vkb::PhysicalDeviceSelector phys_device_selector(context.instance);
-      if (!offscreen) { phys_device_selector.set_surface(context.surface); }
-      phys_device_selector.require_present(!offscreen);
-      phys_device_selector.set_minimum_version(requirements.api_version_major, requirements.api_version_minor);
-      for (char const *extension : requirements.device_extensions) {
-        phys_device_selector.add_required_extension(extension);
-      }
-      VkPhysicalDeviceDescriptorHeapFeaturesEXT descriptor_heap_features{};
-      descriptor_heap_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_FEATURES_EXT;
-      descriptor_heap_features.descriptorHeap = VK_TRUE;
-      phys_device_selector.add_required_extension_features(descriptor_heap_features);
-
-      VkPhysicalDeviceShaderUntypedPointersFeaturesKHR untyped_pointers_features{};
-      untyped_pointers_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_UNTYPED_POINTERS_FEATURES_KHR;
-      untyped_pointers_features.shaderUntypedPointers = VK_TRUE;
-      phys_device_selector.add_required_extension_features(untyped_pointers_features);
-
-      VkPhysicalDeviceVulkan12Features features_12{};
-      features_12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
-      features_12.bufferDeviceAddress = VK_TRUE;
-      features_12.timelineSemaphore = VK_TRUE;
-      phys_device_selector.add_required_extension_features(features_12);
-
-      VkPhysicalDeviceVulkan13Features features_13{};
-      features_13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
-      features_13.synchronization2 = VK_TRUE;
-      features_13.dynamicRendering = VK_TRUE;
-      features_13.shaderDemoteToHelperInvocation = VK_TRUE;
-      features_13.maintenance4 = VK_TRUE;
-      phys_device_selector.add_required_extension_features(features_13);
-
-      if (config.video_encode != VideoEncodeSupport::kRequired) {
-        return VKBResultToExpected(phys_device_selector.select());
-      }
-      auto candidates = VKBResultToExpected(phys_device_selector.select_devices());
-      if (!candidates) { return std::unexpected(candidates.error()); }
-      auto preferred = VKBResultToExpected(phys_device_selector.select());
-      if (!preferred) { return std::unexpected(preferred.error()); }
-      std::vector<vulkan::video::CandidateInfo> candidate_info;
-      candidate_info.reserve(candidates->size());
-      for (auto const &candidate : *candidates) {
-        candidate_info.push_back(vulkan::video::CandidateInfo{
-          .preferred_rendering_device = candidate.physical_device == preferred->physical_device,
-          .device_type = candidate.properties.deviceType,
-          .name = candidate.name,
-        });
-      }
-      std::string unavailable_devices;
-      for (auto const index : vulkan::video::RankCandidates(candidate_info)) {
-        auto &candidate = (*candidates)[index];
-        auto report = vulkan::video::ProbeH264Capabilities(context.inst_disp, candidate.physical_device);
-        if (!report) { return std::unexpected(report.error()); }
-        if (report->usable()) { return candidate; }
-        if (!unavailable_devices.empty()) { unavailable_devices += "; "; }
-        unavailable_devices += report->device_name + ": " + report->unavailable_reason;
-      }
-      return std::unexpected{ MakeError(std::errc::function_not_supported,
-        "No rendering device supports required 8-bit 4:2:0 H.264 encoding and image formats. "
-          + unavailable_devices) };
-    })
-    .and_then([&](vkb::PhysicalDevice physical_device) -> std::expected<vkb::Device, Error> {
-      if (config.request_present_timing && !offscreen) { TryEnablePresentTiming(context, physical_device); }
-
-      if (config.video_encode != VideoEncodeSupport::kDisabled) {
-        auto report = vulkan::video::ProbeH264Capabilities(context.inst_disp, physical_device.physical_device);
-        if (!report) { return std::unexpected(report.error()); }
-        context.video_encode_capabilities.diagnostic = report->diagnostic();
-        if (report->usable()) {
-          constexpr std::array kVideoExtensions{
-            VK_KHR_VIDEO_QUEUE_EXTENSION_NAME,
-            VK_KHR_VIDEO_ENCODE_QUEUE_EXTENSION_NAME,
-            VK_KHR_VIDEO_ENCODE_H264_EXTENSION_NAME,
-          };
-          if (!physical_device.enable_extensions_if_present(kVideoExtensions.size(), kVideoExtensions.data())) {
-            return std::unexpected{ MakeError(std::errc::function_not_supported,
-              "H.264 extensions became unavailable during device creation") };
-          }
-          auto const selected = *report->selected_configuration();
-          context.video_encode_capabilities.max_width = selected.max_extent.width;
-          context.video_encode_capabilities.max_height = selected.max_extent.height;
-          context.video_encode_capabilities.capture_conversion_supported = selected.capture_conversion_supported;
-          context.video_encode_capabilities.reference_pictures_supported = selected.reference_pictures_supported;
-          context.video_encode.emplace(vulkan::video::EncodeDevice{
-            .queue = VK_NULL_HANDLE,
-            .queue_family_index = *vulkan::video::ChooseEncodeQueue(*report),
-            .selection = selected,
-            .capabilities = std::move(*report),
-          });
-        } else if (config.video_encode == VideoEncodeSupport::kRequired) {
-          return std::unexpected{ MakeError(std::errc::function_not_supported,
-            context.video_encode_capabilities.diagnostic) };
-        } else {
-          context.video_encode_capabilities.diagnostic += "\nStatus: H.264 unavailable";
-        }
-      }
-
-      vkb::DeviceBuilder const device_builder{ physical_device };
-      return VKBResultToExpected(device_builder.build());
-    })
-    .and_then([&](vkb::Device const &device) -> std::expected<void, Error> {
-      if (auto initialized = InitializeDeviceContext(context, device); !initialized) { return initialized; }
-      if (context.video_encode) {
-        vkGetDeviceQueue(device.device, context.video_encode->queue_family_index, 0, &context.video_encode->queue);
-        if (context.video_encode->queue == VK_NULL_HANDLE) {
-          return std::unexpected{ MakeError(std::errc::state_not_recoverable,
-            "H.264 encode queue was not created") };
-        }
-        context.video_encode_capabilities.h264_enabled = true;
-        context.video_encode_capabilities.diagnostic += "\nStatus: H.264 enabled";
-      }
-      return {};
-    });
+  auto instance = CreateInstance(config, context.platform->surface_mode());
+  if (!instance) { return std::unexpected(instance.error()); }
+  auto physical_device = SelectPhysicalDevice(context, config, *instance, offscreen);
+  if (!physical_device) { return std::unexpected(physical_device.error()); }
+  auto device = CreateLogicalDevice(context, config, std::move(*physical_device), offscreen);
+  if (!device) { return std::unexpected(device.error()); }
+  return FinalizeDeviceContext(context, *device);
 }
 
 }// namespace vkgsplat

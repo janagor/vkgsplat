@@ -8,7 +8,7 @@
 
 namespace vkgsplat::vulkan::video {
 
-enum class PictureType { kIdr, kP };
+enum class PictureType : std::uint8_t { kIdr, kP };
 
 struct GopPicture
 {

@@ -1,19 +1,29 @@
 #include "png_sequence_writer.hpp"
 
 #include <vkgsplat_capture/screenshot.hpp>
+#include <vkgsplat_capture/frame_sequence.hpp>
 
 #include <algorithm>
+#include <cstddef>
 #include <chrono>
 #include <exception>
+#include <expected>
+#include <filesystem>
 #include <iomanip>
 #include <limits>
+#include <memory>
+#include <mutex>
+#include <optional>
 #include <sstream>
 #include <system_error>
 #include <utility>
 
+#include <vkgsplat_utility/error.hpp>
+#include <vkgsplat_utility/types.hpp>
+
 namespace vkgsplat::capture {
 namespace {
-constexpr size_t kRgbaChannels = 4U;
+constexpr std::size_t kRgbaChannels = 4U;
 constexpr u32 kMaxFilenameDigits = 20U;
 
 class TemporaryFileGuard
@@ -29,6 +39,8 @@ public:
   }
   TemporaryFileGuard(TemporaryFileGuard const &) = delete;
   auto operator=(TemporaryFileGuard const &) -> TemporaryFileGuard & = delete;
+  TemporaryFileGuard(TemporaryFileGuard &&) = delete;
+  auto operator=(TemporaryFileGuard &&) -> TemporaryFileGuard & = delete;
   auto dismiss() noexcept -> void { active_ = false; }
 private:
   std::filesystem::path path_;
@@ -38,8 +50,8 @@ private:
 [[nodiscard]] auto ValidateConfig(FrameSequenceConfig const &config) -> std::expected<void, Error>
 {
   if (config.output_directory.empty() || config.filename_prefix.empty() || config.filename_prefix == "."
-      || config.filename_prefix == ".." || config.filename_prefix.find('/') != std::string::npos
-      || config.filename_prefix.find('\\') != std::string::npos || config.frame_rate.numerator == 0U
+      || config.filename_prefix == ".." || config.filename_prefix.contains('/')
+      || config.filename_prefix.contains('\\') || config.frame_rate.numerator == 0U
       || config.frame_rate.denominator == 0U || config.filename_digits == 0U
       || config.filename_digits > kMaxFilenameDigits
       || config.max_pending_frames == 0U) {
@@ -54,7 +66,7 @@ PngSequenceWriter::PngSequenceWriter(FrameSequenceConfig config, WriteOperation 
 {
   if (!write_) {
     write_ = [](RgbaFrame const &frame, std::filesystem::path const &path) -> std::expected<void, Error> {
-      return write_png(frame, path.string());
+      return WritePng(frame, path.string());
     };
   }
   worker_ = std::jthread([this]() -> void { run(); });
@@ -63,7 +75,7 @@ PngSequenceWriter::PngSequenceWriter(FrameSequenceConfig config, WriteOperation 
 PngSequenceWriter::~PngSequenceWriter() noexcept
 {
   {
-    std::lock_guard const lock{ mutex_ };
+    std::scoped_lock const lock{ mutex_ };
     closing_ = true;
   }
   available_.notify_all();
@@ -75,23 +87,33 @@ auto PngSequenceWriter::create(FrameSequenceConfig config, WriteOperation write,
   -> std::expected<std::unique_ptr<PngSequenceWriter>, Error>
 {
   if (auto valid = ValidateConfig(config); !valid) { return std::unexpected{ valid.error() }; }
-  std::error_code ec;
-  if (std::filesystem::exists(config.output_directory, ec)) {
-    if (ec) { return std::unexpected{ MakeError(ec, "Cannot inspect output directory") }; }
-    auto const is_directory = std::filesystem::is_directory(config.output_directory, ec);
-    if (ec) { return std::unexpected{ MakeError(ec, "Cannot inspect output directory") }; }
+  std::error_code filesystem_error;
+  if (std::filesystem::exists(config.output_directory, filesystem_error)) {
+    if (filesystem_error) {
+      return std::unexpected{ MakeError(filesystem_error, "Cannot inspect output directory") };
+    }
+    auto const is_directory = std::filesystem::is_directory(config.output_directory, filesystem_error);
+    if (filesystem_error) {
+      return std::unexpected{ MakeError(filesystem_error, "Cannot inspect output directory") };
+    }
     if (!is_directory) {
       return std::unexpected{ MakeError(std::errc::not_a_directory, "Sequence output is not a directory") };
     }
-    auto const is_empty = std::filesystem::is_empty(config.output_directory, ec);
-    if (ec) { return std::unexpected{ MakeError(ec, "Cannot inspect output directory") }; }
+    auto const is_empty = std::filesystem::is_empty(config.output_directory, filesystem_error);
+    if (filesystem_error) {
+      return std::unexpected{ MakeError(filesystem_error, "Cannot inspect output directory") };
+    }
     if (!is_empty) {
       return std::unexpected{ MakeError(std::errc::file_exists, "Sequence output directory must be empty") };
     }
   } else {
-    if (ec) { return std::unexpected{ MakeError(ec, "Cannot inspect output directory") }; }
-    std::filesystem::create_directories(config.output_directory, ec);
-    if (ec) { return std::unexpected{ MakeError(ec, "Cannot create output directory") }; }
+    if (filesystem_error) {
+      return std::unexpected{ MakeError(filesystem_error, "Cannot inspect output directory") };
+    }
+    std::filesystem::create_directories(config.output_directory, filesystem_error);
+    if (filesystem_error) {
+      return std::unexpected{ MakeError(filesystem_error, "Cannot create output directory") };
+    }
   }
   return std::unique_ptr<PngSequenceWriter>{ new PngSequenceWriter(std::move(config), std::move(write), std::move(on_queue_full)) };
 }
@@ -131,9 +153,9 @@ auto PngSequenceWriter::submit(FramePacket packet) -> std::expected<std::filesys
     return std::unexpected{ MakeError(std::errc::invalid_argument, "Frame index is out of order or overflows") };
   }
   auto path = path_for(packet.sequence_index);
-  std::error_code ec;
-  auto const occupied = std::filesystem::exists(path, ec);
-  if (ec) { return std::unexpected{ MakeError(ec, "Cannot inspect output frame") }; }
+  std::error_code filesystem_error;
+  auto const occupied = std::filesystem::exists(path, filesystem_error);
+  if (filesystem_error) { return std::unexpected{ MakeError(filesystem_error, "Cannot inspect output frame") }; }
   if (occupied) {
     return std::unexpected{ MakeError(std::errc::file_exists, "Output frame already exists") };
   }
@@ -150,21 +172,29 @@ auto PngSequenceWriter::write_packet(FramePacket const &packet) -> std::expected
   auto const path = path_for(packet.sequence_index);
   auto temporary = path;
   temporary += ".part";
-  std::error_code ec;
-  auto const occupied = std::filesystem::exists(path, ec);
-  if (ec) { return std::unexpected{ MakeError(ec, "Cannot inspect output frame") }; }
-  auto const temporary_occupied = std::filesystem::exists(temporary, ec);
-  if (ec) { return std::unexpected{ MakeError(ec, "Cannot inspect temporary frame") }; }
+  std::error_code filesystem_error;
+  auto const occupied = std::filesystem::exists(path, filesystem_error);
+  if (filesystem_error) {
+    return std::unexpected{ MakeError(filesystem_error, "Cannot inspect output frame") };
+  }
+  auto const temporary_occupied = std::filesystem::exists(temporary, filesystem_error);
+  if (filesystem_error) {
+    return std::unexpected{ MakeError(filesystem_error, "Cannot inspect temporary frame") };
+  }
   if (occupied || temporary_occupied) {
     return std::unexpected{ MakeError(std::errc::file_exists, "Output frame already exists") };
   }
   TemporaryFileGuard cleanup{ temporary };
   auto written = write_(packet.frame, temporary);
   if (!written) { return std::unexpected{ written.error() }; }
-  std::filesystem::create_hard_link(temporary, path, ec);
-  if (ec) { return std::unexpected{ MakeError(ec, "Cannot publish PNG frame") }; }
-  std::filesystem::remove(temporary, ec);
-  if (ec) { return std::unexpected{ MakeError(ec, "Cannot remove temporary PNG") }; }
+  std::filesystem::create_hard_link(temporary, path, filesystem_error);
+  if (filesystem_error) {
+    return std::unexpected{ MakeError(filesystem_error, "Cannot publish PNG frame") };
+  }
+  std::filesystem::remove(temporary, filesystem_error);
+  if (filesystem_error) {
+    return std::unexpected{ MakeError(filesystem_error, "Cannot remove temporary PNG") };
+  }
   cleanup.dismiss();
   return {};
 }
@@ -207,7 +237,7 @@ auto PngSequenceWriter::peak_queued_frames() const noexcept -> size_t { return p
 auto PngSequenceWriter::finish() -> std::expected<void, Error>
 {
   {
-    std::lock_guard const lock{ mutex_ };
+  std::scoped_lock const lock{ mutex_ };
     closing_ = true;
   }
   available_.notify_all();

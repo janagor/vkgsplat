@@ -1,4 +1,6 @@
+// NOLINTBEGIN(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)
 #include "../src/vkgsplat_io/video/mp4_muxer.hpp"
+#include <vkgsplat_video/encoded_packet.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -9,6 +11,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <ios>
 #include <string>
 #include <system_error>
 #include <vector>
@@ -54,6 +57,8 @@ public:
   }
   TemporaryDirectory(TemporaryDirectory const &) = delete;
   auto operator=(TemporaryDirectory const &) -> TemporaryDirectory & = delete;
+  TemporaryDirectory(TemporaryDirectory &&) = delete;
+  auto operator=(TemporaryDirectory &&) -> TemporaryDirectory & = delete;
   [[nodiscard]] auto path() const -> std::filesystem::path const & { return path_; }
 
 private:
@@ -167,7 +172,7 @@ TEST_CASE("MP4 accepts timestamp gaps with consecutive encode indices", "[video]
   constexpr std::int64_t kFirstTimestamp = 0;
   constexpr std::int64_t kSecondTimestamp = 3;
   constexpr std::int64_t kFrameDuration = 1;
-  vkgsplat::EncodedPacket first{
+  vkgsplat::EncodedPacket const first{
     .data = std::vector<std::byte>{ kIdrPicture.begin(), kIdrPicture.end() },
     .frame_index = 0U,
     .pts = kFirstTimestamp,
@@ -184,3 +189,4 @@ TEST_CASE("MP4 accepts timestamp gaps with consecutive encode indices", "[video]
   REQUIRE((*muxer)->Finish());
   REQUIRE(std::filesystem::exists(output));
 }
+// NOLINTEND(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)

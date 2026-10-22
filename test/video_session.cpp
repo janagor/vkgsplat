@@ -1,14 +1,20 @@
+// NOLINTBEGIN(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)
 #include "../src/vkgsplat_backend/vulkan/video/video_session.hpp"
+#include "../src/vkgsplat_backend/vulkan/video/video_capabilities.hpp"
 #include "../src/vkgsplat_backend/vulkan/vulkan_driver.hpp"
 
+#include <vkgsplat/video_capabilities.hpp>
 #include <vkgsplat_headless/offscreen_platform.hpp>
 
+#include <vulkan/vulkan_core.h>
+#include <vk_video/vulkan_video_codec_h264std.h>
+
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
-#include <iterator>
 #include <limits>
 #include <optional>
 #include <span>
@@ -24,10 +30,17 @@ constexpr VkExtent2D kExtent{ .width = 1280, .height = 720 };
 constexpr std::uint32_t kMacroblockSize = 16;
 constexpr std::uint32_t kMaxGolombZeros = 31;
 constexpr std::uint32_t kBitsPerByte = 8;
+constexpr std::uint32_t kProfileFieldBits = 8U;
 constexpr std::uint32_t kMaximumBitRead = 32;
 constexpr std::uint32_t kMaximumBitIndex = kBitsPerByte - 1;
 constexpr size_t kShortStartCodeSize = 3;
 constexpr size_t kLongStartCodeSize = 4;
+constexpr std::array<std::byte, kLongStartCodeSize> kFourByteStartCode{
+  std::byte{ 0U }, std::byte{ 0U }, std::byte{ 0U }, std::byte{ 1U },
+};
+constexpr std::array<std::byte, kShortStartCodeSize> kThreeByteStartCode{
+  std::byte{ 0U }, std::byte{ 0U }, std::byte{ 1U },
+};
 constexpr std::uint8_t kSpsNaluType = 7;
 constexpr std::uint8_t kPpsNaluType = 8;
 constexpr std::uint8_t kNaluTypeMask = 0x1f;
@@ -64,11 +77,13 @@ public:
 
   [[nodiscard]] auto Bits(std::uint32_t count) -> std::optional<std::uint32_t>
   {
-    if (count > kMaximumBitRead || count > bytes_.size() * kBitsPerByte - position_) { return std::nullopt; }
+    if (count > kMaximumBitRead || count > (bytes_.size() * kBitsPerByte) - position_) { return std::nullopt; }
     std::uint32_t result = 0;
     for (std::uint32_t index = 0; index < count; ++index) {
-      auto const byte = bytes_[position_ / kBitsPerByte];
-      result = (result << 1) | ((byte >> (kMaximumBitIndex - position_ % kBitsPerByte)) & 1U);
+      auto const byte = bytes_.at(position_ / kBitsPerByte);
+      auto const bit = static_cast<std::uint32_t>(
+        (static_cast<unsigned int>(byte) >> (kMaximumBitIndex - (position_ % kBitsPerByte))) & 1U);
+      result = (result << 1U) | bit;
       ++position_;
     }
     return result;
@@ -119,11 +134,12 @@ private:
 
 [[nodiscard]] auto StartCodeSize(std::span<std::byte const> bytes, size_t offset) -> size_t
 {
-  if (offset + kLongStartCodeSize <= bytes.size() && bytes[offset] == std::byte{ 0 }
-      && bytes[offset + 1] == std::byte{ 0 } && bytes[offset + 2] == std::byte{ 0 }
-      && bytes[offset + 3] == std::byte{ 1 }) { return kLongStartCodeSize; }
-  if (offset + kShortStartCodeSize <= bytes.size() && bytes[offset] == std::byte{ 0 }
-      && bytes[offset + 1] == std::byte{ 0 } && bytes[offset + 2] == std::byte{ 1 }) {
+  if (offset + kLongStartCodeSize <= bytes.size()
+      && std::ranges::equal(bytes.subspan(offset, kLongStartCodeSize), kFourByteStartCode)) {
+    return kLongStartCodeSize;
+  }
+  if (offset + kShortStartCodeSize <= bytes.size()
+      && std::ranges::equal(bytes.subspan(offset, kShortStartCodeSize), kThreeByteStartCode)) {
     return kShortStartCodeSize;
   }
   return 0;
@@ -135,13 +151,13 @@ private:
   for (size_t offset = 0; offset < bytes.size(); ++offset) {
     auto const prefix = StartCodeSize(bytes, offset);
     if (prefix == 0 || offset + prefix >= bytes.size()) { continue; }
-    auto const header = std::to_integer<std::uint8_t>(bytes[offset + prefix]);
+    auto const header = std::to_integer<std::uint8_t>(bytes.subspan(offset + prefix).front());
     if ((header & kNaluTypeMask) != wanted_type) { continue; }
     std::vector<std::uint8_t> rbsp;
     std::uint32_t preceding_zeros = 0;
     for (size_t index = offset + prefix + 1; index < bytes.size(); ++index) {
       if (StartCodeSize(bytes, index) != 0) { break; }
-      auto const value = std::to_integer<std::uint8_t>(bytes[index]);
+      auto const value = std::to_integer<std::uint8_t>(bytes.subspan(index).front());
       if (preceding_zeros >= 2 && value == kEmulationPreventionByte) {
         preceding_zeros = 0;
         continue;
@@ -158,7 +174,7 @@ struct SpsInfo
 {
   std::uint32_t profile = 0;
   std::uint32_t level = 0;
-  std::uint32_t id = 0;
+  std::uint32_t sequence_parameter_set_id = 0;
   std::uint32_t width = 0;
   std::uint32_t height = 0;
   std::uint32_t num_units_in_tick = 0;
@@ -212,11 +228,11 @@ struct SpsInfo
 
 [[nodiscard]] auto ParseSps(BitReader &reader) -> std::optional<SpsInfo>
 {
-  auto profile = reader.Bits(8);
-  auto constraints = reader.Bits(8);
-  auto level = reader.Bits(8);
-  auto id = reader.UnsignedGolomb();
-  if (!profile || !constraints || !level || !id) { return std::nullopt; }
+  auto profile = reader.Bits(kProfileFieldBits);
+  auto constraints = reader.Bits(kProfileFieldBits);
+  auto level = reader.Bits(kProfileFieldBits);
+  auto sequence_parameter_set_id = reader.UnsignedGolomb();
+  if (!profile || !constraints || !level || !sequence_parameter_set_id) { return std::nullopt; }
   if (*profile == kHighProfileIdc) {
     auto chroma = reader.UnsignedGolomb();
     if (!chroma) { return std::nullopt; }
@@ -263,8 +279,8 @@ struct SpsInfo
     top = *crop_top;
     bottom = *crop_bottom;
   }
-  auto const coded_width = (*width_mbs + 1) * kMacroblockSize;
-  auto const coded_height = (*height_mbs + 1) * kMacroblockSize;
+  auto const coded_width = (*width_mbs + 1U) * kMacroblockSize;
+  auto const coded_height = (*height_mbs + 1U) * kMacroblockSize;
   auto const horizontal_crop = (left + right) * kCropUnit420;
   auto const vertical_crop = (top + bottom) * kCropUnit420;
   if (horizontal_crop >= coded_width || vertical_crop >= coded_height) { return std::nullopt; }
@@ -272,7 +288,8 @@ struct SpsInfo
   if (!vui_present || *vui_present == 0U) { return std::nullopt; }
   auto timing = ParseVuiTiming(reader);
   if (!timing) { return std::nullopt; }
-  return SpsInfo{ .profile = *profile, .level = *level, .id = *id,
+  return SpsInfo{ .profile = *profile, .level = *level,
+    .sequence_parameter_set_id = *sequence_parameter_set_id,
     .width = coded_width - horizontal_crop, .height = coded_height - vertical_crop,
     .num_units_in_tick = timing->num_units_in_tick, .time_scale = timing->time_scale,
     .timing_info_present = timing->timing_info_present,
@@ -281,11 +298,11 @@ struct SpsInfo
 
 [[nodiscard]] auto LevelNumber(StdVideoH264LevelIdc level) -> std::uint32_t
 {
-  constexpr std::uint32_t kLevels[]{
+  constexpr std::array<std::uint32_t, 19> kLevels{
     10, 11, 12, 13, 20, 21, 22, 30, 31, 32, 40, 41, 42, 50, 51, 52, 60, 61, 62,
   };
   auto const index = static_cast<size_t>(level);
-  return index < std::size(kLevels) ? kLevels[index] : 0;
+  return index < kLevels.size() ? kLevels.at(index) : 0;
 }
 
 auto Run() -> int
@@ -336,12 +353,12 @@ auto Run() -> int
         kFpsNumerator, 0U)
       || vkgsplat::vulkan::video::VideoSession::Create(context, device, kExtent,
         std::numeric_limits<std::uint32_t>::max(), kFpsDenominator)) { return EXIT_FAILURE; }
-  constexpr std::array frame_rates{
+  constexpr std::array kFrameRates{
     std::pair{ kFpsNumerator, kFpsDenominator },
     std::pair{ kFractionalFpsNumerator, kFractionalFpsDenominator },
   };
   for (std::uint32_t repetition = 0; repetition < kSessionRepetitions; ++repetition) {
-    auto const [fps_numerator, fps_denominator] = frame_rates[repetition % frame_rates.size()];
+    auto const [fps_numerator, fps_denominator] = kFrameRates.at(repetition % kFrameRates.size());
     auto session = vkgsplat::vulkan::video::VideoSession::Create(context, device, kExtent,
       fps_numerator, fps_denominator);
     if (!session) {
@@ -357,11 +374,11 @@ auto Run() -> int
     auto pps_id = pps->UnsignedGolomb();
     auto pps_sps_id = pps->UnsignedGolomb();
     if (!parsed || !pps_id || !pps_sps_id) { return EXIT_FAILURE; }
-    auto const &profile = device.capabilities.profiles[selection->profile_index];
+    auto const &profile = device.capabilities.profiles.at(selection->profile_index);
     if (parsed->profile != static_cast<std::uint32_t>(selection->profile)
         || parsed->level != LevelNumber(profile.h264.maxLevelIdc)
         || parsed->width != kExtent.width || parsed->height != kExtent.height
-        || parsed->id != 0 || *pps_id != 0 || *pps_sps_id != 0
+        || parsed->sequence_parameter_set_id != 0 || *pps_id != 0 || *pps_sps_id != 0
         || !parsed->timing_info_present || !parsed->fixed_frame_rate
         || parsed->num_units_in_tick != fps_denominator
         || parsed->time_scale != fps_numerator * kH264TicksPerFrame) { return EXIT_FAILURE; }
@@ -372,3 +389,4 @@ auto Run() -> int
 }// namespace
 
 auto main() -> int { return Run(); }
+// NOLINTEND(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)

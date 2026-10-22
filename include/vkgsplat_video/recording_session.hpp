@@ -20,7 +20,12 @@ namespace video {
 class RecordingSession
 {
 public:
+  RecordingSession() = default;
   virtual ~RecordingSession() = default;
+  RecordingSession(RecordingSession const &) = delete;
+  auto operator=(RecordingSession const &) -> RecordingSession & = delete;
+  RecordingSession(RecordingSession &&) = delete;
+  auto operator=(RecordingSession &&) -> RecordingSession & = delete;
   [[nodiscard]] virtual auto CaptureFrame(Camera const &camera, u64 frame_index)
     -> std::expected<EncodedPacket, Error> = 0;
   [[nodiscard]] virtual auto Finish() -> std::expected<void, Error> = 0;

@@ -1,3 +1,4 @@
+// NOLINTBEGIN(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)
 #include "../src/vkgsplat_backend/vulkan/video/h264_gop.hpp"
 
 #include <catch2/catch_test_macros.hpp>
@@ -9,6 +10,8 @@ constexpr std::uint32_t kIdrInterval = 30U;
 constexpr std::uint64_t kFrameCount = 95U;
 }// namespace
 
+// Exercises the complete GOP policy across IDR and P picture branches.
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("H.264 GOP selects deterministic IDR positions and resets numbering", "[video]")
 {
   auto scheduler = vkgsplat::vulkan::video::H264Gop::Create(kIdrInterval, true);
@@ -18,7 +21,7 @@ TEST_CASE("H.264 GOP selects deterministic IDR positions and resets numbering", 
     auto const idr = index % kIdrInterval == 0U;
     CHECK((picture.type == vkgsplat::vulkan::video::PictureType::kIdr) == idr);
     CHECK(picture.frame_index == index);
-    CHECK(picture.remaining_frames == kIdrInterval - 1U - index % kIdrInterval);
+    CHECK(picture.remaining_frames == kIdrInterval - 1U - (index % kIdrInterval));
     if (idr) {
       CHECK(picture.frame_num == 0U);
       CHECK(picture.poc_lsb == 0U);
@@ -33,3 +36,4 @@ TEST_CASE("H.264 GOP can request all-intra pictures", "[video]")
   REQUIRE(scheduler);
   CHECK(scheduler->picture(17U).type == vkgsplat::vulkan::video::PictureType::kIdr);
 }
+// NOLINTEND(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)

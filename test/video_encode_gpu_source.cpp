@@ -1,11 +1,22 @@
+// NOLINTBEGIN(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)
 #include "video_encode_gpu_source.hpp"
+#include "../src/vkgsplat_backend/vulkan/video/video_device.hpp"
+#include "../src/vkgsplat_backend/vulkan/video/video_encoder.hpp"
+#include "../src/vkgsplat_backend/vulkan/vulkan_context.hpp"
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
+#include <expected>
+#include <memory>
 #include <span>
 #include <string>
 #include <system_error>
+
+#include <VkBootstrap.h>
+#include <vulkan/vulkan_core.h>
+#include <vkgsplat_utility/error.hpp>
 
 namespace vkgsplat::test {
 namespace {
@@ -15,6 +26,7 @@ namespace {
   constexpr std::uint8_t kNeutralChroma = 128U;
   constexpr std::size_t kLumaPlane = 0U;
   constexpr std::size_t kChromaPlane = 1U;
+  constexpr std::size_t kPlaneCount = 2U;
 
   [[nodiscard]] auto Failure(char const *operation, VkResult result) -> Error
   {
@@ -29,14 +41,14 @@ namespace {
     context.inst_disp.getPhysicalDeviceMemoryProperties(context.device.physical_device, &properties);
     for (std::uint32_t index = 0U; index < properties.memoryTypeCount; ++index) {
       if ((requirements.memoryTypeBits & (1U << index)) == 0U
-          || (properties.memoryTypes[index].propertyFlags & required) != required) { continue; }
-      VkMemoryDedicatedAllocateInfo dedicated{
+          || (std::span{ properties.memoryTypes }.subspan(index).front().propertyFlags & required) != required) { continue; }
+      VkMemoryDedicatedAllocateInfo const dedicated{
         .sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO,
         .pNext = nullptr,
         .image = image,
         .buffer = buffer,
       };
-      VkMemoryAllocateInfo allocation{
+      VkMemoryAllocateInfo const allocation{
         .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
         .pNext = &dedicated,
         .allocationSize = requirements.size,
@@ -82,12 +94,12 @@ auto GpuVideoSource::Create(vulkan::Context &context, vulkan::video::EncodeDevic
   }
   auto source = std::unique_ptr<GpuVideoSource>{ new GpuVideoSource{ context, extent } };
   source->graphics_queue_ = graphics->first;
-  VkVideoEncodeH264ProfileInfoKHR h264{
+  VkVideoEncodeH264ProfileInfoKHR const h264{
     .sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_H264_PROFILE_INFO_KHR,
     .pNext = nullptr,
     .stdProfileIdc = device.selection.profile,
   };
-  VkVideoProfileInfoKHR profile{
+  VkVideoProfileInfoKHR const profile{
     .sType = VK_STRUCTURE_TYPE_VIDEO_PROFILE_INFO_KHR,
     .pNext = &h264,
     .videoCodecOperation = VK_VIDEO_CODEC_OPERATION_ENCODE_H264_BIT_KHR,
@@ -95,7 +107,7 @@ auto GpuVideoSource::Create(vulkan::Context &context, vulkan::video::EncodeDevic
     .lumaBitDepth = VK_VIDEO_COMPONENT_BIT_DEPTH_8_BIT_KHR,
     .chromaBitDepth = VK_VIDEO_COMPONENT_BIT_DEPTH_8_BIT_KHR,
   };
-  VkVideoProfileListInfoKHR profiles{
+  VkVideoProfileListInfoKHR const profiles{
     .sType = VK_STRUCTURE_TYPE_VIDEO_PROFILE_LIST_INFO_KHR,
     .pNext = nullptr,
     .profileCount = kOneResource,
@@ -104,13 +116,13 @@ auto GpuVideoSource::Create(vulkan::Context &context, vulkan::video::EncodeDevic
   std::array const families{ graphics->second, device.queue_family_index };
   auto const sharing = families.front() == families.back() ? VK_SHARING_MODE_EXCLUSIVE : VK_SHARING_MODE_CONCURRENT;
   auto const &format = device.selection.source_format;
-  VkImageCreateInfo image{
+  VkImageCreateInfo const image{
     .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
     .pNext = &profiles,
     .flags = 0U,
     .imageType = format.image_type,
     .format = format.format,
-    .extent = { extent.width, extent.height, kOneResource },
+    .extent = { .width = extent.width, .height = extent.height, .depth = kOneResource },
     .mipLevels = kOneResource,
     .arrayLayers = kOneResource,
     .samples = VK_SAMPLE_COUNT_1_BIT,
@@ -130,7 +142,7 @@ auto GpuVideoSource::Create(vulkan::Context &context, vulkan::video::EncodeDevic
   source->image_memory_ = *memory;
   result = context.disp.bindImageMemory(source->image_, source->image_memory_, 0U);
   if (result != VK_SUCCESS) { return std::unexpected(Failure("bind external NV12 image", result)); }
-  VkImageViewCreateInfo view{
+  VkImageViewCreateInfo const view{
     .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
     .pNext = nullptr,
     .flags = 0U,
@@ -144,8 +156,8 @@ auto GpuVideoSource::Create(vulkan::Context &context, vulkan::video::EncodeDevic
   result = context.disp.createImageView(&view, nullptr, &source->view_);
   if (result != VK_SUCCESS) { return std::unexpected(Failure("create external NV12 image view", result)); }
   auto const y_size = static_cast<VkDeviceSize>(extent.width) * extent.height;
-  auto const upload_size = y_size + y_size / kChromaDivisor;
-  VkBufferCreateInfo buffer{
+  auto const upload_size = y_size + (y_size / kChromaDivisor);
+  VkBufferCreateInfo const buffer{
     .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
     .pNext = nullptr,
     .flags = 0U,
@@ -163,7 +175,7 @@ auto GpuVideoSource::Create(vulkan::Context &context, vulkan::video::EncodeDevic
   source->upload_memory_ = *memory;
   result = context.disp.bindBufferMemory(source->upload_, source->upload_memory_, 0U);
   if (result != VK_SUCCESS) { return std::unexpected(Failure("bind external NV12 upload", result)); }
-  VkCommandPoolCreateInfo pool{
+  VkCommandPoolCreateInfo const pool{
     .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
     .pNext = nullptr,
     .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
@@ -171,7 +183,7 @@ auto GpuVideoSource::Create(vulkan::Context &context, vulkan::video::EncodeDevic
   };
   result = context.disp.createCommandPool(&pool, nullptr, &source->pool_);
   if (result != VK_SUCCESS) { return std::unexpected(Failure("create external NV12 command pool", result)); }
-  VkCommandBufferAllocateInfo allocate{
+  VkCommandBufferAllocateInfo const allocate{
     .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
     .pNext = nullptr,
     .commandPool = source->pool_,
@@ -180,7 +192,7 @@ auto GpuVideoSource::Create(vulkan::Context &context, vulkan::video::EncodeDevic
   };
   result = context.disp.allocateCommandBuffers(&allocate, &source->command_);
   if (result != VK_SUCCESS) { return std::unexpected(Failure("allocate external NV12 command", result)); }
-  VkSemaphoreCreateInfo semaphore{ .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
+  VkSemaphoreCreateInfo const semaphore{ .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
   result = context.disp.createSemaphore(&semaphore, nullptr, &source->ready_);
   if (result != VK_SUCCESS) { return std::unexpected(Failure("create external NV12 ready semaphore", result)); }
   return source;
@@ -192,17 +204,18 @@ auto GpuVideoSource::Prepare(std::uint8_t luma) -> std::expected<vulkan::video::
     return std::unexpected(MakeError(std::errc::operation_in_progress, "previous GPU test source is still in use"));
   }
   auto const y_size = static_cast<VkDeviceSize>(extent_.width) * extent_.height;
-  auto const upload_size = y_size + y_size / kChromaDivisor;
+  auto const upload_size = y_size + (y_size / kChromaDivisor);
   void *mapped = nullptr;
   auto result = context_.disp.mapMemory(upload_memory_, 0U, upload_size, 0U, &mapped);
   if (result != VK_SUCCESS) { return std::unexpected(Failure("map external NV12 upload", result)); }
   std::memset(mapped, luma, static_cast<std::size_t>(y_size));
-  std::memset(static_cast<std::byte *>(mapped) + y_size, kNeutralChroma,
+  auto const upload_bytes = std::span{ static_cast<std::byte *>(mapped), static_cast<std::size_t>(upload_size) };
+  std::memset(upload_bytes.subspan(static_cast<std::size_t>(y_size)).data(), kNeutralChroma,
     static_cast<std::size_t>(upload_size - y_size));
   context_.disp.unmapMemory(upload_memory_);
   result = context_.disp.resetCommandBuffer(command_, 0U);
   if (result != VK_SUCCESS) { return std::unexpected(Failure("reset external NV12 command", result)); }
-  VkCommandBufferBeginInfo begin{
+  VkCommandBufferBeginInfo const begin{
     .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
     .pNext = nullptr,
     .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
@@ -224,22 +237,24 @@ auto GpuVideoSource::Prepare(std::uint8_t luma) -> std::expected<vulkan::video::
     .subresourceRange = { .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 0U,
       .levelCount = kOneResource, .baseArrayLayer = 0U, .layerCount = kOneResource },
   };
-  VkDependencyInfo dependency{
+  VkDependencyInfo const dependency{
     .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
     .pNext = nullptr,
     .imageMemoryBarrierCount = kOneResource,
     .pImageMemoryBarriers = &barrier,
   };
   context_.disp.cmdPipelineBarrier2(command_, &dependency);
-  std::array<VkBufferImageCopy, 2> regions{};
-  regions[kLumaPlane].imageSubresource.aspectMask = VK_IMAGE_ASPECT_PLANE_0_BIT;
-  regions[kLumaPlane].imageSubresource.layerCount = kOneResource;
-  regions[kLumaPlane].imageExtent = { extent_.width, extent_.height, kOneResource };
-  regions[kChromaPlane].bufferOffset = y_size;
-  regions[kChromaPlane].imageSubresource.aspectMask = VK_IMAGE_ASPECT_PLANE_1_BIT;
-  regions[kChromaPlane].imageSubresource.layerCount = kOneResource;
-  regions[kChromaPlane].imageExtent = { extent_.width / kChromaDivisor,
-    extent_.height / kChromaDivisor, kOneResource };
+  std::array<VkBufferImageCopy, kPlaneCount> regions{};
+  auto &luma_region = regions.at(kLumaPlane);
+  luma_region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_PLANE_0_BIT;
+  luma_region.imageSubresource.layerCount = kOneResource;
+  luma_region.imageExtent = { .width = extent_.width, .height = extent_.height, .depth = kOneResource };
+  auto &chroma_region = regions.at(kChromaPlane);
+  chroma_region.bufferOffset = y_size;
+  chroma_region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_PLANE_1_BIT;
+  chroma_region.imageSubresource.layerCount = kOneResource;
+  chroma_region.imageExtent = { .width = extent_.width / kChromaDivisor,
+    .height = extent_.height / kChromaDivisor, .depth = kOneResource };
   context_.disp.cmdCopyBufferToImage(command_, upload_, image_, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
     static_cast<std::uint32_t>(regions.size()), regions.data());
   barrier.srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
@@ -251,13 +266,13 @@ auto GpuVideoSource::Prepare(std::uint8_t luma) -> std::expected<vulkan::video::
   context_.disp.cmdPipelineBarrier2(command_, &dependency);
   result = context_.disp.endCommandBuffer(command_);
   if (result != VK_SUCCESS) { return std::unexpected(Failure("end external NV12 command", result)); }
-  VkCommandBufferSubmitInfo command_info{
+  VkCommandBufferSubmitInfo const command_info{
     .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
     .pNext = nullptr,
     .commandBuffer = command_,
     .deviceMask = 0U,
   };
-  VkSemaphoreSubmitInfo signal{
+  VkSemaphoreSubmitInfo const signal{
     .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
     .pNext = nullptr,
     .semaphore = ready_,
@@ -265,7 +280,7 @@ auto GpuVideoSource::Prepare(std::uint8_t luma) -> std::expected<vulkan::video::
     .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
     .deviceIndex = 0U,
   };
-  VkSubmitInfo2 submit{
+  VkSubmitInfo2 const submit{
     .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
     .pNext = nullptr,
     .waitSemaphoreInfoCount = 0U,
@@ -288,3 +303,4 @@ auto GpuVideoSource::Prepare(std::uint8_t luma) -> std::expected<vulkan::video::
 }
 
 }// namespace vkgsplat::test
+// NOLINTEND(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)

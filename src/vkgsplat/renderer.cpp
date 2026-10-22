@@ -21,12 +21,14 @@
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat/driver.hpp>
 #include <vkgsplat/engine.hpp>
+#include <vkgsplat/frame.hpp>
 #include <vkgsplat/gpu_timings.hpp>
 #include <vkgsplat/lfd_config.hpp>
 #include <vkgsplat/platform.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
 #include <vkgsplat_utility/utils.hpp>
+#include <vkgsplat_video/encoded_packet.hpp>
 
 #include "vulkan/app_state.hpp"
 #include "vulkan/graphics_pipeline.hpp"
@@ -238,7 +240,7 @@ namespace {
     VulkanVideoRecordingSession(RenderThread &worker, VkExtent2D extent,
       std::unique_ptr<vulkan::video::GpuColorConverter> converter,
       std::unique_ptr<vulkan::video::VideoEncoder> encoder) noexcept
-      : worker_{ worker }, extent_{ extent }, converter_{ std::move(converter) }, encoder_{ std::move(encoder) }
+      : worker_{ &worker }, extent_{ extent }, converter_{ std::move(converter) }, encoder_{ std::move(encoder) }
     {}
 
     [[nodiscard]] auto CaptureFrame(Camera const &camera, u64 frame_index)
@@ -249,7 +251,7 @@ namespace {
           "video recording session is finished or failed"));
       }
       auto const aspect_ratio = static_cast<f64>(extent_.width) / static_cast<f64>(extent_.height);
-      auto packet = worker_.CaptureVideoFrame(camera, aspect_ratio, *converter_, *encoder_, frame_index);
+      auto packet = worker_->CaptureVideoFrame(camera, aspect_ratio, *converter_, *encoder_, frame_index);
       if (!packet) { failed_ = true; }
       return packet;
     }
@@ -273,7 +275,7 @@ namespace {
     { return encoder_->ParameterSets(); }
 
   private:
-    RenderThread &worker_;
+    RenderThread *worker_;
     VkExtent2D extent_{};
     std::unique_ptr<vulkan::video::GpuColorConverter> converter_;
     std::unique_ptr<vulkan::video::VideoEncoder> encoder_;

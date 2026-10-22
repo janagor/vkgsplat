@@ -8,6 +8,7 @@
 
 #include <vkgsplat/driver.hpp>
 #include <vkgsplat/platform.hpp>
+#include <vkgsplat/video_capabilities.hpp>
 #include <vkgsplat_utility/error.hpp>
 
 namespace vkgsplat {

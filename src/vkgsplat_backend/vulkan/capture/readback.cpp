@@ -30,7 +30,7 @@ namespace vkgsplat::vulkan {
 namespace {
 
 
-  void FreeCmd(Context &context, RenderData &data, VkCommandBuffer cmd)
+  auto FreeCmd(Context &context, RenderData &data, VkCommandBuffer cmd) -> void
   {
     if (cmd != VK_NULL_HANDLE && data.command_pool.has_value()) {
       context.disp.freeCommandBuffers(data.command_pool->handle(), 1, &cmd);
@@ -49,25 +49,90 @@ namespace {
     return {};
   }
 
+  [[nodiscard]] auto ValidateReadback(Context const &context, RenderData const &data)
+    -> std::expected<void, Error>
+  {
+    if (data.color_format != VK_FORMAT_R8G8B8A8_UNORM) {
+      return std::unexpected{ MakeError(std::errc::not_supported, "readback currently requires R8G8B8A8_UNORM") };
+    }
+    if (context.vkexec_context == nullptr) {
+      return std::unexpected{ MakeError(std::errc::state_not_recoverable, "vkexec context missing for readback") };
+    }
+    if (context.allocator == nullptr) {
+      return std::unexpected{ MakeError(std::errc::state_not_recoverable, "VMA allocator missing for readback") };
+    }
+    return {};
+  }
+
+  [[nodiscard]] auto RecordReadbackCommands(Context &context, RenderData &data,
+    VkCommandBuffer cmd, VkImage color_image, VkBuffer staging_buffer) -> std::expected<void, Error>
+  {
+    VkCommandBufferBeginInfo const begin_info{
+      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+      .pNext = nullptr,
+      .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+      .pInheritanceInfo = nullptr,
+    };
+    auto const begun = context.disp.beginCommandBuffer(cmd, &begin_info);
+    if (begun != VK_SUCCESS) {
+      return std::unexpected(MakeError(begun == VK_ERROR_DEVICE_LOST ? std::errc::no_such_device : std::errc::io_error,
+        "failed to begin readback command buffer"));
+    }
+
+    // After a normal frame the color target is already TRANSFER_SRC_OPTIMAL.
+    auto barrier = vkexec::image_barrier(*context.vkexec_context,
+      cmd,
+      {
+        .image = color_image,
+        .old_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        .new_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        .src_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
+        .dst_stage = VK_PIPELINE_STAGE_TRANSFER_BIT,
+        .src_access = VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        .dst_access = VK_ACCESS_TRANSFER_READ_BIT,
+      });
+    if (!barrier) { return std::unexpected(VkexecFailure(barrier.error())); }
+
+    VkBufferImageCopy const region{
+      .bufferOffset = 0,
+      .bufferRowLength = 0,
+      .bufferImageHeight = 0,
+      .imageSubresource =
+        {
+          .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+          .mipLevel = 0,
+          .baseArrayLayer = 0,
+          .layerCount = 1,
+        },
+      .imageOffset = { .x = 0, .y = 0, .z = 0 },
+      .imageExtent = { .width = data.color_width, .height = data.color_height, .depth = 1 },
+    };
+    context.disp.cmdCopyImageToBuffer(
+      cmd, color_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, staging_buffer, 1, &region);
+
+    auto const ended = context.disp.endCommandBuffer(cmd);
+    if (ended != VK_SUCCESS) {
+      return std::unexpected(MakeError(ended == VK_ERROR_DEVICE_LOST ? std::errc::no_such_device : std::errc::io_error,
+        "failed to end readback command buffer"));
+    }
+
+    return {};
+  }
+
 }// namespace
 
+// Records, submits, and retires a full image transfer through a staging buffer.
 auto ReadColorTargetRgba8(Context &context, RenderData &data) -> std::expected<RgbaFrame, Error>
 {
   if (!data.color_image.has_value() || data.color_width == 0 || data.color_height == 0) {
     return std::unexpected{ MakeError(std::errc::invalid_argument, "no color target available for readback") };
   }
-  if (data.color_format != VK_FORMAT_R8G8B8A8_UNORM) {
-    return std::unexpected{ MakeError(std::errc::not_supported, "readback currently requires R8G8B8A8_UNORM") };
-  }
   if (!data.command_pool.has_value()) {
     return std::unexpected{ MakeError(std::errc::state_not_recoverable, "command pool missing for readback") };
   }
-  if (context.vkexec_context == nullptr) {
-    return std::unexpected{ MakeError(std::errc::state_not_recoverable, "vkexec context missing for readback") };
-  }
-  if (context.allocator == nullptr) {
-    return std::unexpected{ MakeError(std::errc::state_not_recoverable, "VMA allocator missing for readback") };
-  }
+  auto* const color_image = data.color_image->handle();
+  auto &command_pool = *data.command_pool;
+  if (auto valid = ValidateReadback(context, data); !valid) { return std::unexpected{ valid.error() }; }
   if (auto waited = WaitForPriorFrames(data); !waited) { return std::unexpected{ waited.error() }; }
 
   constexpr u32 kChannels = 4;
@@ -79,7 +144,7 @@ auto ReadColorTargetRgba8(Context &context, RenderData &data) -> std::expected<R
   if (!staging_created) { return std::unexpected{ staging_created.error() }; }
   auto staging = std::optional<vulkan::GpuBuffer>{ std::move(*staging_created) };
 
-  auto buffers = data.command_pool->allocate_buffers(1);
+  auto buffers = command_pool.allocate_buffers(1);
   if (!buffers) { return std::unexpected{ buffers.error() }; }
   VkCommandBuffer cmd = buffers->front().handle();
 
@@ -89,53 +154,8 @@ auto ReadColorTargetRgba8(Context &context, RenderData &data) -> std::expected<R
     return std::unexpected{ std::move(err) };
   };
 
-  VkCommandBufferBeginInfo const begin_info{
-    .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-    .pNext = nullptr,
-    .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-    .pInheritanceInfo = nullptr,
-  };
-  auto const begun = context.disp.beginCommandBuffer(cmd, &begin_info);
-  if (begun != VK_SUCCESS) {
-    return fail(MakeError(begun == VK_ERROR_DEVICE_LOST ? std::errc::no_such_device : std::errc::io_error,
-      "failed to begin readback command buffer"));
-  }
-
-  // After a normal frame the color target is already TRANSFER_SRC_OPTIMAL.
-  auto barrier = vkexec::image_barrier(*context.vkexec_context,
-    cmd,
-    {
-      .image = data.color_image->handle(),
-      .old_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-      .new_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-      .src_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
-      .dst_stage = VK_PIPELINE_STAGE_TRANSFER_BIT,
-      .src_access = VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-      .dst_access = VK_ACCESS_TRANSFER_READ_BIT,
-    });
-  if (!barrier) { return fail(VkexecFailure(barrier.error())); }
-
-  VkBufferImageCopy const region{
-    .bufferOffset = 0,
-    .bufferRowLength = 0,
-    .bufferImageHeight = 0,
-    .imageSubresource =
-      {
-        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-        .mipLevel = 0,
-        .baseArrayLayer = 0,
-        .layerCount = 1,
-      },
-    .imageOffset = { .x = 0, .y = 0, .z = 0 },
-    .imageExtent = { .width = data.color_width, .height = data.color_height, .depth = 1 },
-  };
-  context.disp.cmdCopyImageToBuffer(
-    cmd, data.color_image->handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, staging->handle(), 1, &region);
-
-  auto const ended = context.disp.endCommandBuffer(cmd);
-  if (ended != VK_SUCCESS) {
-    return fail(MakeError(ended == VK_ERROR_DEVICE_LOST ? std::errc::no_such_device : std::errc::io_error,
-      "failed to end readback command buffer"));
+  if (auto recorded = RecordReadbackCommands(context, data, cmd, color_image, staging->handle()); !recorded) {
+    return fail(recorded.error());
   }
 
   auto *const timeline = data.frame_ring.has_value() ? data.frame_ring->timeline().handle() : data.offscreen_timeline;

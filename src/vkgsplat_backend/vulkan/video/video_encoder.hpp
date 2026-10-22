@@ -22,7 +22,7 @@ namespace vkgsplat::vulkan::video {
 struct EncoderResources;
 
 // Simulates rejection at the selected submission boundary in GPU tests.
-enum class EncodeFailurePointForTest {
+enum class EncodeFailurePointForTest : std::uint8_t {
   kNone,
   kVideoSubmission,
   kReadbackSubmission,
@@ -83,6 +83,8 @@ public:
 
   VideoEncoder(VideoEncoder const &) = delete;
   auto operator=(VideoEncoder const &) -> VideoEncoder & = delete;
+  VideoEncoder(VideoEncoder &&) = delete;
+  auto operator=(VideoEncoder &&) -> VideoEncoder & = delete;
 
 private:
   VideoEncoder(Context &context, EncodeDevice device, VkExtent2D extent,

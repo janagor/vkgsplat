@@ -1,21 +1,36 @@
 #include "mp4_muxer.hpp"
 
-#include <cerrno>
 #include <atomic>
+#include <array>
+#include <cstddef>
+#include <cstdint>
 #include <cstring>
+#include <expected>
+#include <filesystem>
 #include <fstream>
+#include <ios>
 #include <limits>
+#include <memory>
+#include <span>
 #include <string>
 #include <system_error>
 #include <utility>
 
+#include <vkgsplat_video/encoded_packet.hpp>
+
 extern "C" {
 #include <libavcodec/avcodec.h>
+#include <libavcodec/codec_id.h>
+#include <libavcodec/defs.h>
 #include <libavcodec/packet.h>
 #include <libavformat/avformat.h>
+#include <libavformat/avio.h>
+#include <libavutil/avutil.h>
 #include <libavutil/error.h>
 #include <libavutil/mem.h>
 }
+
+#include <vkgsplat_utility/error.hpp>
 
 namespace vkgsplat {
 namespace {
@@ -26,24 +41,30 @@ namespace {
   constexpr std::size_t kLongStartCodeSize = 4;
   constexpr std::size_t kShortStartCodeSize = 3;
   constexpr std::uint32_t kMaxTemporaryPathAttempts = 256U;
-  std::atomic_uint64_t gTemporaryPathSequence{ 0U };
+  [[nodiscard]] auto TemporaryPathSequence() noexcept -> std::atomic_uint64_t &
+  {
+    static std::atomic_uint64_t sequence{ 0U };
+    return sequence;
+  }
 
   [[nodiscard]] auto FfmpegError(char const *operation, int code) -> Error
   {
-    char buffer[AV_ERROR_MAX_STRING_SIZE]{};
-    av_strerror(code, buffer, sizeof(buffer));
-    return MakeError(std::errc::io_error, std::string{ operation } + ": " + buffer);
+    std::array<char, AV_ERROR_MAX_STRING_SIZE> buffer{};
+    av_strerror(code, buffer.data(), buffer.size());
+    return MakeError(std::errc::io_error, std::string{ operation } + ": " + buffer.data());
   }
 
   [[nodiscard]] auto HasParameterSet(std::span<std::byte const> data, std::uint8_t type) -> bool
   {
     for (std::size_t index = 0; index + kShortStartCodeSize < data.size(); ++index) {
-      if (data[index] != std::byte{} || data[index + 1] != std::byte{}) { continue; }
+      auto const bytes = data.subspan(index);
+      if (bytes.front() != std::byte{} || bytes.subspan(1U).front() != std::byte{}) { continue; }
       auto const long_code = index + kLongStartCodeSize < data.size()
-                             && data[index + 2] == std::byte{} && data[index + 3] == std::byte{ 1 };
-      auto const short_code = data[index + 2] == std::byte{ 1 };
+                             && bytes.subspan(2U).front() == std::byte{}
+                             && bytes.subspan(kShortStartCodeSize).front() == std::byte{ 1 };
+      auto const short_code = bytes.subspan(2U).front() == std::byte{ 1 };
       if ((long_code || short_code)
-          && (std::to_integer<std::uint8_t>(data[index + (long_code ? kLongStartCodeSize : kShortStartCodeSize)])
+          && (std::to_integer<std::uint8_t>(bytes.subspan(long_code ? kLongStartCodeSize : kShortStartCodeSize).front())
               & kH264NalTypeMask) == type) {
         return true;
       }
@@ -61,7 +82,8 @@ Mp4Muxer::Mp4Muxer(std::filesystem::path path, std::uint32_t fps_numerator,
 Mp4Muxer::~Mp4Muxer()
 {
   if (context_ != nullptr) {
-    if ((context_->oformat->flags & AVFMT_NOFILE) == 0 && context_->pb != nullptr) {
+    if ((static_cast<unsigned int>(context_->oformat->flags) & static_cast<unsigned int>(AVFMT_NOFILE)) == 0U
+        && context_->pb != nullptr) {
       avio_closep(&context_->pb);
     }
     avformat_free_context(context_);
@@ -93,8 +115,8 @@ auto Mp4Muxer::Open(std::filesystem::path path, std::uint32_t width, std::uint32
   auto muxer = std::unique_ptr<Mp4Muxer>{ new Mp4Muxer{ std::move(path), fps_numerator, fps_denominator } };
   for (std::uint32_t attempt = 0U; attempt < kMaxTemporaryPathAttempts; ++attempt) {
     auto candidate = muxer->path_;
-    candidate += ".partial." + std::to_string(gTemporaryPathSequence.fetch_add(1U));
-    std::ofstream reservation{ candidate, std::ios::out | std::ios::binary | std::ios::noreplace };
+    candidate += ".partial." + std::to_string(TemporaryPathSequence().fetch_add(1U));
+    std::ofstream const reservation{ candidate, std::ios::out | std::ios::binary | std::ios::noreplace };
     if (reservation) {
       muxer->temporary_path_ = std::move(candidate);
       break;
@@ -128,9 +150,11 @@ auto Mp4Muxer::Open(std::filesystem::path path, std::uint32_t width, std::uint32
   }
   std::memcpy(parameters->extradata, parameter_sets.data(), parameter_sets.size());
   parameters->extradata_size = static_cast<int>(parameter_sets.size());
-  muxer->stream_->time_base = AVRational{ static_cast<int>(fps_denominator), static_cast<int>(fps_numerator) };
-  muxer->stream_->avg_frame_rate = AVRational{ static_cast<int>(fps_numerator), static_cast<int>(fps_denominator) };
-  if ((muxer->context_->oformat->flags & AVFMT_NOFILE) == 0) {
+  muxer->stream_->time_base = AVRational{ .num = static_cast<int>(fps_denominator),
+    .den = static_cast<int>(fps_numerator) };
+  muxer->stream_->avg_frame_rate = AVRational{ .num = static_cast<int>(fps_numerator),
+    .den = static_cast<int>(fps_denominator) };
+  if ((static_cast<unsigned int>(muxer->context_->oformat->flags) & static_cast<unsigned int>(AVFMT_NOFILE)) == 0U) {
     result = avio_open(&muxer->context_->pb, output.c_str(), AVIO_FLAG_WRITE);
     if (result < 0) { return std::unexpected(FfmpegError("open MP4 output", result)); }
   }
@@ -167,9 +191,13 @@ auto Mp4Muxer::Write(EncodedPacket const &encoded) -> std::expected<void, Error>
   packet->dts = encoded.dts;
   packet->duration = encoded.duration;
   packet->stream_index = stream_->index;
-  if (encoded.keyframe) { packet->flags |= AV_PKT_FLAG_KEY; }
+  if (encoded.keyframe) {
+    packet->flags = static_cast<int>(static_cast<unsigned int>(packet->flags)
+                                     | static_cast<unsigned int>(AV_PKT_FLAG_KEY));
+  }
   av_packet_rescale_ts(packet,
-    AVRational{ static_cast<int>(fps_denominator_), static_cast<int>(fps_numerator_) }, stream_->time_base);
+    AVRational{ .num = static_cast<int>(fps_denominator_), .den = static_cast<int>(fps_numerator_) },
+    stream_->time_base);
   auto const result = av_interleaved_write_frame(context_, packet);
   av_packet_free(&packet);
   if (result < 0) {
@@ -195,7 +223,8 @@ auto Mp4Muxer::Finish() -> std::expected<void, Error>
     failed_ = true;
     return std::unexpected(FfmpegError("write MP4 trailer", result));
   }
-  if ((context_->oformat->flags & AVFMT_NOFILE) == 0 && context_->pb != nullptr) {
+  if ((static_cast<unsigned int>(context_->oformat->flags) & static_cast<unsigned int>(AVFMT_NOFILE)) == 0U
+      && context_->pb != nullptr) {
     auto const closed = avio_closep(&context_->pb);
     if (closed < 0) {
       failed_ = true;

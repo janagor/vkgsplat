@@ -44,6 +44,8 @@ public:
   ~GpuColorConverter();
   GpuColorConverter(GpuColorConverter const &) = delete;
   auto operator=(GpuColorConverter const &) -> GpuColorConverter & = delete;
+  GpuColorConverter(GpuColorConverter &&) = delete;
+  auto operator=(GpuColorConverter &&) -> GpuColorConverter & = delete;
 
 private:
   GpuColorConverter(Context &context, VkExtent2D extent) noexcept;
@@ -80,6 +82,8 @@ public:
   ~ConversionLease() noexcept;
   ConversionLease(ConversionLease const &) = delete;
   auto operator=(ConversionLease const &) -> ConversionLease & = delete;
+  ConversionLease(ConversionLease &&) = delete;
+  auto operator=(ConversionLease &&) -> ConversionLease & = delete;
 
   // Call only after the encoder has accepted the prepared frame. An
   // unaccepted signal requires replacement of this converter's semaphore.

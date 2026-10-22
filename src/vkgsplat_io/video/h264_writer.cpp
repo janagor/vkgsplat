@@ -3,12 +3,21 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
+#include <expected>
 #include <filesystem>
+#include <fstream>
+#include <ios>
+#include <iterator>
 #include <limits>
+#include <span>
 #include <string>
+#include <string_view>
 #include <system_error>
 #include <utility>
+
+#include <vkgsplat_utility/error.hpp>
 
 namespace vkgsplat {
 namespace {
@@ -20,9 +29,14 @@ namespace {
     std::byte{ 0 }, std::byte{ 0 }, std::byte{ 1 }
   };
   constexpr std::uint32_t kMaxTemporaryPathAttempts = 64U;
-  std::atomic<std::uint64_t> gTemporaryPathSequence{ 0U };
 
-  [[nodiscard]] auto StartCodeSize(std::span<std::byte const> bytes) noexcept -> size_t
+  [[nodiscard]] auto TemporaryPathSequence() noexcept -> std::atomic<std::uint64_t> &
+  {
+    static std::atomic<std::uint64_t> sequence{ 0U };
+    return sequence;
+  }
+
+  [[nodiscard]] auto StartCodeSize(std::span<std::byte const> bytes) noexcept -> std::size_t
   {
     if (bytes.size() >= kStartCodeFour.size()
         && std::equal(kStartCodeFour.begin(), kStartCodeFour.end(), bytes.begin())) {
@@ -55,23 +69,23 @@ namespace {
       return std::unexpected(MakeError(std::errc::invalid_argument, "H.264 data lacks an Annex B start code"));
     }
     NaluTypes types;
-    size_t offset = 0;
+    std::size_t offset = 0;
     while (offset < bytes.size()) {
       auto const prefix = StartCodeSize(bytes.subspan(offset));
       if (prefix == 0 || offset + prefix >= bytes.size()) {
         return std::unexpected(MakeError(std::errc::invalid_argument, "invalid H.264 Annex B NAL unit"));
       }
-      auto const header = std::to_integer<std::uint8_t>(bytes[offset + prefix]);
+      auto const header = std::to_integer<std::uint8_t>(bytes.subspan(offset + prefix).front());
       if ((header & kForbiddenZeroBit) != 0 || (header & kNaluTypeMask) == 0) {
         return std::unexpected(MakeError(std::errc::invalid_argument, "invalid H.264 NAL header"));
       }
-      auto const type = header & kNaluTypeMask;
+      auto const type = static_cast<std::uint8_t>(header & kNaluTypeMask);
       types.sps |= type == kSpsNaluType;
       types.pps |= type == kPpsNaluType;
       types.idr |= type == kIdrNaluType;
       types.picture |= type == kIdrNaluType || type == kNonIdrNaluType;
-      size_t next = bytes.size();
-      for (size_t index = offset + prefix + 1; index < bytes.size(); ++index) {
+      std::size_t next = bytes.size();
+      for (std::size_t index = offset + prefix + 1; index < bytes.size(); ++index) {
         if (StartCodeSize(bytes.subspan(index)) != 0) {
           next = index;
           break;
@@ -85,10 +99,15 @@ namespace {
   [[nodiscard]] auto WriteBytes(std::ofstream &stream, std::span<std::byte const> bytes)
     -> std::expected<void, Error>
   {
-    if (bytes.size() > static_cast<size_t>(std::numeric_limits<std::streamsize>::max())) {
+    if (bytes.size() > static_cast<std::size_t>(std::numeric_limits<std::streamsize>::max())) {
       return std::unexpected(MakeError(std::errc::value_too_large, "H.264 data is too large to write"));
     }
-    stream.write(reinterpret_cast<char const *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+    std::string buffer;
+    buffer.reserve(bytes.size());
+    std::ranges::transform(bytes, std::back_inserter(buffer), [](std::byte byte) -> char {
+      return static_cast<char>(std::to_integer<unsigned char>(byte));
+    });
+    stream.write(buffer.data(), static_cast<std::streamsize>(buffer.size()));
     if (!stream) { return std::unexpected(MakeError(std::errc::io_error, "failed to write H.264 bitstream")); }
     return {};
   }
@@ -147,7 +166,7 @@ auto H264Writer::Open(std::string_view path, std::span<std::byte const> paramete
   std::ofstream stream;
   for (std::uint32_t attempt = 0U; attempt < kMaxTemporaryPathAttempts; ++attempt) {
     auto candidate = destination;
-    candidate += ".partial." + std::to_string(gTemporaryPathSequence.fetch_add(1U));
+    candidate += ".partial." + std::to_string(TemporaryPathSequence().fetch_add(1U));
     stream.open(candidate, std::ios::out | std::ios::binary | std::ios::noreplace);
     if (stream) {
       temporary_path = std::move(candidate);
@@ -166,7 +185,7 @@ auto H264Writer::Open(std::string_view path, std::span<std::byte const> paramete
   if (auto written = WriteBytes(writer.stream_, parameter_sets); !written) {
     return std::unexpected(written.error());
   }
-  return std::move(writer);
+  return writer;
 }
 
 auto H264Writer::WriteFrame(std::span<std::byte const> picture) -> std::expected<void, Error>

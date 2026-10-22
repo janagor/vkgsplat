@@ -1,4 +1,4 @@
-// NOLINTBEGIN(readability-function-cognitive-complexity)
+// NOLINTBEGIN(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)
 #include "benchmark/batch_accounting.hpp"
 #include "benchmark/fixture/profile.hpp"
 #include "benchmark/fixture/renderer_adapter.hpp"
@@ -7,6 +7,7 @@
 #include <vkgsplat/renderer.hpp>
 #include <vkgsplat_capture/screenshot.hpp>
 #include <vkgsplat_headless/headless_platform.hpp>
+#include <vkgsplat_utility/types.hpp>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
@@ -68,7 +69,7 @@ auto Run(std::filesystem::path const &scene_path, std::filesystem::path const &i
     std::cerr << accounted.error().message() << '\n';
     return EXIT_FAILURE;
   }
-  if (auto result = vkgsplat::capture::save_png(*renderer, image_path.string()); !result) {
+  if (auto result = vkgsplat::capture::SavePng(*renderer, image_path.string()); !result) {
     std::cerr << result.error().message() << '\n';
     return EXIT_FAILURE;
   }
@@ -86,8 +87,9 @@ auto Run(std::filesystem::path const &scene_path, std::filesystem::path const &i
   std::span<stbi_uc const> const image_bytes{ pixels.get(), pixel_count * static_cast<size_t>(kRgbChannels) };
   for (size_t index = 0; index < pixel_count; ++index) {
     auto const offset = index * kRgbChannels;
-    if (image_bytes[offset] > kColorTolerance || image_bytes[offset + kGreenChannel] > kColorTolerance
-        || image_bytes[offset + kBlueChannel] > kColorTolerance) {
+    if (image_bytes.subspan(offset).front() > kColorTolerance
+        || image_bytes.subspan(offset + kGreenChannel).front() > kColorTolerance
+        || image_bytes.subspan(offset + kBlueChannel).front() > kColorTolerance) {
       ++colored_pixels;
     }
   }
@@ -109,10 +111,10 @@ auto main(int argc, char **argv) -> int
   }
   try {
     std::span<char *> const arguments{ argv, static_cast<size_t>(argc) };
-    return Run(arguments[1], arguments[2]);
+    return Run(arguments.subspan(1U).front(), arguments.subspan(2U).front());
   } catch (std::exception const &error) {
     std::cerr << error.what() << '\n';
     return EXIT_FAILURE;
   }
 }
-// NOLINTEND(readability-function-cognitive-complexity)
+// NOLINTEND(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)

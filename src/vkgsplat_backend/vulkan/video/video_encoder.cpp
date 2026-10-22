@@ -1,6 +1,11 @@
 #include "video_encoder.hpp"
 
+#include "video_capabilities.hpp"
+#include "video_device.hpp"
+#include "video_session.hpp"
 #include "vulkan_context.hpp"
+
+#include <vkgsplat_video/encoded_packet.hpp>
 
 #include <algorithm>
 #include <array>
@@ -9,11 +14,20 @@
 #include <cstring>
 #include <expected>
 #include <limits>
+#include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <system_error>
 #include <utility>
 #include <vector>
+
+#include <VkBootstrap.h>
+#include <vk_video/vulkan_video_codec_h264std.h>
+#include <vk_video/vulkan_video_codec_h264std_encode.h>
+#include <vulkan/vulkan_core.h>
+
+#include <vkgsplat_utility/error.hpp>
 
 namespace vkgsplat::vulkan::video {
 namespace {
@@ -38,7 +52,7 @@ constexpr std::array kAnnexBStartCode{
 
 struct EncoderResources
 {
-  Context &context;
+  Context *context;
   VkQueue graphics_queue = VK_NULL_HANDLE;
   VkQueue video_queue = VK_NULL_HANDLE;
   VkDeviceSize upload_size = 0;
@@ -63,7 +77,12 @@ struct EncoderResources
   VkFence readback_done = VK_NULL_HANDLE;
   VkQueryPool feedback = VK_NULL_HANDLE;
 
-  explicit EncoderResources(Context &value) : context{ value } {}
+  explicit EncoderResources(Context &value) : context{ &value } {}
+
+  EncoderResources(EncoderResources const &) = delete;
+  auto operator=(EncoderResources const &) -> EncoderResources & = delete;
+  EncoderResources(EncoderResources &&) = delete;
+  auto operator=(EncoderResources &&) -> EncoderResources & = delete;
 
   ~EncoderResources()
   {
@@ -71,29 +90,29 @@ struct EncoderResources
     // used by this encoder before releasing its resources.
     if (in_flight) {
       if (graphics_queue != VK_NULL_HANDLE) {
-        auto const queue_lock = context.vkexec_context->lock_queue(graphics_queue);
-        context.disp.queueWaitIdle(graphics_queue);
+        auto const queue_lock = context->vkexec_context->lock_queue(graphics_queue);
+        context->disp.queueWaitIdle(graphics_queue);
       }
       if (video_queue != VK_NULL_HANDLE && video_queue != graphics_queue) {
-        auto const queue_lock = context.vkexec_context->lock_queue(video_queue);
-        context.disp.queueWaitIdle(video_queue);
+        auto const queue_lock = context->vkexec_context->lock_queue(video_queue);
+        context->disp.queueWaitIdle(video_queue);
       }
     }
-    if (feedback != VK_NULL_HANDLE) { context.disp.destroyQueryPool(feedback, nullptr); }
-    if (readback_done != VK_NULL_HANDLE) { context.disp.destroyFence(readback_done, nullptr); }
-    if (video_done != VK_NULL_HANDLE) { context.disp.destroySemaphore(video_done, nullptr); }
-    if (upload_done != VK_NULL_HANDLE) { context.disp.destroySemaphore(upload_done, nullptr); }
-    if (video_pool != VK_NULL_HANDLE) { context.disp.destroyCommandPool(video_pool, nullptr); }
-    if (upload_pool != VK_NULL_HANDLE) { context.disp.destroyCommandPool(upload_pool, nullptr); }
-    if (readback != VK_NULL_HANDLE) { context.disp.destroyBuffer(readback, nullptr); }
-    if (bitstream != VK_NULL_HANDLE) { context.disp.destroyBuffer(bitstream, nullptr); }
-    if (upload != VK_NULL_HANDLE) { context.disp.destroyBuffer(upload, nullptr); }
-    if (view != VK_NULL_HANDLE) { context.disp.destroyImageView(view, nullptr); }
-    if (image != VK_NULL_HANDLE) { context.disp.destroyImage(image, nullptr); }
-    if (readback_memory != VK_NULL_HANDLE) { context.disp.freeMemory(readback_memory, nullptr); }
-    if (bitstream_memory != VK_NULL_HANDLE) { context.disp.freeMemory(bitstream_memory, nullptr); }
-    if (upload_memory != VK_NULL_HANDLE) { context.disp.freeMemory(upload_memory, nullptr); }
-    if (image_memory != VK_NULL_HANDLE) { context.disp.freeMemory(image_memory, nullptr); }
+    if (feedback != VK_NULL_HANDLE) { context->disp.destroyQueryPool(feedback, nullptr); }
+    if (readback_done != VK_NULL_HANDLE) { context->disp.destroyFence(readback_done, nullptr); }
+    if (video_done != VK_NULL_HANDLE) { context->disp.destroySemaphore(video_done, nullptr); }
+    if (upload_done != VK_NULL_HANDLE) { context->disp.destroySemaphore(upload_done, nullptr); }
+    if (video_pool != VK_NULL_HANDLE) { context->disp.destroyCommandPool(video_pool, nullptr); }
+    if (upload_pool != VK_NULL_HANDLE) { context->disp.destroyCommandPool(upload_pool, nullptr); }
+    if (readback != VK_NULL_HANDLE) { context->disp.destroyBuffer(readback, nullptr); }
+    if (bitstream != VK_NULL_HANDLE) { context->disp.destroyBuffer(bitstream, nullptr); }
+    if (upload != VK_NULL_HANDLE) { context->disp.destroyBuffer(upload, nullptr); }
+    if (view != VK_NULL_HANDLE) { context->disp.destroyImageView(view, nullptr); }
+    if (image != VK_NULL_HANDLE) { context->disp.destroyImage(image, nullptr); }
+    if (readback_memory != VK_NULL_HANDLE) { context->disp.freeMemory(readback_memory, nullptr); }
+    if (bitstream_memory != VK_NULL_HANDLE) { context->disp.freeMemory(bitstream_memory, nullptr); }
+    if (upload_memory != VK_NULL_HANDLE) { context->disp.freeMemory(upload_memory, nullptr); }
+    if (image_memory != VK_NULL_HANDLE) { context->disp.freeMemory(image_memory, nullptr); }
   }
 };
 
@@ -255,23 +274,24 @@ namespace {
   std::array<std::uint32_t, 2> const families{ graphics_family, device.queue_family_index };
   auto const sharing = graphics_family == device.queue_family_index
                        ? VK_SHARING_MODE_EXCLUSIVE : VK_SHARING_MODE_CONCURRENT;
-  VkImageCreateInfo image{};
-  image.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-  image.pNext = &profiles;
-  image.flags = 0;
-  image.imageType = format.image_type;
-  image.format = format.format;
-  image.extent = { extent.width, extent.height, kOneResource };
-  image.mipLevels = kOneResource;
-  image.arrayLayers = kOneResource;
-  image.samples = VK_SAMPLE_COUNT_1_BIT;
-  image.tiling = format.tiling;
-  image.usage = VK_IMAGE_USAGE_VIDEO_ENCODE_SRC_BIT_KHR | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-  image.sharingMode = sharing;
-  image.queueFamilyIndexCount = sharing == VK_SHARING_MODE_CONCURRENT
-                                 ? static_cast<std::uint32_t>(families.size()) : 0;
-  image.pQueueFamilyIndices = sharing == VK_SHARING_MODE_CONCURRENT ? families.data() : nullptr;
-  image.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  VkImageCreateInfo const image{
+    .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+    .pNext = &profiles,
+    .flags = 0,
+    .imageType = format.image_type,
+    .format = format.format,
+    .extent = { .width = extent.width, .height = extent.height, .depth = kOneResource },
+    .mipLevels = kOneResource,
+    .arrayLayers = kOneResource,
+    .samples = VK_SAMPLE_COUNT_1_BIT,
+    .tiling = format.tiling,
+    .usage = VK_IMAGE_USAGE_VIDEO_ENCODE_SRC_BIT_KHR | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+    .sharingMode = sharing,
+    .queueFamilyIndexCount = sharing == VK_SHARING_MODE_CONCURRENT
+                               ? static_cast<std::uint32_t>(families.size()) : 0,
+    .pQueueFamilyIndices = sharing == VK_SHARING_MODE_CONCURRENT ? families.data() : nullptr,
+    .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+  };
   auto result = context.disp.createImage(&image, nullptr, &resources.image);
   if (result != VK_SUCCESS) { return std::unexpected(Failure("create NV12 encode image", result)); }
   if (auto allocated = AllocateImageMemory(context, resources); !allocated) { return allocated; }
@@ -363,16 +383,18 @@ namespace {
   context.disp.cmdPipelineBarrier2(resources.upload_cmd, &dependency);
 
   std::array<VkBufferImageCopy, 2> regions{};
-  regions[kLumaPlaneIndex].bufferOffset = 0;
-  regions[kLumaPlaneIndex].imageSubresource.aspectMask = VK_IMAGE_ASPECT_PLANE_0_BIT;
-  regions[kLumaPlaneIndex].imageSubresource.layerCount = kOneResource;
-  regions[kLumaPlaneIndex].imageExtent = { extent.width, extent.height, kOneResource };
-  regions[kChromaPlaneIndex].bufferOffset = y_size;
-  regions[kChromaPlaneIndex].imageSubresource.aspectMask = VK_IMAGE_ASPECT_PLANE_1_BIT;
-  regions[kChromaPlaneIndex].imageSubresource.layerCount = kOneResource;
-  regions[kChromaPlaneIndex].imageExtent = {
-    extent.width / static_cast<std::uint32_t>(kChromaSubsamplingDivisor),
-    extent.height / static_cast<std::uint32_t>(kChromaSubsamplingDivisor), kOneResource };
+  auto &luma = regions.at(kLumaPlaneIndex);
+  luma.bufferOffset = 0;
+  luma.imageSubresource.aspectMask = VK_IMAGE_ASPECT_PLANE_0_BIT;
+  luma.imageSubresource.layerCount = kOneResource;
+  luma.imageExtent = { .width = extent.width, .height = extent.height, .depth = kOneResource };
+  auto &chroma = regions.at(kChromaPlaneIndex);
+  chroma.bufferOffset = y_size;
+  chroma.imageSubresource.aspectMask = VK_IMAGE_ASPECT_PLANE_1_BIT;
+  chroma.imageSubresource.layerCount = kOneResource;
+  chroma.imageExtent = {
+    .width = extent.width / static_cast<std::uint32_t>(kChromaSubsamplingDivisor),
+    .height = extent.height / static_cast<std::uint32_t>(kChromaSubsamplingDivisor), .depth = kOneResource };
   context.disp.cmdCopyBufferToImage(resources.upload_cmd, resources.upload, resources.image,
     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, static_cast<std::uint32_t>(regions.size()), regions.data());
 
@@ -419,13 +441,13 @@ namespace {
   control.flags = VK_VIDEO_CODING_CONTROL_ENCODE_RATE_CONTROL_BIT_KHR;
   context.disp.cmdControlVideoCodingKHR(resources.video_cmd, &control);
 
-  auto const &profile = device.capabilities.profiles[device.selection.profile_index];
-  auto const qp = std::clamp(kPreferredQp, profile.h264.minQp, profile.h264.maxQp);
+  auto const &profile = device.capabilities.profiles.at(device.selection.profile_index);
+  auto const quantization_parameter = std::clamp(kPreferredQp, profile.h264.minQp, profile.h264.maxQp);
   StdVideoEncodeH264SliceHeader slice{};
   slice.slice_type = STD_VIDEO_H264_SLICE_TYPE_I;
   VkVideoEncodeH264NaluSliceInfoKHR nalu{};
   nalu.sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_H264_NALU_SLICE_INFO_KHR;
-  nalu.constantQp = qp;
+  nalu.constantQp = quantization_parameter;
   nalu.pStdSliceHeader = &slice;
   StdVideoEncodeH264PictureInfo picture{};
   picture.flags.IdrPicFlag = 1;
@@ -474,14 +496,16 @@ namespace {
       "graphics queue unavailable for NV12 upload"));
   }
   auto const y_size = static_cast<VkDeviceSize>(extent.width) * extent.height;
-  auto const upload_size = y_size + y_size / kChromaSubsamplingDivisor;
-  auto const &capabilities = device.capabilities.profiles[device.selection.profile_index].capabilities;
+  auto const upload_size = y_size + (y_size / kChromaSubsamplingDivisor);
+  auto const &capabilities = device.capabilities.profiles.at(device.selection.profile_index).capabilities;
   auto const alignment = std::max<VkDeviceSize>(kOneResource, capabilities.minBitstreamBufferSizeAlignment);
   auto const requested = y_size * kBitstreamBytesPerPixel;
   auto const bitstream_size = ((requested + alignment - 1) / alignment) * alignment;
-  VkVideoEncodeH264ProfileInfoKHR h264_profile{};
-  h264_profile.sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_H264_PROFILE_INFO_KHR;
-  h264_profile.stdProfileIdc = device.selection.profile;
+  VkVideoEncodeH264ProfileInfoKHR h264_profile{
+    .sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_H264_PROFILE_INFO_KHR,
+    .pNext = nullptr,
+    .stdProfileIdc = device.selection.profile,
+  };
   VkVideoProfileInfoKHR profile{};
   profile.sType = VK_STRUCTURE_TYPE_VIDEO_PROFILE_INFO_KHR;
   profile.pNext = &h264_profile;
@@ -514,7 +538,7 @@ namespace {
   auto const y_size = static_cast<VkDeviceSize>(extent.width) * extent.height;
   auto const upload_size = resources.upload_size;
   auto const bitstream_size = resources.bitstream_size;
-  for (auto command : { resources.upload_cmd, resources.video_cmd, resources.readback_cmd }) {
+  for (auto *command : { resources.upload_cmd, resources.video_cmd, resources.readback_cmd }) {
     auto const result = context.disp.resetCommandBuffer(command, 0);
     if (result != VK_SUCCESS) { return std::unexpected(Failure("reset video command buffer", result)); }
   }
@@ -573,9 +597,9 @@ namespace {
   resources.in_flight = false;
   struct Feedback
   {
-    std::uint32_t offset;
-    std::uint32_t size;
-    VkQueryResultStatusKHR status;
+    std::uint32_t offset{};
+    std::uint32_t size{};
+    VkQueryResultStatusKHR status{};
   } feedback{};
   auto result = context.disp.getQueryPoolResults(resources.feedback, 0, kOneResource,
     sizeof(feedback), &feedback, sizeof(feedback), VK_QUERY_RESULT_WITH_STATUS_BIT_KHR);
@@ -587,8 +611,10 @@ namespace {
   void *mapped = nullptr;
   result = context.disp.mapMemory(resources.readback_memory, 0, bitstream_size, 0, &mapped);
   if (result != VK_SUCCESS) { return std::unexpected(Failure("map encoded picture", result)); }
-  auto const *start = static_cast<std::byte const *>(mapped) + feedback.offset;
-  std::vector<std::byte> picture(start, start + feedback.size);
+  auto const mapped_bytes = std::span{ static_cast<std::byte const *>(mapped),
+    static_cast<std::size_t>(bitstream_size) };
+  auto const encoded_bytes = mapped_bytes.subspan(feedback.offset, feedback.size);
+  std::vector<std::byte> picture(encoded_bytes.begin(), encoded_bytes.end());
   context.disp.unmapMemory(resources.readback_memory);
   if (picture.size() < kAnnexBStartCode.size()
       || !std::equal(kAnnexBStartCode.begin(), kAnnexBStartCode.end(), picture.begin())) {
@@ -657,7 +683,7 @@ auto VideoEncoder::EncodeNv12(std::span<std::byte const> frame, std::uint64_t fr
   -> std::expected<EncodedPacket, Error>
 {
   auto const y_size = static_cast<std::uint64_t>(extent_.width) * extent_.height;
-  auto const expected_size = y_size + y_size / kChromaSubsamplingDivisor;
+  auto const expected_size = y_size + (y_size / kChromaSubsamplingDivisor);
   if (frame.size() != expected_size) {
     return std::unexpected(MakeError(std::errc::invalid_argument, "NV12 frame size does not match coded extent"));
   }
@@ -771,7 +797,13 @@ auto VideoEncoder::CompleteReadyImage() -> std::expected<EncodedPacket, Error>
     failed_ = true;
     return std::unexpected(picture.error());
   }
-  auto const metadata = *pending_metadata_.at(slot);
+  auto const &pending_metadata = pending_metadata_.at(slot);
+  if (!pending_metadata) {
+    failed_ = true;
+    return std::unexpected(vkgsplat::MakeError(std::errc::state_not_recoverable,
+      "completed video picture has no pending metadata"));
+  }
+  auto const metadata = *pending_metadata;
   pending_metadata_.at(slot).reset();
   source_owners_.at(slot).reset();
   EncodedPacket packet{
@@ -792,14 +824,14 @@ auto VideoEncoder::WaitForInFlightWork() -> std::expected<void, Error>
   for (auto const &resources : resources_) { in_flight = in_flight || resources->in_flight; }
   if (!in_flight) { return {}; }
   auto const &first = *resources_.front();
-  for (auto queue : { first.graphics_queue, first.video_queue }) {
+  for (auto *queue : { first.graphics_queue, first.video_queue }) {
     if (queue == VK_NULL_HANDLE) { continue; }
     auto const queue_lock = context_.vkexec_context->lock_queue(queue);
     auto const result = context_.disp.queueWaitIdle(queue);
     if (result != VK_SUCCESS) { return std::unexpected(Failure("wait for video encode work", result)); }
     if (queue == first.video_queue && first.video_queue == first.graphics_queue) { break; }
   }
-  for (auto &resources : resources_) { resources->in_flight = false; }
+  for (auto const &resources : resources_) { resources->in_flight = false; }
   for (auto &owner : source_owners_) { owner.reset(); }
   return {};
 }

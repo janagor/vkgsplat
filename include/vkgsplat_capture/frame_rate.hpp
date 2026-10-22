@@ -7,7 +7,8 @@ namespace vkgsplat::capture {
 
 struct FrameRate
 {
-  u32 numerator = 60U;
+  static constexpr u32 kDefaultFramesPerSecond = 60U;
+  u32 numerator = kDefaultFramesPerSecond;
   u32 denominator = 1U;
 };
 

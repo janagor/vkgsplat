@@ -1,11 +1,16 @@
+// NOLINTBEGIN(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)
 #include "benchmark/fixture/ply_writer.hpp"
 
 #include <vkgsplat/camera.hpp>
+#include <vkgsplat/frame.hpp>
 #include <vkgsplat/renderer.hpp>
 #include <vkgsplat_capture/frame_sequence.hpp>
+#include <vkgsplat_capture/video_config.hpp>
 #include <vkgsplat_capture/video_recorder.hpp>
 #include <vkgsplat_headless/offscreen_platform.hpp>
 #include <vkgsplat_io/splat_cpu.hpp>
+#include <vkgsplat_utility/error.hpp>
+#include <vkgsplat_utility/types.hpp>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
@@ -15,12 +20,14 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <expected>
 #include <filesystem>
 #include <initializer_list>
 #include <iostream>
 #include <limits>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -56,10 +63,10 @@ constexpr vkgsplat::f32 kCompactShDc = 1.0F / vkgsplat::gs::kShC0;
 {
   // Four broad splats near the focal plane remain inside every narrow-cone quilt view.
   vkgsplat::SplatCpuData scene;
-  for (auto const x : { -kCompactOffset, kCompactOffset }) {
-    for (auto const y : { -kCompactOffset, kCompactOffset }) {
+  for (auto const horizontal_offset : { -kCompactOffset, kCompactOffset }) {
+    for (auto const vertical_offset : { -kCompactOffset, kCompactOffset }) {
       scene.geometries.push_back(vkgsplat::gs::GaussianGeometry{
-        .position = { x, y, 0.0F },
+        .position = { horizontal_offset, vertical_offset, 0.0F },
         .scale = { kCompactLogScale, kCompactLogScale, kCompactLogScale },
         .opacity = kCompactOpacityLogit,
       });
@@ -77,13 +84,14 @@ constexpr vkgsplat::f32 kCompactShDc = 1.0F / vkgsplat::gs::kShC0;
   int height{};
   int channels{};
   auto const filename = path.string();
-  std::unique_ptr<stbi_uc, decltype(&stbi_image_free)> pixels{
+  std::unique_ptr<stbi_uc, decltype(&stbi_image_free)> const pixels{
     stbi_load(filename.c_str(), &width, &height, &channels, static_cast<int>(kRgbaChannels)), stbi_image_free
   };
   if (!pixels || width <= 0 || height <= 0) { return std::nullopt; }
   auto const byte_count = static_cast<size_t>(width) * static_cast<size_t>(height) * kRgbaChannels;
+  std::span<stbi_uc const> const pixel_bytes{ pixels.get(), byte_count };
   return vkgsplat::RgbaFrame{ .width = static_cast<vkgsplat::u32>(width),
-    .height = static_cast<vkgsplat::u32>(height), .pixels = { pixels.get(), pixels.get() + byte_count } };
+    .height = static_cast<vkgsplat::u32>(height), .pixels = { pixel_bytes.begin(), pixel_bytes.end() } };
 }
 
 [[nodiscard]] auto HasScenePixels(vkgsplat::RgbaFrame const &frame,
@@ -92,9 +100,9 @@ constexpr vkgsplat::f32 kCompactShDc = 1.0F / vkgsplat::gs::kShC0;
   vkgsplat::u32 width,
   vkgsplat::u32 height) -> bool
 {
-  for (vkgsplat::u32 y = origin_y; y < origin_y + height; ++y) {
-    for (vkgsplat::u32 x = origin_x; x < origin_x + width; ++x) {
-      auto const pixel_offset = (static_cast<size_t>(y) * frame.width + x) * kRgbaChannels;
+  for (vkgsplat::u32 row = origin_y; row < origin_y + height; ++row) {
+    for (vkgsplat::u32 column = origin_x; column < origin_x + width; ++column) {
+      auto const pixel_offset = ((static_cast<size_t>(row) * frame.width) + column) * kRgbaChannels;
       if (frame.pixels.at(pixel_offset + kRedChannel) > kColorTolerance
           || frame.pixels.at(pixel_offset + kGreenChannel) > kColorTolerance
           || frame.pixels.at(pixel_offset + kBlueChannel) > kColorTolerance) {
@@ -117,8 +125,8 @@ constexpr vkgsplat::f32 kCompactShDc = 1.0F / vkgsplat::gs::kShC0;
   std::uint64_t total_delta = 0;
   vkgsplat::u32 maximum_delta = 0;
   for (std::size_t index = 0; index < reference.pixels.size(); ++index) {
-    auto const left = static_cast<int>(reference.pixels[index]);
-    auto const right = static_cast<int>(actual.pixels[index]);
+    auto const left = static_cast<int>(reference.pixels.at(index));
+    auto const right = static_cast<int>(actual.pixels.at(index));
     auto const delta = static_cast<vkgsplat::u32>(std::abs(left - right));
     total_delta += delta;
     maximum_delta = std::max(maximum_delta, delta);
@@ -180,7 +188,7 @@ constexpr vkgsplat::f32 kCompactShDc = 1.0F / vkgsplat::gs::kShC0;
     invalid.rate_control.mode = mode;
     if (!rejected(invalid, std::errc::function_not_supported)) { return false; }
   }
-#if !defined(VKGSPLAT_ENABLE_MP4)
+#ifndef VKGSPLAT_ENABLE_MP4
   invalid = base;
   invalid.container = vkgsplat::capture::VideoContainer::kMp4;
   if (!rejected(invalid, std::errc::function_not_supported)) { return false; }
@@ -383,7 +391,9 @@ auto main(int argc, char **argv) -> int
 {
   constexpr int kExpectedArgumentCount = 4;
   if (argc != kExpectedArgumentCount) { return EXIT_FAILURE; }
-  std::string_view const validation_arg{ argv[3] };
+  std::span<char *> const arguments{ argv, static_cast<size_t>(argc) };
+  std::string_view const validation_arg{ arguments.subspan(3U).front() };
   bool const validation = validation_arg == "ON" || validation_arg == "TRUE" || validation_arg == "1";
-  return Run(argv[1], argv[2], validation);
+  return Run(arguments.subspan(1U).front(), arguments.subspan(2U).front(), validation);
 }
+// NOLINTEND(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)

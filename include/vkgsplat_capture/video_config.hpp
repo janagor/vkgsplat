@@ -2,21 +2,28 @@
 #define VKGSPLAT_CAPTURE_VIDEO_CONFIG_HPP
 
 #include <filesystem>
+#include <cstdint>
 
 #include <vkgsplat_capture/frame_rate.hpp>
 #include <vkgsplat_utility/types.hpp>
 
 namespace vkgsplat::capture {
 
-enum class VideoContainer { kH264, kMp4 };
-enum class RateControlMode { kDefault, kConstantQp, kCbr, kVbr };
+inline constexpr u64 kDefaultVideoTargetBitrate = 8'000'000U;
+inline constexpr u64 kDefaultVideoMaximumBitrate = 12'000'000U;
+inline constexpr u32 kDefaultVideoConstantQp = 26U;
+inline constexpr u32 kDefaultVideoWidth = 1280U;
+inline constexpr u32 kDefaultVideoHeight = 720U;
+
+enum class VideoContainer : std::uint8_t { kH264, kMp4 };
+enum class RateControlMode : std::uint8_t { kDefault, kConstantQp, kCbr, kVbr };
 
 struct RateControlConfig
 {
   RateControlMode mode = RateControlMode::kDefault;
-  u64 target_bitrate = 8'000'000U;
-  u64 max_bitrate = 12'000'000U;
-  u32 constant_qp = 26U;
+  u64 target_bitrate = kDefaultVideoTargetBitrate;
+  u64 max_bitrate = kDefaultVideoMaximumBitrate;
+  u32 constant_qp = kDefaultVideoConstantQp;
 };
 
 struct GopConfig
@@ -29,8 +36,8 @@ struct VideoConfig
 {
   std::filesystem::path output_path;
   VideoContainer container = VideoContainer::kH264;
-  u32 width = 1280U;
-  u32 height = 720U;
+  u32 width = kDefaultVideoWidth;
+  u32 height = kDefaultVideoHeight;
   FrameRate frame_rate{};
   RateControlConfig rate_control{};
   GopConfig gop{};

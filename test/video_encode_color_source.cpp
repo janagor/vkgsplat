@@ -1,11 +1,21 @@
+// NOLINTBEGIN(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)
 #include "video_encode_color_source.hpp"
+#include "../src/vkgsplat_backend/vulkan/vulkan_context.hpp"
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <expected>
+#include <memory>
+#include <span>
 #include <string>
 #include <system_error>
+#include <vector>
+
+#include <VkBootstrap.h>
+#include <vulkan/vulkan_core.h>
+#include <vkgsplat_utility/error.hpp>
 
 namespace vkgsplat::test {
 namespace {
@@ -36,8 +46,8 @@ namespace {
     context.inst_disp.getPhysicalDeviceMemoryProperties(context.device.physical_device, &properties);
     for (std::uint32_t index = 0U; index < properties.memoryTypeCount; ++index) {
       if ((requirements.memoryTypeBits & (1U << index)) == 0U
-          || (properties.memoryTypes[index].propertyFlags & required) != required) { continue; }
-      VkMemoryAllocateInfo allocation{
+          || (std::span{ properties.memoryTypes }.subspan(index).front().propertyFlags & required) != required) { continue; }
+      VkMemoryAllocateInfo const allocation{
         .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
         .pNext = nullptr,
         .allocationSize = requirements.size,
@@ -80,13 +90,13 @@ auto GpuColorSource::Create(vulkan::Context &context, VkExtent2D extent)
   }
   auto source = std::unique_ptr<GpuColorSource>{ new GpuColorSource{ context, extent } };
   source->graphics_queue_ = graphics->first;
-  VkImageCreateInfo image{
+  VkImageCreateInfo const image{
     .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
     .pNext = nullptr,
     .flags = 0U,
     .imageType = VK_IMAGE_TYPE_2D,
     .format = VK_FORMAT_R8G8B8A8_UNORM,
-    .extent = { extent.width, extent.height, kOneResource },
+    .extent = { .width = extent.width, .height = extent.height, .depth = kOneResource },
     .mipLevels = kOneResource,
     .arrayLayers = kOneResource,
     .samples = VK_SAMPLE_COUNT_1_BIT,
@@ -105,7 +115,7 @@ auto GpuColorSource::Create(vulkan::Context &context, VkExtent2D extent)
   result = context.disp.bindImageMemory(source->image_, source->image_memory_, 0U);
   if (result != VK_SUCCESS) { return std::unexpected(Failure("bind color test image", result)); }
   auto const upload_size = static_cast<VkDeviceSize>(extent.width) * extent.height * kRgbaBytesPerPixel;
-  VkBufferCreateInfo buffer{
+  VkBufferCreateInfo const buffer{
     .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
     .pNext = nullptr,
     .flags = 0U,
@@ -122,7 +132,7 @@ auto GpuColorSource::Create(vulkan::Context &context, VkExtent2D extent)
   source->upload_memory_ = *memory;
   result = context.disp.bindBufferMemory(source->upload_, source->upload_memory_, 0U);
   if (result != VK_SUCCESS) { return std::unexpected(Failure("bind color test upload", result)); }
-  VkCommandPoolCreateInfo pool{
+  VkCommandPoolCreateInfo const pool{
     .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
     .pNext = nullptr,
     .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
@@ -130,7 +140,7 @@ auto GpuColorSource::Create(vulkan::Context &context, VkExtent2D extent)
   };
   result = context.disp.createCommandPool(&pool, nullptr, &source->pool_);
   if (result != VK_SUCCESS) { return std::unexpected(Failure("create color test command pool", result)); }
-  VkCommandBufferAllocateInfo allocate{
+  VkCommandBufferAllocateInfo const allocate{
     .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
     .pNext = nullptr,
     .commandPool = source->pool_,
@@ -145,7 +155,7 @@ auto GpuColorSource::Create(vulkan::Context &context, VkExtent2D extent)
     .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
     .initialValue = 0U,
   };
-  VkSemaphoreCreateInfo semaphore{
+  VkSemaphoreCreateInfo const semaphore{
     .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
     .pNext = &type,
   };
@@ -164,18 +174,19 @@ auto GpuColorSource::Prepare() -> std::expected<void, Error>
   auto result = context_.disp.mapMemory(upload_memory_, 0U, upload_size, 0U, &mapped);
   if (result != VK_SUCCESS) { return std::unexpected(Failure("map color test upload", result)); }
   auto *pixels = static_cast<std::uint8_t *>(mapped);
-  for (std::uint32_t y = 0U; y < extent_.height; ++y) {
-    for (std::uint32_t x = 0U; x < extent_.width; ++x) {
-      auto const quadrant = (y >= extent_.height / kHalf ? kHalf : 0U)
-                            + (x >= extent_.width / kHalf ? 1U : 0U);
-      auto const offset = (static_cast<std::size_t>(y) * extent_.width + x) * kRgbaBytesPerPixel;
+  auto const pixel_bytes = std::span{ pixels, static_cast<std::size_t>(upload_size) };
+  for (std::uint32_t row = 0U; row < extent_.height; ++row) {
+    for (std::uint32_t column = 0U; column < extent_.width; ++column) {
+      auto const quadrant = (row >= extent_.height / kHalf ? kHalf : 0U)
+                            + (column >= extent_.width / kHalf ? kOneResource : 0U);
+      auto const offset = ((static_cast<std::size_t>(row) * extent_.width) + column) * kRgbaBytesPerPixel;
       for (std::size_t channel = 0U; channel < kRgbaBytesPerPixel; ++channel) {
-        pixels[offset + channel] = kColors[quadrant][channel];
+        pixel_bytes.subspan(offset + channel).front() = kColors.at(quadrant).at(channel);
       }
     }
   }
   context_.disp.unmapMemory(upload_memory_);
-  VkCommandBufferBeginInfo begin{
+  VkCommandBufferBeginInfo const begin{
     .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
     .pNext = nullptr,
     .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
@@ -197,7 +208,7 @@ auto GpuColorSource::Prepare() -> std::expected<void, Error>
     .subresourceRange = { .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 0U,
       .levelCount = kOneResource, .baseArrayLayer = 0U, .layerCount = kOneResource },
   };
-  VkDependencyInfo dependency{
+  VkDependencyInfo const dependency{
     .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
     .pNext = nullptr,
     .imageMemoryBarrierCount = kOneResource,
@@ -207,7 +218,7 @@ auto GpuColorSource::Prepare() -> std::expected<void, Error>
   VkBufferImageCopy region{};
   region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   region.imageSubresource.layerCount = kOneResource;
-  region.imageExtent = { extent_.width, extent_.height, kOneResource };
+  region.imageExtent = { .width = extent_.width, .height = extent_.height, .depth = kOneResource };
   context_.disp.cmdCopyBufferToImage(command_, upload_, image_, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
     kOneResource, &region);
   barrier.srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
@@ -219,19 +230,19 @@ auto GpuColorSource::Prepare() -> std::expected<void, Error>
   context_.disp.cmdPipelineBarrier2(command_, &dependency);
   result = context_.disp.endCommandBuffer(command_);
   if (result != VK_SUCCESS) { return std::unexpected(Failure("end color test command", result)); }
-  VkCommandBufferSubmitInfo command{
+  VkCommandBufferSubmitInfo const command{
     .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
     .pNext = nullptr,
     .commandBuffer = command_,
   };
-  VkSemaphoreSubmitInfo signal{
+  VkSemaphoreSubmitInfo const signal{
     .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
     .pNext = nullptr,
     .semaphore = ready_,
     .value = kReadyValue,
     .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
   };
-  VkSubmitInfo2 submit{
+  VkSubmitInfo2 const submit{
     .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
     .pNext = nullptr,
     .commandBufferInfoCount = kOneResource,
@@ -254,17 +265,23 @@ auto GpuColorSource::ReadNv12Buffer(VkBuffer source, VkDeviceSize size)
   }
   struct Readback
   {
-    vulkan::Context &context;
+    vulkan::Context *context;
     VkBuffer buffer = VK_NULL_HANDLE;
     VkDeviceMemory memory = VK_NULL_HANDLE;
 
+    explicit Readback(vulkan::Context &owner) noexcept : context{ &owner } {}
+    Readback(Readback const &) = delete;
+    auto operator=(Readback const &) -> Readback & = delete;
+    Readback(Readback &&) = delete;
+    auto operator=(Readback &&) -> Readback & = delete;
+
     ~Readback()
     {
-      if (buffer != VK_NULL_HANDLE) { context.disp.destroyBuffer(buffer, nullptr); }
-      if (memory != VK_NULL_HANDLE) { context.disp.freeMemory(memory, nullptr); }
+      if (buffer != VK_NULL_HANDLE) { context->disp.destroyBuffer(buffer, nullptr); }
+      if (memory != VK_NULL_HANDLE) { context->disp.freeMemory(memory, nullptr); }
     }
-  } readback{ .context = context_, .buffer = VK_NULL_HANDLE, .memory = VK_NULL_HANDLE };
-  VkBufferCreateInfo buffer{
+  } readback{ context_ };
+  VkBufferCreateInfo const buffer{
     .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
     .pNext = nullptr,
     .flags = 0U,
@@ -284,16 +301,16 @@ auto GpuColorSource::ReadNv12Buffer(VkBuffer source, VkDeviceSize size)
   if (result != VK_SUCCESS) { return std::unexpected(Failure("bind NV12 test readback", result)); }
   result = context_.disp.resetCommandBuffer(command_, 0U);
   if (result != VK_SUCCESS) { return std::unexpected(Failure("reset NV12 test command", result)); }
-  VkCommandBufferBeginInfo begin{
+  VkCommandBufferBeginInfo const begin{
     .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
     .pNext = nullptr,
     .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
   };
   result = context_.disp.beginCommandBuffer(command_, &begin);
   if (result != VK_SUCCESS) { return std::unexpected(Failure("begin NV12 test command", result)); }
-  VkBufferCopy region{ .srcOffset = 0U, .dstOffset = 0U, .size = size };
+  VkBufferCopy const region{ .srcOffset = 0U, .dstOffset = 0U, .size = size };
   context_.disp.cmdCopyBuffer(command_, source, readback.buffer, kOneResource, &region);
-  VkBufferMemoryBarrier2 barrier{
+  VkBufferMemoryBarrier2 const barrier{
     .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
     .pNext = nullptr,
     .srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT,
@@ -306,7 +323,7 @@ auto GpuColorSource::ReadNv12Buffer(VkBuffer source, VkDeviceSize size)
     .offset = 0U,
     .size = size,
   };
-  VkDependencyInfo dependency{
+  VkDependencyInfo const dependency{
     .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
     .pNext = nullptr,
     .bufferMemoryBarrierCount = kOneResource,
@@ -315,12 +332,12 @@ auto GpuColorSource::ReadNv12Buffer(VkBuffer source, VkDeviceSize size)
   context_.disp.cmdPipelineBarrier2(command_, &dependency);
   result = context_.disp.endCommandBuffer(command_);
   if (result != VK_SUCCESS) { return std::unexpected(Failure("end NV12 test command", result)); }
-  VkCommandBufferSubmitInfo command{
+  VkCommandBufferSubmitInfo const command{
     .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
     .pNext = nullptr,
     .commandBuffer = command_,
   };
-  VkSubmitInfo2 submit{
+  VkSubmitInfo2 const submit{
     .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
     .pNext = nullptr,
     .commandBufferInfoCount = kOneResource,
@@ -343,3 +360,4 @@ auto GpuColorSource::ReadNv12Buffer(VkBuffer source, VkDeviceSize size)
 }
 
 }// namespace vkgsplat::test
+// NOLINTEND(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)

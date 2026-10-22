@@ -6,7 +6,7 @@
 
 namespace vkgsplat {
 
-enum class VideoEncodeSupport { kDisabled, kOptional, kRequired };
+enum class VideoEncodeSupport : std::uint8_t { kDisabled, kOptional, kRequired };
 
 /** Summary of H.264 support enabled on this driver's logical device. */
 struct VideoEncodeCapabilities

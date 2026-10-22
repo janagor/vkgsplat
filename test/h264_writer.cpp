@@ -1,3 +1,4 @@
+// NOLINTBEGIN(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)
 #include "../src/vkgsplat_io/video/h264_writer.hpp"
 
 #include <catch2/catch_test_macros.hpp>
@@ -7,7 +8,9 @@
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
+#include <ios>
 #include <iterator>
+#include <algorithm>
 #include <string>
 #include <system_error>
 #include <vector>
@@ -52,6 +55,8 @@ public:
   }
   TemporaryFile(TemporaryFile const &) = delete;
   auto operator=(TemporaryFile const &) -> TemporaryFile & = delete;
+  TemporaryFile(TemporaryFile &&) = delete;
+  auto operator=(TemporaryFile &&) -> TemporaryFile & = delete;
   [[nodiscard]] auto path() const -> std::filesystem::path const & { return path_; }
 private:
   std::filesystem::path path_;
@@ -69,6 +74,8 @@ private:
 
 }// namespace
 
+// Verifies input rejection, successful writes, finalization, and byte ordering together.
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("H.264 writer preserves Annex B NAL order and closes on finish", "[video]")
 {
   TemporaryFile const file;
@@ -85,8 +92,10 @@ TEST_CASE("H.264 writer preserves Annex B NAL order and closes on finish", "[vid
   REQUIRE(input);
   std::vector<char> actual{ std::istreambuf_iterator<char>{ input }, std::istreambuf_iterator<char>{} };
   std::vector<char> expected;
-  auto append = [&](auto const &bytes) -> void {
-    for (auto byte : bytes) { expected.push_back(static_cast<char>(std::to_integer<unsigned char>(byte))); }
+  auto append = [&expected](auto const &bytes) -> void {
+    std::transform(bytes.begin(), bytes.end(), std::back_inserter(expected), [](std::byte byte) -> char {
+      return static_cast<char>(std::to_integer<unsigned char>(byte));
+    });
   };
   append(kParameterSets);
   append(kIdrPicture);
@@ -179,3 +188,4 @@ TEST_CASE("H.264 writer does not replace a file created before publication", "[v
   REQUIRE(input);
   CHECK(std::string{ std::istreambuf_iterator<char>{ input }, std::istreambuf_iterator<char>{} } == "unrelated");
 }
+// NOLINTEND(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)

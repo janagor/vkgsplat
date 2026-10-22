@@ -1,4 +1,4 @@
-// NOLINTBEGIN(readability-function-cognitive-complexity)
+// NOLINTBEGIN(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)
 #include "../benchmark/gpu_statistics.hpp"
 #include "../src/vkgsplat_backend/vulkan/gpu_timestamp_math.hpp"
 #include "../src/vkgsplat_backend/vulkan/gpu_timing_samples.hpp"
@@ -214,4 +214,4 @@ TEST_CASE("GPU timing sample buffer accepts larger batches after reserve and dra
   REQUIRE(second.back().frame_id == kFirstBatchFrames + kSecondBatchFrames - kSingleFrame);
   REQUIRE(samples.take().empty());
 }
-// NOLINTEND(readability-function-cognitive-complexity)
+// NOLINTEND(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)

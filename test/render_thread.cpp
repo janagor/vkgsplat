@@ -1,12 +1,17 @@
-// NOLINTBEGIN(readability-function-cognitive-complexity)
+// NOLINTBEGIN(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)
 #include "vulkan/render_thread.hpp"
 #include "vulkan/vkexec_error.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 #include <vkgsplat/camera.hpp>
+#include <vkgsplat/frame.hpp>
 #include <vkgsplat/renderer.hpp>
+#include <vkgsplat_video/encoded_packet.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
+
+#include <vkexec/error.hpp>
+#include <vulkan/vulkan_core.h>
 
 #include <array>
 #include <atomic>
@@ -768,4 +773,4 @@ TEST_CASE("exclusive reconfiguration blocks submissions until the worker complet
   REQUIRE(worker.CompletedFrameCount() == kTwoFrameCount);
   worker.Stop();
 }
-// NOLINTEND(readability-function-cognitive-complexity)
+// NOLINTEND(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)

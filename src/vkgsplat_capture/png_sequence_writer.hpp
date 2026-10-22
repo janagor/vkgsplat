@@ -38,6 +38,8 @@ public:
 
   PngSequenceWriter(PngSequenceWriter const &) = delete;
   auto operator=(PngSequenceWriter const &) -> PngSequenceWriter & = delete;
+  PngSequenceWriter(PngSequenceWriter &&) = delete;
+  auto operator=(PngSequenceWriter &&) -> PngSequenceWriter & = delete;
 
 private:
   explicit PngSequenceWriter(FrameSequenceConfig config, WriteOperation write, QueueFullObserver on_queue_full);

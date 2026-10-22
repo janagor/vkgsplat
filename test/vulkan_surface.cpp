@@ -1,3 +1,4 @@
+// NOLINTBEGIN(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)
 #include "vulkan/vulkan_platform.hpp"
 
 #include <vkgsplat/platform.hpp>
@@ -41,3 +42,4 @@ TEST_CASE("windowed mode rejects a null window handle", "[surface]")
   REQUIRE_FALSE(result.has_value());
   REQUIRE(result.error().code() == std::errc::invalid_argument);
 }
+// NOLINTEND(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)

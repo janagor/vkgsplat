@@ -44,7 +44,7 @@ struct ImageFormat
 
 struct Profile
 {
-  StdVideoH264ProfileIdc profile{};
+  StdVideoH264ProfileIdc profile = STD_VIDEO_H264_PROFILE_IDC_MAIN;
   VkVideoCapabilitiesKHR capabilities{};
   VkVideoEncodeCapabilitiesKHR encode{};
   VkVideoEncodeH264CapabilitiesKHR h264{};
@@ -67,13 +67,13 @@ struct EncodeRequirements
   VkExtent2D required_extent{};
 };
 
-enum class UploadStrategy { kUnavailable, kTransferDestination, kStorageWrite };
+enum class UploadStrategy : std::uint8_t { kUnavailable, kTransferDestination, kStorageWrite };
 
 /** Self-contained profile and image choice for a single encoder configuration. */
 struct EncodeSelection
 {
   std::size_t profile_index = 0;
-  StdVideoH264ProfileIdc profile{};
+  StdVideoH264ProfileIdc profile = STD_VIDEO_H264_PROFILE_IDC_MAIN;
   ImageFormat source_format;
   std::optional<ImageFormat> dpb_format;
   VkExtent2D max_extent{};

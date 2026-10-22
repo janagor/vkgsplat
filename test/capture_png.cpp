@@ -1,4 +1,6 @@
+// NOLINTBEGIN(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)
 #include <vkgsplat/frame.hpp>
+#include <vkgsplat_utility/types.hpp>
 #include <vkgsplat_capture/screenshot.hpp>
 
 #include <catch2/catch_test_macros.hpp>
@@ -12,6 +14,9 @@
 #include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <utility>
+#include <algorithm>
+#include <span>
 #include <string>
 #include <system_error>
 
@@ -21,7 +26,7 @@ constexpr vkgsplat::u32 kWidth = 2U;
 constexpr vkgsplat::u32 kHeight = 2U;
 constexpr vkgsplat::u32 kSinglePixelDimension = 1U;
 constexpr int kRgbaChannels = 4;
-constexpr std::size_t kPixelBytes = static_cast<std::size_t>(kWidth * kHeight * kRgbaChannels);
+constexpr std::size_t kPixelBytes = static_cast<std::size_t>(kWidth) * kHeight * kRgbaChannels;
 
 class TemporaryPng
 {
@@ -40,6 +45,8 @@ public:
 
   TemporaryPng(TemporaryPng const &) = delete;
   auto operator=(TemporaryPng const &) -> TemporaryPng & = delete;
+  TemporaryPng(TemporaryPng &&) = delete;
+  auto operator=(TemporaryPng &&) -> TemporaryPng & = delete;
 
   [[nodiscard]] auto path() const -> std::filesystem::path const & { return path_; }
 
@@ -49,6 +56,7 @@ private:
 
 }// namespace
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST_CASE("capture writes RGBA pixels with the original dimensions", "[capture]")
 {
   std::array<std::uint8_t, kPixelBytes> const expected{
@@ -60,7 +68,7 @@ TEST_CASE("capture writes RGBA pixels with the original dimensions", "[capture]"
   TemporaryPng const output;
   auto const filename = output.path().string();
 
-  REQUIRE(vkgsplat::capture::write_png(frame, filename));
+  REQUIRE(vkgsplat::capture::WritePng(frame, filename));
   int width{};
   int height{};
   int channels{};
@@ -68,28 +76,30 @@ TEST_CASE("capture writes RGBA pixels with the original dimensions", "[capture]"
     stbi_load(filename.c_str(), &width, &height, &channels, kRgbaChannels), stbi_image_free
   };
   REQUIRE(pixels != nullptr);
-  CHECK(width == static_cast<int>(kWidth));
-  CHECK(height == static_cast<int>(kHeight));
+  CHECK(std::cmp_equal(width, kWidth));
+  CHECK(std::cmp_equal(height, kHeight));
   CHECK(channels == kRgbaChannels);
-  for (std::size_t index = 0; index < expected.size(); ++index) { CHECK(pixels.get()[index] == expected[index]); }
+  std::span<std::uint8_t const> const pixel_bytes{ pixels.get(), expected.size() };
+  CHECK(std::ranges::equal(pixel_bytes, expected));
 }
 
 TEST_CASE("capture propagates PNG validation and output errors", "[capture]")
 {
   TemporaryPng const output;
   vkgsplat::RgbaFrame const empty{};
-  auto invalid_dimensions = vkgsplat::capture::write_png(empty, output.path().string());
+  auto invalid_dimensions = vkgsplat::capture::WritePng(empty, output.path().string());
   REQUIRE_FALSE(invalid_dimensions);
   CHECK(invalid_dimensions.error().code() == std::make_error_code(std::errc::invalid_argument));
 
   vkgsplat::RgbaFrame const short_pixels{ .width = kWidth, .height = kHeight, .pixels = {} };
-  auto invalid_pixels = vkgsplat::capture::write_png(short_pixels, output.path().string());
+  auto invalid_pixels = vkgsplat::capture::WritePng(short_pixels, output.path().string());
   REQUIRE_FALSE(invalid_pixels);
   CHECK(invalid_pixels.error().code() == std::make_error_code(std::errc::invalid_argument));
 
   vkgsplat::RgbaFrame const valid{ .width = kSinglePixelDimension, .height = kSinglePixelDimension,
     .pixels = { 0U, 0U, 0U, 255U } };
-  auto invalid_path = vkgsplat::capture::write_png(valid, (output.path() / "missing.png").string());
+  auto invalid_path = vkgsplat::capture::WritePng(valid, (output.path() / "missing.png").string());
   REQUIRE_FALSE(invalid_path);
   CHECK(invalid_path.error().code() == std::make_error_code(std::errc::io_error));
 }
+// NOLINTEND(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)

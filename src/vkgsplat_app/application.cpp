@@ -78,7 +78,7 @@ namespace {
   {
     if (!input.consume_screenshot_request()) { return; }
     auto const path = MakeScreenshotPath();
-    if (auto saved = capture::save_png(renderer, path); !saved) {
+    if (auto saved = capture::SavePng(renderer, path); !saved) {
       std::println(stderr, "failed to save screenshot: {}", saved.error().message());
     } else {
       std::println("saved screenshot: {}", path);

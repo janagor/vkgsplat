@@ -28,8 +28,10 @@ public:
   ~Mp4Muxer() override;
   Mp4Muxer(Mp4Muxer const &) = delete;
   auto operator=(Mp4Muxer const &) -> Mp4Muxer & = delete;
+  Mp4Muxer(Mp4Muxer &&) = delete;
+  auto operator=(Mp4Muxer &&) -> Mp4Muxer & = delete;
 
-  auto Write(EncodedPacket const &packet) -> std::expected<void, Error> override;
+  auto Write(EncodedPacket const &encoded) -> std::expected<void, Error> override;
   auto Finish() -> std::expected<void, Error> override;
 
 private:

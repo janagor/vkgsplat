@@ -14,6 +14,7 @@
 #include <span>
 #include <string>
 #include <system_error>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -32,8 +33,10 @@
 #include "vulkan_context.hpp"
 #include "vkexec_error.hpp"
 #include <vkgsplat/camera.hpp>
+#include <vkgsplat/frame.hpp>
 #include <vkgsplat/gpu_timings.hpp>
 #include <vkgsplat/renderer.hpp>
+#include <vkgsplat_video/encoded_packet.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
 
@@ -167,6 +170,20 @@ namespace {
     }
     if (data.gpu_pass_timer.enabled()) { data.gpu_pass_timer.mark_submitted(frame_slot); }
     return {};
+  }
+
+  [[nodiscard]] auto InvokeInteractiveCapture(
+    std::function<std::expected<CaptureOutcome, Error>()> const &capture)
+    -> std::expected<CaptureOutcome, Error>
+  {
+    try {
+      return capture();
+    } catch (std::exception const &exception) {
+      return std::unexpected(MakeError(std::errc::io_error,
+        "interactive capture callback threw: " + std::string{ exception.what() }));
+    } catch (...) {
+      return std::unexpected(MakeError(std::errc::io_error, "interactive capture callback threw"));
+    }
   }
 
 }// namespace
@@ -849,6 +866,112 @@ auto RenderThread::ThreadMain() -> void
   }
 }
 
+auto RenderThread::ProcessInteractiveCapture(std::expected<FrameOutcome, Error> &drawn) -> void
+{
+  if (!drawn || drawn.value() != FrameOutcome::kSubmitted) { return; }
+  if (!test_mode_ && (context_ == nullptr || context_->swapchain == nullptr || data_ == nullptr)) { return; }
+
+  std::function<std::expected<CaptureOutcome, Error>()> capture;
+  u64 capture_generation = 0U;
+  {
+    std::scoped_lock const lock{ control_mutex_ };
+    if (interactive_capture_active_) {
+      capture = interactive_capture_;
+      capture_generation = interactive_capture_generation_;
+      active_capture_generation_ = capture_generation;
+      ++interactive_capture_callbacks_in_progress_;
+    }
+  }
+  if (!capture) { return; }
+  auto complete_callback = [this](void *) noexcept -> void {
+    {
+      std::scoped_lock const lock{ control_mutex_ };
+      --interactive_capture_callbacks_in_progress_;
+    }
+    control_cv_.notify_all();
+  };
+  std::unique_ptr<void, decltype(complete_callback)> const completion{ this, complete_callback };
+  auto captured = InvokeInteractiveCapture(capture);
+  if (captured) { return; }
+  {
+    std::scoped_lock const lock{ control_mutex_ };
+    if (capture_generation == interactive_capture_generation_) {
+      if (!interactive_capture_error_) { interactive_capture_error_ = captured.error(); }
+      interactive_capture_active_ = false;
+    }
+  }
+  if (captured.error().code() == std::errc::no_such_device) { drawn = std::unexpected(captured.error()); }
+}
+
+auto RenderThread::RecoverVideoEncodeFailure(VideoCaptureRequest const &request, Error const &encode_error,
+  std::expected<FrameOutcome, Error> &drawn) -> std::expected<EncodedPacket, Error>
+{
+  std::optional<Error> cleanup_error;
+  if (auto drained = request.encoder->WaitForInFlightWork(); !drained) {
+    cleanup_error = drained.error();
+  }
+  if (auto released = request.converter->WaitForSourceRelease(); !released) {
+    if (!cleanup_error || released.error().code() == std::errc::no_such_device) {
+      cleanup_error = released.error();
+    }
+  }
+  if (cleanup_error) {
+    auto const &failure = encode_error.code() == std::errc::no_such_device ? encode_error : *cleanup_error;
+    drawn = std::unexpected(failure);
+    return std::unexpected(failure);
+  }
+  return std::unexpected(encode_error);
+}
+
+auto RenderThread::EncodeVideoCapture(VideoCaptureRequest const &request,
+  std::expected<FrameOutcome, Error> &drawn) -> std::expected<EncodedPacket, Error>
+{
+  if (!drawn) { return std::unexpected(drawn.error()); }
+  if (video_frame_override_) { return video_frame_override_(); }
+  if (drawn.value() != FrameOutcome::kSubmitted || context_ == nullptr || data_ == nullptr
+      || !data_->color_image.has_value() || data_->color_format != VK_FORMAT_R8G8B8A8_UNORM) {
+    return std::unexpected(MakeError(std::errc::operation_not_supported,
+      "video capture requires a rendered RGBA8 color target"));
+  }
+  auto const extent = request.converter->Extent();
+  if (data_->color_width != extent.width || data_->color_height != extent.height) {
+    return std::unexpected(MakeError(std::errc::invalid_argument,
+      "video converter extent does not match the rendered color target"));
+  }
+  auto prepared = request.converter->Convert(data_->color_image->handle(),
+    data_->offscreen_timeline, data_->offscreen_signal_value);
+  if (!prepared) { return std::unexpected(prepared.error()); }
+  auto packet = request.encoder->EncodeImage(*prepared, request.frame_index);
+  if (!packet) { return RecoverVideoEncodeFailure(request, packet.error(), drawn); }
+  if (auto completed = request.converter->Complete(); !completed) {
+    drawn = std::unexpected(completed.error());
+    return std::unexpected(completed.error());
+  }
+  return packet;
+}
+
+auto RenderThread::ProcessVideoCapture(PendingFrame const &frame,
+  std::expected<FrameOutcome, Error> &drawn) -> void
+{
+  if (frame.video_capture == nullptr) { return; }
+  // The worker owns both the graphics queue and the shared color target here.
+  // EncodeImage blocks until the converted image has been consumed, so the
+  // next frame cannot overwrite either image before this request completes.
+  auto encoded = EncodeVideoCapture(*frame.video_capture, drawn);
+  if (!encoded) {
+    if (encoded.error().code() == std::errc::no_such_device) {
+      drawn = std::unexpected(encoded.error());
+    }
+    if (frame.video_capture->encoder != nullptr) { frame.video_capture->encoder->Abort(); }
+    if (frame.video_capture->converter != nullptr) { frame.video_capture->converter->Abort(); }
+  }
+  {
+    std::scoped_lock const lock{ control_mutex_ };
+    frame.video_capture->result = std::move(encoded);
+  }
+}
+
+// Coordinates draw submission with independent asynchronous capture callbacks.
 auto RenderThread::ProcessFrame(size_t frame_slot, PendingFrame const &frame) -> void
 {
   if (data_ != nullptr) {
@@ -862,51 +985,7 @@ auto RenderThread::ProcessFrame(size_t frame_slot, PendingFrame const &frame) ->
                  ? draw_frame_override_().transform([]() -> FrameOutcome { return FrameOutcome::kSubmitted; })
                  : DrawFrameVulkan(frame_slot);
 
-  if (drawn && drawn.value() == FrameOutcome::kSubmitted
-      && (test_mode_ || (context_ != nullptr && context_->swapchain != nullptr && data_ != nullptr))) {
-    std::function<std::expected<CaptureOutcome, Error>()> capture;
-    u64 capture_generation = 0U;
-    {
-      std::scoped_lock const lock{ control_mutex_ };
-      if (interactive_capture_active_) {
-        capture = interactive_capture_;
-        capture_generation = interactive_capture_generation_;
-        active_capture_generation_ = capture_generation;
-        ++interactive_capture_callbacks_in_progress_;
-      }
-    }
-    if (capture) {
-      auto complete_callback = [this](void *) noexcept -> void {
-        {
-          std::scoped_lock const lock{ control_mutex_ };
-          --interactive_capture_callbacks_in_progress_;
-        }
-        control_cv_.notify_all();
-      };
-      std::unique_ptr<void, decltype(complete_callback)> completion{ this, complete_callback };
-      std::expected<CaptureOutcome, Error> captured = CaptureOutcome::kSkipped;
-      try {
-        captured = capture();
-      } catch (std::exception const &exception) {
-        captured = std::unexpected(MakeError(std::errc::io_error,
-          "interactive capture callback threw: " + std::string{ exception.what() }));
-      } catch (...) {
-        captured = std::unexpected(MakeError(std::errc::io_error, "interactive capture callback threw"));
-      }
-      if (!captured) {
-        {
-          std::scoped_lock const lock{ control_mutex_ };
-          if (capture_generation == interactive_capture_generation_) {
-            if (!interactive_capture_error_) { interactive_capture_error_ = captured.error(); }
-            interactive_capture_active_ = false;
-          }
-        }
-        if (captured.error().code() == std::errc::no_such_device) {
-          drawn = std::unexpected(captured.error());
-        }
-      }
-    }
-  }
+  ProcessInteractiveCapture(drawn);
 
   if (frame.capture != nullptr) {
     auto captured = drawn && drawn.value() == FrameOutcome::kSubmitted
@@ -920,63 +999,7 @@ auto RenderThread::ProcessFrame(size_t frame_slot, PendingFrame const &frame) ->
     }
   }
 
-  if (frame.video_capture != nullptr) {
-    // The worker owns both the graphics queue and the shared color target here.
-    // EncodeImage blocks until the converted image has been consumed, so the
-    // next frame cannot overwrite either image before this request completes.
-    auto encoded = [&]() -> std::expected<EncodedPacket, Error> {
-      if (!drawn) { return std::unexpected(drawn.error()); }
-      if (video_frame_override_) { return video_frame_override_(); }
-      if (drawn.value() != FrameOutcome::kSubmitted || context_ == nullptr || data_ == nullptr
-          || !data_->color_image.has_value() || data_->color_format != VK_FORMAT_R8G8B8A8_UNORM) {
-        return std::unexpected(MakeError(std::errc::operation_not_supported,
-          "video capture requires a rendered RGBA8 color target"));
-      }
-      auto const extent = frame.video_capture->converter->Extent();
-      if (data_->color_width != extent.width || data_->color_height != extent.height) {
-        return std::unexpected(MakeError(std::errc::invalid_argument,
-          "video converter extent does not match the rendered color target"));
-      }
-      auto prepared = frame.video_capture->converter->Convert(data_->color_image->handle(),
-        data_->offscreen_timeline, data_->offscreen_signal_value);
-      if (!prepared) { return std::unexpected(prepared.error()); }
-      auto packet = frame.video_capture->encoder->EncodeImage(*prepared, frame.video_capture->frame_index);
-      if (!packet) {
-        std::optional<Error> cleanup_error;
-        if (auto drained = frame.video_capture->encoder->WaitForInFlightWork(); !drained) {
-          cleanup_error = drained.error();
-        }
-        if (auto released = frame.video_capture->converter->WaitForSourceRelease(); !released) {
-          if (!cleanup_error || released.error().code() == std::errc::no_such_device) {
-            cleanup_error = released.error();
-          }
-        }
-        if (cleanup_error) {
-          auto const &failure = packet.error().code() == std::errc::no_such_device
-                                  ? packet.error() : *cleanup_error;
-          drawn = std::unexpected(failure);
-          return std::unexpected(failure);
-        }
-        return packet;
-      }
-      if (auto completed = frame.video_capture->converter->Complete(); !completed) {
-        drawn = std::unexpected(completed.error());
-        return std::unexpected(completed.error());
-      }
-      return packet;
-    }();
-    if (!encoded) {
-      if (encoded.error().code() == std::errc::no_such_device) {
-        drawn = std::unexpected(encoded.error());
-      }
-      if (frame.video_capture->encoder != nullptr) { frame.video_capture->encoder->Abort(); }
-      if (frame.video_capture->converter != nullptr) { frame.video_capture->converter->Abort(); }
-    }
-    {
-      std::scoped_lock const lock{ control_mutex_ };
-      frame.video_capture->result = std::move(encoded);
-    }
-  }
+  ProcessVideoCapture(frame, drawn);
 
   FinishFrame(frame_slot, drawn);
   if (frame.capture != nullptr) {
@@ -995,12 +1018,13 @@ auto RenderThread::ProcessFrame(size_t frame_slot, PendingFrame const &frame) ->
   }
 }
 
+// Coordinates swapchain acquisition, rendering, presentation, and capture.
 auto RenderThread::DrawFrameVulkan(size_t frame_slot) -> std::expected<FrameOutcome, Error>
 {
   if (context_ == nullptr || data_ == nullptr) {
     return std::unexpected{ MakeError(std::errc::state_not_recoverable, "Vulkan render state is not initialized") };
   }
-  vulkan::Context &context = *context_;
+  vulkan::Context const &context = *context_;
   RenderData &data = *data_;
   data.current_slot = frame_slot;
 
@@ -1018,6 +1042,17 @@ auto RenderThread::DrawFrameVulkan(size_t frame_slot) -> std::expected<FrameOutc
   auto const extent = context.platform->framebuffer_extent();
   if (extent.width == 0 || extent.height == 0) { return FrameOutcome::kSkipped; }
 
+  return DrawSwapchainFrame(frame_slot);
+}
+
+auto RenderThread::DrawSwapchainFrame(size_t frame_slot) -> std::expected<FrameOutcome, Error>
+{
+  vulkan::Context &context = *context_;
+  RenderData &data = *data_;
+  if (!data.frame_ring.has_value()) {
+    return std::unexpected{ MakeError(std::errc::state_not_recoverable, "frame_ring is not initialized") };
+  }
+  auto &ring = *data.frame_ring;
   auto acquire_semaphore = ring.acquire_semaphore(frame_slot);
   if (!acquire_semaphore) {
     return std::unexpected{ vulkan::VkexecFailure(acquire_semaphore.error()) };

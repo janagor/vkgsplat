@@ -1,7 +1,10 @@
+// NOLINTBEGIN(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)
 #include "../src/vkgsplat_capture/png_sequence_writer.hpp"
 
 #include <vkgsplat/frame.hpp>
 #include <vkgsplat_capture/screenshot.hpp>
+#include <vkgsplat_utility/error.hpp>
+#include <vkgsplat_utility/types.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -9,14 +12,18 @@
 #include <stb_image.h>
 
 #include <chrono>
+#include <cstddef>
 #include <condition_variable>
 #include <cstdint>
+#include <limits>
+#include <expected>
 #include <filesystem>
 #include <fstream>
 #include <format>
 #include <future>
 #include <memory>
 #include <mutex>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <system_error>
@@ -29,6 +36,7 @@ constexpr vkgsplat::u32 kChannels = 4U;
 constexpr vkgsplat::u32 kFrameCount = 10U;
 constexpr vkgsplat::u32 kFirstFileIndex = 7U;
 constexpr vkgsplat::u32 kFilenameDigits = 3U;
+constexpr std::uint8_t kOpaqueAlpha = std::numeric_limits<std::uint8_t>::max();
 
 class TemporaryDirectory
 {
@@ -45,6 +53,8 @@ public:
   }
   TemporaryDirectory(TemporaryDirectory const &) = delete;
   auto operator=(TemporaryDirectory const &) -> TemporaryDirectory & = delete;
+  TemporaryDirectory(TemporaryDirectory &&) = delete;
+  auto operator=(TemporaryDirectory &&) -> TemporaryDirectory & = delete;
   [[nodiscard]] auto path() const -> std::filesystem::path const & { return path_; }
 private:
   std::filesystem::path path_;
@@ -53,7 +63,7 @@ private:
 [[nodiscard]] auto MakeFrame(std::uint8_t value) -> vkgsplat::RgbaFrame
 {
   return { .width = kWidth, .height = kHeight,
-    .pixels = { value, 0U, 0U, 255U, value, 0U, 0U, 255U } };
+    .pixels = { value, 0U, 0U, kOpaqueAlpha, value, 0U, 0U, kOpaqueAlpha } };
 }
 
 class WriteGate
@@ -74,7 +84,7 @@ public:
   auto release() -> void
   {
     {
-      std::lock_guard const lock{ mutex_ };
+      std::scoped_lock const lock{ mutex_ };
       released_ = true;
     }
     condition_.notify_all();
@@ -111,9 +121,14 @@ TEST_CASE("PNG sequence preserves order and pixels with a bounded queue", "[capt
       stbi_load(path.c_str(), &width, &height, &channels, static_cast<int>(kChannels)), stbi_image_free
     };
     REQUIRE(pixels != nullptr);
-    CHECK(width == static_cast<int>(kWidth));
-    CHECK(height == static_cast<int>(kHeight));
-    CHECK(pixels.get()[0] == static_cast<std::uint8_t>(index));
+    CHECK(std::cmp_equal(width, kWidth));
+    CHECK(std::cmp_equal(height, kHeight));
+    auto const pixel_count = static_cast<std::size_t>(kWidth) * kChannels;
+    auto const pixel_data = std::span{ pixels.get(), pixel_count };
+    auto const first_pixel_matches = pixel_data.front() == static_cast<stbi_uc>(index);
+    auto const second_pixel_matches = pixel_data.subspan(kChannels).front() == static_cast<stbi_uc>(index);
+    CHECK(first_pixel_matches);
+    CHECK(second_pixel_matches);
   }
   CHECK_FALSE((*writer)->submit({ .sequence_index = kFrameCount, .frame = MakeFrame(0U) }));
 }
@@ -170,7 +185,7 @@ TEST_CASE("PNG sequence rejects inconsistent RGBA buffer size", "[capture]")
   REQUIRE(writer);
   auto frame = MakeFrame(1U);
   frame.pixels.pop_back();
-  CHECK_FALSE((*writer)->submit({ .sequence_index = 0U, .frame = std::move(frame) }));
+  CHECK_FALSE((*writer)->submit({ .sequence_index = 0U, .frame = frame }));
   REQUIRE((*writer)->finish());
   CHECK(std::filesystem::is_empty(output.path()));
 }
@@ -220,7 +235,7 @@ TEST_CASE("A full PNG queue blocks the producer until the worker advances", "[ca
   }, [&gate](vkgsplat::RgbaFrame const &frame, std::filesystem::path const &path)
        -> std::expected<void, vkgsplat::Error> {
     gate.enter_and_wait();
-    return vkgsplat::capture::write_png(frame, path.string());
+    return vkgsplat::capture::WritePng(frame, path.string());
   }, [&queue_full]() -> void { queue_full.set_value(); });
   REQUIRE(writer);
   REQUIRE((*writer)->submit({ .sequence_index = 0U, .frame = MakeFrame(0U) }));
@@ -280,3 +295,4 @@ TEST_CASE("PNG filename padding has a practical upper bound", "[capture]")
   CHECK_FALSE(writer);
   CHECK_FALSE(std::filesystem::exists(output.path()));
 }
+// NOLINTEND(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)

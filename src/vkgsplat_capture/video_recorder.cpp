@@ -1,4 +1,5 @@
 #include <vkgsplat_capture/video_recorder.hpp>
+#include <vkgsplat_capture/video_config.hpp>
 #include "video_recorder_test_access.hpp"
 
 #include <vkgsplat/camera.hpp>
@@ -7,18 +8,22 @@
 
 #include "video/h264_stream_sink.hpp"
 #include "video/video_sink.hpp"
-#if defined(VKGSPLAT_ENABLE_MP4)
+#ifdef VKGSPLAT_ENABLE_MP4
 #include "video/mp4_muxer.hpp"
 #endif
 
 #include <cstdint>
 #include <cstddef>
+#include <expected>
 #include <limits>
 #include <memory>
 #include <optional>
 #include <span>
 #include <system_error>
 #include <utility>
+
+#include <vkgsplat_utility/error.hpp>
+#include <vkgsplat_utility/types.hpp>
 
 namespace vkgsplat::capture {
 namespace {
@@ -43,7 +48,7 @@ namespace {
     if (config.container != VideoContainer::kH264 && config.container != VideoContainer::kMp4) {
       return std::unexpected(MakeError(std::errc::invalid_argument, "unknown video container"));
     }
-#if !defined(VKGSPLAT_ENABLE_MP4)
+#ifndef VKGSPLAT_ENABLE_MP4
     if (config.container == VideoContainer::kMp4) {
       return std::unexpected(MakeError(std::errc::function_not_supported,
         "MP4 output requires a build with vkgsplat_ENABLE_MP4"));
@@ -60,7 +65,7 @@ namespace {
       if (!raw) { return std::unexpected(raw.error()); }
       return std::unique_ptr<VideoSink>{ std::make_unique<H264StreamSink>(std::move(*raw)) };
     }
-#if defined(VKGSPLAT_ENABLE_MP4)
+#ifdef VKGSPLAT_ENABLE_MP4
     auto mp4 = Mp4Muxer::Open(config.output_path, config.width, config.height,
       config.frame_rate.numerator, config.frame_rate.denominator, parameter_sets);
     if (!mp4) { return std::unexpected(mp4.error()); }
@@ -90,7 +95,7 @@ VideoRecorder::VideoRecorder(VideoRecorder &&) noexcept = default;
 auto VideoRecorder::operator=(VideoRecorder &&) noexcept -> VideoRecorder & = default;
 VideoRecorder::~VideoRecorder() noexcept = default;
 
-auto VideoRecorder::create(Renderer &renderer, VideoConfig config) -> std::expected<VideoRecorder, Error>
+auto VideoRecorder::create(Renderer &renderer, VideoConfig const &config) -> std::expected<VideoRecorder, Error>
 {
   if (auto valid = Validate(config); !valid) { return std::unexpected(valid.error()); }
   auto session = renderer.create_video_recording_session(config.width, config.height,

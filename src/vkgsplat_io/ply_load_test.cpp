@@ -37,7 +37,7 @@ auto PropertyTypeName(vkgsplat::miniply::PLYPropertyType type) -> std::string_vi
   return std::string_view{ "unknown" };
 }
 
-void PrintProperty(vkgsplat::miniply::PLYProperty const &prop)
+auto PrintProperty(vkgsplat::miniply::PLYProperty const &prop) -> void
 {
   if (prop.count_type != vkgsplat::miniply::PLYPropertyType::kNone) {
     std::println(

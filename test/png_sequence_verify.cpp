@@ -1,3 +1,4 @@
+// NOLINTBEGIN(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
@@ -10,7 +11,9 @@
 #include <format>
 #include <iostream>
 #include <memory>
+#include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -30,15 +33,16 @@ constexpr int kArgumentCount = 5;
     int decoded_width{};
     int decoded_height{};
     int channels{};
-    std::unique_ptr<stbi_uc, decltype(&stbi_image_free)> pixels{
+    std::unique_ptr<stbi_uc, decltype(&stbi_image_free)> const pixels{
       stbi_load(filename.c_str(), &decoded_width, &decoded_height, &channels, kRgbaChannels), stbi_image_free
     };
-    if (!pixels || decoded_width != static_cast<int>(width) || decoded_height != static_cast<int>(height)) {
+    if (!pixels || !std::cmp_equal(decoded_width, width) || !std::cmp_equal(decoded_height, height)) {
       std::cerr << "Missing or invalid sequence PNG: " << filename << '\n';
       return false;
     }
     auto const byte_count = static_cast<size_t>(width) * height * static_cast<size_t>(kRgbaChannels);
-    std::vector<std::uint8_t> const decoded{ pixels.get(), pixels.get() + byte_count };
+    std::span<stbi_uc const> const pixel_bytes{ pixels.get(), byte_count };
+    std::vector<std::uint8_t> const decoded{ pixel_bytes.begin(), pixel_bytes.end() };
     if (index == 0U) { first_pixels = decoded; }
     else if (decoded != first_pixels) { changed = true; }
   }
@@ -59,11 +63,13 @@ auto main(int argc, char **argv) -> int
 {
   if (argc != kArgumentCount) { return EXIT_FAILURE; }
   try {
-    auto const width = static_cast<vkgsplat::u32>(std::stoul(argv[2]));
-    auto const height = static_cast<vkgsplat::u32>(std::stoul(argv[3]));
-    auto const count = static_cast<vkgsplat::u32>(std::stoul(argv[4]));
-    return Verify(argv[1], width, height, count) ? EXIT_SUCCESS : EXIT_FAILURE;
+    std::span<char *> const arguments{ argv, static_cast<size_t>(argc) };
+    auto const width = static_cast<vkgsplat::u32>(std::stoul(arguments.subspan(2U).front()));
+    auto const height = static_cast<vkgsplat::u32>(std::stoul(arguments.subspan(3U).front()));
+    auto const count = static_cast<vkgsplat::u32>(std::stoul(arguments.subspan(4U).front()));
+    return Verify(arguments.subspan(1U).front(), width, height, count) ? EXIT_SUCCESS : EXIT_FAILURE;
   } catch (...) {
     return EXIT_FAILURE;
   }
 }
+// NOLINTEND(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)

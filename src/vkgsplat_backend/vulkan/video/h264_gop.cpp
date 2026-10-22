@@ -1,6 +1,10 @@
 #include "h264_gop.hpp"
 
+#include <cstdint>
+#include <expected>
 #include <system_error>
+
+#include <vkgsplat_utility/error.hpp>
 
 namespace vkgsplat::vulkan::video {
 namespace {

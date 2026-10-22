@@ -18,13 +18,15 @@ class Renderer;
 
 namespace capture {
 
+inline constexpr u32 kDefaultFilenameDigits = 6U;
+
 struct FrameSequenceConfig
 {
   std::filesystem::path output_directory;
   std::string filename_prefix = "frame_";
   FrameRate frame_rate{};
   u64 start_index = 0U;
-  u32 filename_digits = 6U;
+  u32 filename_digits = kDefaultFilenameDigits;
   // Queued frames; the writer may own one additional frame while encoding.
   size_t max_pending_frames = 3U;
 };

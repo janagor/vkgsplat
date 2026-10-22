@@ -1,3 +1,4 @@
+// NOLINTBEGIN(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)
 #ifndef VKGSPLAT_TEST_VIDEO_ENCODE_COLOR_SOURCE_HPP
 #define VKGSPLAT_TEST_VIDEO_ENCODE_COLOR_SOURCE_HPP
 
@@ -22,11 +23,13 @@ public:
     -> std::expected<std::vector<std::byte>, Error>;
   [[nodiscard]] auto Image() const noexcept -> VkImage { return image_; }
   [[nodiscard]] auto ReadyTimeline() const noexcept -> VkSemaphore { return ready_; }
-  [[nodiscard]] auto ReadyValue() const noexcept -> std::uint64_t { return kReadyValue; }
+  [[nodiscard]] static auto ReadyValue() noexcept -> std::uint64_t { return kReadyValue; }
 
   ~GpuColorSource();
   GpuColorSource(GpuColorSource const &) = delete;
   auto operator=(GpuColorSource const &) -> GpuColorSource & = delete;
+  GpuColorSource(GpuColorSource &&) = delete;
+  auto operator=(GpuColorSource &&) -> GpuColorSource & = delete;
 
 private:
   explicit GpuColorSource(vulkan::Context &context, VkExtent2D extent) noexcept;
@@ -48,3 +51,4 @@ private:
 }// namespace vkgsplat::test
 
 #endif// VKGSPLAT_TEST_VIDEO_ENCODE_COLOR_SOURCE_HPP
+// NOLINTEND(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)

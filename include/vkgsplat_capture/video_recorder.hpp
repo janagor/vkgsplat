@@ -20,7 +20,7 @@ struct VideoRecorderTestAccess;
 class VKGSPLAT_CAPTURE_EXPORT VideoRecorder
 {
 public:
-  [[nodiscard]] static auto create(Renderer &renderer, VideoConfig config)
+  [[nodiscard]] static auto create(Renderer &renderer, VideoConfig const &config)
     -> std::expected<VideoRecorder, Error>;
   [[nodiscard]] auto record_frame(Camera const &camera) -> std::expected<void, Error>;
   [[nodiscard]] auto finish() -> std::expected<void, Error>;

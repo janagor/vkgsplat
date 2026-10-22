@@ -39,6 +39,7 @@ enum class CaptureOutcome : u8 { kSubmitted, kDropped, kSkipped };
 
 // Dedicated thread for Vulkan queue and command-buffer work.
 // Presentation uses frame_ring; offscreen output uses a timeline semaphore.
+// NOLINTNEXTLINE(clang-analyzer-optin.performance.Padding)
 class VKGSPLAT_BACKEND_EXPORT RenderThread
 {
 public:
@@ -142,6 +143,12 @@ private:
 
   auto ThreadMain() -> void;
   auto ProcessFrame(size_t frame_slot, PendingFrame const &frame) -> void;
+  auto ProcessInteractiveCapture(std::expected<FrameOutcome, Error> &drawn) -> void;
+  auto ProcessVideoCapture(PendingFrame const &frame, std::expected<FrameOutcome, Error> &drawn) -> void;
+  auto EncodeVideoCapture(VideoCaptureRequest const &request, std::expected<FrameOutcome, Error> &drawn)
+    -> std::expected<EncodedPacket, Error>;
+  static auto RecoverVideoEncodeFailure(VideoCaptureRequest const &request, Error const &encode_error,
+    std::expected<FrameOutcome, Error> &drawn) -> std::expected<EncodedPacket, Error>;
   auto ProcessWaitIdle(std::unique_lock<std::mutex> &lock) -> void;
   auto ProcessReadback(std::unique_lock<std::mutex> &lock) -> void;
   auto ProcessExclusive(std::unique_lock<std::mutex> &lock) -> void;
@@ -157,6 +164,7 @@ private:
     u64 frame_index) -> std::expected<EncodedPacket, Error>;
   auto FinishFrame(size_t frame_slot, std::expected<FrameOutcome, Error> const &drawn) -> void;
   [[nodiscard]] auto DrawFrameVulkan(size_t frame_slot) -> std::expected<FrameOutcome, Error>;
+  [[nodiscard]] auto DrawSwapchainFrame(size_t frame_slot) -> std::expected<FrameOutcome, Error>;
   [[nodiscard]] auto DrawFrameOffscreen(size_t frame_slot) -> std::expected<FrameOutcome, Error>;
   [[nodiscard]] auto ReadFrameOnWorker() -> std::expected<RgbaFrame, Error>;
   auto PublishGpuTiming(std::optional<GpuFrameTimings> sample) -> void;

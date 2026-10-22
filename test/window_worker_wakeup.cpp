@@ -1,3 +1,4 @@
+// NOLINTBEGIN(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)
 #include <vkgsplat_utility/types.hpp>
 #include <vkgsplat_window/window.hpp>
 
@@ -31,3 +32,4 @@ TEST_CASE("worker notification wakes an idle GLFW event wait", "[window]")
   while (!posted.load()) { window->wait_events(); }
   REQUIRE(std::chrono::steady_clock::now() - start < kMaximumWakeTime);
 }
+// NOLINTEND(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)
