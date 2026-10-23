@@ -4,6 +4,7 @@
 #define GLM_ENABLE_EXPERIMENTAL
 
 #include <algorithm>
+#include <optional>
 
 #include <glm/ext/matrix_float4x4.hpp>
 #include <glm/ext/matrix_transform.hpp>
@@ -50,6 +51,7 @@ struct CameraConfig
   glm::dvec3 position{ kDefaultCameraPosition };
   glm::dvec3 target{ kDefaultCameraTarget };
   glm::dvec3 up{ kDefaultCameraUp };
+  std::optional<glm::dquat> orientation{};
 
   /// Intrinsics. Rendering overrides the aspect from the selected output extent.
   f64 fov_degrees{ kCameraDefaultFovDegrees };
@@ -94,9 +96,13 @@ public:
       fov_degrees_(config.fov_degrees), near_plane_(config.near_plane), far_plane_(config.far_plane),
       aspect_ratio_(config.aspect_ratio)
   {
-    auto const world_up = glm::length(config.up) > 0.0 ? glm::normalize(config.up) : kDefaultCameraUp;
-    auto const look_at = glm::lookAt(config.position, config.target, world_up);
-    orientation_ = glm::conjugate(glm::quat_cast(look_at));
+    if (config.orientation) {
+      orientation_ = glm::normalize(*config.orientation);
+    } else {
+      auto const world_up = glm::length(config.up) > 0.0 ? glm::normalize(config.up) : kDefaultCameraUp;
+      auto const look_at = glm::lookAt(config.position, config.target, world_up);
+      orientation_ = glm::conjugate(glm::quat_cast(look_at));
+    }
     update_camera_vectors();
   }
 
