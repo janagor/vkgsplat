@@ -1,3 +1,4 @@
+// NOLINTBEGIN(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)
 #include <vkgsplat/platform.hpp>
 #include <vkgsplat_headless/headless_platform.hpp>
 #include <vkgsplat_headless/offscreen_platform.hpp>
@@ -65,3 +66,4 @@ TEST_CASE("platform defaults to windowed mode", "[headless]")
   } const platform;
   REQUIRE(platform.surface_mode() == vkgsplat::SurfaceMode::kWindowed);
 }
+// NOLINTEND(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)

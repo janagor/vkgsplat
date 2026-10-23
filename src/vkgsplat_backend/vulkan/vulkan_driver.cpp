@@ -10,6 +10,7 @@
 #include <vkgsplat/driver.hpp>
 #include <vkgsplat/platform.hpp>
 #include <vkgsplat/swapchain.hpp>
+#include <vkgsplat/video_capabilities.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
 
@@ -169,6 +170,9 @@ auto VulkanDriver::create_swapchain(Platform &platform, Extent2D extent) -> std:
 auto VulkanDriver::swapchain() noexcept -> vkgsplat::Swapchain * { return context_.swapchain.get(); }
 
 auto VulkanDriver::swapchain() const noexcept -> vkgsplat::Swapchain const * { return context_.swapchain.get(); }
+
+auto VulkanDriver::video_encode_capabilities() const noexcept -> VideoEncodeCapabilities const &
+{ return context_.video_encode_capabilities; }
 
 void VulkanDriver::wait_idle() const noexcept
 {

@@ -6,6 +6,7 @@
 
 #include <vkgsplat/platform.hpp>
 #include <vkgsplat/swapchain.hpp>
+#include <vkgsplat/video_capabilities.hpp>
 #include <vkgsplat/vkgsplat_export.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
@@ -17,6 +18,7 @@ struct DriverConfig
 {
   bool enable_validation = false;
   bool request_present_timing = false;
+  VideoEncodeSupport video_encode = VideoEncodeSupport::kDisabled;
 };
 
 /**
@@ -38,6 +40,7 @@ public:
   /** Returns null when rendering directly to an offscreen color target. */
   [[nodiscard]] virtual auto swapchain() noexcept -> Swapchain * = 0;
   [[nodiscard]] virtual auto swapchain() const noexcept -> Swapchain const * = 0;
+  [[nodiscard]] virtual auto video_encode_capabilities() const noexcept -> VideoEncodeCapabilities const & = 0;
 
   virtual void wait_idle() const noexcept = 0;
 

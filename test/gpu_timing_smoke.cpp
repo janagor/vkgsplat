@@ -1,10 +1,13 @@
+// NOLINTBEGIN(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)
 #include "benchmark/batch_accounting.hpp"
 #include "benchmark/fixture/profile.hpp"
 #include "benchmark/fixture/renderer_adapter.hpp"
 
 #include <vkgsplat/camera.hpp>
+#include <vkgsplat/gpu_timings.hpp>
 #include <vkgsplat/renderer.hpp>
 #include <vkgsplat_headless/headless_platform.hpp>
+#include <vkgsplat_utility/types.hpp>
 
 #include <array>
 #include <cmath>
@@ -13,7 +16,7 @@
 #include <filesystem>
 #include <iostream>
 #include <optional>
-#include <string>
+#include <span>
 #include <system_error>
 #include <unordered_set>
 
@@ -89,5 +92,6 @@ auto Run(std::filesystem::path const &scene_path) -> int
 auto main(int argc, char **argv) -> int
 {
   if (argc != kExpectedArguments) { return EXIT_FAILURE; }
-  return Run(argv[1]);
+  return Run(std::span{ argv, static_cast<size_t>(argc) }.subspan(1U).front());
 }
+// NOLINTEND(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)

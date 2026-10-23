@@ -14,6 +14,7 @@
 #include <vkgsplat/camera.hpp>
 #include <vkgsplat/frame_rate.hpp>
 #include <vkgsplat/renderer.hpp>
+#include <vkgsplat_capture/screenshot.hpp>
 #include <vkgsplat_input_handler/input_handler.hpp>
 #include <vkgsplat_input_handler/key_bindings.hpp>
 #include <vkgsplat_utility/error.hpp>
@@ -77,7 +78,7 @@ namespace {
   {
     if (!input.consume_screenshot_request()) { return; }
     auto const path = MakeScreenshotPath();
-    if (auto saved = renderer.save_frame_png(path); !saved) {
+    if (auto saved = capture::SavePng(renderer, path); !saved) {
       std::println(stderr, "failed to save screenshot: {}", saved.error().message());
     } else {
       std::println("saved screenshot: {}", path);

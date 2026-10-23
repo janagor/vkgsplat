@@ -2,6 +2,7 @@
 #define VKGSPLAT_BACKEND_VULKAN_VULKAN_CONTEXT_HPP
 
 #include <memory>
+#include <optional>
 
 #include <vulkan/vulkan_core.h>
 
@@ -11,7 +12,9 @@
 #include <vkexec_vma/allocator.hpp>
 
 #include "presentable_swapchain.hpp"
+#include "video/video_device.hpp"
 #include <vkgsplat/platform.hpp>
+#include <vkgsplat/video_capabilities.hpp>
 
 namespace vkgsplat::vulkan {
 
@@ -28,6 +31,8 @@ struct Context
   std::unique_ptr<vkexec::context> vkexec_context;
   std::unique_ptr<vkexec::vma::allocator> allocator;
   std::unique_ptr<PresentableSwapchain> swapchain;
+  VideoEncodeCapabilities video_encode_capabilities;
+  std::optional<video::EncodeDevice> video_encode;
 
   bool present_timing_enabled = false;
   bool present_id2_enabled = false;

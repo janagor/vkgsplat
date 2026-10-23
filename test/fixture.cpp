@@ -1,3 +1,4 @@
+// NOLINTBEGIN(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)
 #include "benchmark/fixture/manifest.hpp"
 #include "benchmark/fixture/ply_writer.hpp"
 #include "benchmark/fixture/profile.hpp"
@@ -252,3 +253,4 @@ TEST_CASE("distant Gaussian samples remain stable", "[fixture]")
   REQUIRE(scene->geometries.at(kLastSampleIndex).position.at(kYAxis) == kLastSampleY);
   REQUIRE(scene->appearances.at(kLastSampleIndex).f_rest.at(0) == kLastSampleRest);
 }
+// NOLINTEND(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)

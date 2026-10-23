@@ -23,3 +23,91 @@ The `main` branch deploys to the root, `develop` to `/develop/`, and tags to `/t
  * [Troubleshooting](README_troubleshooting.md)
  * [Docker](README_docker.md)
  * [vkexec migration baseline](docs/migration/vkexec-baseline.md)
+
+## Vulkan Video initialization
+
+`EngineConfig::video_encode` (or `DriverConfig::video_encode`) controls optional H.264
+capability setup. The default, `kDisabled`, keeps the existing device initialization.
+`kOptional` probes the rendering device already selected by Vulkan and enables
+encoding when it supports an 8-bit 4:2:0 H.264 profile, an encode queue, and
+an encode-source image format. A zero-DPB all-intra session does not need a DPB
+format. `kRequired` searches rendering-capable devices
+for those requirements and returns an initialization error when none qualify.
+
+After creation, `engine.video_encode_capabilities()` (or the driver equivalent)
+reports whether the logical device has H.264 enabled, whether the known RGBA
+conversion path and reference pictures are supported, its usable coded extent,
+and a diagnostic string. The Vulkan backend retains the detailed profile, format,
+limit, and queue data used by the offline H.264 encoder.
+`capture_conversion_supported` reports compatible image usages; recording also
+requires a usable compute graphics queue.
+The public maximum extent and both support flags describe one selected profile
+and encode-source format; the internal report retains alternatives for later
+encoder configurations.
+
+## Screenshot API
+
+Include `<vkgsplat_capture/screenshot.hpp>` and link `vkgsplat::vkgsplat_capture`.
+To save the latest completed scene frame, use `vkgsplat::capture::save_png(renderer, "scene.png")`.
+This replaces `renderer.save_frame_png("scene.png")`.
+For a frame returned by `renderer.render_frame(camera)`, use
+`vkgsplat::capture::write_png(*frame, "scene.png")` after checking the result.
+`render_frame()` renders the supplied camera in offscreen mode;
+`capture_latest_frame()` reads an already completed frame.
+
+## PNG sequence capture
+
+Include `<vkgsplat_capture/frame_sequence.hpp>` and link `vkgsplat::vkgsplat_capture`.
+Create a `capture::FrameSequence` with an offscreen `Renderer`, call `record_frame(camera)`
+for each requested camera, then call `finish()`. The renderer must outlive the sequence.
+The writer accepts owned RGBA frames into a bounded queue and blocks when full.
+`max_pending_frames` counts queued frames; one more frame can be in the writer during encoding.
+With the default capacity, a full queue can hold three frames, the writer can hold one,
+and a blocked producer can hold another. At 4K RGBA these five CPU frames use about
+158 MiB, excluding renderer buffers and other allocations. The queue limit bounds pending
+work, not total capture memory. A successful `record_frame()` means the frame was accepted;
+only a successful `finish()` confirms that every PNG was written. The output directory must
+be empty and dedicated to one session at a time. Files start at `frame_000000.png` by
+default and are numbered consecutively. `start_index` changes file names only. Presentation
+timestamps are determined by the zero-based sequence index and rational frame rate:
+`index * denominator / numerator` seconds. PNG files do not carry these timestamps.
+The output filesystem must support hard links for atomic publication without overwriting
+existing frames.
+
+For a circular orbit from the headless app:
+
+```sh
+vkgsplat_headless --ply scene.ply --target offscreen --sequence-dir output/sequence \
+  --width 1920 --height 1080 --frames 120 --fps 60 --orbit-degrees 360
+```
+
+The `--output` option saves one PNG screenshot or a video when its extension is
+`.h264` or `.mp4`; it cannot be combined with `--sequence-dir`. Sequence mode uses
+an offscreen target. Orbit positions are calculated
+from each frame index, so capture speed does not affect the requested camera state.
+
+## Offline video recording
+
+Include `<vkgsplat_capture/video_recorder.hpp>` and link `vkgsplat::vkgsplat_capture`.
+Create an offscreen `Engine` with `EngineConfig::video_encode = VideoEncodeSupport::kRequired`,
+then create its renderer and a `capture::VideoRecorder`. Keep the engine and renderer
+alive until the recorder is destroyed. Call `record_frame(camera)` once per presentation
+frame and check `finish()` to finalize the output. The configured rational frame rate
+determines timestamps; rendering speed does not affect them.
+
+The current encoder writes IDR-only H.264 and requires dimensions divisible by 16.
+`VideoConfig` defaults to raw `.h264`, 1280×720, and an IDR interval of one.
+Requests for P frames or explicit rate-control modes fail during recorder creation.
+MP4 requires `vkgsplat_ENABLE_MP4=ON` and FFmpeg development libraries at build time.
+MP4 publication fails if the destination already exists and uses a reserved temporary
+file until `finish()` succeeds. The output filesystem must support hard links.
+
+```sh
+vkgsplat_headless --ply scene.ply --target offscreen --output orbit.mp4 \
+  --width 1280 --height 720 --frames 300 --fps 60 --orbit-degrees 360
+```
+
+The same command with `orbit.h264` writes a raw Annex B stream without FFmpeg.
+Raw H.264 and MP4 recordings are published only after finalization. Publication
+uses a hard link from a temporary file in the output directory, so the output
+filesystem must support hard links; an existing destination is never replaced.

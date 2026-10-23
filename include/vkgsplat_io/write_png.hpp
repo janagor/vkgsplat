@@ -6,6 +6,7 @@
 #include <span>
 #include <string_view>
 
+#include <vkgsplat_io/vkgsplat_io_export.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
 
@@ -16,7 +17,7 @@ namespace vkgsplat {
  * `channels` must be 1 (Y), 2 (YA), 3 (RGB), or 4 (RGBA), and `pixels` must
  * contain `width * height * channels` bytes.
  */
-[[nodiscard]] auto
+[[nodiscard]] VKGSPLAT_IO_EXPORT auto
   WritePng(std::string_view path, u32 width, u32 height, u32 channels, std::span<std::uint8_t const> pixels)
     -> std::expected<void, Error>;
 

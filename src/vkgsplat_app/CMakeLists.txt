@@ -3,6 +3,7 @@ add_executable(vkgsplat_app main.cpp application.cpp app_config.cpp)
 target_link_libraries(
   vkgsplat_app
   PRIVATE vkgsplat::vkgsplat
+          vkgsplat::vkgsplat_capture
           vkgsplat::vkgsplat_input_handler
           vkgsplat::vkgsplat_window
           vkgsplat::vkgsplat_options

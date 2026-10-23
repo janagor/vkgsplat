@@ -1,4 +1,4 @@
-// NOLINTBEGIN(readability-function-cognitive-complexity)
+// NOLINTBEGIN(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)
 #include <vkgsplat_adt/latest_frame_mailbox.hpp>
 
 #include <catch2/catch_test_macros.hpp>
@@ -271,4 +271,4 @@ TEST_CASE("lossless admission wakes on failure and shutdown", "[render]")
   producer.join();
   REQUIRE_FALSE(accepted);
 }
-// NOLINTEND(readability-function-cognitive-complexity)
+// NOLINTEND(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)

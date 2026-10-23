@@ -1,4 +1,4 @@
-// NOLINTBEGIN(readability-function-cognitive-complexity)
+// NOLINTBEGIN(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)
 #include "benchmark/batch_accounting.hpp"
 #include "benchmark/fixture/profile.hpp"
 #include "benchmark/fixture/renderer_adapter.hpp"
@@ -43,4 +43,4 @@ TEST_CASE("benchmark accounting rejects missing and recreated frames", "[fixture
   REQUIRE_FALSE(vkgsplat::benchmark::ValidateBatchAccounting(kRequested, kBefore, kBefore + kRequested, 0U, 1U));
   REQUIRE_FALSE(vkgsplat::benchmark::ValidateBatchAccounting(kRequested, kBefore, kBefore - 1U, 0U, 0U));
 }
-// NOLINTEND(readability-function-cognitive-complexity)
+// NOLINTEND(readability-function-cognitive-complexity,bugprone-unchecked-optional-access)

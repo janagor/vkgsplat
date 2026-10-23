@@ -29,6 +29,7 @@ public:
   [[nodiscard]] auto create_swapchain(Platform &platform, Extent2D extent) -> std::expected<void, Error> override;
   [[nodiscard]] auto swapchain() noexcept -> vkgsplat::Swapchain * override;
   [[nodiscard]] auto swapchain() const noexcept -> vkgsplat::Swapchain const * override;
+  [[nodiscard]] auto video_encode_capabilities() const noexcept -> VideoEncodeCapabilities const & override;
 
   void wait_idle() const noexcept override;
 

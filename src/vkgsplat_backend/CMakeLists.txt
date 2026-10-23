@@ -6,6 +6,12 @@ add_library(
   vulkan/vulkan_driver.cpp
   vulkan/presentable_swapchain.cpp
   vulkan/device.cpp
+  vulkan/video/video_capabilities.cpp
+  vulkan/video/video_device.cpp
+  vulkan/video/video_session.cpp
+  vulkan/video/video_encoder.cpp
+  vulkan/video/color_converter.cpp
+  vulkan/video/h264_gop.cpp
   vulkan/shader.cpp
   vulkan/mesh_gpu.cpp
   vulkan/sphere_setup.cpp
@@ -22,7 +28,7 @@ add_library(
   vulkan/gs/rasterization.cpp
   vulkan/gs/pipeline.cpp
   vulkan/gs/operations.cpp
-  vulkan/screenshot.cpp
+  vulkan/capture/readback.cpp
   vulkan/descriptor/descriptor_heap.cpp
   vulkan/gpu_pass_timer.cpp
   vulkan/imgui_overlay.cpp
@@ -49,7 +55,8 @@ vkgsplat_compile_shaders(
   "${VKGSPLAT_VKRADIXSORT_SHADERS_DIR}/multi_radixsort_histograms.comp"
   "${VKGSPLAT_VKRADIXSORT_SHADERS_DIR}/multi_radixsort.comp"
   shaders/gs/identify_ranges.comp
-  shaders/gs/rasterization.comp)
+  shaders/gs/rasterization.comp
+  shaders/video/rgba_to_nv12.comp)
 
 target_link_libraries(
   vkgsplat_backend
