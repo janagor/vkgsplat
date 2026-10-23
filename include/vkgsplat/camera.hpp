@@ -51,7 +51,7 @@ struct CameraConfig
   glm::dvec3 position{ kDefaultCameraPosition };
   glm::dvec3 target{ kDefaultCameraTarget };
   glm::dvec3 up{ kDefaultCameraUp };
-  std::optional<glm::dquat> orientation{};
+  std::optional<glm::dquat> orientation;
 
   /// Intrinsics. Rendering overrides the aspect from the selected output extent.
   f64 fov_degrees{ kCameraDefaultFovDegrees };
@@ -107,7 +107,7 @@ public:
   }
 
   explicit Camera(glm::dvec3 position, glm::dvec3 target)
-    : Camera(CameraConfig{ .position = position, .target = target })
+    : Camera(CameraConfig{ .position = position, .target = target, .orientation = std::nullopt })
   {}
 
   [[nodiscard]] auto view_matrix() const noexcept -> glm::mat4

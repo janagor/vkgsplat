@@ -220,10 +220,12 @@ auto Run(std::string const &scene_path, std::string const &compact_path, bool va
   vkgsplat::Camera const camera_a{ vkgsplat::CameraConfig{
     .position = { 0.0, 0.0, kCameraDistance },
     .target = { 0.0, 0.0, 0.0 },
+    .orientation = std::nullopt,
   } };
   vkgsplat::Camera const camera_b{ vkgsplat::CameraConfig{
     .position = { kCameraSideOffset, 0.0, kCameraDistance },
     .target = { 0.0, 0.0, 0.0 },
+    .orientation = std::nullopt,
   } };
   auto first = renderer->render_frame(camera_a);
   if (!first) {

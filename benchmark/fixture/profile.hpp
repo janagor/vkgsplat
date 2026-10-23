@@ -43,6 +43,7 @@ struct BenchmarkProfile
     .position = { 0.0, 0.0, kCameraDistance },
     .target = { 0.0, 0.0, 0.0 },
     .up = { 0.0, 1.0, 0.0 },
+    .orientation = std::nullopt,
     .fov_degrees = kBaselineFovDegrees,
     .aspect_ratio = static_cast<f64>(kBaselineWidth) / static_cast<f64>(kBaselineHeight),
     .near_plane = kBaselineNearPlane,

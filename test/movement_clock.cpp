@@ -7,6 +7,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <initializer_list>
+#include <optional>
 
 #include <glm/geometric.hpp>
 
@@ -31,7 +32,7 @@ constexpr double kDispatchTimeSeconds = 0.1;
 TEST_CASE("movement distance survives slow updates", "[input]")
 {
   vkgsplat::MovementClock clock;
-  vkgsplat::Camera camera{ vkgsplat::CameraConfig{ .movement_speed = kCameraSpeed } };
+  vkgsplat::Camera camera{ vkgsplat::CameraConfig{ .orientation = std::nullopt, .movement_speed = kCameraSpeed } };
   auto const initial_position = camera.position();
   auto const initial_front = camera.front();
   clock.reset(kStartTimeSeconds);

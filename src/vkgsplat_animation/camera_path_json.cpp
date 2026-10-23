@@ -1,9 +1,14 @@
 #include <vkgsplat_animation/camera_path.hpp>
 
 #include <vkgsplat/camera.hpp>
+#include <vkgsplat_utility/error.hpp>
+#include <vkgsplat_utility/types.hpp>
 
+#include <glm/ext/matrix_transform.hpp>
+#include <glm/ext/quaternion_common.hpp>
+#include <glm/ext/quaternion_double.hpp>
+#include <glm/ext/vector_double3.hpp>
 #include <glm/geometric.hpp>
-#include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 
 #include <nlohmann/json.hpp>
@@ -11,6 +16,9 @@
 #include <array>
 #include <cerrno>
 #include <cmath>
+#include <cstddef>
+#include <expected>
+#include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <string>
@@ -24,11 +32,12 @@ namespace {
 constexpr int kCameraPathVersion = 1;
 constexpr std::size_t kVectorComponents = 3U;
 constexpr std::size_t kQuaternionComponents = 4U;
+using Json = nlohmann::json;// NOLINT(misc-include-cleaner): nlohmann/json.hpp is included directly above.
 
 [[nodiscard]] auto Invalid(std::string message) -> Error
 { return MakeError(std::errc::invalid_argument, std::move(message)); }
 
-[[nodiscard]] auto Number(nlohmann::json const &object, char const *field, std::string const &prefix)
+[[nodiscard]] auto Number(Json const &object, char const *field, std::string const &prefix)
   -> std::expected<f64, Error>
 {
   if (!object.contains(field) || !object.at(field).is_number()) {
@@ -40,7 +49,7 @@ constexpr std::size_t kQuaternionComponents = 4U;
 }
 
 template<std::size_t Count>
-[[nodiscard]] auto Components(nlohmann::json const &object, char const *field, std::string const &prefix)
+[[nodiscard]] auto Components(Json const &object, char const *field, std::string const &prefix)
   -> std::expected<std::array<f64, Count>, Error>
 {
   if (!object.contains(field) || !object.at(field).is_array() || object.at(field).size() != Count) {
@@ -58,7 +67,7 @@ template<std::size_t Count>
   return values;
 }
 
-[[nodiscard]] auto Vector(nlohmann::json const &object, char const *field, std::string const &prefix)
+[[nodiscard]] auto Vector(Json const &object, char const *field, std::string const &prefix)
   -> std::expected<glm::dvec3, Error>
 {
   auto values = Components<kVectorComponents>(object, field, prefix);
@@ -66,7 +75,7 @@ template<std::size_t Count>
   return glm::dvec3{ values->at(0), values->at(1), values->at(2) };
 }
 
-[[nodiscard]] auto ParseKeyframe(nlohmann::json const &item, std::size_t index)
+[[nodiscard]] auto ParseKeyframe(Json const &item, std::size_t index)
   -> std::expected<CameraKeyframe, Error>
 {
   auto const prefix = "keyframes[" + std::to_string(index) + "].";
@@ -89,21 +98,21 @@ template<std::size_t Count>
   } else {
     auto target = Vector(item, "target", prefix);
     if (!target) { return std::unexpected(target.error()); }
-    auto up = glm::dvec3{ kDefaultCameraUp };
+    auto world_up = glm::dvec3{ kDefaultCameraUp };
     if (item.contains("up")) {
       auto supplied = Vector(item, "up", prefix);
       if (!supplied) { return std::unexpected(supplied.error()); }
-      up = *supplied;
+      world_up = *supplied;
     }
     auto const forward = *target - *position;
     if (!std::isfinite(glm::length(forward)) || glm::length(forward) == 0.0) {
       return std::unexpected(Invalid(prefix + "target: must differ from position"));
     }
-    auto const right = glm::cross(forward, up);
+    auto const right = glm::cross(forward, world_up);
     if (!std::isfinite(glm::length(right)) || glm::length(right) == 0.0) {
       return std::unexpected(Invalid(prefix + "up: must not be zero or parallel to view direction"));
     }
-    orientation = glm::conjugate(glm::quat_cast(glm::lookAt(*position, *target, glm::normalize(up))));
+    orientation = glm::conjugate(glm::quat_cast(glm::lookAt(*position, *target, glm::normalize(world_up))));
   }
   return CameraKeyframe{ .time_seconds = *time,
     .pose = { .position = *position, .orientation = orientation, .fov_degrees = *fov } };
@@ -111,10 +120,10 @@ template<std::size_t Count>
 
 }// namespace
 
-auto parse_camera_path_json(std::string const &json) -> std::expected<CameraPath, Error>
+auto ParseCameraPathJson(std::string const &json) -> std::expected<CameraPath, Error>
 {
   try {
-    auto document = nlohmann::json::parse(json, nullptr, false);
+    auto document = Json::parse(json, nullptr, false);
     if (document.is_discarded() || !document.is_object()) {
       return std::unexpected(Invalid("camera path: invalid JSON object"));
     }
@@ -132,12 +141,12 @@ auto parse_camera_path_json(std::string const &json) -> std::expected<CameraPath
       keyframes.push_back(*keyframe);
     }
     return CameraPath::create(std::move(keyframes));
-  } catch (nlohmann::json::exception const &error) {
+  } catch (Json::exception const &error) {
     return std::unexpected(Invalid("camera path JSON: " + std::string{ error.what() }));
   }
 }
 
-auto load_camera_path(std::filesystem::path const &path) -> std::expected<CameraPath, Error>
+auto LoadCameraPath(std::filesystem::path const &path) -> std::expected<CameraPath, Error>
 {
   errno = 0;
   std::ifstream input{ path };
@@ -148,7 +157,7 @@ auto load_camera_path(std::filesystem::path const &path) -> std::expected<Camera
   }
   auto const contents = std::string{ std::istreambuf_iterator<char>{ input }, std::istreambuf_iterator<char>{} };
   if (input.bad()) { return std::unexpected(MakeError(std::errc::io_error, "camera path: failed to read " + path.string())); }
-  return parse_camera_path_json(contents);
+  return ParseCameraPathJson(contents);
 }
 
 }// namespace vkgsplat::animation

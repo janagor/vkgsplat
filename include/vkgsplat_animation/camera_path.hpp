@@ -43,13 +43,13 @@ private:
   std::vector<CameraKeyframe> keyframes_;
 };
 
-[[nodiscard]] VKGSPLAT_ANIMATION_EXPORT auto load_camera_path(std::filesystem::path const &path)
+[[nodiscard]] VKGSPLAT_ANIMATION_EXPORT auto LoadCameraPath(std::filesystem::path const &path)
   -> std::expected<CameraPath, Error>;
-[[nodiscard]] VKGSPLAT_ANIMATION_EXPORT auto parse_camera_path_json(std::string const &json)
+[[nodiscard]] VKGSPLAT_ANIMATION_EXPORT auto ParseCameraPathJson(std::string const &json)
   -> std::expected<CameraPath, Error>;
-[[nodiscard]] VKGSPLAT_ANIMATION_EXPORT auto frame_time_seconds(u64 index, u32 fps_numerator, u32 fps_denominator)
+[[nodiscard]] VKGSPLAT_ANIMATION_EXPORT auto FrameTimeSeconds(u64 index, u32 fps_numerator, u32 fps_denominator)
   -> std::expected<f64, Error>;
-[[nodiscard]] VKGSPLAT_ANIMATION_EXPORT auto frame_count(CameraPath const &path, u32 fps_numerator, u32 fps_denominator)
+[[nodiscard]] VKGSPLAT_ANIMATION_EXPORT auto FrameCount(CameraPath const &path, u32 fps_numerator, u32 fps_denominator)
   -> std::expected<u64, Error>;
 
 }// namespace vkgsplat::animation

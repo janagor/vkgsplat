@@ -1,30 +1,46 @@
 #include <vkgsplat_animation/camera_path.hpp>
 
 #include <vkgsplat/camera.hpp>
+#include <vkgsplat_utility/error.hpp>
+#include <vkgsplat_utility/types.hpp>
 
 #include <glm/common.hpp>
 #include <glm/ext/quaternion_common.hpp>
-#include <glm/geometric.hpp>
+#include <glm/ext/quaternion_double.hpp>
+#include <glm/ext/quaternion_geometric.hpp>
+#include <glm/ext/vector_double3.hpp>
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
+#include <expected>
 #include <iterator>
 #include <limits>
 #include <string>
 #include <system_error>
 #include <utility>
+#include <vector>
 
 namespace vkgsplat::animation {
 namespace {
+
+constexpr f64 kHermiteCubicCoefficient = 2.0;
+constexpr f64 kHermiteQuadraticCoefficient = 3.0;
 
 [[nodiscard]] auto Invalid(std::string message) -> Error
 { return MakeError(std::errc::invalid_argument, std::move(message)); }
 
 [[nodiscard]] auto Finite(glm::dvec3 const &value) -> bool
-{ return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z); }
+{
+  // NOLINTBEGIN(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+  return std::isfinite(value[0]) && std::isfinite(value[1]) && std::isfinite(value[2]);
+  // NOLINTEND(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+}
 
 [[nodiscard]] auto Finite(glm::dquat const &value) -> bool
-{ return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z) && std::isfinite(value.w); }
+{
+  return std::isfinite(value.w) && std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
+}
 
 [[nodiscard]] auto Tangent(std::vector<CameraKeyframe> const &keys, std::size_t index) -> glm::dvec3
 {
@@ -43,9 +59,10 @@ namespace {
   auto const span = last.time_seconds - first.time_seconds;
   auto const squared = amount * amount;
   auto const cubed = squared * amount;
-  return ((2.0 * cubed) - (3.0 * squared) + 1.0) * first.pose.position
-       + (cubed - (2.0 * squared) + amount) * span * Tangent(keys, left)
-       + ((-2.0 * cubed) + (3.0 * squared)) * last.pose.position
+  return ((kHermiteCubicCoefficient * cubed) - (kHermiteQuadraticCoefficient * squared) + 1.0)
+           * first.pose.position
+       + (cubed - (kHermiteCubicCoefficient * squared) + amount) * span * Tangent(keys, left)
+       + ((-kHermiteCubicCoefficient * cubed) + (kHermiteQuadraticCoefficient * squared)) * last.pose.position
        + (cubed - squared) * span * Tangent(keys, left + 1U);
 }
 
@@ -67,8 +84,9 @@ auto CameraPath::create(std::vector<CameraKeyframe> keyframes) -> std::expected<
     if (!Finite(key.pose.orientation)) {
       return std::unexpected(Invalid(prefix + "orientation: values must be finite"));
     }
-    auto const scale = std::max({ std::abs(key.pose.orientation.x), std::abs(key.pose.orientation.y),
-      std::abs(key.pose.orientation.z), std::abs(key.pose.orientation.w) });
+    auto const &orientation = key.pose.orientation;
+    auto const scale = std::max({ std::abs(orientation.w), std::abs(orientation.x), std::abs(orientation.y),
+      std::abs(orientation.z) });
     if (scale == 0.0) {
       return std::unexpected(Invalid(prefix + "orientation: quaternion must be normalizable"));
     }
@@ -98,8 +116,7 @@ auto CameraPath::sample(f64 time_seconds) const -> std::expected<CameraPose, Err
   if (!std::isfinite(time_seconds)) { return std::unexpected(Invalid("sample time: value must be finite")); }
   if (time_seconds <= 0.0) { return keyframes_.front().pose; }
   if (time_seconds >= duration_seconds()) { return keyframes_.back().pose; }
-  auto const upper = std::upper_bound(keyframes_.begin(), keyframes_.end(), time_seconds,
-    [](f64 time, CameraKeyframe const &key) -> bool { return time < key.time_seconds; });
+  auto const upper = std::ranges::upper_bound(keyframes_, time_seconds, {}, &CameraKeyframe::time_seconds);
   auto const left = static_cast<std::size_t>(std::distance(keyframes_.begin(), upper) - 1);
   auto const &first = keyframes_.at(left);
   if (time_seconds == first.time_seconds) { return first.pose; }
@@ -116,26 +133,28 @@ auto CameraPath::sample(f64 time_seconds) const -> std::expected<CameraPose, Err
   return pose;
 }
 
-auto frame_time_seconds(u64 index, u32 fps_numerator, u32 fps_denominator) -> std::expected<f64, Error>
+auto FrameTimeSeconds(u64 index, u32 fps_numerator, u32 fps_denominator) -> std::expected<f64, Error>
 {
   if (fps_numerator == 0U || fps_denominator == 0U) {
     return std::unexpected(Invalid("frame rate: numerator and denominator must be positive"));
   }
+  // NOLINTBEGIN(google-runtime-float): extra precision keeps rational frame times stable at decimal boundaries.
   auto const seconds = static_cast<long double>(index) * static_cast<long double>(fps_denominator)
                      / static_cast<long double>(fps_numerator);
   if (seconds > static_cast<long double>(std::numeric_limits<f64>::max())) {
     return std::unexpected(Invalid("frame time: value exceeds floating point range"));
   }
+  // NOLINTEND(google-runtime-float)
   return static_cast<f64>(seconds);
 }
 
-auto frame_count(CameraPath const &path, u32 fps_numerator, u32 fps_denominator) -> std::expected<u64, Error>
+auto FrameCount(CameraPath const &path, u32 fps_numerator, u32 fps_denominator) -> std::expected<u64, Error>
 {
   if (fps_numerator == 0U || fps_denominator == 0U) {
     return std::unexpected(Invalid("frame rate: numerator and denominator must be positive"));
   }
   auto const last_index = std::numeric_limits<u64>::max();
-  auto last_time = frame_time_seconds(last_index, fps_numerator, fps_denominator);
+  auto last_time = FrameTimeSeconds(last_index, fps_numerator, fps_denominator);
   if (!last_time || *last_time < path.duration_seconds()) {
     return std::unexpected(Invalid("frame count: path duration exceeds supported range"));
   }
@@ -144,7 +163,7 @@ auto frame_count(CameraPath const &path, u32 fps_numerator, u32 fps_denominator)
   u64 last = last_index;
   while (first < last) {
     auto const middle = first + ((last - first) / 2U);
-    auto time = frame_time_seconds(middle, fps_numerator, fps_denominator);
+    auto time = FrameTimeSeconds(middle, fps_numerator, fps_denominator);
     if (!time) { return std::unexpected(time.error()); }
     if (*time < path.duration_seconds()) {
       first = middle + 1U;
