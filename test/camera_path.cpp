@@ -41,8 +41,8 @@ constexpr std::size_t kMatrixDimension = 4U;
   -> vkgsplat::animation::CameraKeyframe
 {
   return { .time_seconds = time,
-    .pose = { .position = { position_x, 0.0, 0.0 }, .orientation = glm::dquat{ 1.0, 0.0, 0.0, 0.0 },
-      .fov_degrees = fov } };
+    .pose = {
+      .position = { position_x, 0.0, 0.0 }, .orientation = glm::dquat{ 1.0, 0.0, 0.0, 0.0 }, .fov_degrees = fov } };
 }
 
 }// namespace
@@ -110,10 +110,10 @@ TEST_CASE("camera path frame timing is rational and repeatable", "[animation]")
   REQUIRE(pose.position[1] == again.position[1]);
   REQUIRE(pose.position[2] == again.position[2]);
   // NOLINTEND(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  vkgsplat::Camera const first{ vkgsplat::CameraConfig{ .position = pose.position,
-    .orientation = pose.orientation, .fov_degrees = pose.fov_degrees } };
-  vkgsplat::Camera const repeated{ vkgsplat::CameraConfig{ .position = again.position,
-    .orientation = again.orientation, .fov_degrees = again.fov_degrees } };
+  vkgsplat::Camera const first{ vkgsplat::CameraConfig{
+    .position = pose.position, .orientation = pose.orientation, .fov_degrees = pose.fov_degrees } };
+  vkgsplat::Camera const repeated{ vkgsplat::CameraConfig{
+    .position = again.position, .orientation = again.orientation, .fov_degrees = again.fov_degrees } };
   // NOLINTBEGIN(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   for (std::size_t column = 0U; column < kMatrixDimension; ++column) {
     for (std::size_t row = 0U; row < kMatrixDimension; ++row) {
@@ -125,8 +125,8 @@ TEST_CASE("camera path frame timing is rational and repeatable", "[animation]")
 
 TEST_CASE("camera path frame counts match sampled frame times", "[animation]")
 {
-  auto const count_for = [](vkgsplat::f64 duration, vkgsplat::u32 numerator, vkgsplat::u32 denominator)
-    -> vkgsplat::u64 {
+  auto const count_for =
+    [](vkgsplat::f64 duration, vkgsplat::u32 numerator, vkgsplat::u32 denominator) -> vkgsplat::u64 {
     auto path = vkgsplat::animation::CameraPath::create({ Key(0.0, 0.0), Key(duration, 1.0) });
     REQUIRE(path);
     return vkgsplat::animation::FrameCount(*path, numerator, denominator).value();
@@ -137,18 +137,17 @@ TEST_CASE("camera path frame counts match sampled frame times", "[animation]")
   REQUIRE(count_for(kSecondTime, 60U, 1U) == 120U);
   auto const rational_boundary = vkgsplat::animation::FrameTimeSeconds(1U, 30'000U, 1001U).value();
   REQUIRE(count_for(rational_boundary, 30'000U, 1001U) == 1U);
-  REQUIRE(count_for(std::nextafter(rational_boundary, std::numeric_limits<vkgsplat::f64>::infinity()),
-            30'000U, 1001U) == 2U);
+  REQUIRE(
+    count_for(std::nextafter(rational_boundary, std::numeric_limits<vkgsplat::f64>::infinity()), 30'000U, 1001U) == 2U);
   auto const decimal_boundary = vkgsplat::animation::FrameTimeSeconds(6U, 60U, 1U).value();
   REQUIRE(count_for(std::nextafter(decimal_boundary, 0.0), 60U, 1U) == 6U);
-  REQUIRE(count_for(std::nextafter(decimal_boundary, std::numeric_limits<vkgsplat::f64>::infinity()), 60U, 1U)
-          == 7U);
+  REQUIRE(count_for(std::nextafter(decimal_boundary, std::numeric_limits<vkgsplat::f64>::infinity()), 60U, 1U) == 7U);
 }
 
 TEST_CASE("camera path rejects unrepresentable interpolation tangents", "[animation]")
 {
-  auto path = vkgsplat::animation::CameraPath::create(
-    { Key(0.0, 0.0), Key(kTinyTimeStep, 1.0), Key(1.0, kSecondTime) });
+  auto path =
+    vkgsplat::animation::CameraPath::create({ Key(0.0, 0.0), Key(kTinyTimeStep, 1.0), Key(1.0, kSecondTime) });
   REQUIRE_FALSE(path);
   REQUIRE(path.error().message().contains("keyframes[0].position"));
 }

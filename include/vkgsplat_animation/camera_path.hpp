@@ -1,9 +1,9 @@
 #ifndef VKGSPLAT_ANIMATION_CAMERA_PATH_HPP
 #define VKGSPLAT_ANIMATION_CAMERA_PATH_HPP
 
+#include <vkgsplat_animation/vkgsplat_animation_export.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
-#include <vkgsplat_animation/vkgsplat_animation_export.hpp>
 
 #include <glm/ext/quaternion_double.hpp>
 #include <glm/ext/vector_double3.hpp>

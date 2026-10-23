@@ -1,4 +1,7 @@
-if(NOT DEFINED EXECUTABLE OR NOT DEFINED VERIFY_EXECUTABLE OR NOT DEFINED PLY OR NOT DEFINED OUTPUT_DIR)
+if(NOT DEFINED EXECUTABLE
+   OR NOT DEFINED VERIFY_EXECUTABLE
+   OR NOT DEFINED PLY
+   OR NOT DEFINED OUTPUT_DIR)
   message(FATAL_ERROR "EXECUTABLE, VERIFY_EXECUTABLE, PLY, and OUTPUT_DIR are required")
 endif()
 
@@ -7,23 +10,45 @@ set(sequence_height 128)
 set(sequence_frames 4)
 set(path_file "${OUTPUT_DIR}/camera.json")
 file(MAKE_DIRECTORY "${OUTPUT_DIR}")
-file(WRITE "${path_file}" "{\"version\":1,\"keyframes\":[{\"time\":0,\"position\":[0,1.5,10],\"target\":[0,0,0],\"fov_degrees\":45},{\"time\":1,\"position\":[2,1.5,10],\"target\":[0,0,0],\"fov_degrees\":40}]}")
+file(
+  WRITE "${path_file}"
+  "{\"version\":1,\"keyframes\":[{\"time\":0,\"position\":[0,1.5,10],\"target\":[0,0,0],\"fov_degrees\":45},{\"time\":1,\"position\":[2,1.5,10],\"target\":[0,0,0],\"fov_degrees\":40}]}"
+)
 
 foreach(run IN ITEMS first second)
   set(sequence_dir "${OUTPUT_DIR}/${run}")
   file(REMOVE_RECURSE "${sequence_dir}")
-  set(render_arguments --ply "${PLY}" --camera-path "${path_file}" --target offscreen --sequence-dir
-                       "${sequence_dir}" --width ${sequence_width} --height ${sequence_height} --fps 4)
+  set(render_arguments
+      --ply
+      "${PLY}"
+      --camera-path
+      "${path_file}"
+      --target
+      offscreen
+      --sequence-dir
+      "${sequence_dir}"
+      --width
+      ${sequence_width}
+      --height
+      ${sequence_height}
+      --fps
+      4)
   if(VALIDATION)
     list(APPEND render_arguments --validation)
   endif()
   execute_process(COMMAND "${EXECUTABLE}" ${render_arguments} RESULT_VARIABLE render_result)
-  if(NOT render_result EQUAL 0)
+  if(NOT
+     render_result
+     EQUAL
+     0)
     message(FATAL_ERROR "Camera path sequence export failed: ${render_result}")
   endif()
   execute_process(COMMAND "${VERIFY_EXECUTABLE}" "${sequence_dir}" ${sequence_width} ${sequence_height}
                           ${sequence_frames} RESULT_VARIABLE verify_result)
-  if(NOT verify_result EQUAL 0)
+  if(NOT
+     verify_result
+     EQUAL
+     0)
     message(FATAL_ERROR "Camera path sequence PNG verification failed: ${verify_result}")
   endif()
 endforeach()
@@ -34,23 +59,49 @@ list(SORT first_frames)
 list(SORT second_frames)
 list(LENGTH first_frames first_count)
 list(LENGTH second_frames second_count)
-if(NOT first_count EQUAL sequence_frames OR NOT second_count EQUAL sequence_frames)
+if(NOT
+   first_count
+   EQUAL
+   sequence_frames
+   OR NOT
+      second_count
+      EQUAL
+      sequence_frames)
   message(FATAL_ERROR "Camera path export produced an unexpected number of frames")
 endif()
 math(EXPR final_index "${sequence_frames} - 1")
-list(GET first_frames 0 first_start_frame)
-list(GET first_frames ${final_index} first_end_frame)
+list(
+  GET
+  first_frames
+  0
+  first_start_frame)
+list(
+  GET
+  first_frames
+  ${final_index}
+  first_end_frame)
 file(SHA256 "${first_start_frame}" start_hash)
 file(SHA256 "${first_end_frame}" end_hash)
 if(start_hash STREQUAL end_hash)
   message(FATAL_ERROR "Camera path produced identical first and near-end views")
 endif()
 foreach(index RANGE 0 ${final_index})
-  list(GET first_frames ${index} first_frame)
-  list(GET second_frames ${index} second_frame)
+  list(
+    GET
+    first_frames
+    ${index}
+    first_frame)
+  list(
+    GET
+    second_frames
+    ${index}
+    second_frame)
   file(SHA256 "${first_frame}" first_hash)
   file(SHA256 "${second_frame}" second_hash)
-  if(NOT first_hash STREQUAL second_hash)
+  if(NOT
+     first_hash
+     STREQUAL
+     second_hash)
     message(FATAL_ERROR "Repeated camera path renders differ at frame ${index}")
   endif()
 endforeach()

@@ -4,11 +4,11 @@
 #include <vkgsplat/platform.hpp>
 #include <vkgsplat/renderer.hpp>
 #include <vkgsplat/video_capabilities.hpp>
+#include <vkgsplat_animation/camera_path.hpp>
 #include <vkgsplat_capture/frame_sequence.hpp>
 #include <vkgsplat_capture/screenshot.hpp>
 #include <vkgsplat_capture/video_config.hpp>
 #include <vkgsplat_capture/video_recorder.hpp>
-#include <vkgsplat_animation/camera_path.hpp>
 #include <vkgsplat_headless/headless_platform.hpp>
 #include <vkgsplat_headless/offscreen_platform.hpp>
 #include <vkgsplat_utility/types.hpp>
@@ -202,8 +202,7 @@ struct CameraPathSelection
     selection.frames = *count;
   }
   if (request.animated && selection.frames != 0U) {
-    auto last_time =
-      vkgsplat::animation::FrameTimeSeconds(selection.frames - 1U, request.fps, request.fps_denominator);
+    auto last_time = vkgsplat::animation::FrameTimeSeconds(selection.frames - 1U, request.fps, request.fps_denominator);
     if (!last_time) { return std::unexpected(last_time.error()); }
   }
   return selection;
@@ -234,8 +233,8 @@ struct CameraPathSelection
   bool animated) -> bool
 {
   return !(output.empty() && sequence_dir.empty()) && settings.width != 0U && settings.height != 0U
-      && settings.fps != 0U && settings.fps_denominator != 0U && std::isfinite(orbit_degrees)
-      && (!animated || (target == "offscreen" && settings.frames != 0U));
+         && settings.fps != 0U && settings.fps_denominator != 0U && std::isfinite(orbit_degrees)
+         && (!animated || (target == "offscreen" && settings.frames != 0U));
 }
 
 auto SaveSingleFrame(vkgsplat::Renderer &renderer,
@@ -321,8 +320,8 @@ auto RunHeadless(int argc, char **argv) -> int
   auto const video_mode = extension == ".h264" || extension == ".mp4";
   auto const animated = video_mode || !sequence_dir.empty();
   auto selected = SelectCameraPath({ .file = camera_path_file,
-    .conflicts_with_camera_options = orbit_option->count() != 0U || position_option->count() != 0U
-                                  || target_option->count() != 0U,
+    .conflicts_with_camera_options =
+      orbit_option->count() != 0U || position_option->count() != 0U || target_option->count() != 0U,
     .animated = animated,
     .frames_explicit = frames_option->count() != 0U,
     .frames = frames,
@@ -333,11 +332,9 @@ auto RunHeadless(int argc, char **argv) -> int
     return 1;
   }
   frames = selected->frames;
-  auto const settings = RecordingSettings{ .width = width,
-    .height = height,
-    .frames = frames,
-    .fps = fps,
-    .fps_denominator = fps_denominator };
+  auto const settings = RecordingSettings{
+    .width = width, .height = height, .frames = frames, .fps = fps, .fps_denominator = fps_denominator
+  };
   if (!ValidCaptureSettings(output, sequence_dir, target, settings, orbit_degrees, animated)) {
     std::println(stderr, "Invalid output mode, positive width and height, frame count, frame rate, or orbit angle");
     return 1;
@@ -377,9 +374,9 @@ auto RunHeadless(int argc, char **argv) -> int
     std::println(stderr, "{}", renderer.error().message());
     return 1;
   }
-  auto const camera_at_frame = [&selected, &camera_position, &camera_target, width, height, frames, orbit_degrees,
-                                 fps, fps_denominator](vkgsplat::u64 index)
-    -> std::expected<vkgsplat::Camera, vkgsplat::Error> {
+  auto const camera_at_frame =
+    [&selected, &camera_position, &camera_target, width, height, frames, orbit_degrees, fps, fps_denominator](
+      vkgsplat::u64 index) -> std::expected<vkgsplat::Camera, vkgsplat::Error> {
     if (!selected->path) {
       return OrbitCamera(camera_position, camera_target, width, height, index, frames, orbit_degrees);
     }
