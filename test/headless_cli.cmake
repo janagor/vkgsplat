@@ -4,6 +4,32 @@ endif()
 
 set(ply_path "${OUTPUT_DIR}/headless-cli-placeholder.ply")
 file(WRITE "${ply_path}" "ply\n")
+set(invalid_camera_path "${OUTPUT_DIR}/headless-cli-invalid-camera.json")
+file(WRITE "${invalid_camera_path}" "{\"version\": 1, \"keyframes\": []}\n")
+execute_process(
+  COMMAND "${EXECUTABLE}" --ply "${ply_path}" --camera-path "${invalid_camera_path}" --target offscreen
+          --sequence-dir "${OUTPUT_DIR}/invalid-camera-sequence"
+  RESULT_VARIABLE invalid_path_result
+  ERROR_VARIABLE invalid_path_error)
+if(invalid_path_result EQUAL 0
+   OR NOT invalid_path_error MATCHES "keyframes")
+  message(FATAL_ERROR "Invalid camera path was not rejected before GPU startup: ${invalid_path_error}")
+endif()
+if(EXISTS "${OUTPUT_DIR}/invalid-camera-sequence")
+  message(FATAL_ERROR "Invalid camera path created an output directory")
+endif()
+
+set(valid_camera_path "${OUTPUT_DIR}/headless-cli-valid-camera.json")
+file(WRITE "${valid_camera_path}" "{\"version\":1,\"keyframes\":[{\"time\":0,\"position\":[0,1,10],\"target\":[0,0,0],\"fov_degrees\":45},{\"time\":2,\"position\":[2,1,10],\"target\":[0,0,0],\"fov_degrees\":40}]}")
+execute_process(
+  COMMAND "${EXECUTABLE}" --ply "${ply_path}" --camera-path "${valid_camera_path}" --camera-position 0 1 10
+          --target offscreen --sequence-dir "${OUTPUT_DIR}/conflicting-camera-sequence"
+  RESULT_VARIABLE path_conflict_result
+  ERROR_VARIABLE path_conflict_error)
+if(path_conflict_result EQUAL 0
+   OR NOT path_conflict_error MATCHES "--camera-path conflicts")
+  message(FATAL_ERROR "Conflicting camera sources were accepted: ${path_conflict_error}")
+endif()
 
 execute_process(
   COMMAND "${EXECUTABLE}" --ply "${ply_path}" --width 0 --output "${OUTPUT_DIR}/headless-cli-invalid.png"

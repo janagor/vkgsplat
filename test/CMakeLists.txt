@@ -28,6 +28,12 @@ endif()
 include(${Catch2_SOURCE_DIR}/extras/Catch.cmake)
 
 if(TARGET vkgsplat::vkgsplat_utility)
+  if(TARGET vkgsplat::vkgsplat_animation)
+    add_executable(vkgsplat_camera_path_test camera_path.cpp camera_path_json.cpp)
+    target_link_libraries(vkgsplat_camera_path_test PRIVATE Catch2::Catch2WithMain vkgsplat::vkgsplat_animation
+                                                          vkgsplat::vkgsplat)
+    catch_discover_tests(vkgsplat_camera_path_test)
+  endif()
   add_executable(vkgsplat_gpu_timing_statistics_test gpu_timing_statistics.cpp ../benchmark/gpu_statistics.cpp)
   target_link_libraries(vkgsplat_gpu_timing_statistics_test PRIVATE Catch2::Catch2WithMain vkgsplat::vkgsplat_utility)
   target_include_directories(vkgsplat_gpu_timing_statistics_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/..")
@@ -380,6 +386,16 @@ if(vkgsplat_ENABLE_HEADLESS_GPU_TESTS)
                  "DISPLAY=;WAYLAND_DISPLAY="
                  TIMEOUT
                  180)
+    add_test(
+      NAME headless.gpu.camera_path
+      COMMAND ${CMAKE_COMMAND} -DEXECUTABLE=$<TARGET_FILE:vkgsplat_headless>
+              -DVERIFY_EXECUTABLE=$<TARGET_FILE:vkgsplat_png_sequence_verify> -DPLY=${benchmark_scene}
+              -DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/headless-camera-path-test
+              -DVALIDATION=${vkgsplat_HEADLESS_GPU_TEST_VALIDATION} -P
+              ${CMAKE_CURRENT_SOURCE_DIR}/headless_camera_path_gpu_smoke.cmake)
+    set_tests_properties(
+      headless.gpu.camera_path
+      PROPERTIES FIXTURES_REQUIRED benchmark_fixture ENVIRONMENT "DISPLAY=;WAYLAND_DISPLAY=" TIMEOUT 180)
     if(vkgsplat_ENABLE_VIDEO_GPU_TESTS
        AND vkgsplat_FFMPEG_EXECUTABLE
        AND vkgsplat_FFPROBE_EXECUTABLE

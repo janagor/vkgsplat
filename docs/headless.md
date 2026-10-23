@@ -1,5 +1,7 @@
 # Headless rendering
 
+For offscreen PNG sequences and video driven by keyframes, see [Camera paths](camera_paths.md).
+
 `vkgsplat_headless` renders one PLY scene frame through the normal Vulkan renderer and writes its color target to a PNG. It creates a `VK_EXT_headless_surface` and a presentable swapchain, so the Vulkan implementation must support that extension, a present-capable queue, the renderer's required device features, and a compatible swapchain. No display server or GLFW window is needed. The existing renderer still links GLFW, but headless execution does not initialize it.
 
 ## Build
