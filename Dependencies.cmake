@@ -267,6 +267,18 @@ function(vkgsplat_setup_dependencies)
       YES)
   endif()
 
+  if(NOT EMSCRIPTEN AND NOT TARGET nlohmann_json::nlohmann_json)
+    cpmaddpackage(
+      NAME
+      nlohmann_json
+      GITHUB_REPOSITORY
+      "nlohmann/json"
+      GIT_TAG
+      "v3.12.0"
+      SYSTEM
+      YES)
+  endif()
+
   if(NOT TARGET tools::tools)
     cpmaddpackage(
       NAME
