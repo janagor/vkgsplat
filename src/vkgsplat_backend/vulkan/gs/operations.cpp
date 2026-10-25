@@ -3,6 +3,7 @@
 #include "app_state.hpp"
 #include "gs/push_constants.hpp"
 #include "gs/rasterization.hpp"
+#include "gs/tiled/operations.hpp"
 #include "vulkan/gpu_buffers.hpp"
 #include "vulkan/gpu_pass_timer.hpp"
 #include "vulkan_context.hpp"
@@ -110,7 +111,9 @@ namespace {
     RenderData const &data,
     VkCommandBuffer command_buffer) -> std::expected<void, Error>
   {
-    if (!data.bin_algorithm) { return {}; }
+    if (!data.bin_algorithm) {
+      return std::unexpected{ MakeError(std::errc::state_not_recoverable, "gaussian binning pipeline is not initialized") };
+    }
     ScopedGpuPass const timer{ context, data, command_buffer, GpuPass::kBinning };
     if (auto recorded =
           RecordHeapDispatch(context, command_buffer, *data.bin_algorithm, data.bin_push, data.splat_count);
@@ -126,7 +129,9 @@ namespace {
     RenderData const &data,
     VkCommandBuffer command_buffer) -> std::expected<void, Error>
   {
-    if (!data.prepare_sort_algorithm) { return {}; }
+    if (!data.prepare_sort_algorithm) {
+      return std::unexpected{ MakeError(std::errc::state_not_recoverable, "sort preparation pipeline is not initialized") };
+    }
     ScopedGpuPass const timer{ context, data, command_buffer, GpuPass::kPrepareSort };
     auto const sort_grid = Dispatch2dForThreads(context, data.gaussian_sort_size, kComputeLocalSizeX);
     auto recorded = vkexec::record_pass(*context.vkexec_context,
@@ -158,7 +163,9 @@ namespace {
     RenderData const &data,
     VkCommandBuffer command_buffer) -> std::expected<void, Error>
   {
-    if (!data.radix_histogram_algorithm || !data.radix_scatter_algorithm || !data.radix_dispatch_buffer) { return {}; }
+    if (!data.radix_histogram_algorithm || !data.radix_scatter_algorithm || !data.radix_dispatch_buffer) {
+      return std::unexpected{ MakeError(std::errc::state_not_recoverable, "radix sorting resources are not initialized") };
+    }
     ScopedGpuPass const timer{ context, data, command_buffer, GpuPass::kRadixSort };
     constexpr u32 kRadixPasses = 4U;
     constexpr u32 kRadixBitsPerPass = 8U;
@@ -218,11 +225,16 @@ auto RecordProjection(vulkan::Context const &context,
 auto RecordPhaseACompute(vulkan::Context const &context, RenderData const &data, VkCommandBuffer command_buffer)
   -> std::expected<void, Error>
 {
-  if (context.vkexec_context == nullptr || !data.instance_count_buffer) {
-    return std::unexpected{ MakeError(std::errc::state_not_recoverable, "compute resources are not initialized") };
-  }
-
   if (auto recorded = RecordProjection(context, data, command_buffer, true); !recorded) { return recorded; }
+
+  switch (data.rasterization_mode) {
+  case RasterizationMode::kHardware: break;
+  case RasterizationMode::kComputeTiled: return tiled::RecordPreparation(context, data, command_buffer);
+  default: return std::unexpected{ MakeError(std::errc::invalid_argument, "unknown rasterization mode") };
+  }
+  if (!data.instance_count_buffer) {
+    return std::unexpected{ MakeError(std::errc::state_not_recoverable, "hardware instance counter is not initialized") };
+  }
 
   context.disp.cmdFillBuffer(command_buffer, data.instance_count_buffer->handle(), 0, sizeof(u32), 0U);
   if (auto barrier = vkexec::barrier::transfer_to_compute(*context.vkexec_context, command_buffer); !barrier) {
@@ -237,7 +249,12 @@ auto RecordPhaseACompute(vulkan::Context const &context, RenderData const &data,
 auto RecordRasterization(vulkan::Context const &context, RenderData const &data, VkCommandBuffer command_buffer)
   -> std::expected<void, Error>
 {
-  ScopedGpuPass const timer{ context, data, command_buffer, GpuPass::kRasterize };
+  ScopedGpuPass const timer{ context, data, command_buffer,
+    data.rasterization_mode == RasterizationMode::kComputeTiled ? GpuPass::kTiledRasterize : GpuPass::kRasterize };
+  if (data.rasterization_mode == RasterizationMode::kComputeTiled) {
+    if (auto recorded = tiled::RecordRasterization(context, data, command_buffer); !recorded) { return recorded; }
+    return BlitQuiltToSwapchain(context, data, command_buffer, data.present_image_index);
+  }
   return DispatchRasterization(context, data, data.raster_push, command_buffer, data.present_image_index);
 }
 

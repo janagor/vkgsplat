@@ -55,6 +55,10 @@ struct BinPushConstants
 
 constexpr size_t kBinPushConstantsSize = 24;
 static_assert(sizeof(BinPushConstants) == kBinPushConstantsSize);
+static_assert(offsetof(BinPushConstants, viewport) == 0U);
+static_assert(offsetof(BinPushConstants, max_instances) == sizeof(glm::uvec2));
+static_assert(offsetof(BinPushConstants, tile_size) == sizeof(glm::uvec2) + sizeof(u32));
+static_assert(offsetof(BinPushConstants, instance_count_address) == 2U * sizeof(glm::uvec2));
 
 // Stage 3 prepare / identify passes.
 struct SortPushConstants
@@ -70,6 +74,13 @@ struct SortPushConstants
 
 constexpr size_t kSortPushConstantsSize = 40;
 static_assert(sizeof(SortPushConstants) == kSortPushConstantsSize);
+static_assert(offsetof(SortPushConstants, instance_count_address) == 0U);
+static_assert(offsetof(SortPushConstants, radix_dispatch_address) == sizeof(u64));
+static_assert(offsetof(SortPushConstants, draw_indirect_address) == 2U * sizeof(u64));
+static_assert(offsetof(SortPushConstants, sort_size) == 3U * sizeof(u64));
+static_assert(offsetof(SortPushConstants, tile_count) == 3U * sizeof(u64) + sizeof(u32));
+static_assert(offsetof(SortPushConstants, blocks_per_workgroup) == 3U * sizeof(u64) + 2U * sizeof(u32));
+static_assert(offsetof(SortPushConstants, pad) == 3U * sizeof(u64) + 3U * sizeof(u32));
 
 // Multi-pass radix sort. Keys are packed uint32 (tile<<16)|(depth>>16); 4 x 8-bit passes.
 struct RadixPushConstants
@@ -103,6 +114,14 @@ struct RasterPushConstants
 
 constexpr size_t kRasterPushConstantsSize = 64;
 static_assert(sizeof(RasterPushConstants) == kRasterPushConstantsSize);
+static_assert(offsetof(RasterPushConstants, camera_position) == 0U);
+static_assert(offsetof(RasterPushConstants, viewport) == sizeof(glm::vec4));
+static_assert(offsetof(RasterPushConstants, tile_size) == sizeof(glm::vec4) + sizeof(glm::uvec2));
+static_assert(offsetof(RasterPushConstants, tiles_x) == sizeof(glm::vec4) + sizeof(glm::uvec2) + sizeof(u32));
+static_assert(offsetof(RasterPushConstants, background) == 2U * sizeof(glm::vec4));
+static_assert(offsetof(RasterPushConstants, projected_splat_count) == 3U * sizeof(glm::vec4));
+static_assert(offsetof(RasterPushConstants, projected_view_index) == 3U * sizeof(glm::vec4) + sizeof(u32));
+static_assert(offsetof(RasterPushConstants, tile_offset) == 3U * sizeof(glm::vec4) + 2U * sizeof(u32));
 
 }// namespace vkgsplat::gs
 

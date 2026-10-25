@@ -28,6 +28,8 @@ add_library(
   vulkan/gs/rasterization.cpp
   vulkan/gs/pipeline.cpp
   vulkan/gs/operations.cpp
+  vulkan/gs/tiled/resources.cpp
+  vulkan/gs/tiled/operations.cpp
   vulkan/capture/readback.cpp
   vulkan/descriptor/descriptor_heap.cpp
   vulkan/gpu_pass_timer.cpp
@@ -56,6 +58,15 @@ vkgsplat_compile_shaders(
   "${VKGSPLAT_VKRADIXSORT_SHADERS_DIR}/multi_radixsort.comp"
   shaders/gs/identify_ranges.comp
   shaders/gs/rasterization.comp
+  shaders/gs/tiled_count.comp
+  shaders/gs/tiled_scan.comp
+  shaders/gs/tiled_emit.comp
+  shaders/gs/tiled_prepare.comp
+  shaders/gs/tiled_radix_histograms.comp
+  shaders/gs/tiled_radix_prefix.comp
+  shaders/gs/tiled_radix_scatter.comp
+  shaders/gs/tiled_identify_ranges.comp
+  shaders/gs/tiled_rasterization.comp
   shaders/video/rgba_to_nv12.comp)
 
 target_link_libraries(

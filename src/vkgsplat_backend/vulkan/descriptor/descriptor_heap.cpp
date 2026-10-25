@@ -47,6 +47,7 @@ namespace {
     GsStorageBuffer<HeapSlot::kSortedKeys>,
     GsStorageBuffer<HeapSlot::kSortedValues>,
     GsStorageBuffer<HeapSlot::kTileRanges>,
+    vkexec::storage_image<static_cast<u32>(HeapSlot::kColorTarget)>,
     GsStorageBuffer<HeapSlot::kSortHistogram>,
     GsStorageBuffer<HeapSlot::kProjectionCameras>>;
 
@@ -62,16 +63,24 @@ namespace {
     static_cast<u32>(HeapSlot::kSortedKeys),
     static_cast<u32>(HeapSlot::kSortedValues),
     static_cast<u32>(HeapSlot::kTileRanges),
+    static_cast<u32>(HeapSlot::kColorTarget),
     static_cast<u32>(HeapSlot::kSortHistogram),
     static_cast<u32>(HeapSlot::kProjectionCameras),
   };
 
   [[nodiscard]] auto HasGsBuffers(RenderData const &data) -> bool
   {
-    return data.geometry_buffer && data.appearance_buffer && data.projected_buffer && data.projection_cameras_buffer
+    bool const common = data.geometry_buffer && data.appearance_buffer && data.projected_buffer
+                        && data.projection_cameras_buffer && data.color_image && data.color_image_view
            && data.unsorted_keys_buffer && data.unsorted_values_buffer && data.sorted_keys_buffer
            && data.sorted_values_buffer && data.sort_histogram_buffer && data.tile_ranges_buffer && data.sorted_indices
            && data.sorted_indices.value().size() != 0 && data.sort_entries && data.sort_entries.value().size() != 0;
+    if (!common) { return false; }
+    if (data.rasterization_mode == RasterizationMode::kComputeTiled) {
+      return data.tiled_counts_buffer && data.tiled_offsets_buffer && data.tiled_total_buffer
+             && data.tiled_overflow_buffer && data.tiled_radix_prefix_buffer && data.tiled_radix_group_buffer;
+    }
+    return data.rasterization_mode == RasterizationMode::kHardware;
   }
 
   [[nodiscard]] auto EnsureDescriptorHeapStorage(vulkan::Context &context, RenderData &data) -> bool
@@ -149,13 +158,12 @@ namespace {
     auto const geometry_buffer_size = static_cast<VkDeviceSize>(data.splat_count * sizeof(gs::GaussianGeometry));
     auto const appearance_buffer_size = static_cast<VkDeviceSize>(data.splat_count * sizeof(gs::GaussianAppearance));
     auto const projected_buffer_size = data.projected_buffer.value().size();
-    auto const unsorted_keys_buffer_size = static_cast<VkDeviceSize>(data.max_bin_instances * sizeof(gs::BinningKey));
-    auto const unsorted_values_buffer_size = static_cast<VkDeviceSize>(data.max_bin_instances * sizeof(u32));
-    auto const sorted_keys_buffer_size = static_cast<VkDeviceSize>(data.gaussian_sort_size * sizeof(gs::BinningKey));
-    auto const sorted_values_buffer_size = static_cast<VkDeviceSize>(data.gaussian_sort_size * sizeof(u32));
-    auto const sort_histogram_buffer_size =
-      static_cast<VkDeviceSize>(static_cast<size_t>(data.radix_num_workgroups) * 256U * sizeof(u32));
-    auto const tile_ranges_buffer_size = static_cast<VkDeviceSize>(data.tile_count * sizeof(gs::TileRange));
+    auto const unsorted_keys_buffer_size = data.unsorted_keys_buffer.value().size();
+    auto const unsorted_values_buffer_size = data.unsorted_values_buffer.value().size();
+    auto const sorted_keys_buffer_size = data.sorted_keys_buffer.value().size();
+    auto const sorted_values_buffer_size = data.sorted_values_buffer.value().size();
+    auto const sort_histogram_buffer_size = data.sort_histogram_buffer.value().size();
+    auto const tile_ranges_buffer_size = data.tile_ranges_buffer.value().size();
     auto const sorted_indices_buffer_size = data.sorted_indices.value().byte_size();
     auto const sort_entries_buffer_size = data.sort_entries.value().byte_size();
 
@@ -170,6 +178,7 @@ namespace {
       vkexec::buffer_resource(data.sorted_keys_buffer.value().handle(), sorted_keys_buffer_size),
       vkexec::buffer_resource(data.sorted_values_buffer.value().handle(), sorted_values_buffer_size),
       vkexec::buffer_resource(data.tile_ranges_buffer.value().handle(), tile_ranges_buffer_size),
+      vkexec::storage_image_resource(data.color_image_view.value().handle(), VK_IMAGE_LAYOUT_GENERAL),
       vkexec::buffer_resource(data.sort_histogram_buffer.value().handle(), sort_histogram_buffer_size),
       vkexec::buffer_resource(
         data.projection_cameras_buffer.value().handle(), data.projection_cameras_buffer.value().size()));
@@ -186,6 +195,7 @@ namespace {
       vulkan::DeviceAddressOrZero(data.sorted_keys_buffer.value()),
       vulkan::DeviceAddressOrZero(data.sorted_values_buffer.value()),
       vulkan::DeviceAddressOrZero(data.tile_ranges_buffer.value()),
+      0U,
       vulkan::DeviceAddressOrZero(data.sort_histogram_buffer.value()),
       vulkan::DeviceAddressOrZero(data.projection_cameras_buffer.value()),
     };
@@ -197,6 +207,38 @@ namespace {
     }
     std::size_t entry_index{};
     for (auto const &entry : entries) {
+      if (entry.resource.kind == vkexec::resource_kind::storage_image) {
+        if (data.descriptor_stride < data.image_descriptor_size) {
+          std::println("GS image descriptor exceeds descriptor stride");
+          return false;
+        }
+        auto const descriptor_offset = static_cast<size_t>(HeapSlot::kColorTarget) * data.descriptor_stride;
+        if (descriptor_offset > heap_bytes.size()
+            || data.image_descriptor_size > heap_bytes.size() - descriptor_offset) {
+          std::println("GS image descriptor is outside the mapped heap");
+          return false;
+        }
+        VkImageViewCreateInfo const view_info{
+          .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+          .pNext = nullptr,
+          .flags = 0U,
+          .image = data.color_image.value().handle(),
+          .viewType = VK_IMAGE_VIEW_TYPE_2D,
+          .format = data.color_format,
+          .components = { VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY,
+            VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY },
+          .subresourceRange = { .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 0U,
+            .levelCount = 1U, .baseArrayLayer = 0U, .layerCount = 1U },
+        };
+        auto const written = vkexec::write_storage_image_descriptor(vkexec, view_info,
+          VK_IMAGE_LAYOUT_GENERAL, heap_bytes.subspan(descriptor_offset, data.image_descriptor_size));
+        if (!written) {
+          std::println("Failed to write GS color descriptor: {}", written.error().message());
+          return false;
+        }
+        ++entry_index;
+        continue;
+      }
       if (!WriteGsDescriptorEntry(context,
             vkexec,
             data,
@@ -244,7 +286,8 @@ auto QueryDescriptorHeapLayout(vulkan::Context const &context, RenderData &data)
   data.sampler_descriptor_size = layout->sampler_descriptor_size;
   data.descriptor_stride = layout->descriptor_stride;
   if (layout->resource_heap_alignment == 0 || layout->sampler_heap_alignment == 0
-      || layout->descriptor_stride < layout->buffer_descriptor_size || layout->sampler_descriptor_size == 0) {
+      || layout->descriptor_stride < layout->buffer_descriptor_size
+      || layout->descriptor_stride < layout->image_descriptor_size || layout->sampler_descriptor_size == 0) {
     std::println("query_descriptor_heap_layout returned invalid descriptor sizes or alignments");
     return false;
   }
@@ -274,7 +317,10 @@ auto RefreshDescriptorHeap(vulkan::Context &context, RenderData &data) -> bool
 {
   if (context.allocator == nullptr) { return false; }
   if (!QueryDescriptorHeapLayout(context, data)) { return false; }
-  if (!HasGsBuffers(data)) { return true; }
+  if (!HasGsBuffers(data)) {
+    std::println("mandatory GS descriptor resources are missing");
+    return false;
+  }
 
   auto *vkexec = RequireVkexec(context);
   if (vkexec == nullptr) { return false; }

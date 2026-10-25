@@ -31,6 +31,7 @@
 #include <vkexec_extensions/timeline_semaphore/frame_ring.hpp>
 #include <vkexec_vma/image.hpp>
 #include <vkgsplat/lfd_config.hpp>
+#include <vkgsplat/renderer.hpp>
 
 
 namespace vkgsplat {
@@ -48,11 +49,24 @@ constexpr size_t kFrameSlotCount = 2;
 constexpr u32 kVertsPerSphere = 6;
 constexpr u32 kDefaultProjectionBatchSize = 4U;
 constexpr u32 kMaxProjectionBatchSize = 8U;
+enum class TiledDebugSection : size_t {
+  kProjected,
+  kCounts,
+  kOffsets,
+  kEmittedKeys,
+  kEmittedIndices,
+  kSortedKeys,
+  kSortedIndices,
+  kRanges,
+  kCount,
+};
+constexpr size_t kTiledDebugSectionCount = static_cast<size_t>(TiledDebugSection::kCount);
 
 struct ImGuiOverlayState;
 
 struct RenderData
 {
+  RasterizationMode rasterization_mode{ RasterizationMode::kHardware };
   u32 splat_count = 0;
   u32 sort_size = 0;
   VkQueue graphics_queue{};
@@ -74,6 +88,25 @@ struct RenderData
   std::optional<GpuBuffer> radix_dispatch_buffer;
   std::optional<GpuBuffer> draw_indirect_buffer;
   std::optional<GpuBuffer> tile_ranges_buffer;
+  std::optional<GpuBuffer> tiled_counts_buffer;
+  std::optional<GpuBuffer> tiled_offsets_buffer;
+  std::optional<GpuBuffer> tiled_total_buffer;
+  std::optional<GpuBuffer> tiled_overflow_buffer;
+  bool tiled_status_pending{};
+  std::vector<GpuBuffer> tiled_scan_sums;
+  std::vector<GpuBuffer> tiled_scan_offsets;
+  std::optional<GpuBuffer> tiled_radix_prefix_buffer;
+  std::optional<GpuBuffer> tiled_radix_group_buffer;
+  u32 tiled_radix_prefix_groups{};
+  u32 tiled_intersection_capacity{};
+  u32 tiled_tiles_x{};
+  u32 tiled_tiles_y{};
+  u32 tiled_radix_workgroups{};
+  u64 tiled_intersection_budget_bytes{ kDefaultTiledIntersectionBudgetBytes };
+  bool enable_tiled_debug_readback{};
+  std::optional<GpuBuffer> tiled_debug_readback_buffer;
+  std::array<VkDeviceSize, kTiledDebugSectionCount> tiled_debug_offsets{};
+  std::array<VkDeviceSize, kTiledDebugSectionCount> tiled_debug_sizes{};
   std::optional<GpuImage> color_image;
   std::optional<vkexec::owned::image_view> color_image_view;
   // 3DGS is trained for gamma-space blending (typical WebGL UNORM8). A float RT
@@ -122,6 +155,15 @@ struct RenderData
   std::optional<vkexec::algorithm> radix_scatter_algorithm;
   std::optional<vkexec::algorithm> identify_ranges_algorithm;
   std::optional<vkexec::algorithm> rasterize_algorithm;
+  std::optional<vkexec::algorithm> tiled_count_algorithm;
+  std::optional<vkexec::algorithm> tiled_scan_algorithm;
+  std::optional<vkexec::algorithm> tiled_emit_algorithm;
+  std::optional<vkexec::algorithm> tiled_prepare_algorithm;
+  std::optional<vkexec::algorithm> tiled_histogram_algorithm;
+  std::optional<vkexec::algorithm> tiled_prefix_algorithm;
+  std::optional<vkexec::algorithm> tiled_scatter_algorithm;
+  std::optional<vkexec::algorithm> tiled_ranges_algorithm;
+  std::optional<vkexec::algorithm> tiled_raster_algorithm;
   gs::ProjectPushConstants project_push{};
   gs::BinPushConstants bin_push{};
   gs::SortPushConstants sort_push{};

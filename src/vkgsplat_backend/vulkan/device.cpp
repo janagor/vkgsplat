@@ -314,6 +314,10 @@ namespace {
     features_12.timelineSemaphore = VK_TRUE;
     selector.add_required_extension_features(features_12);
 
+    VkPhysicalDeviceFeatures shader_features{};
+    shader_features.shaderInt64 = VK_TRUE;
+    selector.set_required_features(shader_features);
+
     VkPhysicalDeviceVulkan13Features features_13{};
     features_13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
     features_13.synchronization2 = VK_TRUE;

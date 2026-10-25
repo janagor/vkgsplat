@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstring>
 #include <expected>
 #include <limits>
 #include <memory>
@@ -11,6 +12,7 @@
 #include <span>
 #include <string>
 #include <system_error>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -37,6 +39,9 @@
 #include "vulkan/gs/projection.hpp"
 #include "vulkan/gs/rasterization.hpp"
 #include "vulkan/gs/sorting.hpp"
+#include "vulkan/gs/tiled/operations.hpp"
+#include "vulkan/gs/tiled/resources.hpp"
+#include "vulkan/descriptor/descriptor_heap.hpp"
 #include "vulkan/imgui_overlay.hpp"
 #include "vulkan/mesh_gpu.hpp"
 #include "vulkan/present_pacer.hpp"
@@ -147,6 +152,9 @@ namespace {
     RenderData &render_data,
     RendererConfig const &config) -> std::expected<void, Error>
   {
+    render_data.rasterization_mode = config.rasterization_mode;
+    render_data.tiled_intersection_budget_bytes = config.tiled_intersection_budget_bytes;
+    render_data.enable_tiled_debug_readback = config.enable_tiled_debug_readback;
     if (auto valid = ValidateOutputConfig(config, context); !valid) { return valid; }
     auto const output_extent =
       context.swapchain == nullptr ? context.platform->framebuffer_extent() : context.swapchain->extent();
@@ -177,21 +185,40 @@ namespace {
     if (!InitSphereSetup(context, render_data)) {
       return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to initialize sphere setup"));
     }
-    if (!gs::InitBinning(context, render_data)) {
-      return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to initialize gaussian binning"));
-    }
     if (!gs::InitProjection(context, render_data)) {
       return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to initialize gaussian projection"));
-    }
-    if (!gs::InitSorting(context, render_data)) {
-      return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to initialize gaussian sorting"));
     }
     if (!gs::InitRasterization(context, render_data)) {
       return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to initialize gaussian rasterization"));
     }
     gs::RecordGsPipeline(render_data);
-    if (0 != CreateGraphicsPipeline(context, render_data)) {
-      return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to create graphics pipeline"));
+    if (config.rasterization_mode == RasterizationMode::kHardware) {
+      if (!gs::InitBinning(context, render_data)) {
+        return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to initialize gaussian binning"));
+      }
+      if (!gs::InitSorting(context, render_data)) {
+        return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to initialize gaussian sorting"));
+      }
+      if (0 != CreateGraphicsPipeline(context, render_data)) {
+        return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to create graphics pipeline"));
+      }
+    } else {
+      VkFormatProperties format_properties{};
+      context.inst_disp.getPhysicalDeviceFormatProperties(
+        context.device.physical_device.physical_device, render_data.color_format, &format_properties);
+      if ((format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT) == 0U) {
+        return std::unexpected(MakeError(std::errc::operation_not_supported,
+          "VK_FORMAT_R8G8B8A8_UNORM does not support storage images on this device"));
+      }
+      if (auto resources = gs::tiled::InitResources(context, render_data); !resources) {
+        return std::unexpected(resources.error());
+      }
+      if (auto algorithms = gs::tiled::InitAlgorithms(context, render_data); !algorithms) {
+        return std::unexpected(algorithms.error());
+      }
+    }
+    if (!RefreshDescriptorHeap(context, render_data)) {
+      return std::unexpected(MakeError(std::errc::io_error, "Failed to refresh Gaussian descriptor heap"));
     }
     if (auto command_resources = CreateCommandResources(context, render_data); !command_resources) {
       return std::unexpected(command_resources.error());
@@ -300,6 +327,16 @@ Renderer::~Renderer() noexcept
 
 auto Renderer::create(RendererConfig const &config, Platform &platform) -> std::expected<Renderer, Error>
 {
+  if (config.rasterization_mode != RasterizationMode::kHardware
+      && config.rasterization_mode != RasterizationMode::kComputeTiled) {
+    return std::unexpected{ MakeError(std::errc::invalid_argument, "unknown rasterization mode") };
+  }
+  if (config.rasterization_mode == RasterizationMode::kComputeTiled) {
+    if (config.lfd_grid != std::array<u32, 2>{ 1U, 1U }) {
+      return std::unexpected(
+        MakeError(std::errc::invalid_argument, "tiled compute rasterization requires a mono lfd_grid"));
+    }
+  }
   if (auto validated = ValidateGpuTimingConfig(config); !validated) { return std::unexpected{ validated.error() }; }
   if (auto validated = ValidateOffscreenConfig(config, platform); !validated) {
     return std::unexpected{ validated.error() };
@@ -327,6 +364,16 @@ auto Renderer::create(RendererConfig const &config, Platform &platform) -> std::
 
 auto Renderer::create(RendererConfig const &config, Engine &engine) -> std::expected<Renderer, Error>
 {
+  if (config.rasterization_mode != RasterizationMode::kHardware
+      && config.rasterization_mode != RasterizationMode::kComputeTiled) {
+    return std::unexpected{ MakeError(std::errc::invalid_argument, "unknown rasterization mode") };
+  }
+  if (config.rasterization_mode == RasterizationMode::kComputeTiled) {
+    if (config.lfd_grid != std::array<u32, 2>{ 1U, 1U }) {
+      return std::unexpected(
+        MakeError(std::errc::invalid_argument, "tiled compute rasterization requires a mono lfd_grid"));
+    }
+  }
   if (auto validated = ValidateGpuTimingConfig(config); !validated) { return std::unexpected{ validated.error() }; }
   if (auto validated = ValidateOffscreenConfig(config, engine.platform()); !validated) {
     return std::unexpected{ validated.error() };
@@ -417,6 +464,95 @@ auto Renderer::capture_latest_frame() -> std::expected<RgbaFrame, Error>
 { return impl_->render_thread->ReadLatestFrame(); }
 
 auto Renderer::wait_idle() -> std::expected<void, Error> { return impl_->render_thread->WaitIdle(); }
+
+auto Renderer::tiled_intersection_count() -> std::expected<u32, Error>
+{
+  if (impl_->render_data.rasterization_mode != RasterizationMode::kComputeTiled
+      || !impl_->render_data.tiled_total_buffer) {
+    return std::unexpected(MakeError(std::errc::operation_not_supported, "tiled intersection count is unavailable"));
+  }
+  if (auto idle = wait_idle(); !idle) { return std::unexpected(idle.error()); }
+  auto const &buffer = *impl_->render_data.tiled_total_buffer;
+  if (auto invalidated = buffer.invalidate(); !invalidated) {
+    return std::unexpected(MakeError(std::errc::io_error, invalidated.error().message()));
+  }
+  auto const bytes = buffer.mapped();
+  if (bytes.size() < sizeof(u32)) {
+    return std::unexpected(MakeError(std::errc::state_not_recoverable, "tiled total buffer is not mapped"));
+  }
+  u32 count{};
+  std::memcpy(&count, bytes.data(), sizeof(count));
+  return count;
+}
+
+auto Renderer::tiled_scratch_bytes() const -> u64
+{
+  auto const &data = impl_->render_data;
+  if (data.rasterization_mode != RasterizationMode::kComputeTiled) { return 0U; }
+  u64 bytes = 0U;
+  auto add = [&bytes](std::optional<GpuBuffer> const &buffer) -> void {
+    if (buffer) { bytes += buffer->size(); }
+  };
+  add(data.tiled_counts_buffer);
+  add(data.tiled_offsets_buffer);
+  add(data.tiled_total_buffer);
+  add(data.tiled_overflow_buffer);
+  add(data.unsorted_keys_buffer);
+  add(data.unsorted_values_buffer);
+  add(data.sorted_keys_buffer);
+  add(data.sorted_values_buffer);
+  add(data.sort_histogram_buffer);
+  add(data.tiled_radix_prefix_buffer);
+  add(data.tiled_radix_group_buffer);
+  add(data.radix_dispatch_buffer);
+  add(data.tile_ranges_buffer);
+  for (auto const &buffer : data.tiled_scan_sums) { bytes += buffer.size(); }
+  for (auto const &buffer : data.tiled_scan_offsets) { bytes += buffer.size(); }
+  return bytes;
+}
+
+auto Renderer::tiled_debug_snapshot() -> std::expected<TiledDebugSnapshot, Error>
+{
+  auto const &data = impl_->render_data;
+  if (!data.enable_tiled_debug_readback || !data.tiled_debug_readback_buffer) {
+    return std::unexpected(MakeError(std::errc::operation_not_supported, "tiled debug readback is disabled"));
+  }
+  auto intersections = tiled_intersection_count();
+  if (!intersections) { return std::unexpected(intersections.error()); }
+  if (auto invalidated = data.tiled_debug_readback_buffer->invalidate(); !invalidated) {
+    return std::unexpected(MakeError(std::errc::io_error, invalidated.error().message()));
+  }
+  auto const bytes = data.tiled_debug_readback_buffer->mapped();
+  auto read = [&](TiledDebugSection section, auto &destination, size_t count) -> bool {
+    using Value = typename std::remove_reference_t<decltype(destination)>::value_type;
+    size_t const index = static_cast<size_t>(section);
+    VkDeviceSize const offset = data.tiled_debug_offsets.at(index);
+    VkDeviceSize const length = count * sizeof(Value);
+    if (length > data.tiled_debug_sizes.at(index) || offset > bytes.size()
+        || length > bytes.size() - offset) { return false; }
+    destination.resize(count);
+    if (length != 0U) { std::memcpy(destination.data(), bytes.data() + offset, length); }
+    return true;
+  };
+  TiledDebugSnapshot snapshot{};
+  snapshot.intersections = *intersections;
+  snapshot.tiles_x = data.tiled_tiles_x;
+  snapshot.tiles_y = data.tiled_tiles_y;
+  size_t const key_words = static_cast<size_t>(*intersections) * sizeof(gs::TiledSortKey) / sizeof(u32);
+  size_t const range_words = static_cast<size_t>(data.tile_count) * sizeof(gs::TileRange) / sizeof(u32);
+  if (!read(TiledDebugSection::kProjected, snapshot.projected,
+        static_cast<size_t>(data.splat_count) * gs::kProjectedFloats)
+      || !read(TiledDebugSection::kCounts, snapshot.counts, data.splat_count)
+      || !read(TiledDebugSection::kOffsets, snapshot.offsets, static_cast<size_t>(data.splat_count) + 1U)
+      || !read(TiledDebugSection::kEmittedKeys, snapshot.emitted_key_words, key_words)
+      || !read(TiledDebugSection::kEmittedIndices, snapshot.emitted_indices, *intersections)
+      || !read(TiledDebugSection::kSortedKeys, snapshot.sorted_key_words, key_words)
+      || !read(TiledDebugSection::kSortedIndices, snapshot.sorted_indices, *intersections)
+      || !read(TiledDebugSection::kRanges, snapshot.range_words, range_words)) {
+    return std::unexpected(MakeError(std::errc::result_out_of_range, "tiled debug readback layout is invalid"));
+  }
+  return snapshot;
+}
 
 auto Renderer::take_gpu_timings() -> std::expected<std::vector<GpuFrameTimings>, Error>
 { return impl_->render_thread->TakeGpuTimings(); }
