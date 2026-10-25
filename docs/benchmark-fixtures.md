@@ -99,6 +99,10 @@ The hardware rasterizer remains the default. The compute tiled path currently
 supports mono output only. Its default intersection memory budget is 128 MiB;
 the 4K benchmark raises this to 256 MiB. A scene that exceeds the configured
 budget fails with a GPU status error rather than producing a truncated image.
+Tiled compute also requires Vulkan `shaderInt64`. A standalone compute renderer
+requests that feature when it creates its engine. When sharing an existing engine,
+create the engine with `EngineConfig::require_shader_int64 = true` before creating
+a compute renderer. Hardware rendering does not request this feature.
 
 `vkgsplat_bench` registers hardware and compute runs at 1280 × 720, 1920 × 1080,
 and 3840 × 2160 using the same canonical PLY and camera. `BM_RenderThroughput`
