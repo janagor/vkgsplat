@@ -162,7 +162,6 @@ namespace {
     auto loaded = LoadSplatsFromPly(config.ply_path);
     if (!loaded) { return std::unexpected(loaded.error()); }
     SplatCpuData const splats = std::move(*loaded);
-    std::println("Loaded {} splats from {}", splats.geometries.size(), config.ply_path);
     {
       auto const &first_appearance = splats.appearances.at(0);
       std::println("appearance[0] f_dc=({}, {}, {})",
