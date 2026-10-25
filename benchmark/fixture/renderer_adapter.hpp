@@ -9,10 +9,12 @@
 
 namespace vkgsplat::benchmark {
 
-[[nodiscard]] auto MakeRendererConfig(BenchmarkProfile const &profile, std::filesystem::path const &scene_path)
+[[nodiscard]] auto MakeRendererConfig(BenchmarkProfile const &profile, std::filesystem::path const &scene_path,
+  RasterizationMode mode = RasterizationMode::kHardware)
   -> RendererConfig;
 [[nodiscard]] auto MakeGpuProfilingRendererConfig(BenchmarkProfile const &profile,
-  std::filesystem::path const &scene_path) -> RendererConfig;
+  std::filesystem::path const &scene_path,
+  RasterizationMode mode = RasterizationMode::kHardware) -> RendererConfig;
 
 }// namespace vkgsplat::benchmark
 

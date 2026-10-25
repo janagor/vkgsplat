@@ -25,6 +25,8 @@ inline constexpr f64 kBaselineFovDegrees = 45.0;
 inline constexpr f64 kBaselineNearPlane = 0.1;
 inline constexpr f64 kBaselineFarPlane = 100.0;
 inline constexpr f64 kCameraDistance = 6.0;
+inline constexpr u64 kMebibyte = 1024U * 1024U;
+inline constexpr u64 kUhdTiledBudgetBytes = 256U * kMebibyte;
 
 struct BenchmarkSceneSpec
 {
@@ -53,6 +55,7 @@ struct BenchmarkProfile
   bool enable_imgui{ false };
   bool enable_gpu_timers{ false };
   bool enable_validation{ false };
+  u64 tiled_intersection_budget_bytes{ 128U * kMebibyte };
   FrameRateMode frame_rate_mode{ FrameRateMode::kUncapped };
 };
 

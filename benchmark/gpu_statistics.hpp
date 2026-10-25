@@ -2,6 +2,7 @@
 #define VKGSPLAT_BENCHMARK_GPU_STATISTICS_HPP
 
 #include <vkgsplat/gpu_timings.hpp>
+#include <vkgsplat/renderer.hpp>
 
 #include <array>
 #include <cstddef>
@@ -23,6 +24,7 @@ struct GpuSummary
 // Percentiles use nearest rank. Standard deviation is population deviation.
 [[nodiscard]] auto SummarizeGpuValues(std::vector<double> values) -> GpuSummary;
 [[nodiscard]] auto IsCompleteMonoGpuSample(GpuFrameTimings const &sample) -> bool;
+[[nodiscard]] auto IsCompleteGpuSample(GpuFrameTimings const &sample, RasterizationMode mode) -> bool;
 
 class GpuStatistics
 {
@@ -40,6 +42,7 @@ private:
 };
 
 [[nodiscard]] auto HasCompleteMonoGpuStatistics(GpuStatistics const &statistics) -> bool;
+[[nodiscard]] auto HasCompleteGpuStatistics(GpuStatistics const &statistics, RasterizationMode mode) -> bool;
 
 }// namespace vkgsplat::benchmark
 
