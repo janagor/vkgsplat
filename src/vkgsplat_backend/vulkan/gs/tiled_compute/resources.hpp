@@ -1,5 +1,5 @@
-#ifndef VKGSPLAT_BACKEND_VULKAN_GS_TILED_RESOURCES_HPP
-#define VKGSPLAT_BACKEND_VULKAN_GS_TILED_RESOURCES_HPP
+#ifndef VKGSPLAT_BACKEND_VULKAN_GS_TILED_COMPUTE_RESOURCES_HPP
+#define VKGSPLAT_BACKEND_VULKAN_GS_TILED_COMPUTE_RESOURCES_HPP
 
 #include <expected>
 #include <vkgsplat_utility/error.hpp>
@@ -16,4 +16,4 @@ void DestroyResources(RenderData &data);
 }// namespace gs::tiled
 }// namespace vkgsplat
 
-#endif// VKGSPLAT_BACKEND_VULKAN_GS_TILED_RESOURCES_HPP
+#endif// VKGSPLAT_BACKEND_VULKAN_GS_TILED_COMPUTE_RESOURCES_HPP

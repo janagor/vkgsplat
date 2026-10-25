@@ -43,8 +43,8 @@ auto RegisterRenderThroughput(Platform &platform,
   Camera const &camera,
   std::atomic_bool &failed) -> void
 {
-  for (auto const mode : { RasterizationMode::kHardware, RasterizationMode::kComputeTiled }) {
-    char const *mode_name = mode == RasterizationMode::kHardware ? "hardware" : "compute";
+  for (auto const mode : { RasterizationMode::kGraphicsPipeline, RasterizationMode::kComputeTiled }) {
+    char const *mode_name = mode == RasterizationMode::kGraphicsPipeline ? "graphics" : "compute";
     auto const name = std::format("BM_RenderThroughput/{}/{}/{}/{}x{}", profile.id, mode_name,
       profile.scene.gaussian_count, profile.width, profile.height);
     auto *registered = ::benchmark::RegisterBenchmark(

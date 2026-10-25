@@ -1,4 +1,4 @@
-#include "gs/binning.hpp"
+#include "gs/graphics/binning.hpp"
 
 #include "app_state.hpp"
 #include "gs/gaussian_splat.hpp"

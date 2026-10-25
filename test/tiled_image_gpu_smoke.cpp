@@ -235,32 +235,32 @@ struct ReferenceIntersection
   return false;
 }
 
-[[nodiscard]] auto CompareFrames(vkgsplat::RgbaFrame const &hardware,
+[[nodiscard]] auto CompareFrames(vkgsplat::RgbaFrame const &graphics,
   vkgsplat::RgbaFrame const &compute,
   std::filesystem::path const &heatmap_path) -> bool
 {
-  if (hardware.width != compute.width || hardware.height != compute.height
-      || hardware.pixels.size() != compute.pixels.size()) { return false; }
+  if (graphics.width != compute.width || graphics.height != compute.height
+      || graphics.pixels.size() != compute.pixels.size()) { return false; }
   std::ofstream heatmap(heatmap_path, std::ios::binary);
   if (!heatmap) { return false; }
-  heatmap << "P6\n" << hardware.width << ' ' << hardware.height << "\n" << kChannelMaximum << '\n';
+  heatmap << "P6\n" << graphics.width << ' ' << graphics.height << "\n" << kChannelMaximum << '\n';
   double squared_error = 0.0;
   double foreground_squared_error = 0.0;
   size_t foreground_samples = 0U;
   std::array<size_t, kChannelMaximum + 1U> error_histogram{};
   vkgsplat::u32 maximum_error = 0U;
-  for (size_t pixel = 0U; pixel < hardware.pixels.size() / kChannels; ++pixel) {
+  for (size_t pixel = 0U; pixel < graphics.pixels.size() / kChannels; ++pixel) {
     vkgsplat::u32 pixel_error = 0U;
     for (vkgsplat::u32 channel = 0U; channel < kColorChannels; ++channel) {
       size_t const index = pixel * kChannels + channel;
-      auto const difference = static_cast<int>(hardware.pixels.at(index))
+      auto const difference = static_cast<int>(graphics.pixels.at(index))
                             - static_cast<int>(compute.pixels.at(index));
       auto const magnitude = static_cast<vkgsplat::u32>(std::abs(difference));
       pixel_error = std::max(pixel_error, magnitude);
       maximum_error = std::max(maximum_error, magnitude);
       squared_error += static_cast<double>(difference * difference);
       ++error_histogram.at(magnitude);
-      if (hardware.pixels.at(index) > kForegroundThreshold
+      if (graphics.pixels.at(index) > kForegroundThreshold
           || compute.pixels.at(index) > kForegroundThreshold) {
         foreground_squared_error += static_cast<double>(difference * difference);
         ++foreground_samples;
@@ -270,7 +270,7 @@ struct ReferenceIntersection
     heatmap.put(0);
     heatmap.put(0);
   }
-  double const sample_count = static_cast<double>(hardware.pixels.size() / kChannels * kColorChannels);
+  double const sample_count = static_cast<double>(graphics.pixels.size() / kChannels * kColorChannels);
   double const mse = squared_error / sample_count;
   double const psnr = mse == 0.0 ? std::numeric_limits<double>::infinity()
                                  : 10.0 * std::log10(static_cast<double>(kChannelMaximum * kChannelMaximum) / mse);
@@ -286,10 +286,10 @@ struct ReferenceIntersection
     accumulated += error_histogram.at(error);
     if (accumulated >= percentile_rank) { percentile_error = error; break; }
   }
-  std::cout << "hardware/compute PSNR=" << psnr << " dB, foreground PSNR=" << foreground_psnr
+  std::cout << "graphics/compute PSNR=" << psnr << " dB, foreground PSNR=" << foreground_psnr
             << " dB, p99 channel error=" << percentile_error
             << ", maximum channel error=" << maximum_error << '\n';
-  return HasScenePixels(hardware) && HasScenePixels(compute) && foreground_samples > 0U
+  return HasScenePixels(graphics) && HasScenePixels(compute) && foreground_samples > 0U
     && psnr >= kMinimumPsnrDb && foreground_psnr >= kMinimumForegroundPsnrDb && heatmap.good();
 }
 
@@ -313,10 +313,10 @@ struct ReferenceIntersection
     .enable_imgui = false,
     .submission_policy = vkgsplat::FrameSubmissionPolicy::kLossless,
   };
-  auto hardware = vkgsplat::Renderer::create(config, *platform);
-  if (!hardware) { std::cerr << hardware.error().message() << '\n'; return EXIT_FAILURE; }
-  auto hardware_frame = hardware->render_frame(camera);
-  if (!hardware_frame) { std::cerr << hardware_frame.error().message() << '\n'; return EXIT_FAILURE; }
+  auto graphics = vkgsplat::Renderer::create(config, *platform);
+  if (!graphics) { std::cerr << graphics.error().message() << '\n'; return EXIT_FAILURE; }
+  auto graphics_frame = graphics->render_frame(camera);
+  if (!graphics_frame) { std::cerr << graphics_frame.error().message() << '\n'; return EXIT_FAILURE; }
   config.rasterization_mode = vkgsplat::RasterizationMode::kComputeTiled;
   config.enable_tiled_debug_readback = true;
   auto compute = vkgsplat::Renderer::create(config, *platform);
@@ -325,13 +325,13 @@ struct ReferenceIntersection
   if (!compute_frame) { std::cerr << compute_frame.error().message() << '\n'; return EXIT_FAILURE; }
   auto snapshot = compute->tiled_debug_snapshot();
   if (!snapshot || !ValidateSnapshot(*snapshot, *compute_frame)) { return EXIT_FAILURE; }
-  if (!CompareFrames(*hardware_frame, *compute_frame, heatmap_path)) { return EXIT_FAILURE; }
+  if (!CompareFrames(*graphics_frame, *compute_frame, heatmap_path)) { return EXIT_FAILURE; }
   vkgsplat::Camera const side_camera{ vkgsplat::CameraConfig{
     .position = { kCameraSideOffset, 0.0, kCameraDistance },
     .target = { 0.0, 0.0, 0.0 },
     .orientation = std::nullopt,
   } };
-  auto hardware_side = hardware->render_frame(side_camera);
+  auto graphics_side = graphics->render_frame(side_camera);
   auto compute_side = compute->render_frame(side_camera);
   auto side_snapshot = compute->tiled_debug_snapshot();
   if (!side_snapshot || !compute_side || !ValidateSnapshot(*side_snapshot, *compute_side)) {
@@ -339,8 +339,8 @@ struct ReferenceIntersection
   }
   auto side_heatmap_path = heatmap_path;
   side_heatmap_path.replace_extension(".side.ppm");
-  if (!hardware_side || !compute_side
-      || !CompareFrames(*hardware_side, *compute_side, side_heatmap_path)) {
+  if (!graphics_side || !compute_side
+      || !CompareFrames(*graphics_side, *compute_side, side_heatmap_path)) {
     std::cerr << "camera-change image comparison failed\n";
     return EXIT_FAILURE;
   }
@@ -348,17 +348,17 @@ struct ReferenceIntersection
     { { kBoundaryWidth, kBoundaryWidth }, { kHdWidth, kHdHeight },
       { kFullHdWidth, kFullHdHeight }, { kUhdWidth, kUhdHeight } }
   };
-  config.rasterization_mode = vkgsplat::RasterizationMode::kHardware;
+  config.rasterization_mode = vkgsplat::RasterizationMode::kGraphicsPipeline;
   config.enable_tiled_debug_readback = false;
   for (auto const &extent : kExtents) {
     config.ply_path = extent.at(0) == kBoundaryWidth ? scene_path.string() : small_scene_path.string();
     auto sized_platform = vkgsplat::OffscreenPlatform::create({ .width = extent.at(0), .height = extent.at(1) });
     if (!sized_platform) { std::cerr << sized_platform.error().message() << '\n'; return EXIT_FAILURE; }
-    auto sized_hardware = vkgsplat::Renderer::create(config, *sized_platform);
-    if (!sized_hardware) { std::cerr << sized_hardware.error().message() << '\n'; return EXIT_FAILURE; }
-    auto sized_hardware_frame = sized_hardware->render_frame(camera);
-    if (!sized_hardware_frame) {
-      std::cerr << sized_hardware_frame.error().message() << '\n';
+    auto sized_graphics = vkgsplat::Renderer::create(config, *sized_platform);
+    if (!sized_graphics) { std::cerr << sized_graphics.error().message() << '\n'; return EXIT_FAILURE; }
+    auto sized_graphics_frame = sized_graphics->render_frame(camera);
+    if (!sized_graphics_frame) {
+      std::cerr << sized_graphics_frame.error().message() << '\n';
       return EXIT_FAILURE;
     }
     config.rasterization_mode = vkgsplat::RasterizationMode::kComputeTiled;
@@ -369,8 +369,8 @@ struct ReferenceIntersection
     auto const sized_heatmap = heatmap_path.parent_path()
       / (heatmap_path.stem().string() + "-" + std::to_string(extent.at(0)) + "x"
          + std::to_string(extent.at(1)) + ".ppm");
-    if (!CompareFrames(*sized_hardware_frame, *sized_compute_frame, sized_heatmap)) { return EXIT_FAILURE; }
-    config.rasterization_mode = vkgsplat::RasterizationMode::kHardware;
+    if (!CompareFrames(*sized_graphics_frame, *sized_compute_frame, sized_heatmap)) { return EXIT_FAILURE; }
+    config.rasterization_mode = vkgsplat::RasterizationMode::kGraphicsPipeline;
   }
   config.rasterization_mode = vkgsplat::RasterizationMode::kComputeTiled;
   config.ply_path = scene_path.string();
@@ -401,12 +401,12 @@ struct ReferenceIntersection
     return EXIT_FAILURE;
   }
   config.tiled_intersection_budget_bytes = vkgsplat::kDefaultTiledIntersectionBudgetBytes;
-  config.rasterization_mode = vkgsplat::RasterizationMode::kHardware;
+  config.rasterization_mode = vkgsplat::RasterizationMode::kGraphicsPipeline;
   auto shared_engine = vkgsplat::Engine::create({}, *platform);
   if (!shared_engine) { std::cerr << shared_engine.error().message() << '\n'; return EXIT_FAILURE; }
-  auto shared_hardware = vkgsplat::Renderer::create(config, *shared_engine);
-  if (!shared_hardware || !shared_hardware->render_frame(camera)) {
-    std::cerr << "hardware renderer failed with a shared engine\n";
+  auto shared_graphics = vkgsplat::Renderer::create(config, *shared_engine);
+  if (!shared_graphics || !shared_graphics->render_frame(camera)) {
+    std::cerr << "graphics renderer failed with a shared engine\n";
     return EXIT_FAILURE;
   }
   config.rasterization_mode = vkgsplat::RasterizationMode::kComputeTiled;

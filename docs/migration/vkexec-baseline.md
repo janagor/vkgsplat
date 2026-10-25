@@ -147,7 +147,7 @@ The following existing call sites should be compared during PRs 2–4:
   heap layouts, table lowering, heap binding, and the direct internal API use
   `vkexec::detail::heap_descriptor_backend::lower`.
 - `src/vkgsplat_backend/vulkan/gs/load_heap_pipeline.hpp`,
-  `graphics_pipeline.cpp`, and `gs/pipeline.cpp`: compute and graphics pipeline
+  `gs/graphics/graphics_pipeline.cpp`, and `gs/pipeline.cpp`: compute and graphics pipeline
   creation and descriptor-heap layouts.
 - `src/vkgsplat_backend/vulkan/render_thread.cpp`, `frame_context.cpp`, and
   `gs/operations.cpp`: frame-ring submission, command recording, synchronization,

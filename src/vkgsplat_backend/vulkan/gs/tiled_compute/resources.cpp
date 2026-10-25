@@ -1,4 +1,4 @@
-#include "gs/tiled/resources.hpp"
+#include "gs/tiled_compute/resources.hpp"
 
 #include "app_state.hpp"
 #include "gs/gaussian_splat.hpp"

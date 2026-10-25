@@ -15,7 +15,7 @@ add_library(
   vulkan/shader.cpp
   vulkan/mesh_gpu.cpp
   vulkan/sphere_setup.cpp
-  vulkan/graphics_pipeline.cpp
+  vulkan/gs/graphics/graphics_pipeline.cpp
   vulkan/swapchain_resource.cpp
   vulkan/command/pool.cpp
   vulkan/renderer.cpp
@@ -23,13 +23,13 @@ add_library(
   vulkan/render_thread.cpp
   vulkan/present_pacer.cpp
   vulkan/gs/projection.cpp
-  vulkan/gs/binning.cpp
-  vulkan/gs/sorting.cpp
+  vulkan/gs/graphics/binning.cpp
+  vulkan/gs/graphics/sorting.cpp
   vulkan/gs/rasterization.cpp
   vulkan/gs/pipeline.cpp
   vulkan/gs/operations.cpp
-  vulkan/gs/tiled/resources.cpp
-  vulkan/gs/tiled/operations.cpp
+  vulkan/gs/tiled_compute/resources.cpp
+  vulkan/gs/tiled_compute/operations.cpp
   vulkan/capture/readback.cpp
   vulkan/descriptor/descriptor_heap.cpp
   vulkan/gpu_pass_timer.cpp
@@ -48,25 +48,25 @@ vkgsplat_compile_shaders(
   OUTPUT_DIR
   "${SHADER_DIRECTORY}"
   SOURCES
-  shaders/sphere.vert
-  shaders/sphere.frag
+  shaders/gs/graphics/sphere.vert
+  shaders/gs/graphics/sphere.frag
   shaders/gs/projection.comp
   shaders/gs/projection_batch.comp
-  shaders/gs/binning.comp
-  shaders/gs/prepare_sorting.comp
+  shaders/gs/graphics/binning.comp
+  shaders/gs/graphics/prepare_sorting.comp
   "${VKGSPLAT_VKRADIXSORT_SHADERS_DIR}/multi_radixsort_histograms.comp"
   "${VKGSPLAT_VKRADIXSORT_SHADERS_DIR}/multi_radixsort.comp"
-  shaders/gs/identify_ranges.comp
-  shaders/gs/rasterization.comp
-  shaders/gs/tiled_count.comp
-  shaders/gs/tiled_scan.comp
-  shaders/gs/tiled_emit.comp
-  shaders/gs/tiled_prepare.comp
-  shaders/gs/tiled_radix_histograms.comp
-  shaders/gs/tiled_radix_prefix.comp
-  shaders/gs/tiled_radix_scatter.comp
-  shaders/gs/tiled_identify_ranges.comp
-  shaders/gs/tiled_rasterization.comp
+  shaders/gs/graphics/identify_ranges.comp
+  shaders/gs/tiled_compute/rasterization.comp
+  shaders/gs/tiled_compute/tiled_count.comp
+  shaders/gs/tiled_compute/tiled_scan.comp
+  shaders/gs/tiled_compute/tiled_emit.comp
+  shaders/gs/tiled_compute/tiled_prepare.comp
+  shaders/gs/tiled_compute/tiled_radix_histograms.comp
+  shaders/gs/tiled_compute/tiled_radix_prefix.comp
+  shaders/gs/tiled_compute/tiled_radix_scatter.comp
+  shaders/gs/tiled_compute/tiled_identify_ranges.comp
+  shaders/gs/tiled_compute/tiled_rasterization.comp
   shaders/video/rgba_to_nv12.comp)
 
 target_link_libraries(

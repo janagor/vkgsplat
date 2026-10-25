@@ -3,7 +3,7 @@
 #include "app_state.hpp"
 #include "gs/push_constants.hpp"
 #include "gs/rasterization.hpp"
-#include "gs/tiled/operations.hpp"
+#include "gs/tiled_compute/operations.hpp"
 #include "vulkan/gpu_buffers.hpp"
 #include "vulkan/gpu_pass_timer.hpp"
 #include "vulkan_context.hpp"
@@ -228,12 +228,12 @@ auto RecordPhaseACompute(vulkan::Context const &context, RenderData const &data,
   if (auto recorded = RecordProjection(context, data, command_buffer, true); !recorded) { return recorded; }
 
   switch (data.rasterization_mode) {
-  case RasterizationMode::kHardware: break;
+  case RasterizationMode::kGraphicsPipeline: break;
   case RasterizationMode::kComputeTiled: return tiled::RecordPreparation(context, data, command_buffer);
   default: return std::unexpected{ MakeError(std::errc::invalid_argument, "unknown rasterization mode") };
   }
   if (!data.instance_count_buffer) {
-    return std::unexpected{ MakeError(std::errc::state_not_recoverable, "hardware instance counter is not initialized") };
+    return std::unexpected{ MakeError(std::errc::state_not_recoverable, "graphics pipeline instance counter is not initialized") };
   }
 
   context.disp.cmdFillBuffer(command_buffer, data.instance_count_buffer->handle(), 0, sizeof(u32), 0U);

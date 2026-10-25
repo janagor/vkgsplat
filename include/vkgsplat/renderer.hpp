@@ -33,7 +33,7 @@ namespace video {
 }
 
 enum class FrameSubmissionPolicy : u8 { kLatest, kLossless };
-enum class RasterizationMode : u8 { kHardware, kComputeTiled };
+enum class RasterizationMode : u8 { kGraphicsPipeline, kComputeTiled };
 inline constexpr u64 kDefaultTiledIntersectionBudgetBytes = 128ULL * 1024ULL * 1024ULL;
 
 struct RenderDeviceInfo
@@ -54,7 +54,7 @@ struct RendererConfig
   bool enable_gpu_timers = false;
   bool capture_gpu_timing_samples = false;
   FrameSubmissionPolicy submission_policy = FrameSubmissionPolicy::kLatest;
-  RasterizationMode rasterization_mode = RasterizationMode::kHardware;
+  RasterizationMode rasterization_mode = RasterizationMode::kGraphicsPipeline;
   u64 tiled_intersection_budget_bytes = kDefaultTiledIntersectionBudgetBytes;
   bool enable_tiled_debug_readback = false;
   FrameRateConfig frame_rate{};

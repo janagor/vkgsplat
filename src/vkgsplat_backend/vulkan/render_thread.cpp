@@ -20,7 +20,7 @@
 
 #include "app_state.hpp"
 #include "gs/pipeline.hpp"
-#include "gs/tiled/operations.hpp"
+#include "gs/tiled_compute/operations.hpp"
 #include "video/color_converter.hpp"
 #include "video/video_encoder.hpp"
 #include "vkexec_error.hpp"

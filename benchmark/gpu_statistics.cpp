@@ -14,7 +14,7 @@ namespace {
   constexpr double kP95Fraction = 0.95;
   constexpr size_t kMedianDivisor = 2U;
   constexpr double kZeroMilliseconds = 0.0;
-  constexpr std::array<GpuPass, 6> kHardwarePasses{ GpuPass::kProjection, GpuPass::kBinning,
+  constexpr std::array<GpuPass, 6> kGraphicsPipelinePasses{ GpuPass::kProjection, GpuPass::kBinning,
     GpuPass::kPrepareSort, GpuPass::kRadixSort, GpuPass::kRasterize, GpuPass::kMultiviewProjection };
   constexpr std::array<GpuPass, 7> kComputePasses{ GpuPass::kProjection, GpuPass::kTiledCount,
     GpuPass::kTiledScan, GpuPass::kTiledEmit, GpuPass::kTiledRadixSort, GpuPass::kTiledRanges,
@@ -28,7 +28,7 @@ auto IsCompleteGpuSample(GpuFrameTimings const &sample, RasterizationMode mode) 
     GpuPass const pass = static_cast<GpuPass>(index);
     bool const required = mode == RasterizationMode::kComputeTiled
       ? std::ranges::find(kComputePasses, pass) != kComputePasses.end()
-      : std::ranges::find(kHardwarePasses, pass) != kHardwarePasses.end()
+      : std::ranges::find(kGraphicsPipelinePasses, pass) != kGraphicsPipelinePasses.end()
           && pass != GpuPass::kMultiviewProjection;
     auto const duration = sample.pass_ms.at(index);
     if (required != duration.has_value()) { return false; }
@@ -117,7 +117,7 @@ auto HasCompleteGpuStatistics(GpuStatistics const &statistics, RasterizationMode
     GpuPass const pass = static_cast<GpuPass>(index);
     bool const required = mode == RasterizationMode::kComputeTiled
       ? std::ranges::find(kComputePasses, pass) != kComputePasses.end()
-      : std::ranges::find(kHardwarePasses, pass) != kHardwarePasses.end()
+      : std::ranges::find(kGraphicsPipelinePasses, pass) != kGraphicsPipelinePasses.end()
           && pass != GpuPass::kMultiviewProjection;
     if (statistics.pass_count(pass) != (required ? frame_count : 0U)) { return false; }
   }

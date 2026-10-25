@@ -80,7 +80,7 @@ namespace {
       return data.tiled_counts_buffer && data.tiled_offsets_buffer && data.tiled_total_buffer
              && data.tiled_overflow_buffer && data.tiled_radix_prefix_buffer && data.tiled_radix_group_buffer;
     }
-    return data.rasterization_mode == RasterizationMode::kHardware;
+    return data.rasterization_mode == RasterizationMode::kGraphicsPipeline;
   }
 
   [[nodiscard]] auto EnsureDescriptorHeapStorage(vulkan::Context &context, RenderData &data) -> bool

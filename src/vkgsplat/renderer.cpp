@@ -33,14 +33,14 @@
 #include <vkgsplat_video/encoded_packet.hpp>
 
 #include "vulkan/app_state.hpp"
-#include "vulkan/graphics_pipeline.hpp"
-#include "vulkan/gs/binning.hpp"
+#include "vulkan/gs/graphics/graphics_pipeline.hpp"
+#include "vulkan/gs/graphics/binning.hpp"
 #include "vulkan/gs/pipeline.hpp"
 #include "vulkan/gs/projection.hpp"
 #include "vulkan/gs/rasterization.hpp"
-#include "vulkan/gs/sorting.hpp"
-#include "vulkan/gs/tiled/operations.hpp"
-#include "vulkan/gs/tiled/resources.hpp"
+#include "vulkan/gs/graphics/sorting.hpp"
+#include "vulkan/gs/tiled_compute/operations.hpp"
+#include "vulkan/gs/tiled_compute/resources.hpp"
 #include "vulkan/descriptor/descriptor_heap.hpp"
 #include "vulkan/imgui_overlay.hpp"
 #include "vulkan/mesh_gpu.hpp"
@@ -187,7 +187,7 @@ namespace {
       return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to initialize gaussian rasterization"));
     }
     gs::RecordGsPipeline(render_data);
-    if (config.rasterization_mode == RasterizationMode::kHardware) {
+    if (config.rasterization_mode == RasterizationMode::kGraphicsPipeline) {
       if (!gs::InitBinning(context, render_data)) {
         return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to initialize gaussian binning"));
       }
@@ -322,7 +322,7 @@ Renderer::~Renderer() noexcept
 
 auto Renderer::create(RendererConfig const &config, Platform &platform) -> std::expected<Renderer, Error>
 {
-  if (config.rasterization_mode != RasterizationMode::kHardware
+  if (config.rasterization_mode != RasterizationMode::kGraphicsPipeline
       && config.rasterization_mode != RasterizationMode::kComputeTiled) {
     return std::unexpected{ MakeError(std::errc::invalid_argument, "unknown rasterization mode") };
   }
@@ -360,7 +360,7 @@ auto Renderer::create(RendererConfig const &config, Platform &platform) -> std::
 
 auto Renderer::create(RendererConfig const &config, Engine &engine) -> std::expected<Renderer, Error>
 {
-  if (config.rasterization_mode != RasterizationMode::kHardware
+  if (config.rasterization_mode != RasterizationMode::kGraphicsPipeline
       && config.rasterization_mode != RasterizationMode::kComputeTiled) {
     return std::unexpected{ MakeError(std::errc::invalid_argument, "unknown rasterization mode") };
   }

@@ -1,4 +1,4 @@
-#include "src/vkgsplat_backend/vulkan/gs/tiled/operations.hpp"
+#include "src/vkgsplat_backend/vulkan/gs/tiled_compute/operations.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 

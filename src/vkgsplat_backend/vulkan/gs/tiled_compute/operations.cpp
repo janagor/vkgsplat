@@ -1,8 +1,8 @@
-#include "gs/tiled/operations.hpp"
+#include "gs/tiled_compute/operations.hpp"
 
 #include "app_state.hpp"
 #include "gs/load_heap_pipeline.hpp"
-#include "gs/tiled/resources.hpp"
+#include "gs/tiled_compute/resources.hpp"
 #include "vulkan/gpu_buffers.hpp"
 #include "vulkan_context.hpp"
 

@@ -66,7 +66,7 @@ struct ImGuiOverlayState;
 
 struct RenderData
 {
-  RasterizationMode rasterization_mode{ RasterizationMode::kHardware };
+  RasterizationMode rasterization_mode{ RasterizationMode::kGraphicsPipeline };
   u32 splat_count = 0;
   u32 sort_size = 0;
   VkQueue graphics_queue{};

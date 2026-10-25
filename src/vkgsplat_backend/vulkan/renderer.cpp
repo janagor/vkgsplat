@@ -12,12 +12,12 @@
 #include "vulkan/command/pool.hpp"
 #include "vulkan/descriptor/descriptor_heap.hpp"
 #include "vulkan/gpu_pass_timer.hpp"
-#include "vulkan/graphics_pipeline.hpp"
-#include "vulkan/gs/binning.hpp"
+#include "vulkan/gs/graphics/graphics_pipeline.hpp"
+#include "vulkan/gs/graphics/binning.hpp"
 #include "vulkan/gs/projection.hpp"
-#include "vulkan/gs/sorting.hpp"
-#include "vulkan/gs/tiled/operations.hpp"
-#include "vulkan/gs/tiled/resources.hpp"
+#include "vulkan/gs/graphics/sorting.hpp"
+#include "vulkan/gs/tiled_compute/operations.hpp"
+#include "vulkan/gs/tiled_compute/resources.hpp"
 #include "vulkan/imgui_overlay.hpp"
 #include "vulkan/sphere_setup.hpp"
 #include "vulkan/vulkan_bootstrap.hpp"
@@ -122,7 +122,7 @@ auto RecreateSwapchain(vulkan::Context &context, RenderData &data) -> std::expec
   data.command_buffers.clear();
   data.command_pool.reset();
 
-  if (data.rasterization_mode == RasterizationMode::kHardware) { DestroyGraphicsPipeline(context, data); }
+  if (data.rasterization_mode == RasterizationMode::kGraphicsPipeline) { DestroyGraphicsPipeline(context, data); }
 
   if (context.swapchain == nullptr) {
     return std::unexpected{ MakeError(std::errc::state_not_recoverable, "swapchain is not initialized") };
@@ -138,7 +138,7 @@ auto RecreateSwapchain(vulkan::Context &context, RenderData &data) -> std::expec
   if (!gs::RecreateRasterizationColorTarget(context, data)) {
     return std::unexpected{ MakeError(std::errc::io_error, "failed to recreate rasterize color target") };
   }
-  if (data.rasterization_mode == RasterizationMode::kHardware) {
+  if (data.rasterization_mode == RasterizationMode::kGraphicsPipeline) {
     if (0 != CreateGraphicsPipeline(context, data)) {
       return std::unexpected{ MakeError(std::errc::io_error, "failed to recreate graphics pipeline") };
     }
