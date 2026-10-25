@@ -162,14 +162,6 @@ namespace {
     auto loaded = LoadSplatsFromPly(config.ply_path);
     if (!loaded) { return std::unexpected(loaded.error()); }
     SplatCpuData const splats = std::move(*loaded);
-    {
-      auto const &first_appearance = splats.appearances.at(0);
-      std::println("appearance[0] f_dc=({}, {}, {})",
-        first_appearance.f_dc.at(0),
-        first_appearance.f_dc.at(1),
-        first_appearance.f_dc.at(2));
-    }
-
     if (auto queues = GetQueues(context, render_data); !queues) { return std::unexpected(queues.error()); }
 
     if (auto configured = ConfigureLfd(render_data, config); !configured) {
