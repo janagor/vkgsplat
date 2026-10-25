@@ -98,8 +98,12 @@ namespace {
     }
   }
 
-  auto RunGpuPassTimings(::benchmark::State &state, Platform &platform, BenchmarkProfile const &profile,
-    std::filesystem::path const &scene_path, Camera const &camera, std::atomic_bool &failed,
+  auto RunGpuPassTimings(::benchmark::State &state,
+    Platform &platform,
+    BenchmarkProfile const &profile,
+    std::filesystem::path const &scene_path,
+    Camera const &camera,
+    std::atomic_bool &failed,
     RasterizationMode mode) -> void
   {
     auto renderer = Renderer::create(MakeGpuProfilingRendererConfig(profile, scene_path, mode), platform);
@@ -159,11 +163,15 @@ auto RegisterGpuPassTimings(Platform &platform,
 {
   for (auto const mode : { RasterizationMode::kGraphicsPipeline, RasterizationMode::kComputeTiled }) {
     char const *mode_name = mode == RasterizationMode::kGraphicsPipeline ? "graphics" : "compute";
-    auto const name = std::format("BM_GpuPassTimings/{}/{}/{}/{}x{}", profile.id, mode_name,
-      profile.scene.gaussian_count, profile.width, profile.height);
+    auto const name = std::format("BM_GpuPassTimings/{}/{}/{}/{}x{}",
+      profile.id,
+      mode_name,
+      profile.scene.gaussian_count,
+      profile.width,
+      profile.height);
     auto *registered = ::benchmark::RegisterBenchmark(
       name, [&platform, &profile, &scene_path, &camera, &failed, mode](::benchmark::State &state) -> void {
-      RunGpuPassTimings(state, platform, profile, scene_path, camera, failed, mode);
+        RunGpuPassTimings(state, platform, profile, scene_path, camera, failed, mode);
       });
     registered->ArgName("batch")->UseManualTime()->Unit(::benchmark::kMillisecond);
     for (auto const batch_frames : kBatchFrameCounts) { registered->Arg(static_cast<std::int64_t>(batch_frames)); }

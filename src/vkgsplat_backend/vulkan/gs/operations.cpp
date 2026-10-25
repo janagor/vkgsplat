@@ -113,7 +113,8 @@ namespace {
     VkCommandBuffer command_buffer) -> std::expected<void, Error>
   {
     if (!data.bin_algorithm) {
-      return std::unexpected{ MakeError(std::errc::state_not_recoverable, "gaussian binning pipeline is not initialized") };
+      return std::unexpected{ MakeError(
+        std::errc::state_not_recoverable, "gaussian binning pipeline is not initialized") };
     }
     ScopedGpuPass const timer{ context, data, command_buffer, GpuPass::kBinning };
     if (auto recorded =
@@ -131,7 +132,8 @@ namespace {
     VkCommandBuffer command_buffer) -> std::expected<void, Error>
   {
     if (!data.prepare_sort_algorithm) {
-      return std::unexpected{ MakeError(std::errc::state_not_recoverable, "sort preparation pipeline is not initialized") };
+      return std::unexpected{ MakeError(
+        std::errc::state_not_recoverable, "sort preparation pipeline is not initialized") };
     }
     ScopedGpuPass const timer{ context, data, command_buffer, GpuPass::kPrepareSort };
     auto const sort_grid = Dispatch2dForThreads(context, data.gaussian_sort_size, kComputeLocalSizeX);
@@ -165,7 +167,8 @@ namespace {
     VkCommandBuffer command_buffer) -> std::expected<void, Error>
   {
     if (!data.radix_histogram_algorithm || !data.radix_scatter_algorithm || !data.radix_dispatch_buffer) {
-      return std::unexpected{ MakeError(std::errc::state_not_recoverable, "radix sorting resources are not initialized") };
+      return std::unexpected{ MakeError(
+        std::errc::state_not_recoverable, "radix sorting resources are not initialized") };
     }
     ScopedGpuPass const timer{ context, data, command_buffer, GpuPass::kRadixSort };
     constexpr u32 kRadixPasses = 4U;
@@ -229,12 +232,16 @@ auto RecordPhaseACompute(vulkan::Context const &context, RenderData const &data,
   if (auto recorded = RecordProjection(context, data, command_buffer, true); !recorded) { return recorded; }
 
   switch (data.rasterization_mode) {
-  case RasterizationMode::kGraphicsPipeline: break;
-  case RasterizationMode::kComputeTiled: return tiled::RecordPreparation(context, data, command_buffer);
-  default: return std::unexpected{ MakeError(std::errc::invalid_argument, "unknown rasterization mode") };
+  case RasterizationMode::kGraphicsPipeline:
+    break;
+  case RasterizationMode::kComputeTiled:
+    return tiled::RecordPreparation(context, data, command_buffer);
+  default:
+    return std::unexpected{ MakeError(std::errc::invalid_argument, "unknown rasterization mode") };
   }
   if (!data.instance_count_buffer) {
-    return std::unexpected{ MakeError(std::errc::state_not_recoverable, "graphics pipeline instance counter is not initialized") };
+    return std::unexpected{ MakeError(
+      std::errc::state_not_recoverable, "graphics pipeline instance counter is not initialized") };
   }
 
   context.disp.cmdFillBuffer(command_buffer, data.instance_count_buffer->handle(), 0, sizeof(u32), 0U);
@@ -250,7 +257,9 @@ auto RecordPhaseACompute(vulkan::Context const &context, RenderData const &data,
 auto RecordRasterization(vulkan::Context const &context, RenderData const &data, VkCommandBuffer command_buffer)
   -> std::expected<void, Error>
 {
-  ScopedGpuPass const timer{ context, data, command_buffer,
+  ScopedGpuPass const timer{ context,
+    data,
+    command_buffer,
     data.rasterization_mode == RasterizationMode::kComputeTiled ? GpuPass::kTiledRasterize : GpuPass::kRasterize };
   if (data.rasterization_mode == RasterizationMode::kComputeTiled) {
     if (auto recorded = tiled::RecordRasterization(context, data, command_buffer); !recorded) { return recorded; }

@@ -12,19 +12,19 @@
 #include "vulkan/command/pool.hpp"
 #include "vulkan/descriptor/descriptor_heap.hpp"
 #include "vulkan/gpu_pass_timer.hpp"
-#include "vulkan/gs/graphics/graphics_pipeline.hpp"
 #include "vulkan/gs/graphics/binning.hpp"
-#include "vulkan/gs/projection.hpp"
+#include "vulkan/gs/graphics/graphics_pipeline.hpp"
 #include "vulkan/gs/graphics/sorting.hpp"
+#include "vulkan/gs/projection.hpp"
 #include "vulkan/gs/tiled_compute/operations.hpp"
 #include "vulkan/gs/tiled_compute/resources.hpp"
 #include "vulkan/imgui_overlay.hpp"
 #include "vulkan/sphere_setup.hpp"
 #include "vulkan/vulkan_bootstrap.hpp"
 #include "vulkan_context.hpp"
+#include <vkgsplat/renderer.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
-#include <vkgsplat/renderer.hpp>
 
 #include <vkexec/sync_wait.hpp>
 #include <vkexec_extensions/timeline_semaphore/frame_ring.hpp>
@@ -147,7 +147,8 @@ auto RecreateSwapchain(vulkan::Context &context, RenderData &data) -> std::expec
     if (auto resources = gs::tiled::RecreateExtentResources(context, data); !resources) { return resources; }
   }
   if (!RefreshDescriptorHeap(context, data)) {
-    return std::unexpected{ MakeError(std::errc::io_error, "failed to refresh descriptors after swapchain recreation") };
+    return std::unexpected{ MakeError(
+      std::errc::io_error, "failed to refresh descriptors after swapchain recreation") };
   }
   if (auto command_resources = CreateCommandResources(context, data); !command_resources) {
     return std::unexpected{ command_resources.error() };

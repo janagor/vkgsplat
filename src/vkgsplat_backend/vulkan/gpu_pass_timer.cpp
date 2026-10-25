@@ -54,12 +54,18 @@ auto GpuPassName(GpuPass pass) -> char const *
     return "raster";
   case GpuPass::kMultiviewProjection:
     return "view proj";
-  case GpuPass::kTiledCount: return "tiled count";
-  case GpuPass::kTiledScan: return "tiled scan";
-  case GpuPass::kTiledEmit: return "tiled emit";
-  case GpuPass::kTiledRadixSort: return "tiled radix";
-  case GpuPass::kTiledRanges: return "tiled ranges";
-  case GpuPass::kTiledRasterize: return "tiled raster";
+  case GpuPass::kTiledCount:
+    return "tiled count";
+  case GpuPass::kTiledScan:
+    return "tiled scan";
+  case GpuPass::kTiledEmit:
+    return "tiled emit";
+  case GpuPass::kTiledRadixSort:
+    return "tiled radix";
+  case GpuPass::kTiledRanges:
+    return "tiled ranges";
+  case GpuPass::kTiledRasterize:
+    return "tiled raster";
   case GpuPass::kCount:
     break;
   }

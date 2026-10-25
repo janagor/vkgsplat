@@ -9,9 +9,9 @@
 
 namespace vkgsplat::benchmark {
 
-[[nodiscard]] auto MakeRendererConfig(BenchmarkProfile const &profile, std::filesystem::path const &scene_path,
-  RasterizationMode mode = RasterizationMode::kGraphicsPipeline)
-  -> RendererConfig;
+[[nodiscard]] auto MakeRendererConfig(BenchmarkProfile const &profile,
+  std::filesystem::path const &scene_path,
+  RasterizationMode mode = RasterizationMode::kGraphicsPipeline) -> RendererConfig;
 [[nodiscard]] auto MakeGpuProfilingRendererConfig(BenchmarkProfile const &profile,
   std::filesystem::path const &scene_path,
   RasterizationMode mode = RasterizationMode::kGraphicsPipeline) -> RendererConfig;

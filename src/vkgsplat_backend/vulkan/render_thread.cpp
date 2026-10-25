@@ -845,9 +845,7 @@ auto RenderThread::ReadFrameOnWorker() -> std::expected<RgbaFrame, Error>
   }
   auto frame = vulkan::ReadColorTargetRgba8(*context_, *data_);
   if (!frame) { return frame; }
-  if (auto status = ConsumeCompletedTiledStatus(*data_); !status) {
-    return std::unexpected{ status.error() };
-  }
+  if (auto status = ConsumeCompletedTiledStatus(*data_); !status) { return std::unexpected{ status.error() }; }
   return frame;
 }
 

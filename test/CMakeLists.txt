@@ -36,7 +36,7 @@ if(TARGET vkgsplat::vkgsplat_utility)
   endif()
   add_executable(vkgsplat_gpu_timing_statistics_test gpu_timing_statistics.cpp ../benchmark/gpu_statistics.cpp)
   target_link_libraries(vkgsplat_gpu_timing_statistics_test PRIVATE Catch2::Catch2WithMain vkgsplat::vkgsplat_utility
-                                                                vkgsplat::vkgsplat)
+                                                                    vkgsplat::vkgsplat)
   target_include_directories(vkgsplat_gpu_timing_statistics_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/..")
   catch_discover_tests(vkgsplat_gpu_timing_statistics_test)
 
@@ -368,18 +368,17 @@ if(vkgsplat_ENABLE_HEADLESS_GPU_TESTS)
     add_executable(vkgsplat_offscreen_gpu_smoke offscreen_gpu_smoke.cpp)
     add_executable(vkgsplat_tiled_image_gpu_smoke tiled_image_gpu_smoke.cpp)
     target_link_libraries(
-      vkgsplat_tiled_image_gpu_smoke
-      PRIVATE vkgsplat::vkgsplat
-              vkgsplat::vkgsplat_headless_platform
-              vkgsplat::vkgsplat_benchmark_fixture)
-    add_test(
-      NAME tiled.gpu.image_and_overflow
-      COMMAND $<TARGET_FILE:vkgsplat_tiled_image_gpu_smoke>
-              ${CMAKE_CURRENT_BINARY_DIR}/tiled-compact.ply
-              ${CMAKE_CURRENT_BINARY_DIR}/tiled-error.ppm)
+      vkgsplat_tiled_image_gpu_smoke PRIVATE vkgsplat::vkgsplat vkgsplat::vkgsplat_headless_platform
+                                             vkgsplat::vkgsplat_benchmark_fixture)
+    add_test(NAME tiled.gpu.image_and_overflow
+             COMMAND $<TARGET_FILE:vkgsplat_tiled_image_gpu_smoke> ${CMAKE_CURRENT_BINARY_DIR}/tiled-compact.ply
+                     ${CMAKE_CURRENT_BINARY_DIR}/tiled-error.ppm)
     set_tests_properties(
       tiled.gpu.image_and_overflow
-      PROPERTIES ENVIRONMENT "DISPLAY=;WAYLAND_DISPLAY=" TIMEOUT 180)
+      PROPERTIES ENVIRONMENT
+                 "DISPLAY=;WAYLAND_DISPLAY="
+                 TIMEOUT
+                 180)
     target_link_libraries(
       vkgsplat_offscreen_gpu_smoke
       PRIVATE vkgsplat::vkgsplat

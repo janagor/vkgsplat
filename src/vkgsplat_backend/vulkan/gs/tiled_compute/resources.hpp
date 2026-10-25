@@ -6,12 +6,14 @@
 
 namespace vkgsplat {
 struct RenderData;
-namespace vulkan { struct Context; }
+namespace vulkan {
+  struct Context;
+}
 namespace gs::tiled {
 
-[[nodiscard]] auto InitResources(vulkan::Context &context, RenderData &data) -> std::expected<void, Error>;
-[[nodiscard]] auto RecreateExtentResources(vulkan::Context &context, RenderData &data) -> std::expected<void, Error>;
-void DestroyResources(RenderData &data);
+  [[nodiscard]] auto InitResources(vulkan::Context &context, RenderData &data) -> std::expected<void, Error>;
+  [[nodiscard]] auto RecreateExtentResources(vulkan::Context &context, RenderData &data) -> std::expected<void, Error>;
+  void DestroyResources(RenderData &data);
 
 }// namespace gs::tiled
 }// namespace vkgsplat

@@ -1,7 +1,7 @@
 #include "benchmark/capture_sequence.hpp"
 #include "benchmark/fixture/manifest.hpp"
-#include "benchmark/fixture/profile.hpp"
 #include "benchmark/fixture/ply_writer.hpp"
+#include "benchmark/fixture/profile.hpp"
 #include "benchmark/fixture/renderer_adapter.hpp"
 #include "benchmark/fixture/scene.hpp"
 #include "benchmark/gpu_pass_timings.hpp"
@@ -37,12 +37,16 @@ constexpr vkgsplat::f32 kHighOverlapPositionScale = 0.15F;
   auto scene = vkgsplat::benchmark::GenerateScene({ .gaussian_count = kOverlapGaussianCount,
     .seed = vkgsplat::benchmark::kBaselineSeed,
     .generator_version = vkgsplat::benchmark::kGeneratorVersion });
-  if (!scene) { std::println(stderr, "{}", scene.error().message()); return false; }
+  if (!scene) {
+    std::println(stderr, "{}", scene.error().message());
+    return false;
+  }
   for (auto &geometry : scene->geometries) {
     geometry.scale.fill(high_overlap ? kHighOverlapLogScale : kLowOverlapLogScale);
     if (high_overlap) {
-      std::ranges::transform(geometry.position, geometry.position.begin(),
-        [](vkgsplat::f32 position) -> vkgsplat::f32 { return position * kHighOverlapPositionScale; });
+      std::ranges::transform(geometry.position, geometry.position.begin(), [](vkgsplat::f32 position) -> vkgsplat::f32 {
+        return position * kHighOverlapPositionScale;
+      });
     }
   }
   auto written = vkgsplat::benchmark::WritePly(path, *scene);
@@ -118,7 +122,10 @@ auto RunBenchmark(int argc, char **argv) -> int
   hd_profile.height = kHdHeight;
   hd_profile.camera.aspect_ratio = static_cast<vkgsplat::f64>(kHdWidth) / kHdHeight;
   auto hd_platform = vkgsplat::HeadlessPlatform::create({ .width = kHdWidth, .height = kHdHeight });
-  if (!hd_platform) { std::println(stderr, "{}", hd_platform.error().message()); return 1; }
+  if (!hd_platform) {
+    std::println(stderr, "{}", hd_platform.error().message());
+    return 1;
+  }
   auto const hd_camera = vkgsplat::Camera{ hd_profile.camera };
   vkgsplat::benchmark::RegisterRenderThroughput(*hd_platform, hd_profile, scene_path, hd_camera, failed);
   vkgsplat::benchmark::RegisterGpuPassTimings(*hd_platform, hd_profile, scene_path, hd_camera, failed);
@@ -128,7 +135,10 @@ auto RunBenchmark(int argc, char **argv) -> int
   uhd_profile.camera.aspect_ratio = static_cast<vkgsplat::f64>(kUhdWidth) / kUhdHeight;
   uhd_profile.tiled_intersection_budget_bytes = vkgsplat::benchmark::kUhdTiledBudgetBytes;
   auto uhd_platform = vkgsplat::HeadlessPlatform::create({ .width = kUhdWidth, .height = kUhdHeight });
-  if (!uhd_platform) { std::println(stderr, "{}", uhd_platform.error().message()); return 1; }
+  if (!uhd_platform) {
+    std::println(stderr, "{}", uhd_platform.error().message());
+    return 1;
+  }
   auto const uhd_camera = vkgsplat::Camera{ uhd_profile.camera };
   vkgsplat::benchmark::RegisterRenderThroughput(*uhd_platform, uhd_profile, scene_path, uhd_camera, failed);
   vkgsplat::benchmark::RegisterGpuPassTimings(*uhd_platform, uhd_profile, scene_path, uhd_camera, failed);

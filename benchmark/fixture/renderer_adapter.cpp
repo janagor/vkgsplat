@@ -7,7 +7,8 @@
 
 namespace vkgsplat::benchmark {
 
-auto MakeRendererConfig(BenchmarkProfile const &profile, std::filesystem::path const &scene_path,
+auto MakeRendererConfig(BenchmarkProfile const &profile,
+  std::filesystem::path const &scene_path,
   RasterizationMode mode) -> RendererConfig
 {
   return RendererConfig{
@@ -26,8 +27,7 @@ auto MakeRendererConfig(BenchmarkProfile const &profile, std::filesystem::path c
 
 auto MakeGpuProfilingRendererConfig(BenchmarkProfile const &profile,
   std::filesystem::path const &scene_path,
-  RasterizationMode mode)
-  -> RendererConfig
+  RasterizationMode mode) -> RendererConfig
 {
   auto config = MakeRendererConfig(profile, scene_path, mode);
   config.enable_gpu_timers = true;

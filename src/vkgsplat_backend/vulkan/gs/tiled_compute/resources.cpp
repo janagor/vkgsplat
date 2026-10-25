@@ -19,45 +19,45 @@
 namespace vkgsplat::gs::tiled {
 namespace {
 
-constexpr u64 kRadixBins = 256U;
-constexpr u64 kRadixBlockSize = 256U;
-constexpr u64 kRadixPrefixBlocksPerGroup = 256U;
-constexpr u64 kScanBlockSize = 256U;
-constexpr u64 kKeyCopies = 2U;
-constexpr u64 kValueCopies = 2U;
-constexpr u64 kRadixScratchCopies = 2U;
-constexpr u64 kMinimumIntersections = 1U;
-constexpr u64 kCountWorkgroupSize = 64U;
+  constexpr u64 kRadixBins = 256U;
+  constexpr u64 kRadixBlockSize = 256U;
+  constexpr u64 kRadixPrefixBlocksPerGroup = 256U;
+  constexpr u64 kScanBlockSize = 256U;
+  constexpr u64 kKeyCopies = 2U;
+  constexpr u64 kValueCopies = 2U;
+  constexpr u64 kRadixScratchCopies = 2U;
+  constexpr u64 kMinimumIntersections = 1U;
+  constexpr u64 kCountWorkgroupSize = 64U;
 
-[[nodiscard]] auto CeilDiv(u64 numerator, u64 denominator) -> u64
-{ return (numerator / denominator) + (numerator % denominator != 0U ? 1U : 0U); }
+  [[nodiscard]] auto CeilDiv(u64 numerator, u64 denominator) -> u64
+  { return (numerator / denominator) + (numerator % denominator != 0U ? 1U : 0U); }
 
-[[nodiscard]] auto CheckedBytes(u64 elements, u64 stride, u64 limit, char const *name)
-  -> std::expected<VkDeviceSize, Error>
-{
-  if (elements == 0U || elements > std::numeric_limits<VkDeviceSize>::max() / stride
-      || elements * stride > limit) {
-    return std::unexpected(MakeError(std::errc::value_too_large,
-      std::format("tiled {} buffer exceeds maxStorageBufferRange", name)));
+  [[nodiscard]] auto CheckedBytes(u64 elements, u64 stride, u64 limit, char const *name)
+    -> std::expected<VkDeviceSize, Error>
+  {
+    if (elements == 0U || elements > std::numeric_limits<VkDeviceSize>::max() / stride || elements * stride > limit) {
+      return std::unexpected(
+        MakeError(std::errc::value_too_large, std::format("tiled {} buffer exceeds maxStorageBufferRange", name)));
+    }
+    return static_cast<VkDeviceSize>(elements * stride);
   }
-  return static_cast<VkDeviceSize>(elements * stride);
-}
 
-[[nodiscard]] auto Allocate(vulkan::Context &context, std::optional<GpuBuffer> &destination,
-  VkDeviceSize size, char const *name) -> std::expected<void, Error>
-{
-  auto created = vulkan::CreateDeviceStorageBuffer(*context.allocator, size);
-  if (!created) {
-    return std::unexpected(MakeError(std::errc::not_enough_memory,
-      std::format("failed to allocate tiled {} buffer: {}", name, created.error().message())));
+  [[nodiscard]] auto
+    Allocate(vulkan::Context &context, std::optional<GpuBuffer> &destination, VkDeviceSize size, char const *name)
+      -> std::expected<void, Error>
+  {
+    auto created = vulkan::CreateDeviceStorageBuffer(*context.allocator, size);
+    if (!created) {
+      return std::unexpected(MakeError(std::errc::not_enough_memory,
+        std::format("failed to allocate tiled {} buffer: {}", name, created.error().message())));
+    }
+    destination = std::move(*created);
+    if (vulkan::DeviceAddressOrZero(destination) == 0U) {
+      return std::unexpected(
+        MakeError(std::errc::state_not_recoverable, std::format("tiled {} buffer has no device address", name)));
+    }
+    return {};
   }
-  destination = std::move(*created);
-  if (vulkan::DeviceAddressOrZero(destination) == 0U) {
-    return std::unexpected(MakeError(std::errc::state_not_recoverable,
-      std::format("tiled {} buffer has no device address", name)));
-  }
-  return {};
-}
 
 }// namespace
 
@@ -91,99 +91,107 @@ void DestroyResources(RenderData &data)
 
 namespace {
 
-struct BufferSizes
-{
-  VkDeviceSize counts{};
-  VkDeviceSize offsets{};
-  VkDeviceSize keys{};
-  VkDeviceSize values{};
-  VkDeviceSize histogram{};
-  VkDeviceSize prefix_group{};
-  VkDeviceSize ranges{};
-};
-
-[[nodiscard]] auto AllocateTiledBuffers(vulkan::Context &context, RenderData &data,
-  BufferSizes const &sizes) -> std::expected<void, Error>
-{
-  if (auto result = Allocate(context, data.tiled_counts_buffer, sizes.counts, "counts"); !result) { return result; }
-  if (auto result = Allocate(context, data.tiled_offsets_buffer, sizes.offsets, "offsets"); !result) { return result; }
-  auto total = vulkan::CreateStorageBuffer(*context.allocator, sizeof(u32));
-  if (!total) { return std::unexpected(total.error()); }
-  data.tiled_total_buffer = std::move(*total);
-  auto status = vulkan::CreateStorageBuffer(*context.allocator, sizeof(u32));
-  if (!status) { return std::unexpected(status.error()); }
-  data.tiled_overflow_buffer = std::move(*status);
-  if (auto result = Allocate(context, data.sorted_keys_buffer, sizes.keys, "keys A"); !result) { return result; }
-  if (auto result = Allocate(context, data.unsorted_keys_buffer, sizes.keys, "keys B"); !result) { return result; }
-  if (auto result = Allocate(context, data.sorted_values_buffer, sizes.values, "values A"); !result) { return result; }
-  if (auto result = Allocate(context, data.unsorted_values_buffer, sizes.values, "values B"); !result) { return result; }
-  if (auto result = Allocate(context, data.sort_histogram_buffer, sizes.histogram, "histograms"); !result) {
-    return result;
-  }
-  if (auto result = Allocate(context, data.tiled_radix_prefix_buffer, sizes.histogram, "radix prefixes"); !result) {
-    return result;
-  }
-  if (auto result = Allocate(context, data.tiled_radix_group_buffer, sizes.prefix_group, "radix prefix groups");
-    !result) {
-    return result;
-  }
-  if (auto result = Allocate(context, data.radix_dispatch_buffer, sizeof(VkDispatchIndirectCommand), "indirect dispatch");
-    !result) {
-    return result;
-  }
-  if (auto result = Allocate(context, data.tile_ranges_buffer, sizes.ranges, "tile ranges"); !result) { return result; }
-
-  return {};
-}
-
-[[nodiscard]] auto AllocateScanLevels(vulkan::Context &context, RenderData &data,
-  u64 max_range) -> std::expected<void, Error>
-{
-  u64 level_count = data.splat_count;
-  while (level_count > kScanBlockSize) {
-    level_count = CeilDiv(level_count, kScanBlockSize);
-    auto const level_size = CheckedBytes(level_count, sizeof(u32), max_range, "scan level");
-    if (!level_size) { return std::unexpected(level_size.error()); }
-    std::optional<GpuBuffer> sums;
-    std::optional<GpuBuffer> offsets;
-    if (auto result = Allocate(context, sums, *level_size, "scan sums"); !result) { return result; }
-    if (auto result = Allocate(context, offsets, *level_size, "scan offsets"); !result) { return result; }
-    if (!sums || !offsets) {
-      return std::unexpected(MakeError(std::errc::state_not_recoverable, "tiled scan buffers are missing"));
-    }
-    data.tiled_scan_sums.push_back(std::move(*sums));
-    data.tiled_scan_offsets.push_back(std::move(*offsets));
-  }
-  return {};
-}
-
-[[nodiscard]] auto InitDebugReadback(vulkan::Context &context, RenderData &data)
-  -> std::expected<void, Error>
-{
-  if (!data.projected_buffer || !data.tiled_counts_buffer || !data.tiled_offsets_buffer
-      || !data.sorted_keys_buffer || !data.sorted_values_buffer || !data.tile_ranges_buffer) {
-    return std::unexpected(MakeError(std::errc::state_not_recoverable, "tiled debug buffers are missing"));
-  }
-  VkDeviceSize size = 0U;
-  auto section = [&](TiledDebugSection selected, VkDeviceSize bytes) -> void {
-    auto const index = static_cast<size_t>(selected);
-    data.tiled_debug_offsets.at(index) = size;
-    data.tiled_debug_sizes.at(index) = bytes;
-    size += bytes;
+  struct BufferSizes
+  {
+    VkDeviceSize counts{};
+    VkDeviceSize offsets{};
+    VkDeviceSize keys{};
+    VkDeviceSize values{};
+    VkDeviceSize histogram{};
+    VkDeviceSize prefix_group{};
+    VkDeviceSize ranges{};
   };
-  section(TiledDebugSection::kProjected, data.projected_buffer->size());
-  section(TiledDebugSection::kCounts, data.tiled_counts_buffer->size());
-  section(TiledDebugSection::kOffsets, data.tiled_offsets_buffer->size());
-  section(TiledDebugSection::kEmittedKeys, data.sorted_keys_buffer->size());
-  section(TiledDebugSection::kEmittedIndices, data.sorted_values_buffer->size());
-  section(TiledDebugSection::kSortedKeys, data.sorted_keys_buffer->size());
-  section(TiledDebugSection::kSortedIndices, data.sorted_values_buffer->size());
-  section(TiledDebugSection::kRanges, data.tile_ranges_buffer->size());
-  auto readback = vulkan::CreateStagingBuffer(*context.allocator, size);
-  if (!readback) { return std::unexpected(readback.error()); }
-  data.tiled_debug_readback_buffer = std::move(*readback);
-  return {};
-}
+
+  [[nodiscard]] auto AllocateTiledBuffers(vulkan::Context &context, RenderData &data, BufferSizes const &sizes)
+    -> std::expected<void, Error>
+  {
+    if (auto result = Allocate(context, data.tiled_counts_buffer, sizes.counts, "counts"); !result) { return result; }
+    if (auto result = Allocate(context, data.tiled_offsets_buffer, sizes.offsets, "offsets"); !result) {
+      return result;
+    }
+    auto total = vulkan::CreateStorageBuffer(*context.allocator, sizeof(u32));
+    if (!total) { return std::unexpected(total.error()); }
+    data.tiled_total_buffer = std::move(*total);
+    auto status = vulkan::CreateStorageBuffer(*context.allocator, sizeof(u32));
+    if (!status) { return std::unexpected(status.error()); }
+    data.tiled_overflow_buffer = std::move(*status);
+    if (auto result = Allocate(context, data.sorted_keys_buffer, sizes.keys, "keys A"); !result) { return result; }
+    if (auto result = Allocate(context, data.unsorted_keys_buffer, sizes.keys, "keys B"); !result) { return result; }
+    if (auto result = Allocate(context, data.sorted_values_buffer, sizes.values, "values A"); !result) {
+      return result;
+    }
+    if (auto result = Allocate(context, data.unsorted_values_buffer, sizes.values, "values B"); !result) {
+      return result;
+    }
+    if (auto result = Allocate(context, data.sort_histogram_buffer, sizes.histogram, "histograms"); !result) {
+      return result;
+    }
+    if (auto result = Allocate(context, data.tiled_radix_prefix_buffer, sizes.histogram, "radix prefixes"); !result) {
+      return result;
+    }
+    if (auto result = Allocate(context, data.tiled_radix_group_buffer, sizes.prefix_group, "radix prefix groups");
+      !result) {
+      return result;
+    }
+    if (auto result =
+          Allocate(context, data.radix_dispatch_buffer, sizeof(VkDispatchIndirectCommand), "indirect dispatch");
+      !result) {
+      return result;
+    }
+    if (auto result = Allocate(context, data.tile_ranges_buffer, sizes.ranges, "tile ranges"); !result) {
+      return result;
+    }
+
+    return {};
+  }
+
+  [[nodiscard]] auto AllocateScanLevels(vulkan::Context &context, RenderData &data, u64 max_range)
+    -> std::expected<void, Error>
+  {
+    u64 level_count = data.splat_count;
+    while (level_count > kScanBlockSize) {
+      level_count = CeilDiv(level_count, kScanBlockSize);
+      auto const level_size = CheckedBytes(level_count, sizeof(u32), max_range, "scan level");
+      if (!level_size) { return std::unexpected(level_size.error()); }
+      std::optional<GpuBuffer> sums;
+      std::optional<GpuBuffer> offsets;
+      if (auto result = Allocate(context, sums, *level_size, "scan sums"); !result) { return result; }
+      if (auto result = Allocate(context, offsets, *level_size, "scan offsets"); !result) { return result; }
+      if (!sums || !offsets) {
+        return std::unexpected(MakeError(std::errc::state_not_recoverable, "tiled scan buffers are missing"));
+      }
+      data.tiled_scan_sums.push_back(std::move(*sums));
+      data.tiled_scan_offsets.push_back(std::move(*offsets));
+    }
+    return {};
+  }
+
+  [[nodiscard]] auto InitDebugReadback(vulkan::Context &context, RenderData &data) -> std::expected<void, Error>
+  {
+    if (!data.projected_buffer || !data.tiled_counts_buffer || !data.tiled_offsets_buffer || !data.sorted_keys_buffer
+        || !data.sorted_values_buffer || !data.tile_ranges_buffer) {
+      return std::unexpected(MakeError(std::errc::state_not_recoverable, "tiled debug buffers are missing"));
+    }
+    VkDeviceSize size = 0U;
+    auto section = [&](TiledDebugSection selected, VkDeviceSize bytes) -> void {
+      auto const index = static_cast<size_t>(selected);
+      data.tiled_debug_offsets.at(index) = size;
+      data.tiled_debug_sizes.at(index) = bytes;
+      size += bytes;
+    };
+    section(TiledDebugSection::kProjected, data.projected_buffer->size());
+    section(TiledDebugSection::kCounts, data.tiled_counts_buffer->size());
+    section(TiledDebugSection::kOffsets, data.tiled_offsets_buffer->size());
+    section(TiledDebugSection::kEmittedKeys, data.sorted_keys_buffer->size());
+    section(TiledDebugSection::kEmittedIndices, data.sorted_values_buffer->size());
+    section(TiledDebugSection::kSortedKeys, data.sorted_keys_buffer->size());
+    section(TiledDebugSection::kSortedIndices, data.sorted_values_buffer->size());
+    section(TiledDebugSection::kRanges, data.tile_ranges_buffer->size());
+    auto readback = vulkan::CreateStagingBuffer(*context.allocator, size);
+    if (!readback) { return std::unexpected(readback.error()); }
+    data.tiled_debug_readback_buffer = std::move(*readback);
+    return {};
+  }
 
 }// namespace
 
@@ -209,8 +217,7 @@ auto InitResources(vulkan::Context &context, RenderData &data) -> std::expected<
   if (tile_count == 0U || tile_count > std::numeric_limits<u32>::max()
       || CeilDiv(data.splat_count, kCountWorkgroupSize) > limits.maxComputeWorkGroupCount[0]
       || prefix_groups > limits.maxComputeWorkGroupCount[0]
-      || radix_workgroups > static_cast<u64>(limits.maxComputeWorkGroupCount[0])
-                              * limits.maxComputeWorkGroupCount[1]
+      || radix_workgroups > static_cast<u64>(limits.maxComputeWorkGroupCount[0]) * limits.maxComputeWorkGroupCount[1]
       || tiles_x > limits.maxComputeWorkGroupCount[0] || tiles_y > limits.maxComputeWorkGroupCount[1]) {
     return std::unexpected(MakeError(std::errc::value_too_large, "tiled dispatch or tile grid exceeds device limits"));
   }
@@ -221,8 +228,8 @@ auto InitResources(vulkan::Context &context, RenderData &data) -> std::expected<
   auto const keys_size = CheckedBytes(capacity, sizeof(TiledSortKey), max_range, "keys");
   auto const values_size = CheckedBytes(capacity, sizeof(u32), max_range, "values");
   auto const histogram_size = CheckedBytes(radix_workgroups * kRadixBins, sizeof(u32), max_range, "histogram");
-  auto const prefix_group_size = CheckedBytes((prefix_groups + 1U) * kRadixBins,
-    sizeof(u32), max_range, "radix prefix groups");
+  auto const prefix_group_size =
+    CheckedBytes((prefix_groups + 1U) * kRadixBins, sizeof(u32), max_range, "radix prefix groups");
   auto const ranges_size = CheckedBytes(tile_count, sizeof(TileRange), max_range, "tile ranges");
   if (!counts_size) { return std::unexpected(counts_size.error()); }
   if (!offsets_size) { return std::unexpected(offsets_size.error()); }

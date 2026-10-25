@@ -32,16 +32,16 @@
 #include <vkgsplat_video/encoded_packet.hpp>
 
 #include "vulkan/app_state.hpp"
+#include "vulkan/descriptor/descriptor_heap.hpp"
 #include "vulkan/gs/gaussian_splat.hpp"
-#include "vulkan/gs/graphics/graphics_pipeline.hpp"
 #include "vulkan/gs/graphics/binning.hpp"
+#include "vulkan/gs/graphics/graphics_pipeline.hpp"
+#include "vulkan/gs/graphics/sorting.hpp"
 #include "vulkan/gs/pipeline.hpp"
 #include "vulkan/gs/projection.hpp"
 #include "vulkan/gs/rasterization.hpp"
-#include "vulkan/gs/graphics/sorting.hpp"
 #include "vulkan/gs/tiled_compute/operations.hpp"
 #include "vulkan/gs/tiled_compute/resources.hpp"
-#include "vulkan/descriptor/descriptor_heap.hpp"
 #include "vulkan/imgui_overlay.hpp"
 #include "vulkan/mesh_gpu.hpp"
 #include "vulkan/present_pacer.hpp"
@@ -148,8 +148,8 @@ namespace {
     return {};
   }
 
-  [[nodiscard]] auto InitRasterizer(vulkan::Context &context, RenderData &render_data,
-    RasterizationMode mode) -> std::expected<void, Error>
+  [[nodiscard]] auto InitRasterizer(vulkan::Context &context, RenderData &render_data, RasterizationMode mode)
+    -> std::expected<void, Error>
   {
     if (mode == RasterizationMode::kGraphicsPipeline) {
       if (!gs::InitBinning(context, render_data)) {
@@ -167,8 +167,8 @@ namespace {
     context.inst_disp.getPhysicalDeviceFormatProperties(
       context.device.physical_device.physical_device, render_data.color_format, &format_properties);
     if ((format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT) == 0U) {
-      return std::unexpected(MakeError(std::errc::operation_not_supported,
-        "VK_FORMAT_R8G8B8A8_UNORM does not support storage images on this device"));
+      return std::unexpected(MakeError(
+        std::errc::operation_not_supported, "VK_FORMAT_R8G8B8A8_UNORM does not support storage images on this device"));
     }
     if (auto resources = gs::tiled::InitResources(context, render_data); !resources) {
       return std::unexpected(resources.error());
@@ -179,8 +179,8 @@ namespace {
     return {};
   }
 
-  [[nodiscard]] auto InitFrameResources(vulkan::Context &context, RenderData &render_data,
-    RendererConfig const &config) -> std::expected<void, Error>
+  [[nodiscard]] auto InitFrameResources(vulkan::Context &context, RenderData &render_data, RendererConfig const &config)
+    -> std::expected<void, Error>
   {
     if (!RefreshDescriptorHeap(context, render_data)) {
       return std::unexpected(MakeError(std::errc::io_error, "Failed to refresh Gaussian descriptor heap"));
@@ -207,8 +207,8 @@ namespace {
   {
     render_data.rasterization_mode = config.rasterization_mode;
     if (config.rasterization_mode == RasterizationMode::kComputeTiled && !context.shader_int64_enabled) {
-      return std::unexpected(MakeError(std::errc::operation_not_supported,
-        "tiled compute rasterization requires an engine created with shaderInt64"));
+      return std::unexpected(MakeError(
+        std::errc::operation_not_supported, "tiled compute rasterization requires an engine created with shaderInt64"));
     }
     render_data.tiled_intersection_budget_bytes = config.tiled_intersection_budget_bytes;
     render_data.enable_tiled_debug_readback = config.enable_tiled_debug_readback;
@@ -349,10 +349,11 @@ auto Renderer::create(RendererConfig const &config, Platform &platform) -> std::
   if (auto validated = ValidateOffscreenConfig(config, platform); !validated) {
     return std::unexpected{ validated.error() };
   }
-  auto engine = Engine::create(EngineConfig{ .enable_validation = config.enable_validation,
-                                 .request_present_timing = config.frame_rate.IsPacingRequested(),
-                                 .require_shader_int64 = config.rasterization_mode == RasterizationMode::kComputeTiled },
-    platform);
+  auto engine =
+    Engine::create(EngineConfig{ .enable_validation = config.enable_validation,
+                     .request_present_timing = config.frame_rate.IsPacingRequested(),
+                     .require_shader_int64 = config.rasterization_mode == RasterizationMode::kComputeTiled },
+      platform);
   if (!engine) { return std::unexpected(engine.error()); }
 
   beman::indirect::indirect<Impl> impl;
@@ -519,10 +520,10 @@ auto Renderer::tiled_scratch_bytes() const -> u64
   add(data.tiled_radix_group_buffer);
   add(data.radix_dispatch_buffer);
   add(data.tile_ranges_buffer);
-  bytes = std::ranges::fold_left(data.tiled_scan_sums, bytes,
-    [](u64 total, GpuBuffer const &buffer) -> u64 { return total + buffer.size(); });
-  bytes = std::ranges::fold_left(data.tiled_scan_offsets, bytes,
-    [](u64 total, GpuBuffer const &buffer) -> u64 { return total + buffer.size(); });
+  bytes = std::ranges::fold_left(
+    data.tiled_scan_sums, bytes, [](u64 total, GpuBuffer const &buffer) -> u64 { return total + buffer.size(); });
+  bytes = std::ranges::fold_left(
+    data.tiled_scan_offsets, bytes, [](u64 total, GpuBuffer const &buffer) -> u64 { return total + buffer.size(); });
   return bytes;
 }
 
@@ -543,12 +544,13 @@ auto Renderer::tiled_debug_snapshot() -> std::expected<TiledDebugSnapshot, Error
     auto const index = static_cast<size_t>(section);
     VkDeviceSize const offset = data.tiled_debug_offsets.at(index);
     VkDeviceSize const length = count * sizeof(Value);
-    if (length > data.tiled_debug_sizes.at(index) || offset > bytes.size()
-        || length > bytes.size() - offset) { return false; }
+    if (length > data.tiled_debug_sizes.at(index) || offset > bytes.size() || length > bytes.size() - offset) {
+      return false;
+    }
     destination.resize(count);
     if (length != 0U) {
-      std::memcpy(destination.data(), bytes.subspan(static_cast<size_t>(offset), static_cast<size_t>(length)).data(),
-        length);
+      std::memcpy(
+        destination.data(), bytes.subspan(static_cast<size_t>(offset), static_cast<size_t>(length)).data(), length);
     }
     return true;
   };
@@ -558,8 +560,8 @@ auto Renderer::tiled_debug_snapshot() -> std::expected<TiledDebugSnapshot, Error
   snapshot.tiles_y = data.tiled_tiles_y;
   size_t const key_words = static_cast<size_t>(*intersections) * sizeof(gs::TiledSortKey) / sizeof(u32);
   size_t const range_words = static_cast<size_t>(data.tile_count) * sizeof(gs::TileRange) / sizeof(u32);
-  if (!read(TiledDebugSection::kProjected, snapshot.projected,
-        static_cast<size_t>(data.splat_count) * gs::kProjectedFloats)
+  if (!read(
+        TiledDebugSection::kProjected, snapshot.projected, static_cast<size_t>(data.splat_count) * gs::kProjectedFloats)
       || !read(TiledDebugSection::kCounts, snapshot.counts, data.splat_count)
       || !read(TiledDebugSection::kOffsets, snapshot.offsets, static_cast<size_t>(data.splat_count) + 1U)
       || !read(TiledDebugSection::kEmittedKeys, snapshot.emitted_key_words, key_words)

@@ -72,9 +72,10 @@ namespace {
   {
     bool const common = data.geometry_buffer && data.appearance_buffer && data.projected_buffer
                         && data.projection_cameras_buffer && data.color_image && data.color_image_view
-           && data.unsorted_keys_buffer && data.unsorted_values_buffer && data.sorted_keys_buffer
-           && data.sorted_values_buffer && data.sort_histogram_buffer && data.tile_ranges_buffer && data.sorted_indices
-           && data.sorted_indices.value().size() != 0 && data.sort_entries && data.sort_entries.value().size() != 0;
+                        && data.unsorted_keys_buffer && data.unsorted_values_buffer && data.sorted_keys_buffer
+                        && data.sorted_values_buffer && data.sort_histogram_buffer && data.tile_ranges_buffer
+                        && data.sorted_indices && data.sorted_indices.value().size() != 0 && data.sort_entries
+                        && data.sort_entries.value().size() != 0;
     if (!common) { return false; }
     if (data.rasterization_mode == RasterizationMode::kComputeTiled) {
       return data.tiled_counts_buffer && data.tiled_offsets_buffer && data.tiled_total_buffer
@@ -229,13 +230,20 @@ namespace {
           .image = data.color_image->handle(),
           .viewType = VK_IMAGE_VIEW_TYPE_2D,
           .format = data.color_format,
-          .components = { .r = VK_COMPONENT_SWIZZLE_IDENTITY, .g = VK_COMPONENT_SWIZZLE_IDENTITY,
-            .b = VK_COMPONENT_SWIZZLE_IDENTITY, .a = VK_COMPONENT_SWIZZLE_IDENTITY },
-          .subresourceRange = { .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 0U,
-            .levelCount = 1U, .baseArrayLayer = 0U, .layerCount = 1U },
+          .components = { .r = VK_COMPONENT_SWIZZLE_IDENTITY,
+            .g = VK_COMPONENT_SWIZZLE_IDENTITY,
+            .b = VK_COMPONENT_SWIZZLE_IDENTITY,
+            .a = VK_COMPONENT_SWIZZLE_IDENTITY },
+          .subresourceRange = { .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0U,
+            .levelCount = 1U,
+            .baseArrayLayer = 0U,
+            .layerCount = 1U },
         };
-        auto const written = vkexec::write_storage_image_descriptor(vkexec, view_info,
-          VK_IMAGE_LAYOUT_GENERAL, heap_bytes.subspan(descriptor_offset, data.image_descriptor_size));
+        auto const written = vkexec::write_storage_image_descriptor(vkexec,
+          view_info,
+          VK_IMAGE_LAYOUT_GENERAL,
+          heap_bytes.subspan(descriptor_offset, data.image_descriptor_size));
         if (!written) {
           std::println("Failed to write GS color descriptor: {}", written.error().message());
           return false;
