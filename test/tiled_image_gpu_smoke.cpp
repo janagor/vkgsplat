@@ -1,6 +1,7 @@
 #include "benchmark/fixture/ply_writer.hpp"
 
 #include <vkgsplat/camera.hpp>
+#include <vkgsplat/engine.hpp>
 #include <vkgsplat/frame.hpp>
 #include <vkgsplat/renderer.hpp>
 #include <vkgsplat_headless/offscreen_platform.hpp>
@@ -19,6 +20,7 @@
 #include <limits>
 #include <optional>
 #include <string>
+#include <system_error>
 #include <vector>
 
 namespace {
@@ -396,6 +398,28 @@ struct ReferenceIntersection
   if (!overflow_renderer) { std::cerr << overflow_renderer.error().message() << '\n'; return EXIT_FAILURE; }
   if (overflow_renderer->render_frame(camera)) {
     std::cerr << "truncated tiled frame was reported as successful\n";
+    return EXIT_FAILURE;
+  }
+  config.tiled_intersection_budget_bytes = vkgsplat::kDefaultTiledIntersectionBudgetBytes;
+  config.rasterization_mode = vkgsplat::RasterizationMode::kHardware;
+  auto shared_engine = vkgsplat::Engine::create({}, *platform);
+  if (!shared_engine) { std::cerr << shared_engine.error().message() << '\n'; return EXIT_FAILURE; }
+  auto shared_hardware = vkgsplat::Renderer::create(config, *shared_engine);
+  if (!shared_hardware || !shared_hardware->render_frame(camera)) {
+    std::cerr << "hardware renderer failed with a shared engine\n";
+    return EXIT_FAILURE;
+  }
+  config.rasterization_mode = vkgsplat::RasterizationMode::kComputeTiled;
+  auto unsupported_compute = vkgsplat::Renderer::create(config, *shared_engine);
+  if (unsupported_compute || unsupported_compute.error().code() != std::errc::operation_not_supported) {
+    std::cerr << "compute renderer accepted a shared engine without shaderInt64\n";
+    return EXIT_FAILURE;
+  }
+  auto compute_engine = vkgsplat::Engine::create({ .require_shader_int64 = true }, *platform);
+  if (!compute_engine) { std::cerr << compute_engine.error().message() << '\n'; return EXIT_FAILURE; }
+  auto shared_compute = vkgsplat::Renderer::create(config, *compute_engine);
+  if (!shared_compute || !shared_compute->render_frame(camera)) {
+    std::cerr << "compute renderer failed with a shaderInt64 enabled shared engine\n";
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;
