@@ -302,9 +302,11 @@ namespace {
     features_12.timelineSemaphore = VK_TRUE;
     selector.add_required_extension_features(features_12);
 
-    VkPhysicalDeviceFeatures shader_features{};
-    shader_features.shaderInt64 = VK_TRUE;
-    selector.set_required_features(shader_features);
+    if (config.require_shader_int64) {
+      VkPhysicalDeviceFeatures shader_features{};
+      shader_features.shaderInt64 = VK_TRUE;
+      selector.set_required_features(shader_features);
+    }
 
     VkPhysicalDeviceVulkan13Features features_13{};
     features_13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
@@ -404,7 +406,9 @@ auto DeviceInitialization(vulkan::Context &context, DriverConfig const &config) 
   if (!physical_device) { return std::unexpected(physical_device.error()); }
   auto device = CreateLogicalDevice(context, config, std::move(*physical_device), offscreen);
   if (!device) { return std::unexpected(device.error()); }
-  return FinalizeDeviceContext(context, *device);
+  if (auto finalized = FinalizeDeviceContext(context, *device); !finalized) { return finalized; }
+  context.shader_int64_enabled = config.require_shader_int64;
+  return {};
 }
 
 }// namespace vkgsplat

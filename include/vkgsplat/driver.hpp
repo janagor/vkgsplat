@@ -19,6 +19,7 @@ struct DriverConfig
   bool enable_validation = false;
   bool request_present_timing = false;
   VideoEncodeSupport video_encode = VideoEncodeSupport::kDisabled;
+  bool require_shader_int64 = false;
 };
 
 /**

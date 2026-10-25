@@ -153,6 +153,10 @@ namespace {
     RendererConfig const &config) -> std::expected<void, Error>
   {
     render_data.rasterization_mode = config.rasterization_mode;
+    if (config.rasterization_mode == RasterizationMode::kComputeTiled && !context.shader_int64_enabled) {
+      return std::unexpected(MakeError(std::errc::operation_not_supported,
+        "tiled compute rasterization requires an engine created with shaderInt64"));
+    }
     render_data.tiled_intersection_budget_bytes = config.tiled_intersection_budget_bytes;
     render_data.enable_tiled_debug_readback = config.enable_tiled_debug_readback;
     if (auto valid = ValidateOutputConfig(config, context); !valid) { return valid; }
@@ -333,7 +337,8 @@ auto Renderer::create(RendererConfig const &config, Platform &platform) -> std::
     return std::unexpected{ validated.error() };
   }
   auto engine = Engine::create(EngineConfig{ .enable_validation = config.enable_validation,
-                                 .request_present_timing = config.frame_rate.IsPacingRequested() },
+                                 .request_present_timing = config.frame_rate.IsPacingRequested(),
+                                 .require_shader_int64 = config.rasterization_mode == RasterizationMode::kComputeTiled },
     platform);
   if (!engine) { return std::unexpected(engine.error()); }
 

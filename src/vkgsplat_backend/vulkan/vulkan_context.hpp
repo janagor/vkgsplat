@@ -33,6 +33,7 @@ struct Context
   std::unique_ptr<PresentableSwapchain> swapchain;
   VideoEncodeCapabilities video_encode_capabilities;
   std::optional<video::EncodeDevice> video_encode;
+  bool shader_int64_enabled = false;
 
   bool present_timing_enabled = false;
   bool present_id2_enabled = false;
