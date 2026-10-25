@@ -179,18 +179,6 @@ namespace {
     context.device = device;
     context.disp = context.device.make_table();
 
-    VkPhysicalDeviceSubgroupProperties subgroup_props{};
-    subgroup_props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES;
-    VkPhysicalDeviceProperties2 props2 = {
-      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
-      .pNext = &subgroup_props,
-      .properties = {},
-    };
-    context.inst_disp.getPhysicalDeviceProperties2(context.device.physical_device, &props2);
-    std::println("Subgroup size={} operations={:#x} (radix sort needs arithmetic)",
-      subgroup_props.subgroupSize,
-      static_cast<unsigned>(subgroup_props.supportedOperations));
-
     // NOLINTBEGIN(cppcoreguidelines-pro-type-reinterpret-cast)
     context.set_swapchain_present_timing_queue_size = reinterpret_cast<PFN_vkSetSwapchainPresentTimingQueueSizeEXT>(
       vkGetDeviceProcAddr(context.device, "vkSetSwapchainPresentTimingQueueSizeEXT"));
