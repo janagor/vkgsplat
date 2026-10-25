@@ -33,7 +33,13 @@ namespace {
     "prepare_sort",
     "radix_sort",
     "rasterize",
-    "multiview_projection" };
+    "multiview_projection",
+    "tiled_count",
+    "tiled_scan",
+    "tiled_emit",
+    "tiled_radix_sort",
+    "tiled_ranges",
+    "tiled_rasterize" };
 
   auto PublishSummary(::benchmark::State &state, std::string const &name, GpuSummary const &summary) -> void
   {
@@ -54,7 +60,8 @@ namespace {
     u64 batch_frames,
     GpuStatistics &statistics,
     std::unordered_set<u64> &frame_ids,
-    std::atomic_bool &failed) -> bool
+    std::atomic_bool &failed,
+    RasterizationMode mode) -> bool
   {
     if (auto batch = RenderBatch(renderer, camera, batch_frames); !batch) {
       failed.store(true);
@@ -69,7 +76,7 @@ namespace {
     }
     double gpu_seconds = 0.0;
     for (auto const &sample : *samples) {
-      if (!frame_ids.insert(sample.frame_id).second || !IsCompleteMonoGpuSample(sample)) {
+      if (!frame_ids.insert(sample.frame_id).second || !IsCompleteGpuSample(sample, mode)) {
         failed.store(true);
         state.SkipWithError("GPU timing sample has duplicate ID, missing pass, or invalid duration");
         return false;
@@ -98,10 +105,13 @@ auto RegisterGpuPassTimings(Platform &platform,
   Camera const &camera,
   std::atomic_bool &failed) -> void
 {
-  auto const name = std::format("BM_GpuPassTimings/{}/{}x{}", kBaselineCount, kBaselineWidth, kBaselineHeight);
-  auto *registered = ::benchmark::RegisterBenchmark(
-    name, [&platform, &profile, &scene_path, &camera, &failed](::benchmark::State &state) -> void {
-      auto renderer = Renderer::create(MakeGpuProfilingRendererConfig(profile, scene_path), platform);
+  for (auto const mode : { RasterizationMode::kHardware, RasterizationMode::kComputeTiled }) {
+    char const *mode_name = mode == RasterizationMode::kHardware ? "hardware" : "compute";
+    auto const name = std::format("BM_GpuPassTimings/{}/{}/{}/{}x{}", profile.id, mode_name,
+      profile.scene.gaussian_count, profile.width, profile.height);
+    auto *registered = ::benchmark::RegisterBenchmark(
+      name, [&platform, &profile, &scene_path, &camera, &failed, mode](::benchmark::State &state) -> void {
+      auto renderer = Renderer::create(MakeGpuProfilingRendererConfig(profile, scene_path, mode), platform);
       if (!renderer) {
         failed.store(true);
         state.SkipWithError(renderer.error().message());
@@ -117,6 +127,16 @@ auto RegisterGpuPassTimings(Platform &platform,
         state.SkipWithError("GPU warmup timing samples are incomplete");
         return;
       }
+      if (mode == RasterizationMode::kComputeTiled) {
+        auto intersections = renderer->tiled_intersection_count();
+        if (!intersections) {
+          failed.store(true);
+          state.SkipWithError(intersections.error().message());
+          return;
+        }
+        state.counters["gpu.tiled.intersections"] = static_cast<double>(*intersections);
+        state.counters["gpu.tiled.scratch_bytes"] = static_cast<double>(renderer->tiled_scratch_bytes());
+      }
 
       auto const batch_frames = static_cast<u64>(state.range(0));
       if (auto reserved = renderer->reserve_gpu_timing_samples(static_cast<size_t>(batch_frames)); !reserved) {
@@ -129,17 +149,18 @@ auto RegisterGpuPassTimings(Platform &platform,
       std::unordered_set<u64> frame_ids;
       for (auto iteration : state) {
         static_cast<void>(iteration);
-        if (!RecordBatch(state, *renderer, camera, batch_frames, statistics, frame_ids, failed)) { return; }
+        if (!RecordBatch(state, *renderer, camera, batch_frames, statistics, frame_ids, failed, mode)) { return; }
       }
-      if (!HasCompleteMonoGpuStatistics(statistics)) {
+      if (!HasCompleteGpuStatistics(statistics, mode)) {
         failed.store(true);
         state.SkipWithError("GPU timing statistics have incomplete required pass counts");
         return;
       }
       PublishStatistics(state, statistics);
-    });
-  registered->ArgName("batch")->UseManualTime()->Unit(::benchmark::kMillisecond);
-  for (auto const batch_frames : kBatchFrameCounts) { registered->Arg(static_cast<std::int64_t>(batch_frames)); }
+      });
+    registered->ArgName("batch")->UseManualTime()->Unit(::benchmark::kMillisecond);
+    for (auto const batch_frames : kBatchFrameCounts) { registered->Arg(static_cast<std::int64_t>(batch_frames)); }
+  }
 }
 // NOLINTEND(misc-include-cleaner)
 

@@ -43,10 +43,13 @@ auto RegisterRenderThroughput(Platform &platform,
   Camera const &camera,
   std::atomic_bool &failed) -> void
 {
-  auto const name = std::format("BM_RenderThroughput/{}/{}x{}", kBaselineCount, kBaselineWidth, kBaselineHeight);
-  auto *registered = ::benchmark::RegisterBenchmark(
-    name, [&platform, &profile, &scene_path, &camera, &failed](::benchmark::State &state) -> void {
-      auto renderer = Renderer::create(MakeRendererConfig(profile, scene_path), platform);
+  for (auto const mode : { RasterizationMode::kHardware, RasterizationMode::kComputeTiled }) {
+    char const *mode_name = mode == RasterizationMode::kHardware ? "hardware" : "compute";
+    auto const name = std::format("BM_RenderThroughput/{}/{}/{}/{}x{}", profile.id, mode_name,
+      profile.scene.gaussian_count, profile.width, profile.height);
+    auto *registered = ::benchmark::RegisterBenchmark(
+      name, [&platform, &profile, &scene_path, &camera, &failed, mode](::benchmark::State &state) -> void {
+      auto renderer = Renderer::create(MakeRendererConfig(profile, scene_path, mode), platform);
       if (!renderer) {
         failed.store(true);
         state.SkipWithError(renderer.error().message());
@@ -57,6 +60,16 @@ auto RegisterRenderThroughput(Platform &platform,
         failed.store(true);
         state.SkipWithError(warmup.error().message());
         return;
+      }
+      if (mode == RasterizationMode::kComputeTiled) {
+        auto intersections = renderer->tiled_intersection_count();
+        if (!intersections) {
+          failed.store(true);
+          state.SkipWithError(intersections.error().message());
+          return;
+        }
+        state.counters["gpu.tiled.intersections"] = static_cast<double>(*intersections);
+        state.counters["gpu.tiled.scratch_bytes"] = static_cast<double>(renderer->tiled_scratch_bytes());
       }
 
       u64 frames = 0U;
@@ -72,9 +85,10 @@ auto RegisterRenderThroughput(Platform &platform,
       state.counters["gpu_timing_enabled"] = 0.0;
       state.SetItemsProcessed(static_cast<std::int64_t>(frames));
       state.counters["fps"] = ::benchmark::Counter(static_cast<double>(frames), ::benchmark::Counter::kIsRate);
-    });
-  registered->ArgName("batch")->UseRealTime()->Unit(::benchmark::kMillisecond);
-  for (auto const batch_frames : kBatchFrameCounts) { registered->Arg(static_cast<std::int64_t>(batch_frames)); }
+      });
+    registered->ArgName("batch")->UseRealTime()->Unit(::benchmark::kMillisecond);
+    for (auto const batch_frames : kBatchFrameCounts) { registered->Arg(static_cast<std::int64_t>(batch_frames)); }
+  }
 }
 // NOLINTEND(misc-include-cleaner)
 
