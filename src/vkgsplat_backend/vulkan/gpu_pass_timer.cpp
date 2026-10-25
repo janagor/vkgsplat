@@ -31,7 +31,7 @@ namespace {
 
   constexpr u32 kQueriesPerPass = 2U;
   constexpr u32 kViewPassCount = 2U;
-  constexpr u32 kBasePassCount = static_cast<u32>(GpuPass::kMultiviewProjection);
+  constexpr u32 kBasePassCount = static_cast<u32>(GpuPass::kCount);
   constexpr u32 kBaseQueriesPerSlot = kBasePassCount * kQueriesPerPass;
   constexpr u32 kQueriesPerView = kViewPassCount * kQueriesPerPass;
   constexpr u32 kResultValuesPerQuery = 2U;
@@ -54,6 +54,12 @@ auto GpuPassName(GpuPass pass) -> char const *
     return "raster";
   case GpuPass::kMultiviewProjection:
     return "view proj";
+  case GpuPass::kTiledCount: return "tiled count";
+  case GpuPass::kTiledScan: return "tiled scan";
+  case GpuPass::kTiledEmit: return "tiled emit";
+  case GpuPass::kTiledRadixSort: return "tiled radix";
+  case GpuPass::kTiledRanges: return "tiled ranges";
+  case GpuPass::kTiledRasterize: return "tiled raster";
   case GpuPass::kCount:
     break;
   }
