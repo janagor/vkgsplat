@@ -1,0 +1,87 @@
+#version 460
+#extension GL_EXT_descriptor_heap : require
+#extension GL_EXT_buffer_reference : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+const uint RADIX_BINS = 256u;
+const uint BLOCKS_PER_GROUP = 256u;
+const uint MODE_LOCAL = 0u;
+const uint MODE_GROUPS = 1u;
+const uint MODE_ADD = 2u;
+const uint HEAP_HISTOGRAMS = 11u;
+
+layout(descriptor_heap, std430) readonly buffer HistogramBuffer { uint data[]; } histograms[];
+layout(buffer_reference, std430, buffer_reference_align = 4) buffer PrefixRef { uint data[]; };
+layout(buffer_reference, std430, buffer_reference_align = 4) buffer GroupRef { uint data[]; };
+layout(buffer_reference, std430, buffer_reference_align = 4) readonly buffer TotalRef { uint value; };
+
+layout(push_constant) uniform RadixPush {
+  uint64_t total_address;
+  uint64_t prefix_address;
+  uint64_t prefix_group_address;
+  uint capacity;
+  uint pass_index;
+  uint group_count_x;
+  uint prefix_group_capacity;
+  uint prefix_mode;
+} push;
+
+shared uint bin_totals[RADIX_BINS];
+shared uint bin_bases[RADIX_BINS];
+
+void main()
+{
+  uint digit = gl_LocalInvocationID.x;
+  uint total = min(TotalRef(push.total_address).value, push.capacity);
+  uint blocks = (total + RADIX_BINS - 1u) / RADIX_BINS;
+  uint groups = (blocks + BLOCKS_PER_GROUP - 1u) / BLOCKS_PER_GROUP;
+  PrefixRef prefixes = PrefixRef(push.prefix_address);
+  GroupRef group_prefixes = GroupRef(push.prefix_group_address);
+
+  if (push.prefix_mode == MODE_GROUPS) {
+    uint running = 0u;
+    for (uint group = 0u; group < groups; ++group) {
+      uint index = group * RADIX_BINS + digit;
+      uint count = group_prefixes.data[index];
+      group_prefixes.data[index] = running;
+      running += count;
+    }
+    bin_totals[digit] = running;
+    barrier();
+    if (digit == 0u) {
+      uint base = 0u;
+      for (uint bin = 0u; bin < RADIX_BINS; ++bin) {
+        bin_bases[bin] = base;
+        base += bin_totals[bin];
+      }
+    }
+    barrier();
+    uint base = bin_bases[digit];
+    for (uint group = 0u; group < groups; ++group) {
+      group_prefixes.data[group * RADIX_BINS + digit] += base;
+    }
+    return;
+  }
+
+  uint group = gl_WorkGroupID.x;
+  if (group >= groups) { return; }
+  uint first_block = group * BLOCKS_PER_GROUP;
+  uint last_block = min(first_block + BLOCKS_PER_GROUP, blocks);
+  if (push.prefix_mode == MODE_LOCAL) {
+    uint running = 0u;
+    for (uint block = first_block; block < last_block; ++block) {
+      uint index = block * RADIX_BINS + digit;
+      prefixes.data[index] = running;
+      running += histograms[HEAP_HISTOGRAMS].data[index];
+    }
+    group_prefixes.data[group * RADIX_BINS + digit] = running;
+    return;
+  }
+  if (push.prefix_mode == MODE_ADD) {
+    uint base = group_prefixes.data[group * RADIX_BINS + digit];
+    for (uint block = first_block; block < last_block; ++block) {
+      prefixes.data[block * RADIX_BINS + digit] += base;
+    }
+  }
+}

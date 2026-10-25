@@ -1,0 +1,167 @@
+#version 460
+#extension GL_EXT_descriptor_heap : require
+#extension GL_EXT_nonuniform_qualifier : enable
+#extension GL_EXT_buffer_reference : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+
+// One workgroup per 16 x 16 tile; each thread evaluates one pixel front-to-back.
+// Splats are collaboratively loaded into shared memory in batches of 256.
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+const uint HEAP_PROJECTED = 4u;
+const uint HEAP_SORTED_VALUES = 8u;
+const uint HEAP_TILE_RANGES = 9u;
+const uint HEAP_COLOR = 10u;
+
+const uint PROJECTED_STRIDE = 11u;
+const uint PROJ_MEAN = 0u;
+const uint PROJ_CONIC = 2u;
+const uint PROJ_RADIUS = 6u;
+const uint PROJ_COLOR = 7u;
+const uint PROJ_OPACITY = 10u;
+
+const uint RANGE_STRIDE = 2u;
+const uint RANGE_START = 0u;
+const uint RANGE_END = 1u;
+
+const uint BATCH_SIZE = 256u;
+layout(constant_id = 0) const uint INTERSECTION_CAPACITY = 1u;
+const uint INVALID_RASTER_METADATA = 32u;
+layout(buffer_reference, std430, buffer_reference_align = 4) buffer StatusRef { uint value; };
+
+const float T_EPS = 1e-4;
+const float ALPHA_MIN = 1.0 / 255.0;
+
+layout(descriptor_heap, std430) readonly buffer ProjectedBuffer {
+	float data[];
+} projected_buffers[];
+
+layout(descriptor_heap, std430) readonly buffer SortedValuesBuffer {
+	uint data[];
+} sorted_values_buffers[];
+
+layout(descriptor_heap, std430) readonly buffer TileRangesBuffer {
+	uint data[];
+} tile_ranges_buffers[];
+
+layout(descriptor_heap, rgba8) writeonly uniform image2D color_images[];
+
+layout(push_constant) uniform RasterPush {
+	vec4 camera_position;
+	uvec2 viewport;
+	uint tile_size;
+	uint tiles_x;
+	vec4 background;
+	uint projected_splat_count;
+	uint projected_view_index;
+	uvec2 tile_offset;
+	uint64_t overflow_address;
+} push;
+
+// Collaborative tile cache: one slot per workgroup thread.
+shared vec3 s_mean_radius[BATCH_SIZE];// xy = mean, z = radius
+shared vec3 s_conic[BATCH_SIZE];
+shared vec4 s_color_opacity[BATCH_SIZE];// rgb + opacity
+
+void main()
+{
+	uint pixel_x = gl_GlobalInvocationID.x;
+	uint pixel_y = gl_GlobalInvocationID.y;
+	// Out-of-viewport threads must still participate in shared loads + barriers.
+	bool write_pixel = pixel_x < push.viewport.x && pixel_y < push.viewport.y;
+
+	uint tile_x = gl_WorkGroupID.x;
+	uint tile_y = gl_WorkGroupID.y;
+	uint tile_id = tile_y * push.tiles_x + tile_x;
+
+	uint range_base = tile_id * RANGE_STRIDE;
+	uint range_start = tile_ranges_buffers[HEAP_TILE_RANGES].data[range_base + RANGE_START];
+	uint range_end = tile_ranges_buffers[HEAP_TILE_RANGES].data[range_base + RANGE_END];
+	if (range_end < range_start || range_end > INTERSECTION_CAPACITY) {
+		if (gl_LocalInvocationIndex == 0u) {
+			atomicOr(StatusRef(push.overflow_address).value, INVALID_RASTER_METADATA);
+		}
+		range_start = 0u;
+		range_end = 0u;
+	}
+
+	vec3 color = vec3(0.0);
+	float T = 1.0;
+
+	uint local_id = gl_LocalInvocationIndex;
+
+	for (uint batch_start = range_start; batch_start < range_end; batch_start += BATCH_SIZE) {
+		uint load_idx = batch_start + local_id;
+		if (load_idx < range_end) {
+			uint gaussian_id = sorted_values_buffers[HEAP_SORTED_VALUES].data[load_idx];
+			if (gaussian_id >= push.projected_splat_count) {
+				atomicOr(StatusRef(push.overflow_address).value, INVALID_RASTER_METADATA);
+				s_mean_radius[local_id] = vec3(0.0);
+				s_conic[local_id] = vec3(0.0);
+				s_color_opacity[local_id] = vec4(0.0);
+			} else {
+			uint proj_base = gaussian_id * PROJECTED_STRIDE;
+			s_mean_radius[local_id] = vec3(
+				projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_MEAN],
+				projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_MEAN + 1u],
+				projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_RADIUS]);
+			s_conic[local_id] = vec3(
+				projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_CONIC],
+				projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_CONIC + 1u],
+				projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_CONIC + 2u]);
+			s_color_opacity[local_id] = vec4(
+				projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_COLOR],
+				projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_COLOR + 1u],
+				projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_COLOR + 2u],
+				projected_buffers[HEAP_PROJECTED].data[proj_base + PROJ_OPACITY]);
+			}
+		} else {
+			s_mean_radius[local_id] = vec3(0.0);
+			s_conic[local_id] = vec3(0.0);
+			s_color_opacity[local_id] = vec4(0.0);
+		}
+		barrier();
+
+		uint batch_count = min(BATCH_SIZE, range_end - batch_start);
+		if (write_pixel && T >= T_EPS) {
+			vec2 pix = vec2(float(pixel_x) + 0.5, float(pixel_y) + 0.5);
+			for (uint j = 0u; j < batch_count; ++j) {
+				vec3 mean_radius = s_mean_radius[j];
+				vec2 mean = mean_radius.xy;
+				float radius = mean_radius.z;
+				vec2 delta = mean - pix;
+				if (dot(delta, delta) > radius * radius) {
+					continue;
+				}
+
+				vec3 conic = s_conic[j];
+				// conic = (xx, xy, yy)
+				float power = -0.5 * (conic.x * delta.x * delta.x + conic.z * delta.y * delta.y)
+					- conic.y * delta.x * delta.y;
+				if (power > 0.0) {
+					continue;
+				}
+
+				vec4 color_opacity = s_color_opacity[j];
+				float alpha = min(0.99, color_opacity.a * exp(power));
+				if (alpha < ALPHA_MIN) {
+					continue;
+				}
+
+				color += (alpha * T) * color_opacity.rgb;
+				T *= (1.0 - alpha);
+				if (T < T_EPS) {
+					break;
+				}
+			}
+		}
+		barrier();
+	}
+
+	if (write_pixel) {
+		color += T * push.background.rgb;
+		ivec2 output_pixel = ivec2(push.tile_offset + uvec2(pixel_x, pixel_y));
+		imageStore(color_images[HEAP_COLOR], output_pixel, vec4(color, 1.0 - T));
+	}
+}

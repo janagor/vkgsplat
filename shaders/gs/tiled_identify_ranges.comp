@@ -1,0 +1,39 @@
+#version 460
+#extension GL_EXT_descriptor_heap : require
+#extension GL_EXT_buffer_reference : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+const uint HEAP_KEYS_A = 7u;
+const uint HEAP_RANGES = 9u;
+
+layout(descriptor_heap, std430) readonly buffer KeyBuffer { uint data[]; } key_buffers[];
+layout(descriptor_heap, std430) buffer RangeBuffer { uint data[]; } tile_ranges[];
+layout(buffer_reference, std430, buffer_reference_align = 4) readonly buffer TotalRef { uint value; };
+layout(buffer_reference, std430, buffer_reference_align = 4) buffer StatusRef { uint value; };
+
+layout(push_constant) uniform RangePush {
+  uint64_t total_address;
+  uint64_t overflow_address;
+  uint capacity;
+  uint tile_count;
+  uint group_count_x;
+} push;
+
+void main()
+{
+  uint id = gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_NumWorkGroups.x * gl_WorkGroupSize.x;
+  uint total = min(TotalRef(push.total_address).value, push.capacity);
+  if (id >= total) { return; }
+  uint tile = key_buffers[HEAP_KEYS_A].data[id * 2u + 1u];
+  if (tile >= push.tile_count) {
+    atomicOr(StatusRef(push.overflow_address).value, 16u);
+    return;
+  }
+  if (id == 0u || key_buffers[HEAP_KEYS_A].data[(id - 1u) * 2u + 1u] != tile) {
+    tile_ranges[HEAP_RANGES].data[tile * 2u] = id;
+  }
+  if (id + 1u == total || key_buffers[HEAP_KEYS_A].data[(id + 1u) * 2u + 1u] != tile) {
+    tile_ranges[HEAP_RANGES].data[tile * 2u + 1u] = id + 1u;
+  }
+}

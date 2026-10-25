@@ -40,7 +40,7 @@ layout(descriptor_heap, std430) readonly buffer TileRangesBuffer {
 	uint data[];
 } tile_ranges_buffers[];
 
-layout(descriptor_heap, rgba32f) writeonly uniform image2D color_images[];
+layout(descriptor_heap, rgba8) writeonly uniform image2D color_images[];
 
 layout(push_constant) uniform RasterPush {
 	vec4 camera_position;
@@ -48,8 +48,8 @@ layout(push_constant) uniform RasterPush {
 	uint tile_size;
 	uint tiles_x;
 	vec4 background;
-	uint sh_degree;
-	uint pad0_;
+	uint projected_splat_count;
+	uint projected_view_index;
 	uvec2 tile_offset;
 } push;
 
@@ -73,7 +73,7 @@ void main()
 	uint range_start = tile_ranges_buffers[HEAP_TILE_RANGES].data[range_base + RANGE_START];
 	uint range_end = tile_ranges_buffers[HEAP_TILE_RANGES].data[range_base + RANGE_END];
 
-	vec3 color = push.background.rgb;
+	vec3 color = vec3(0.0);
 	float T = 1.0;
 
 	uint local_id = gl_LocalInvocationIndex;
@@ -140,6 +140,8 @@ void main()
 	}
 
 	if (write_pixel) {
-		imageStore(color_images[HEAP_COLOR], ivec2(int(pixel_x), int(pixel_y)), vec4(color, 1.0 - T));
+		color += T * push.background.rgb;
+		ivec2 output_pixel = ivec2(push.tile_offset + uvec2(pixel_x, pixel_y));
+		imageStore(color_images[HEAP_COLOR], output_pixel, vec4(color, 1.0 - T));
 	}
 }
