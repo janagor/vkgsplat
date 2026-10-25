@@ -1,0 +1,64 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_descriptor_heap : require
+#extension GL_EXT_buffer_reference : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+
+#include "tiled_bounds.glsl"
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+const uint HEAP_PROJECTED = 4u;
+const uint HEAP_KEYS_A = 7u;
+const uint HEAP_VALUES_A = 8u;
+const uint PROJECTED_STRIDE = 11u;
+
+layout(descriptor_heap, std430) readonly buffer ProjectedBuffer { float data[]; } projected_buffers[];
+layout(descriptor_heap, std430) writeonly buffer KeyBuffer { uint data[]; } key_buffers[];
+layout(descriptor_heap, std430) writeonly buffer ValueBuffer { uint data[]; } value_buffers[];
+layout(buffer_reference, std430, buffer_reference_align = 4) readonly buffer CountsRef { uint data[]; };
+layout(buffer_reference, std430, buffer_reference_align = 4) readonly buffer OffsetsRef { uint data[]; };
+layout(buffer_reference, std430, buffer_reference_align = 4) buffer StatusRef { uint value; };
+
+layout(push_constant) uniform TiledEmitPush {
+  uint64_t counts_address;
+  uint64_t offsets_address;
+  uint64_t overflow_address;
+  uvec2 viewport;
+  uint splat_count;
+  uint capacity;
+  uint tile_size;
+  uint tiles_x;
+  uint tiles_y;
+} push;
+
+void main()
+{
+  if (StatusRef(push.overflow_address).value != 0u) { return; }
+  uint id = gl_GlobalInvocationID.x;
+  if (id >= push.splat_count) { return; }
+  uint count = CountsRef(push.counts_address).data[id];
+  if (count == 0u) { return; }
+  uint base = id * PROJECTED_STRIDE;
+  vec2 mean = vec2(projected_buffers[HEAP_PROJECTED].data[base],
+                   projected_buffers[HEAP_PROJECTED].data[base + 1u]);
+  float depth = projected_buffers[HEAP_PROJECTED].data[base + 5u];
+  float radius = projected_buffers[HEAP_PROJECTED].data[base + 6u];
+  uvec4 bounds = tiled_bounds(mean, radius, depth, push.viewport, push.tile_size,
+                              uvec2(push.tiles_x, push.tiles_y));
+  uint64_t offset = uint64_t(OffsetsRef(push.offsets_address).data[id]);
+  uint local = 0u;
+  for (uint y = bounds.y; y < bounds.w; ++y) {
+    for (uint x = bounds.x; x < bounds.z; ++x) {
+      uint64_t output_index = offset + uint64_t(local++);
+      if (output_index >= uint64_t(push.capacity)) {
+        atomicOr(StatusRef(push.overflow_address).value, 1u);
+        continue;
+      }
+      uint output_word = uint(output_index) * 2u;
+      key_buffers[HEAP_KEYS_A].data[output_word] = floatBitsToUint(depth);
+      key_buffers[HEAP_KEYS_A].data[output_word + 1u] = y * push.tiles_x + x;
+      value_buffers[HEAP_VALUES_A].data[uint(output_index)] = id;
+    }
+  }
+  if (local != count) { atomicOr(StatusRef(push.overflow_address).value, 2u); }
+}

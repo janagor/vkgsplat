@@ -1,4 +1,4 @@
-#include "gs/sorting.hpp"
+#include "gs/graphics/sorting.hpp"
 
 #include "app_state.hpp"
 #include "gs/gaussian_splat.hpp"

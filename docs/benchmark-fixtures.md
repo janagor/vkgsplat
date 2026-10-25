@@ -92,3 +92,49 @@ the black clear color; it is enabled with
 This synthetic cloud favors reproducibility over the spatial and appearance
 statistics of a reconstructed scene. Fixed input and camera do not imply identical
 GPU pixels or timings across drivers and hardware.
+
+## Tiled compute comparison
+
+The graphics pipeline rasterizer remains the default. The compute tiled path currently
+supports mono output only. Its default intersection memory budget is 128 MiB;
+the 4K benchmark raises this to 256 MiB. A scene that exceeds the configured
+budget fails with a GPU status error rather than producing a truncated image.
+Tiled compute also requires Vulkan `shaderInt64`. A standalone compute renderer
+requests that feature when it creates its engine. When sharing an existing engine,
+create the engine with `EngineConfig::require_shader_int64 = true` before creating
+a compute renderer. Graphics pipeline rendering does not request this feature.
+
+`vkgsplat_bench` registers graphics and compute runs at 1280 × 720, 1920 × 1080,
+and 3840 × 2160 using the same canonical PLY and camera. `BM_RenderThroughput`
+reports CPU observed batch throughput, including submission and synchronization.
+`BM_GpuPassTimings` reports timestamp based per pass and whole pipeline mean,
+median, p95, spread, and sample count. Compute runs also report intersection
+count and scratch bytes. Compare corresponding modes at the same resolution and
+batch size; the throughput and GPU duration columns measure different things.
+The 4K run uses a larger intersection budget, so memory use is not directly
+comparable with the lower resolutions.
+
+To reproduce a measurement, configure a Release build with benchmarks enabled,
+run `vkgsplat_bench --benchmark_out=results.json --benchmark_out_format=json`,
+and retain the generated JSON. Its context records the GPU, driver, Vulkan API,
+Git revision and dirty state, build type, fixture checksum, and timer properties.
+Report median and p95 for both rasterizers at each resolution and batch size.
+Record the exact configure, build, and invocation commands with the results.
+
+The headless tiled image test compares graphics and compute output at 64 × 64,
+the 17 pixel tile boundary, 720p, 1080p, and 4K. It writes a channel error
+heatmap and reports whole image and foreground PSNR, p99 channel error, and
+maximum channel error. Its small scenes exercise a different workload from the
+canonical benchmark fixture. These image checks are correctness checks, not
+performance measurements.
+
+No current performance number is asserted here: results from an earlier source
+revision do not verify the current 4K case or the current synchronization path.
+`vkgsplat_bench` also generates `low-overlap-v1.ply` and
+`high-overlap-v1.ply` beside the canonical PLY. Both contain 4,096 Gaussians
+sampled with the baseline seed and generator. The low overlap scene keeps the
+sampled positions and sets all scale logits to -5.5. The high overlap scene
+multiplies each position coordinate by 0.15 and sets scale logits to -2.5.
+Both run at 1080p with the same camera and both rasterizers. The JSON context
+records their FNV-1a checksums. These fixtures provide controlled overlap
+extremes at equal Gaussian count; they do not model reconstructed scenes.

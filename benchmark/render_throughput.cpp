@@ -43,38 +43,56 @@ auto RegisterRenderThroughput(Platform &platform,
   Camera const &camera,
   std::atomic_bool &failed) -> void
 {
-  auto const name = std::format("BM_RenderThroughput/{}/{}x{}", kBaselineCount, kBaselineWidth, kBaselineHeight);
-  auto *registered = ::benchmark::RegisterBenchmark(
-    name, [&platform, &profile, &scene_path, &camera, &failed](::benchmark::State &state) -> void {
-      auto renderer = Renderer::create(MakeRendererConfig(profile, scene_path), platform);
-      if (!renderer) {
-        failed.store(true);
-        state.SkipWithError(renderer.error().message());
-        return;
-      }
-      auto const batch_frames = static_cast<u64>(state.range(0));
-      if (auto warmup = RenderBatch(*renderer, camera, kWarmupFrames); !warmup) {
-        failed.store(true);
-        state.SkipWithError(warmup.error().message());
-        return;
-      }
-
-      u64 frames = 0U;
-      for (auto iteration : state) {
-        static_cast<void>(iteration);
-        if (auto batch = RenderBatch(*renderer, camera, batch_frames); !batch) {
+  for (auto const mode : { RasterizationMode::kGraphicsPipeline, RasterizationMode::kComputeTiled }) {
+    char const *mode_name = mode == RasterizationMode::kGraphicsPipeline ? "graphics" : "compute";
+    auto const name = std::format("BM_RenderThroughput/{}/{}/{}/{}x{}",
+      profile.id,
+      mode_name,
+      profile.scene.gaussian_count,
+      profile.width,
+      profile.height);
+    auto *registered = ::benchmark::RegisterBenchmark(
+      name, [&platform, &profile, &scene_path, &camera, &failed, mode](::benchmark::State &state) -> void {
+        auto renderer = Renderer::create(MakeRendererConfig(profile, scene_path, mode), platform);
+        if (!renderer) {
           failed.store(true);
-          state.SkipWithError(batch.error().message());
+          state.SkipWithError(renderer.error().message());
           return;
         }
-        frames += batch_frames;
-      }
-      state.counters["gpu_timing_enabled"] = 0.0;
-      state.SetItemsProcessed(static_cast<std::int64_t>(frames));
-      state.counters["fps"] = ::benchmark::Counter(static_cast<double>(frames), ::benchmark::Counter::kIsRate);
-    });
-  registered->ArgName("batch")->UseRealTime()->Unit(::benchmark::kMillisecond);
-  for (auto const batch_frames : kBatchFrameCounts) { registered->Arg(static_cast<std::int64_t>(batch_frames)); }
+        auto const batch_frames = static_cast<u64>(state.range(0));
+        if (auto warmup = RenderBatch(*renderer, camera, kWarmupFrames); !warmup) {
+          failed.store(true);
+          state.SkipWithError(warmup.error().message());
+          return;
+        }
+        if (mode == RasterizationMode::kComputeTiled) {
+          auto intersections = renderer->tiled_intersection_count();
+          if (!intersections) {
+            failed.store(true);
+            state.SkipWithError(intersections.error().message());
+            return;
+          }
+          state.counters["gpu.tiled.intersections"] = static_cast<double>(*intersections);
+          state.counters["gpu.tiled.scratch_bytes"] = static_cast<double>(renderer->tiled_scratch_bytes());
+        }
+
+        u64 frames = 0U;
+        for (auto iteration : state) {
+          static_cast<void>(iteration);
+          if (auto batch = RenderBatch(*renderer, camera, batch_frames); !batch) {
+            failed.store(true);
+            state.SkipWithError(batch.error().message());
+            return;
+          }
+          frames += batch_frames;
+        }
+        state.counters["gpu_timing_enabled"] = 0.0;
+        state.SetItemsProcessed(static_cast<std::int64_t>(frames));
+        state.counters["fps"] = ::benchmark::Counter(static_cast<double>(frames), ::benchmark::Counter::kIsRate);
+      });
+    registered->ArgName("batch")->UseRealTime()->Unit(::benchmark::kMillisecond);
+    for (auto const batch_frames : kBatchFrameCounts) { registered->Arg(static_cast<std::int64_t>(batch_frames)); }
+  }
 }
 // NOLINTEND(misc-include-cleaner)
 

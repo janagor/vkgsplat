@@ -27,6 +27,8 @@ struct EngineConfig
   /// kRequired guarantees a usable offline H.264 configuration at some extent;
   /// VideoRecorder::create validates the requested recording dimensions.
   VideoEncodeSupport video_encode = VideoEncodeSupport::kDisabled;
+  /// Require shaderInt64 when the engine will host tiled compute rendering.
+  bool require_shader_int64 = false;
 };
 
 /**

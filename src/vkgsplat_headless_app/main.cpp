@@ -288,6 +288,7 @@ auto RunHeadless(int argc, char **argv) -> int
   vkgsplat::u32 fps_denominator = 1U;
   vkgsplat::f64 orbit_degrees = kDefaultOrbitDegrees;
   std::string target = "headless-surface";
+  std::string rasterizer = "graphics";
   vkgsplat::u32 width = vkgsplat::kDefaultHeadlessWidth;
   vkgsplat::u32 height = vkgsplat::kDefaultHeadlessHeight;
   bool validation = false;
@@ -305,6 +306,8 @@ auto RunHeadless(int argc, char **argv) -> int
   app.add_option("--camera-path", camera_path_file, "Versioned JSON camera path");
   app.add_option("--target", target, "Output target: headless-surface or offscreen")
     ->check(CLI::IsMember({ "headless-surface", "offscreen" }));
+  app.add_option("--rasterizer", rasterizer, "Rasterizer: graphics or compute")
+    ->check(CLI::IsMember({ "graphics", "compute" }));
   app.add_option("--width", width, "Frame width")->capture_default_str();
   app.add_option("--height", height, "Frame height")->capture_default_str();
   app.add_flag("--validation", validation, "Enable Vulkan validation layers");
@@ -350,6 +353,8 @@ auto RunHeadless(int argc, char **argv) -> int
     .enable_imgui = false,
     .enable_gpu_timers = false,
     .submission_policy = vkgsplat::FrameSubmissionPolicy::kLossless,
+    .rasterization_mode = rasterizer == "compute" ? vkgsplat::RasterizationMode::kComputeTiled
+                                                  : vkgsplat::RasterizationMode::kGraphicsPipeline,
     .frame_rate = { .mode = vkgsplat::FrameRateMode::kUncapped },
     .lfd_view_order = {},
   };

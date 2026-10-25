@@ -31,6 +31,7 @@ layout(buffer_reference, std430, buffer_reference_align = 4) buffer InstanceCoun
 layout(push_constant) uniform SortPush {
 	uvec2 instance_count_addr;
 	uvec2 radix_dispatch_addr;
+	uvec2 draw_indirect_addr;
 	uint sort_size;
 	uint tile_count;
 	uint blocks_per_workgroup;

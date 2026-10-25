@@ -35,7 +35,8 @@ if(TARGET vkgsplat::vkgsplat_utility)
     catch_discover_tests(vkgsplat_camera_path_test)
   endif()
   add_executable(vkgsplat_gpu_timing_statistics_test gpu_timing_statistics.cpp ../benchmark/gpu_statistics.cpp)
-  target_link_libraries(vkgsplat_gpu_timing_statistics_test PRIVATE Catch2::Catch2WithMain vkgsplat::vkgsplat_utility)
+  target_link_libraries(vkgsplat_gpu_timing_statistics_test PRIVATE Catch2::Catch2WithMain vkgsplat::vkgsplat_utility
+                                                                    vkgsplat::vkgsplat)
   target_include_directories(vkgsplat_gpu_timing_statistics_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/..")
   catch_discover_tests(vkgsplat_gpu_timing_statistics_test)
 
@@ -73,6 +74,11 @@ if(TARGET vkgsplat::vkgsplat_utility)
   endif()
 
   if(TARGET vkgsplat::vkgsplat_backend)
+    add_executable(vkgsplat_tiled_status_test tiled_status.cpp)
+    target_link_libraries(vkgsplat_tiled_status_test PRIVATE Catch2::Catch2WithMain vkgsplat::vkgsplat_backend)
+    target_include_directories(vkgsplat_tiled_status_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/..")
+    catch_discover_tests(vkgsplat_tiled_status_test)
+
     add_executable(vkgsplat_h264_gop_test h264_gop.cpp)
     target_link_libraries(vkgsplat_h264_gop_test PRIVATE Catch2::Catch2WithMain vkgsplat::vkgsplat_backend)
     catch_discover_tests(vkgsplat_h264_gop_test)
@@ -360,6 +366,19 @@ if(vkgsplat_ENABLE_HEADLESS_GPU_TESTS)
     target_link_libraries(vkgsplat_png_sequence_verify PRIVATE stb::stb vkgsplat::vkgsplat_utility)
     set(benchmark_scene ${CMAKE_CURRENT_BINARY_DIR}/benchmark-baseline-v1.ply)
     add_executable(vkgsplat_offscreen_gpu_smoke offscreen_gpu_smoke.cpp)
+    add_executable(vkgsplat_tiled_image_gpu_smoke tiled_image_gpu_smoke.cpp)
+    target_link_libraries(
+      vkgsplat_tiled_image_gpu_smoke PRIVATE vkgsplat::vkgsplat vkgsplat::vkgsplat_headless_platform
+                                             vkgsplat::vkgsplat_benchmark_fixture)
+    add_test(NAME tiled.gpu.image_and_overflow
+             COMMAND $<TARGET_FILE:vkgsplat_tiled_image_gpu_smoke> ${CMAKE_CURRENT_BINARY_DIR}/tiled-compact.ply
+                     ${CMAKE_CURRENT_BINARY_DIR}/tiled-error.ppm)
+    set_tests_properties(
+      tiled.gpu.image_and_overflow
+      PROPERTIES ENVIRONMENT
+                 "DISPLAY=;WAYLAND_DISPLAY="
+                 TIMEOUT
+                 180)
     target_link_libraries(
       vkgsplat_offscreen_gpu_smoke
       PRIVATE vkgsplat::vkgsplat

@@ -20,6 +20,7 @@
 
 #include "app_state.hpp"
 #include "gs/pipeline.hpp"
+#include "gs/tiled_compute/operations.hpp"
 #include "video/color_converter.hpp"
 #include "video/video_encoder.hpp"
 #include "vkexec_error.hpp"
@@ -86,6 +87,14 @@ namespace {
     return resolved;
   }
 
+  [[nodiscard]] auto ConsumeCompletedTiledStatus(RenderData &data) -> std::expected<void, Error>
+  {
+    if (!data.tiled_status_pending) { return {}; }
+    auto status = gs::tiled::ReadFrameStatus(data);
+    data.tiled_status_pending = false;
+    return status;
+  }
+
   [[nodiscard]] auto PresentSwapchainImage(vulkan::Context &context,
     RenderData &data,
     uint32_t image_index,
@@ -125,6 +134,9 @@ namespace {
     if (auto waited = ring.wait_slot(previous_slot); !waited) {
       return std::unexpected{ vulkan::VkexecFailure(waited.error()) };
     }
+    // The tiled status buffer is shared across slots. Check the completed frame
+    // before recording a new one that can overwrite it.
+    if (auto status = ConsumeCompletedTiledStatus(data); !status) { return std::unexpected{ status.error() }; }
     return ResolveGpuPassTimings(context, data, frame_slot, capture_samples);
   }
 
@@ -169,6 +181,7 @@ namespace {
       return std::unexpected{ vulkan::VkexecFailure(marked.error()) };
     }
     if (data.gpu_pass_timer.enabled()) { data.gpu_pass_timer.mark_submitted(frame_slot); }
+    if (data.rasterization_mode == RasterizationMode::kComputeTiled) { data.tiled_status_pending = true; }
     return {};
   }
 
@@ -754,7 +767,11 @@ auto RenderThread::ProcessWaitIdle(std::unique_lock<std::mutex> &lock) -> void
   if (wait_idle_override_) { wait_idle_override_(); }
   auto const result = context_ != nullptr ? context_->disp.deviceWaitIdle() : VK_SUCCESS;
   std::optional<Error> timing_error;
-  if (result == VK_SUCCESS && context_ != nullptr && data_ != nullptr && data_->gpu_pass_timer.enabled()) {
+  if (result == VK_SUCCESS && data_ != nullptr) {
+    if (auto status = ConsumeCompletedTiledStatus(*data_); !status) { timing_error = status.error(); }
+  }
+  if (result == VK_SUCCESS && !timing_error && context_ != nullptr && data_ != nullptr
+      && data_->gpu_pass_timer.enabled()) {
     for (size_t slot = 0U; slot < kFrameSlotCount; ++slot) {
       auto sample = ResolveGpuPassTimings(*context_, *data_, slot, capture_gpu_timing_samples_);
       if (!sample) {
@@ -800,7 +817,8 @@ auto RenderThread::ProcessExclusive(std::unique_lock<std::mutex> &lock) -> void
       std::unexpected{ MakeError(wait_result == VK_ERROR_DEVICE_LOST ? std::errc::no_such_device : std::errc::io_error,
         "failed to wait for GPU before reconfiguration") };
   } else {
-    result = exclusive_action_();
+    if (data_ != nullptr) { result = ConsumeCompletedTiledStatus(*data_); }
+    if (result) { result = exclusive_action_(); }
   }
   lock.lock();
   if (data_ != nullptr) {
@@ -825,7 +843,10 @@ auto RenderThread::ReadFrameOnWorker() -> std::expected<RgbaFrame, Error>
   if (context_ == nullptr || data_ == nullptr) {
     return std::unexpected{ MakeError(std::errc::operation_not_supported, "GPU readback is unavailable in test mode") };
   }
-  return vulkan::ReadColorTargetRgba8(*context_, *data_);
+  auto frame = vulkan::ReadColorTargetRgba8(*context_, *data_);
+  if (!frame) { return frame; }
+  if (auto status = ConsumeCompletedTiledStatus(*data_); !status) { return std::unexpected{ status.error() }; }
+  return frame;
 }
 
 auto RenderThread::ThreadMain() -> void
@@ -1125,6 +1146,7 @@ auto RenderThread::DrawFrameOffscreen(size_t frame_slot) -> std::expected<FrameO
         waited == VK_ERROR_DEVICE_LOST ? std::errc::no_such_device : std::errc::io_error,
         "failed to wait for offscreen frame") };
     }
+    if (auto status = ConsumeCompletedTiledStatus(data); !status) { return std::unexpected{ status.error() }; }
   }
   auto resolved = ResolveGpuPassTimings(context, data, frame_slot, capture_gpu_timing_samples_);
   if (!resolved) { return std::unexpected(resolved.error()); }
@@ -1161,6 +1183,7 @@ auto RenderThread::DrawFrameOffscreen(size_t frame_slot) -> std::expected<FrameO
     return std::unexpected{ vulkan::VkexecFailure(submitted.error()) };
   }
   if (data.gpu_pass_timer.enabled()) { data.gpu_pass_timer.mark_submitted(frame_slot); }
+  if (data.rasterization_mode == RasterizationMode::kComputeTiled) { data.tiled_status_pending = true; }
   return FrameOutcome::kSubmitted;
 }
 

@@ -179,18 +179,6 @@ namespace {
     context.device = device;
     context.disp = context.device.make_table();
 
-    VkPhysicalDeviceSubgroupProperties subgroup_props{};
-    subgroup_props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES;
-    VkPhysicalDeviceProperties2 props2 = {
-      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
-      .pNext = &subgroup_props,
-      .properties = {},
-    };
-    context.inst_disp.getPhysicalDeviceProperties2(context.device.physical_device, &props2);
-    std::println("Subgroup size={} operations={:#x} (radix sort needs arithmetic)",
-      subgroup_props.subgroupSize,
-      static_cast<unsigned>(subgroup_props.supportedOperations));
-
     // NOLINTBEGIN(cppcoreguidelines-pro-type-reinterpret-cast)
     context.set_swapchain_present_timing_queue_size = reinterpret_cast<PFN_vkSetSwapchainPresentTimingQueueSizeEXT>(
       vkGetDeviceProcAddr(context.device, "vkSetSwapchainPresentTimingQueueSizeEXT"));
@@ -314,6 +302,12 @@ namespace {
     features_12.timelineSemaphore = VK_TRUE;
     selector.add_required_extension_features(features_12);
 
+    if (config.require_shader_int64) {
+      VkPhysicalDeviceFeatures shader_features{};
+      shader_features.shaderInt64 = VK_TRUE;
+      selector.set_required_features(shader_features);
+    }
+
     VkPhysicalDeviceVulkan13Features features_13{};
     features_13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
     features_13.synchronization2 = VK_TRUE;
@@ -412,7 +406,9 @@ auto DeviceInitialization(vulkan::Context &context, DriverConfig const &config) 
   if (!physical_device) { return std::unexpected(physical_device.error()); }
   auto device = CreateLogicalDevice(context, config, std::move(*physical_device), offscreen);
   if (!device) { return std::unexpected(device.error()); }
-  return FinalizeDeviceContext(context, *device);
+  if (auto finalized = FinalizeDeviceContext(context, *device); !finalized) { return finalized; }
+  context.shader_int64_enabled = config.require_shader_int64;
+  return {};
 }
 
 }// namespace vkgsplat

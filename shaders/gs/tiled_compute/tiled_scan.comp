@@ -1,0 +1,64 @@
+#version 460
+#extension GL_EXT_buffer_reference : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+const uint BLOCK_SIZE = 256u;
+const uint MODE_SCAN = 0u;
+const uint MODE_ADD = 1u;
+
+layout(buffer_reference, std430, buffer_reference_align = 4) readonly buffer InputRef { uint data[]; };
+layout(buffer_reference, std430, buffer_reference_align = 4) buffer OutputRef { uint data[]; };
+layout(buffer_reference, std430, buffer_reference_align = 4) buffer SumsRef { uint data[]; };
+layout(buffer_reference, std430, buffer_reference_align = 4) readonly buffer BlockOffsetsRef { uint data[]; };
+layout(buffer_reference, std430, buffer_reference_align = 4) buffer StatusRef { uint value; };
+
+layout(push_constant) uniform ScanPush {
+  uint64_t input_address;
+  uint64_t output_address;
+  uint64_t sums_address;
+  uint64_t block_offsets_address;
+  uint64_t overflow_address;
+  uint element_count;
+  uint mode;
+} push;
+
+shared uint64_t scan_values[BLOCK_SIZE];
+
+void main()
+{
+  uint block = gl_WorkGroupID.x;
+  uint base = block * BLOCK_SIZE;
+  uint id = base + gl_LocalInvocationID.x;
+  if (push.mode == MODE_ADD) {
+    if (id >= push.element_count) { return; }
+    uint64_t result = uint64_t(OutputRef(push.output_address).data[id])
+                    + uint64_t(BlockOffsetsRef(push.block_offsets_address).data[block]);
+    if (result > uint64_t(0xffffffffu)) {
+      atomicOr(StatusRef(push.overflow_address).value, 4u);
+      result = uint64_t(0xffffffffu);
+    }
+    OutputRef(push.output_address).data[id] = uint(result);
+    return;
+  }
+  uint local = gl_LocalInvocationID.x;
+  uint input_value = id < push.element_count ? InputRef(push.input_address).data[id] : 0u;
+  scan_values[local] = uint64_t(input_value);
+  barrier();
+  for (uint stride = 1u; stride < BLOCK_SIZE; stride <<= 1u) {
+    uint64_t previous = local >= stride ? scan_values[local - stride] : 0ul;
+    barrier();
+    scan_values[local] += previous;
+    barrier();
+  }
+  uint64_t inclusive = scan_values[local];
+  if (inclusive > uint64_t(0xffffffffu)) {
+    atomicOr(StatusRef(push.overflow_address).value, 4u);
+  }
+  if (id < push.element_count) {
+    OutputRef(push.output_address).data[id] = uint(min(inclusive - uint64_t(input_value), uint64_t(0xffffffffu)));
+  }
+  if (local == BLOCK_SIZE - 1u && push.sums_address != 0ul) {
+    SumsRef(push.sums_address).data[block] = uint(min(inclusive, uint64_t(0xffffffffu)));
+  }
+}

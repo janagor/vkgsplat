@@ -1,0 +1,46 @@
+#version 460
+#extension GL_EXT_descriptor_heap : require
+#extension GL_EXT_nonuniform_qualifier : enable
+#extension GL_EXT_buffer_reference : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+const uint RADIX_BINS = 256u;
+const uint HEAP_KEYS_A = 7u;
+const uint HEAP_KEYS_B = 5u;
+const uint HEAP_HISTOGRAMS = 11u;
+
+layout(descriptor_heap, std430) readonly buffer KeyBuffer { uint data[]; } key_buffers[];
+layout(descriptor_heap, std430) writeonly buffer HistogramBuffer { uint data[]; } histograms[];
+layout(buffer_reference, std430, buffer_reference_align = 4) readonly buffer TotalRef { uint value; };
+
+layout(push_constant) uniform RadixPush {
+  uint64_t total_address;
+  uint64_t prefix_address;
+  uint64_t prefix_group_address;
+  uint capacity;
+  uint pass_index;
+  uint group_count_x;
+  uint prefix_group_capacity;
+  uint prefix_mode;
+} push;
+
+shared uint bins[RADIX_BINS];
+
+void main()
+{
+  uint local = gl_LocalInvocationID.x;
+  uint block = gl_WorkGroupID.y * gl_NumWorkGroups.x + gl_WorkGroupID.x;
+  uint total = min(TotalRef(push.total_address).value, push.capacity);
+  uint id = block * RADIX_BINS + local;
+  bins[local] = 0u;
+  barrier();
+  if (id < total) {
+    uint slot = (push.pass_index & 1u) == 0u ? HEAP_KEYS_A : HEAP_KEYS_B;
+    uint word = push.pass_index < 4u ? 0u : 1u;
+    uint digit = (key_buffers[slot].data[id * 2u + word] >> ((push.pass_index & 3u) * 8u)) & 255u;
+    atomicAdd(bins[digit], 1u);
+  }
+  barrier();
+  histograms[HEAP_HISTOGRAMS].data[block * RADIX_BINS + local] = bins[local];
+}

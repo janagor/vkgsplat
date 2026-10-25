@@ -16,11 +16,17 @@ enum class GpuPass : u8 {
   kRadixSort,
   kRasterize,
   kMultiviewProjection,
+  kTiledCount,
+  kTiledScan,
+  kTiledEmit,
+  kTiledRadixSort,
+  kTiledRanges,
+  kTiledRasterize,
   kCount,
 };
 
 inline constexpr size_t kGpuPassCount = static_cast<size_t>(GpuPass::kCount);
-inline constexpr u32 kGpuTimingSchemaVersion = 1U;
+inline constexpr u32 kGpuTimingSchemaVersion = 2U;
 
 struct GpuFrameTimings
 {

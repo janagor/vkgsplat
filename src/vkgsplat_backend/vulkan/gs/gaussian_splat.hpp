@@ -36,8 +36,6 @@ static_assert(std::is_standard_layout_v<GaussianProjected>);
 inline constexpr u32 kTileSize = 16;
 // Default NDC xy cull half-extent for projection (matches classic 3DGS fringe).
 inline constexpr f32 kDefaultProjectionCullMargin = 1.3F;
-// Conservative upper bound on tiles touched per splat (16x16 tile grid).
-inline constexpr u32 kMaxTilesPerSplat = 64;
 // Radix sort: elements processed per workgroup invocation.
 inline constexpr u32 kRadixBlocksPerWorkgroup = 32;
 
@@ -53,6 +51,20 @@ auto constexpr kBinningKeySize = 8;
 static_assert(sizeof(BinningKey) == kBinningKeySize);
 static_assert(TriviallyCopyable<BinningKey>);
 static_assert(std::is_standard_layout_v<BinningKey>);
+
+// Compute rasterization sorts positive finite depth bits within each tile.
+// The word order matches a logical (tile_id << 32) | depth_bits key.
+struct TiledSortKey
+{
+  u32 depth_bits{};
+  u32 tile_id{};
+};
+
+static_assert(sizeof(TiledSortKey) == sizeof(u32) * 2U);
+static_assert(offsetof(TiledSortKey, depth_bits) == 0U);
+static_assert(offsetof(TiledSortKey, tile_id) == sizeof(u32));
+static_assert(TriviallyCopyable<TiledSortKey>);
+static_assert(std::is_standard_layout_v<TiledSortKey>);
 
 // Stage 3: per-tile start/end into the sorted instance list.
 struct TileRange

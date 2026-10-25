@@ -33,6 +33,8 @@ namespace video {
 }
 
 enum class FrameSubmissionPolicy : u8 { kLatest, kLossless };
+enum class RasterizationMode : u8 { kGraphicsPipeline, kComputeTiled };
+inline constexpr u64 kDefaultTiledIntersectionBudgetBytes = 128ULL * 1024ULL * 1024ULL;
 
 struct RenderDeviceInfo
 {
@@ -52,6 +54,9 @@ struct RendererConfig
   bool enable_gpu_timers = false;
   bool capture_gpu_timing_samples = false;
   FrameSubmissionPolicy submission_policy = FrameSubmissionPolicy::kLatest;
+  RasterizationMode rasterization_mode = RasterizationMode::kGraphicsPipeline;
+  u64 tiled_intersection_budget_bytes = kDefaultTiledIntersectionBudgetBytes;
+  bool enable_tiled_debug_readback = false;
   FrameRateConfig frame_rate{};
   /// Quilt dimensions as {columns, rows}; {1, 1} selects the mono path.
   std::array<u32, 2> lfd_grid{ 1U, 1U };
@@ -102,6 +107,24 @@ public:
   [[nodiscard]] auto reserve_gpu_timing_samples(size_t count) -> std::expected<void, Error>;
   [[nodiscard]] auto gpu_timestamp_period_ns() const -> double;
   [[nodiscard]] auto gpu_timestamp_valid_bits() const -> u32;
+  /** Intersection count from the latest completed tiled frame. */
+  [[nodiscard]] auto tiled_intersection_count() -> std::expected<u32, Error>;
+  [[nodiscard]] auto tiled_scratch_bytes() const -> u64;
+  struct TiledDebugSnapshot
+  {
+    std::vector<f32> projected;
+    std::vector<u32> counts;
+    std::vector<u32> offsets;
+    std::vector<u32> emitted_key_words;
+    std::vector<u32> emitted_indices;
+    std::vector<u32> sorted_key_words;
+    std::vector<u32> sorted_indices;
+    std::vector<u32> range_words;
+    u32 intersections{};
+    u32 tiles_x{};
+    u32 tiles_y{};
+  };
+  [[nodiscard]] auto tiled_debug_snapshot() -> std::expected<TiledDebugSnapshot, Error>;
 
   /** Render one quilt cell full-screen instead of the complete atlas. */
   [[nodiscard]] auto set_lfd_emulate(bool active) -> std::expected<void, Error>;

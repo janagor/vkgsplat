@@ -12,14 +12,17 @@
 #include "vulkan/command/pool.hpp"
 #include "vulkan/descriptor/descriptor_heap.hpp"
 #include "vulkan/gpu_pass_timer.hpp"
-#include "vulkan/graphics_pipeline.hpp"
-#include "vulkan/gs/binning.hpp"
+#include "vulkan/gs/graphics/binning.hpp"
+#include "vulkan/gs/graphics/graphics_pipeline.hpp"
+#include "vulkan/gs/graphics/sorting.hpp"
 #include "vulkan/gs/projection.hpp"
-#include "vulkan/gs/sorting.hpp"
+#include "vulkan/gs/tiled_compute/operations.hpp"
+#include "vulkan/gs/tiled_compute/resources.hpp"
 #include "vulkan/imgui_overlay.hpp"
 #include "vulkan/sphere_setup.hpp"
 #include "vulkan/vulkan_bootstrap.hpp"
 #include "vulkan_context.hpp"
+#include <vkgsplat/renderer.hpp>
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
 
@@ -109,13 +112,18 @@ auto RecreateSwapchain(vulkan::Context &context, RenderData &data) -> std::expec
     return std::unexpected{ MakeError(
       std::errc::io_error, "failed to wait for presentation before swapchain recreation") };
   }
+  if (data.tiled_status_pending) {
+    auto status = gs::tiled::ReadFrameStatus(data);
+    data.tiled_status_pending = false;
+    if (!status) { return status; }
+  }
   if (extent.width == 0 || extent.height == 0) { return CreateSyncObjects(context, data); }
 
   data.in_flight_readbacks.clear();
   data.command_buffers.clear();
   data.command_pool.reset();
 
-  DestroyGraphicsPipeline(context, data);
+  if (data.rasterization_mode == RasterizationMode::kGraphicsPipeline) { DestroyGraphicsPipeline(context, data); }
 
   if (context.swapchain == nullptr) {
     return std::unexpected{ MakeError(std::errc::state_not_recoverable, "swapchain is not initialized") };
@@ -128,11 +136,19 @@ auto RecreateSwapchain(vulkan::Context &context, RenderData &data) -> std::expec
 
   if (auto sync = CreateSyncObjects(context, data); !sync) { return sync; }
 
-  if (0 != CreateGraphicsPipeline(context, data)) {
-    return std::unexpected{ MakeError(std::errc::io_error, "failed to recreate graphics pipeline") };
-  }
   if (!gs::RecreateRasterizationColorTarget(context, data)) {
     return std::unexpected{ MakeError(std::errc::io_error, "failed to recreate rasterize color target") };
+  }
+  if (data.rasterization_mode == RasterizationMode::kGraphicsPipeline) {
+    if (0 != CreateGraphicsPipeline(context, data)) {
+      return std::unexpected{ MakeError(std::errc::io_error, "failed to recreate graphics pipeline") };
+    }
+  } else {
+    if (auto resources = gs::tiled::RecreateExtentResources(context, data); !resources) { return resources; }
+  }
+  if (!RefreshDescriptorHeap(context, data)) {
+    return std::unexpected{ MakeError(
+      std::errc::io_error, "failed to refresh descriptors after swapchain recreation") };
   }
   if (auto command_resources = CreateCommandResources(context, data); !command_resources) {
     return std::unexpected{ command_resources.error() };
@@ -162,9 +178,14 @@ void Cleanup(vulkan::Context &context, RenderData &data)
 
   gs::DestroyGsPipeline(data);
   DestroySphereBuffers(context, data);
+  if (data.rasterization_mode == RasterizationMode::kComputeTiled) {
+    gs::tiled::DestroyAlgorithms(data);
+    gs::tiled::DestroyResources(data);
+  } else {
+    gs::DestroySorting(context, data);
+    gs::DestroyBinning(context, data);
+  }
   gs::DestroyRasterization(context, data);
-  gs::DestroySorting(context, data);
-  gs::DestroyBinning(context, data);
   gs::DestroyProjection(context, data);
   DestroySphereSetup(context, data);
   DestroyDescriptorHeap(context, data);

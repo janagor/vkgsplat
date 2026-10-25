@@ -34,7 +34,8 @@ auto Engine::create(EngineConfig const &config, Platform &platform) -> std::expe
   auto created_driver = CreateVulkanDriver(platform,
     DriverConfig{ .enable_validation = config.enable_validation,
       .request_present_timing = config.request_present_timing,
-      .video_encode = config.video_encode });
+      .video_encode = config.video_encode,
+      .require_shader_int64 = config.require_shader_int64 });
   if (!created_driver) { return std::unexpected(created_driver.error()); }
   impl->driver = std::move(*created_driver);
 

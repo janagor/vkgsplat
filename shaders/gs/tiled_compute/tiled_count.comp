@@ -1,0 +1,37 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_descriptor_heap : require
+#extension GL_EXT_buffer_reference : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+
+#include "tiled_bounds.glsl"
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+const uint HEAP_PROJECTED = 4u;
+const uint PROJECTED_STRIDE = 11u;
+
+layout(descriptor_heap, std430) readonly buffer ProjectedBuffer { float data[]; } projected_buffers[];
+layout(buffer_reference, std430, buffer_reference_align = 4) buffer CountsRef { uint data[]; };
+
+layout(push_constant) uniform TiledCountPush {
+  uint64_t counts_address;
+  uvec2 viewport;
+  uint splat_count;
+  uint tile_size;
+  uint tiles_x;
+  uint tiles_y;
+} push;
+
+void main()
+{
+  uint id = gl_GlobalInvocationID.x;
+  if (id >= push.splat_count) { return; }
+  uint base = id * PROJECTED_STRIDE;
+  vec2 mean = vec2(projected_buffers[HEAP_PROJECTED].data[base],
+                   projected_buffers[HEAP_PROJECTED].data[base + 1u]);
+  float depth = projected_buffers[HEAP_PROJECTED].data[base + 5u];
+  float radius = projected_buffers[HEAP_PROJECTED].data[base + 6u];
+  uvec4 bounds = tiled_bounds(mean, radius, depth, push.viewport, push.tile_size,
+                              uvec2(push.tiles_x, push.tiles_y));
+  CountsRef(push.counts_address).data[id] = (bounds.z - bounds.x) * (bounds.w - bounds.y);
+}

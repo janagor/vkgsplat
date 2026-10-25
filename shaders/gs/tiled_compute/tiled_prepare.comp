@@ -1,0 +1,70 @@
+#version 460
+#extension GL_EXT_buffer_reference : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+const uint RADIX_BLOCK_SIZE = 256u;
+
+layout(buffer_reference, std430, buffer_reference_align = 4) readonly buffer CountsRef { uint data[]; };
+layout(buffer_reference, std430, buffer_reference_align = 4) buffer OffsetsRef { uint data[]; };
+layout(buffer_reference, std430, buffer_reference_align = 4) buffer TotalRef { uint value; };
+layout(buffer_reference, std430, buffer_reference_align = 4) buffer StatusRef { uint value; };
+layout(buffer_reference, std430, buffer_reference_align = 4) buffer DispatchRef {
+  uint x;
+  uint y;
+  uint z;
+};
+
+layout(push_constant) uniform PreparePush {
+  uint64_t counts_address;
+  uint64_t offsets_address;
+  uint64_t total_address;
+  uint64_t overflow_address;
+  uint64_t dispatch_address;
+  uint splat_count;
+  uint capacity;
+  uint max_groups_x;
+  uint max_groups_y;
+} push;
+
+void main()
+{
+  if (StatusRef(push.overflow_address).value != 0u) {
+    TotalRef(push.total_address).value = 0u;
+    OffsetsRef(push.offsets_address).data[push.splat_count] = 0u;
+    DispatchRef dispatch = DispatchRef(push.dispatch_address);
+    dispatch.x = 1u;
+    dispatch.y = 1u;
+    dispatch.z = 1u;
+    return;
+  }
+  uint last = push.splat_count - 1u;
+  uint64_t total = uint64_t(OffsetsRef(push.offsets_address).data[last])
+                 + uint64_t(CountsRef(push.counts_address).data[last]);
+  if (total > uint64_t(0xffffffffu)) {
+    atomicOr(StatusRef(push.overflow_address).value, 4u);
+    total = uint64_t(0xffffffffu);
+  }
+  TotalRef(push.total_address).value = uint(total);
+  OffsetsRef(push.offsets_address).data[push.splat_count] = uint(total);
+  if (total > uint64_t(push.capacity)) {
+    atomicOr(StatusRef(push.overflow_address).value, 1u);
+    total = 0ul;
+    TotalRef(push.total_address).value = 0u;
+    OffsetsRef(push.offsets_address).data[push.splat_count] = 0u;
+  }
+  uint groups = (uint(total) + RADIX_BLOCK_SIZE - 1u) / RADIX_BLOCK_SIZE;
+  uint x = min(max(groups, 1u), push.max_groups_x);
+  uint y = (max(groups, 1u) + x - 1u) / x;
+  if (y > push.max_groups_y) {
+    atomicOr(StatusRef(push.overflow_address).value, 8u);
+    TotalRef(push.total_address).value = 0u;
+    OffsetsRef(push.offsets_address).data[push.splat_count] = 0u;
+    x = 1u;
+    y = 1u;
+  }
+  DispatchRef dispatch = DispatchRef(push.dispatch_address);
+  dispatch.x = x;
+  dispatch.y = y;
+  dispatch.z = 1u;
+}

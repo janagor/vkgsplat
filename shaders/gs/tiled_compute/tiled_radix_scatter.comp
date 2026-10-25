@@ -1,0 +1,65 @@
+#version 460
+#extension GL_EXT_descriptor_heap : require
+#extension GL_EXT_nonuniform_qualifier : enable
+#extension GL_EXT_buffer_reference : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+const uint RADIX_BINS = 256u;
+const uint HEAP_KEYS_A = 7u;
+const uint HEAP_VALUES_A = 8u;
+const uint HEAP_KEYS_B = 5u;
+const uint HEAP_VALUES_B = 6u;
+
+layout(descriptor_heap, std430) buffer KeyBuffer { uint data[]; } key_buffers[];
+layout(descriptor_heap, std430) buffer ValueBuffer { uint data[]; } value_buffers[];
+layout(buffer_reference, std430, buffer_reference_align = 4) readonly buffer PrefixRef { uint data[]; };
+layout(buffer_reference, std430, buffer_reference_align = 4) readonly buffer TotalRef { uint value; };
+
+layout(push_constant) uniform RadixPush {
+  uint64_t total_address;
+  uint64_t prefix_address;
+  uint64_t prefix_group_address;
+  uint capacity;
+  uint pass_index;
+  uint group_count_x;
+  uint prefix_group_capacity;
+  uint prefix_mode;
+} push;
+
+shared uint digits[RADIX_BINS];
+
+void main()
+{
+  uint local = gl_LocalInvocationID.x;
+  uint block = gl_WorkGroupID.y * gl_NumWorkGroups.x + gl_WorkGroupID.x;
+  uint id = block * RADIX_BINS + local;
+  uint total = min(TotalRef(push.total_address).value, push.capacity);
+  uint input_slot = (push.pass_index & 1u) == 0u ? HEAP_KEYS_A : HEAP_KEYS_B;
+  uint output_slot = (push.pass_index & 1u) == 0u ? HEAP_KEYS_B : HEAP_KEYS_A;
+  uint input_values = (push.pass_index & 1u) == 0u ? HEAP_VALUES_A : HEAP_VALUES_B;
+  uint output_values = (push.pass_index & 1u) == 0u ? HEAP_VALUES_B : HEAP_VALUES_A;
+  uint depth_bits = 0u;
+  uint tile_id = 0u;
+  uint value = 0u;
+  uint digit = 0u;
+  if (id < total) {
+    depth_bits = key_buffers[input_slot].data[id * 2u];
+    tile_id = key_buffers[input_slot].data[id * 2u + 1u];
+    value = value_buffers[input_values].data[id];
+    uint word = push.pass_index < 4u ? depth_bits : tile_id;
+    digit = (word >> ((push.pass_index & 3u) * 8u)) & 255u;
+  }
+  digits[local] = digit;
+  barrier();
+  if (id >= total) { return; }
+  uint rank = 0u;
+  for (uint previous = 0u; previous < local; ++previous) {
+    rank += uint(digits[previous] == digit);
+  }
+  uint destination = PrefixRef(push.prefix_address).data[block * RADIX_BINS + digit] + rank;
+  if (destination >= total) { return; }
+  key_buffers[output_slot].data[destination * 2u] = depth_bits;
+  key_buffers[output_slot].data[destination * 2u + 1u] = tile_id;
+  value_buffers[output_values].data[destination] = value;
+}
