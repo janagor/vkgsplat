@@ -16,6 +16,7 @@
 // NOLINTBEGIN(misc-include-cleaner)
 #include <benchmark/benchmark.h>
 
+#include <algorithm>
 #include <atomic>
 #include <cstdlib>
 #include <exception>
@@ -40,7 +41,8 @@ constexpr vkgsplat::f32 kHighOverlapPositionScale = 0.15F;
   for (auto &geometry : scene->geometries) {
     geometry.scale.fill(high_overlap ? kHighOverlapLogScale : kLowOverlapLogScale);
     if (high_overlap) {
-      for (auto &position : geometry.position) { position *= kHighOverlapPositionScale; }
+      std::ranges::transform(geometry.position, geometry.position.begin(),
+        [](vkgsplat::f32 position) -> vkgsplat::f32 { return position * kHighOverlapPositionScale; });
     }
   }
   auto written = vkgsplat::benchmark::WritePly(path, *scene);

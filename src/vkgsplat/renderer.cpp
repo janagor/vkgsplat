@@ -8,7 +8,6 @@
 #include <limits>
 #include <memory>
 #include <optional>
-#include <print>
 #include <span>
 #include <string>
 #include <system_error>
@@ -33,6 +32,7 @@
 #include <vkgsplat_video/encoded_packet.hpp>
 
 #include "vulkan/app_state.hpp"
+#include "vulkan/gs/gaussian_splat.hpp"
 #include "vulkan/gs/graphics/graphics_pipeline.hpp"
 #include "vulkan/gs/graphics/binning.hpp"
 #include "vulkan/gs/pipeline.hpp"
@@ -148,6 +148,59 @@ namespace {
     return {};
   }
 
+  [[nodiscard]] auto InitRasterizer(vulkan::Context &context, RenderData &render_data,
+    RasterizationMode mode) -> std::expected<void, Error>
+  {
+    if (mode == RasterizationMode::kGraphicsPipeline) {
+      if (!gs::InitBinning(context, render_data)) {
+        return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to initialize gaussian binning"));
+      }
+      if (!gs::InitSorting(context, render_data)) {
+        return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to initialize gaussian sorting"));
+      }
+      if (0 != CreateGraphicsPipeline(context, render_data)) {
+        return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to create graphics pipeline"));
+      }
+      return {};
+    }
+    VkFormatProperties format_properties{};
+    context.inst_disp.getPhysicalDeviceFormatProperties(
+      context.device.physical_device.physical_device, render_data.color_format, &format_properties);
+    if ((format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT) == 0U) {
+      return std::unexpected(MakeError(std::errc::operation_not_supported,
+        "VK_FORMAT_R8G8B8A8_UNORM does not support storage images on this device"));
+    }
+    if (auto resources = gs::tiled::InitResources(context, render_data); !resources) {
+      return std::unexpected(resources.error());
+    }
+    if (auto algorithms = gs::tiled::InitAlgorithms(context, render_data); !algorithms) {
+      return std::unexpected(algorithms.error());
+    }
+    return {};
+  }
+
+  [[nodiscard]] auto InitFrameResources(vulkan::Context &context, RenderData &render_data,
+    RendererConfig const &config) -> std::expected<void, Error>
+  {
+    if (!RefreshDescriptorHeap(context, render_data)) {
+      return std::unexpected(MakeError(std::errc::io_error, "Failed to refresh Gaussian descriptor heap"));
+    }
+    if (auto command_resources = CreateCommandResources(context, render_data); !command_resources) {
+      return std::unexpected(command_resources.error());
+    }
+    if (auto sync_objects = CreateSyncObjects(context, render_data); !sync_objects) {
+      return std::unexpected(sync_objects.error());
+    }
+    if (config.enable_gpu_timers) {
+      if (auto timer = CreateGpuPassTimer(context, render_data); !timer) { return std::unexpected(timer.error()); }
+    }
+    if (config.enable_imgui) {
+      if (auto imgui = InitImguiOverlay(context, render_data); !imgui) { return std::unexpected(imgui.error()); }
+    }
+    render_data.present_pacer = PresentPacer::TryCreate(context, config.frame_rate);
+    return {};
+  }
+
   [[nodiscard]] auto BuildRendererResources(vulkan::Context &context,
     RenderData &render_data,
     RendererConfig const &config) -> std::expected<void, Error>
@@ -187,51 +240,11 @@ namespace {
       return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to initialize gaussian rasterization"));
     }
     gs::RecordGsPipeline(render_data);
-    if (config.rasterization_mode == RasterizationMode::kGraphicsPipeline) {
-      if (!gs::InitBinning(context, render_data)) {
-        return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to initialize gaussian binning"));
-      }
-      if (!gs::InitSorting(context, render_data)) {
-        return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to initialize gaussian sorting"));
-      }
-      if (0 != CreateGraphicsPipeline(context, render_data)) {
-        return std::unexpected(MakeError(std::errc::invalid_argument, "Failed to create graphics pipeline"));
-      }
-    } else {
-      VkFormatProperties format_properties{};
-      context.inst_disp.getPhysicalDeviceFormatProperties(
-        context.device.physical_device.physical_device, render_data.color_format, &format_properties);
-      if ((format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT) == 0U) {
-        return std::unexpected(MakeError(std::errc::operation_not_supported,
-          "VK_FORMAT_R8G8B8A8_UNORM does not support storage images on this device"));
-      }
-      if (auto resources = gs::tiled::InitResources(context, render_data); !resources) {
-        return std::unexpected(resources.error());
-      }
-      if (auto algorithms = gs::tiled::InitAlgorithms(context, render_data); !algorithms) {
-        return std::unexpected(algorithms.error());
-      }
+    if (auto rasterizer = InitRasterizer(context, render_data, config.rasterization_mode); !rasterizer) {
+      return std::unexpected(rasterizer.error());
     }
-    if (!RefreshDescriptorHeap(context, render_data)) {
-      return std::unexpected(MakeError(std::errc::io_error, "Failed to refresh Gaussian descriptor heap"));
-    }
-    if (auto command_resources = CreateCommandResources(context, render_data); !command_resources) {
-      return std::unexpected(command_resources.error());
-    }
-    if (auto sync_objects = CreateSyncObjects(context, render_data); !sync_objects) {
-      return std::unexpected(sync_objects.error());
-    }
-    if (config.enable_gpu_timers) {
-      if (auto timer = CreateGpuPassTimer(context, render_data); !timer) { return std::unexpected(timer.error()); }
-    }
-    if (config.enable_imgui) {
-      if (auto imgui = InitImguiOverlay(context, render_data); !imgui) { return std::unexpected(imgui.error()); }
-    }
-
-    render_data.present_pacer = PresentPacer::TryCreate(context, config.frame_rate);
-    if (config.frame_rate.IsPacingRequested() && render_data.present_pacer == nullptr
-        && !context.present_timing_enabled) {
-      // Warning already printed by TryCreate / device context.
+    if (auto frame_resources = InitFrameResources(context, render_data, config); !frame_resources) {
+      return std::unexpected(frame_resources.error());
     }
 
     return {};
@@ -468,7 +481,11 @@ auto Renderer::tiled_intersection_count() -> std::expected<u32, Error>
     return std::unexpected(MakeError(std::errc::operation_not_supported, "tiled intersection count is unavailable"));
   }
   if (auto idle = wait_idle(); !idle) { return std::unexpected(idle.error()); }
-  auto const &buffer = *impl_->render_data.tiled_total_buffer;
+  auto const &total_buffer = impl_->render_data.tiled_total_buffer;
+  if (!total_buffer.has_value()) {
+    return std::unexpected(MakeError(std::errc::operation_not_supported, "tiled intersection count is unavailable"));
+  }
+  auto const &buffer = total_buffer.value();
   if (auto invalidated = buffer.invalidate(); !invalidated) {
     return std::unexpected(MakeError(std::errc::io_error, invalidated.error().message()));
   }
@@ -502,8 +519,10 @@ auto Renderer::tiled_scratch_bytes() const -> u64
   add(data.tiled_radix_group_buffer);
   add(data.radix_dispatch_buffer);
   add(data.tile_ranges_buffer);
-  for (auto const &buffer : data.tiled_scan_sums) { bytes += buffer.size(); }
-  for (auto const &buffer : data.tiled_scan_offsets) { bytes += buffer.size(); }
+  bytes = std::ranges::fold_left(data.tiled_scan_sums, bytes,
+    [](u64 total, GpuBuffer const &buffer) -> u64 { return total + buffer.size(); });
+  bytes = std::ranges::fold_left(data.tiled_scan_offsets, bytes,
+    [](u64 total, GpuBuffer const &buffer) -> u64 { return total + buffer.size(); });
   return bytes;
 }
 
@@ -520,14 +539,17 @@ auto Renderer::tiled_debug_snapshot() -> std::expected<TiledDebugSnapshot, Error
   }
   auto const bytes = data.tiled_debug_readback_buffer->mapped();
   auto read = [&](TiledDebugSection section, auto &destination, size_t count) -> bool {
-    using Value = typename std::remove_reference_t<decltype(destination)>::value_type;
-    size_t const index = static_cast<size_t>(section);
+    using Value = std::remove_reference_t<decltype(destination)>::value_type;
+    auto const index = static_cast<size_t>(section);
     VkDeviceSize const offset = data.tiled_debug_offsets.at(index);
     VkDeviceSize const length = count * sizeof(Value);
     if (length > data.tiled_debug_sizes.at(index) || offset > bytes.size()
         || length > bytes.size() - offset) { return false; }
     destination.resize(count);
-    if (length != 0U) { std::memcpy(destination.data(), bytes.data() + offset, length); }
+    if (length != 0U) {
+      std::memcpy(destination.data(), bytes.subspan(static_cast<size_t>(offset), static_cast<size_t>(length)).data(),
+        length);
+    }
     return true;
   };
   TiledDebugSnapshot snapshot{};

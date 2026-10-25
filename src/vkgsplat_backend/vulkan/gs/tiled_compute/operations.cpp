@@ -1,25 +1,33 @@
 #include "gs/tiled_compute/operations.hpp"
 
 #include "app_state.hpp"
+#include "gs/gaussian_splat.hpp"
 #include "gs/load_heap_pipeline.hpp"
+#include "gs/push_constants.hpp"
 #include "gs/tiled_compute/resources.hpp"
 #include "vulkan/gpu_buffers.hpp"
+#include "vulkan/gpu_pass_timer.hpp"
 #include "vulkan_context.hpp"
 
-#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstring>
 #include <expected>
 #include <format>
+#include <optional>
 #include <span>
 #include <string>
 #include <system_error>
 #include <utility>
 
+#include <glm/ext/vector_uint2.hpp>
 #include <vkexec/barrier.hpp>
 #include <vkexec/pass.hpp>
+#include <vkexec_extensions/descriptor_heap/algorithm.hpp>
 #include <vkexec_extensions/descriptor_heap/pass.hpp>
+#include <vkgsplat/gpu_timings.hpp>
+#include <vkgsplat_utility/error.hpp>
+#include <vkgsplat_utility/types.hpp>
 #include <vulkan/vulkan_core.h>
 
 #include "vkgsplat/example_config.h"
@@ -157,6 +165,9 @@ template<typename Push>
 [[nodiscard]] auto RecordScan(vulkan::Context const &context, RenderData const &data,
   VkCommandBuffer command_buffer) -> std::expected<void, Error>
 {
+  if (!data.tiled_scan_algorithm) {
+    return std::unexpected(MakeError(std::errc::state_not_recoverable, "tiled scan algorithm is missing"));
+  }
   u32 count = data.splat_count;
   u64 input = vulkan::DeviceAddressOrZero(data.tiled_counts_buffer);
   u64 output = vulkan::DeviceAddressOrZero(data.tiled_offsets_buffer);
@@ -215,13 +226,13 @@ template<typename Push>
 }
 
 void CopyDebugSection(vulkan::Context const &context, RenderData const &data,
-  VkCommandBuffer command_buffer, TiledDebugSection section, GpuBuffer const &source)
+  VkCommandBuffer command_buffer, TiledDebugSection section, GpuBuffer const &source,
+  GpuBuffer const &readback)
 {
-  size_t const index = static_cast<size_t>(section);
+  auto const index = static_cast<size_t>(section);
   VkBufferCopy const region{ .srcOffset = 0U, .dstOffset = data.tiled_debug_offsets.at(index),
     .size = data.tiled_debug_sizes.at(index) };
-  context.disp.cmdCopyBuffer(command_buffer, source.handle(),
-    data.tiled_debug_readback_buffer->handle(), 1U, &region);
+  context.disp.cmdCopyBuffer(command_buffer, source.handle(), readback.handle(), 1U, &region);
 }
 
 [[nodiscard]] auto FinishDebugCopies(vulkan::Context const &context, VkCommandBuffer command_buffer)
@@ -285,7 +296,9 @@ auto InitAlgorithms(vulkan::Context &context, RenderData &data) -> std::expected
   return {};
 }
 
-auto RecordPreparation(vulkan::Context const &context, RenderData const &data,
+namespace {
+
+[[nodiscard]] auto RecordCountScanEmit(vulkan::Context const &context, RenderData const &data,
   VkCommandBuffer command_buffer) -> std::expected<void, Error>
 {
   if (!data.tiled_count_algorithm || !data.tiled_scan_algorithm || !data.tiled_emit_algorithm
@@ -341,19 +354,32 @@ auto RecordPreparation(vulkan::Context const &context, RenderData const &data,
   if (auto result = ComputeBarrier(context, command_buffer); !result) { return result; }
   data.gpu_pass_timer.write(context, data.current_slot, GpuPass::kTiledEmit, true, command_buffer);
   if (data.enable_tiled_debug_readback) {
-    if (!data.tiled_debug_readback_buffer) {
-      return std::unexpected(MakeError(std::errc::state_not_recoverable, "tiled debug readback is missing"));
+    if (!data.tiled_debug_readback_buffer || !data.sorted_keys_buffer || !data.sorted_values_buffer) {
+      return std::unexpected(MakeError(std::errc::state_not_recoverable, "tiled debug resources are missing"));
     }
     if (auto result = DebugCopyBarrier(context, command_buffer); !result) { return result; }
-    CopyDebugSection(context, data, command_buffer, TiledDebugSection::kEmittedKeys, *data.sorted_keys_buffer);
-    CopyDebugSection(context, data, command_buffer, TiledDebugSection::kEmittedIndices, *data.sorted_values_buffer);
+    CopyDebugSection(context, data, command_buffer, TiledDebugSection::kEmittedKeys, *data.sorted_keys_buffer,
+      *data.tiled_debug_readback_buffer);
+    CopyDebugSection(context, data, command_buffer, TiledDebugSection::kEmittedIndices, *data.sorted_values_buffer,
+      *data.tiled_debug_readback_buffer);
     if (auto result = FinishDebugCopies(context, command_buffer); !result) { return result; }
   }
 
-  VkBuffer const indirect = data.radix_dispatch_buffer->handle();
+  return {};
+}
+
+[[nodiscard]] auto RecordRadixSort(vulkan::Context const &context, RenderData const &data,
+  VkCommandBuffer command_buffer) -> std::expected<void, Error>
+{
+  if (!data.radix_dispatch_buffer || !data.tiled_histogram_algorithm
+      || !data.tiled_prefix_algorithm || !data.tiled_scatter_algorithm) {
+    return std::unexpected(MakeError(std::errc::state_not_recoverable, "tiled radix resources are missing"));
+  }
+  VkBuffer indirect = data.radix_dispatch_buffer->handle();
+  auto const &limits = context.device.physical_device.properties.limits;
   data.gpu_pass_timer.write(context, data.current_slot, GpuPass::kTiledRadixSort, false, command_buffer);
   for (u32 pass = 0U; pass < kRadixPasses; ++pass) {
-    RadixPush const radix_push{ .total_address = prepare_push.total_address,
+    RadixPush const radix_push{ .total_address = vulkan::DeviceAddressOrZero(data.tiled_total_buffer),
       .prefix_address = vulkan::DeviceAddressOrZero(data.tiled_radix_prefix_buffer),
       .prefix_group_address = vulkan::DeviceAddressOrZero(data.tiled_radix_group_buffer),
       .capacity = data.tiled_intersection_capacity, .pass_index = pass,
@@ -362,7 +388,7 @@ auto RecordPreparation(vulkan::Context const &context, RenderData const &data,
     if (auto result = DispatchIndirect(context, command_buffer, *data.tiled_histogram_algorithm,
           radix_push, indirect); !result) { return result; }
     if (auto result = ComputeBarrier(context, command_buffer); !result) { return result; }
-    for (u32 prefix_mode : { kPrefixModeLocal, kPrefixModeGroups, kPrefixModeAdd }) {
+    for (u32 const prefix_mode : { kPrefixModeLocal, kPrefixModeGroups, kPrefixModeAdd }) {
       RadixPush prefix_push = radix_push;
       prefix_push.prefix_mode = prefix_mode;
       u32 const groups = prefix_mode == kPrefixModeGroups ? 1U
@@ -377,14 +403,25 @@ auto RecordPreparation(vulkan::Context const &context, RenderData const &data,
   }
   data.gpu_pass_timer.write(context, data.current_slot, GpuPass::kTiledRadixSort, true, command_buffer);
 
+  return {};
+}
+
+[[nodiscard]] auto RecordRanges(vulkan::Context const &context, RenderData const &data,
+  VkCommandBuffer command_buffer) -> std::expected<void, Error>
+{
+  if (!data.tile_ranges_buffer || !data.tiled_ranges_algorithm || !data.radix_dispatch_buffer) {
+    return std::unexpected(MakeError(std::errc::state_not_recoverable, "tiled range resources are missing"));
+  }
+  VkBuffer indirect = data.radix_dispatch_buffer->handle();
+  auto const &limits = context.device.physical_device.properties.limits;
   data.gpu_pass_timer.write(context, data.current_slot, GpuPass::kTiledRanges, false, command_buffer);
   context.disp.cmdFillBuffer(command_buffer, data.tile_ranges_buffer->handle(), 0U,
     static_cast<VkDeviceSize>(data.tile_count) * sizeof(TileRange), 0U);
   if (auto barrier = vkexec::barrier::transfer_to_compute(*context.vkexec_context, command_buffer); !barrier) {
     return std::unexpected(MakeError(std::errc::io_error, barrier.error().message()));
   }
-  RangePush const range_push{ .total_address = prepare_push.total_address,
-    .overflow_address = prepare_push.overflow_address,
+  RangePush const range_push{ .total_address = vulkan::DeviceAddressOrZero(data.tiled_total_buffer),
+    .overflow_address = vulkan::DeviceAddressOrZero(data.tiled_overflow_buffer),
     .capacity = data.tiled_intersection_capacity, .tile_count = data.tile_count,
     .group_count_x = limits.maxComputeWorkGroupCount[0] };
   if (auto result = DispatchIndirect(context, command_buffer, *data.tiled_ranges_algorithm,
@@ -392,16 +429,36 @@ auto RecordPreparation(vulkan::Context const &context, RenderData const &data,
   if (auto result = ComputeBarrier(context, command_buffer); !result) { return result; }
   data.gpu_pass_timer.write(context, data.current_slot, GpuPass::kTiledRanges, true, command_buffer);
   if (data.enable_tiled_debug_readback) {
+    if (!data.tiled_debug_readback_buffer || !data.projected_buffer || !data.tiled_counts_buffer
+        || !data.tiled_offsets_buffer || !data.sorted_keys_buffer || !data.sorted_values_buffer) {
+      return std::unexpected(MakeError(std::errc::state_not_recoverable, "tiled debug resources are missing"));
+    }
     if (auto result = DebugCopyBarrier(context, command_buffer); !result) { return result; }
-    CopyDebugSection(context, data, command_buffer, TiledDebugSection::kProjected, *data.projected_buffer);
-    CopyDebugSection(context, data, command_buffer, TiledDebugSection::kCounts, *data.tiled_counts_buffer);
-    CopyDebugSection(context, data, command_buffer, TiledDebugSection::kOffsets, *data.tiled_offsets_buffer);
-    CopyDebugSection(context, data, command_buffer, TiledDebugSection::kSortedKeys, *data.sorted_keys_buffer);
-    CopyDebugSection(context, data, command_buffer, TiledDebugSection::kSortedIndices, *data.sorted_values_buffer);
-    CopyDebugSection(context, data, command_buffer, TiledDebugSection::kRanges, *data.tile_ranges_buffer);
+    CopyDebugSection(context, data, command_buffer, TiledDebugSection::kProjected, *data.projected_buffer,
+      *data.tiled_debug_readback_buffer);
+    CopyDebugSection(context, data, command_buffer, TiledDebugSection::kCounts, *data.tiled_counts_buffer,
+      *data.tiled_debug_readback_buffer);
+    CopyDebugSection(context, data, command_buffer, TiledDebugSection::kOffsets, *data.tiled_offsets_buffer,
+      *data.tiled_debug_readback_buffer);
+    CopyDebugSection(context, data, command_buffer, TiledDebugSection::kSortedKeys, *data.sorted_keys_buffer,
+      *data.tiled_debug_readback_buffer);
+    CopyDebugSection(context, data, command_buffer, TiledDebugSection::kSortedIndices, *data.sorted_values_buffer,
+      *data.tiled_debug_readback_buffer);
+    CopyDebugSection(context, data, command_buffer, TiledDebugSection::kRanges, *data.tile_ranges_buffer,
+      *data.tiled_debug_readback_buffer);
     if (auto result = FinishDebugCopies(context, command_buffer); !result) { return result; }
   }
   return {};
+}
+
+}// namespace
+
+auto RecordPreparation(vulkan::Context const &context, RenderData const &data,
+  VkCommandBuffer command_buffer) -> std::expected<void, Error>
+{
+  if (auto result = RecordCountScanEmit(context, data, command_buffer); !result) { return result; }
+  if (auto result = RecordRadixSort(context, data, command_buffer); !result) { return result; }
+  return RecordRanges(context, data, command_buffer);
 }
 
 auto RecordRasterization(vulkan::Context const &context, RenderData const &data,

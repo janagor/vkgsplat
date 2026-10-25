@@ -24,6 +24,7 @@
 #include "vulkan_context.hpp"
 #include <vkgsplat_utility/error.hpp>
 #include <vkgsplat_utility/types.hpp>
+#include <vkgsplat/renderer.hpp>
 
 #include <vkexec/sync_wait.hpp>
 #include <vkexec_extensions/timeline_semaphore/frame_ring.hpp>

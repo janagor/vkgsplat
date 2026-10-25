@@ -9,10 +9,10 @@
 #include <utility>
 
 #include "app_state.hpp"
-#include "gs/gaussian_splat.hpp"
 #include "vulkan/gpu_buffers.hpp"
 #include "vulkan/imgui_overlay.hpp"
 #include "vulkan_context.hpp"
+#include <vkgsplat/renderer.hpp>
 #include <vkgsplat_io/splat_cpu.hpp>
 #include <vkgsplat_utility/types.hpp>
 
@@ -208,6 +208,10 @@ namespace {
     std::size_t entry_index{};
     for (auto const &entry : entries) {
       if (entry.resource.kind == vkexec::resource_kind::storage_image) {
+        if (!data.color_image) {
+          std::println("GS color image is missing");
+          return false;
+        }
         if (data.descriptor_stride < data.image_descriptor_size) {
           std::println("GS image descriptor exceeds descriptor stride");
           return false;
@@ -222,11 +226,11 @@ namespace {
           .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
           .pNext = nullptr,
           .flags = 0U,
-          .image = data.color_image.value().handle(),
+          .image = data.color_image->handle(),
           .viewType = VK_IMAGE_VIEW_TYPE_2D,
           .format = data.color_format,
-          .components = { VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY,
-            VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY },
+          .components = { .r = VK_COMPONENT_SWIZZLE_IDENTITY, .g = VK_COMPONENT_SWIZZLE_IDENTITY,
+            .b = VK_COMPONENT_SWIZZLE_IDENTITY, .a = VK_COMPONENT_SWIZZLE_IDENTITY },
           .subresourceRange = { .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 0U,
             .levelCount = 1U, .baseArrayLayer = 0U, .layerCount = 1U },
         };

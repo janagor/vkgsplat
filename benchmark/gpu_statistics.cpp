@@ -1,12 +1,14 @@
 #include "benchmark/gpu_statistics.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <functional>
 #include <vector>
 
 #include <vkgsplat/gpu_timings.hpp>
+#include <vkgsplat/renderer.hpp>
 
 namespace vkgsplat::benchmark {
 
@@ -25,7 +27,7 @@ auto IsCompleteGpuSample(GpuFrameTimings const &sample, RasterizationMode mode) 
 {
   if (!std::isfinite(sample.frame_ms) || sample.frame_ms < kZeroMilliseconds) { return false; }
   for (size_t index = 0U; index < kGpuPassCount; ++index) {
-    GpuPass const pass = static_cast<GpuPass>(index);
+    auto const pass = static_cast<GpuPass>(index);
     bool const required = mode == RasterizationMode::kComputeTiled
       ? std::ranges::find(kComputePasses, pass) != kComputePasses.end()
       : std::ranges::find(kGraphicsPipelinePasses, pass) != kGraphicsPipelinePasses.end()
@@ -114,7 +116,7 @@ auto HasCompleteGpuStatistics(GpuStatistics const &statistics, RasterizationMode
   size_t const frame_count = statistics.frame_count();
   if (frame_count == 0U) { return false; }
   for (size_t index = 0U; index < kGpuPassCount; ++index) {
-    GpuPass const pass = static_cast<GpuPass>(index);
+    auto const pass = static_cast<GpuPass>(index);
     bool const required = mode == RasterizationMode::kComputeTiled
       ? std::ranges::find(kComputePasses, pass) != kComputePasses.end()
       : std::ranges::find(kGraphicsPipelinePasses, pass) != kGraphicsPipelinePasses.end()

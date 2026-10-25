@@ -97,6 +97,58 @@ namespace {
       PublishSummary(state, kPassCounterNames.at(index), statistics.pass(static_cast<GpuPass>(index)));
     }
   }
+
+  auto RunGpuPassTimings(::benchmark::State &state, Platform &platform, BenchmarkProfile const &profile,
+    std::filesystem::path const &scene_path, Camera const &camera, std::atomic_bool &failed,
+    RasterizationMode mode) -> void
+  {
+    auto renderer = Renderer::create(MakeGpuProfilingRendererConfig(profile, scene_path, mode), platform);
+    if (!renderer) {
+      failed.store(true);
+      state.SkipWithError(renderer.error().message());
+      return;
+    }
+    if (auto warmup = RenderBatch(*renderer, camera, kWarmupFrames); !warmup) {
+      failed.store(true);
+      state.SkipWithError(warmup.error().message());
+      return;
+    }
+    if (auto discarded = renderer->take_gpu_timings(); !discarded || discarded->size() != kWarmupFrames) {
+      failed.store(true);
+      state.SkipWithError("GPU warmup timing samples are incomplete");
+      return;
+    }
+    if (mode == RasterizationMode::kComputeTiled) {
+      auto intersections = renderer->tiled_intersection_count();
+      if (!intersections) {
+        failed.store(true);
+        state.SkipWithError(intersections.error().message());
+        return;
+      }
+      state.counters["gpu.tiled.intersections"] = static_cast<double>(*intersections);
+      state.counters["gpu.tiled.scratch_bytes"] = static_cast<double>(renderer->tiled_scratch_bytes());
+    }
+
+    auto const batch_frames = static_cast<u64>(state.range(0));
+    if (auto reserved = renderer->reserve_gpu_timing_samples(static_cast<size_t>(batch_frames)); !reserved) {
+      failed.store(true);
+      state.SkipWithError(reserved.error().message());
+      return;
+    }
+    GpuStatistics statistics;
+    statistics.reserve(static_cast<size_t>(batch_frames));
+    std::unordered_set<u64> frame_ids;
+    for (auto iteration : state) {
+      static_cast<void>(iteration);
+      if (!RecordBatch(state, *renderer, camera, batch_frames, statistics, frame_ids, failed, mode)) { return; }
+    }
+    if (!HasCompleteGpuStatistics(statistics, mode)) {
+      failed.store(true);
+      state.SkipWithError("GPU timing statistics have incomplete required pass counts");
+      return;
+    }
+    PublishStatistics(state, statistics);
+  }
 }// namespace
 
 auto RegisterGpuPassTimings(Platform &platform,
@@ -111,52 +163,7 @@ auto RegisterGpuPassTimings(Platform &platform,
       profile.scene.gaussian_count, profile.width, profile.height);
     auto *registered = ::benchmark::RegisterBenchmark(
       name, [&platform, &profile, &scene_path, &camera, &failed, mode](::benchmark::State &state) -> void {
-      auto renderer = Renderer::create(MakeGpuProfilingRendererConfig(profile, scene_path, mode), platform);
-      if (!renderer) {
-        failed.store(true);
-        state.SkipWithError(renderer.error().message());
-        return;
-      }
-      if (auto warmup = RenderBatch(*renderer, camera, kWarmupFrames); !warmup) {
-        failed.store(true);
-        state.SkipWithError(warmup.error().message());
-        return;
-      }
-      if (auto discarded = renderer->take_gpu_timings(); !discarded || discarded->size() != kWarmupFrames) {
-        failed.store(true);
-        state.SkipWithError("GPU warmup timing samples are incomplete");
-        return;
-      }
-      if (mode == RasterizationMode::kComputeTiled) {
-        auto intersections = renderer->tiled_intersection_count();
-        if (!intersections) {
-          failed.store(true);
-          state.SkipWithError(intersections.error().message());
-          return;
-        }
-        state.counters["gpu.tiled.intersections"] = static_cast<double>(*intersections);
-        state.counters["gpu.tiled.scratch_bytes"] = static_cast<double>(renderer->tiled_scratch_bytes());
-      }
-
-      auto const batch_frames = static_cast<u64>(state.range(0));
-      if (auto reserved = renderer->reserve_gpu_timing_samples(static_cast<size_t>(batch_frames)); !reserved) {
-        failed.store(true);
-        state.SkipWithError(reserved.error().message());
-        return;
-      }
-      GpuStatistics statistics;
-      statistics.reserve(static_cast<size_t>(batch_frames));
-      std::unordered_set<u64> frame_ids;
-      for (auto iteration : state) {
-        static_cast<void>(iteration);
-        if (!RecordBatch(state, *renderer, camera, batch_frames, statistics, frame_ids, failed, mode)) { return; }
-      }
-      if (!HasCompleteGpuStatistics(statistics, mode)) {
-        failed.store(true);
-        state.SkipWithError("GPU timing statistics have incomplete required pass counts");
-        return;
-      }
-      PublishStatistics(state, statistics);
+      RunGpuPassTimings(state, platform, profile, scene_path, camera, failed, mode);
       });
     registered->ArgName("batch")->UseManualTime()->Unit(::benchmark::kMillisecond);
     for (auto const batch_frames : kBatchFrameCounts) { registered->Arg(static_cast<std::int64_t>(batch_frames)); }

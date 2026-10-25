@@ -9,6 +9,7 @@
 #include "vulkan_context.hpp"
 
 #include <vkgsplat/gpu_timings.hpp>
+#include <vkgsplat/renderer.hpp>
 #include <vkgsplat_utility/types.hpp>
 
 #include <expected>
