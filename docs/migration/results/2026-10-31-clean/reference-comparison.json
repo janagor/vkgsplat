@@ -1,0 +1,7 @@
+{
+  "width": 1920,
+  "height": 1080,
+  "mean_absolute_channel_error_255": 0.40911554783950616,
+  "max_channel_error_255": 43,
+  "fraction_pixels_any_channel_error_gt_4": 0.003756269290123457
+}

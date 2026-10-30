@@ -1,0 +1,11 @@
+source_sha,device,driver,build_type,scene_checksum,mode,width,height,batch_frames,repetition,measured_frames,fps,validation,raw_result
+6cc0716cf630be8bb955673721164c326c8dffee,Intel(R) Graphics (ADL GT2),109060096,Release,ad124868b0d228b3,graphics,1920,1080,64,0,256,21.40690860338512,disabled,2026-10-31-clean/throughput.json
+6cc0716cf630be8bb955673721164c326c8dffee,Intel(R) Graphics (ADL GT2),109060096,Release,ad124868b0d228b3,graphics,1920,1080,64,1,256,19.98210292484292,disabled,2026-10-31-clean/throughput.json
+6cc0716cf630be8bb955673721164c326c8dffee,Intel(R) Graphics (ADL GT2),109060096,Release,ad124868b0d228b3,graphics,1920,1080,64,2,256,19.99312480332945,disabled,2026-10-31-clean/throughput.json
+6cc0716cf630be8bb955673721164c326c8dffee,Intel(R) Graphics (ADL GT2),109060096,Release,ad124868b0d228b3,graphics,1920,1080,64,3,256,19.917838014164538,disabled,2026-10-31-clean/throughput.json
+6cc0716cf630be8bb955673721164c326c8dffee,Intel(R) Graphics (ADL GT2),109060096,Release,ad124868b0d228b3,graphics,1920,1080,64,4,256,19.97665562515431,disabled,2026-10-31-clean/throughput.json
+6cc0716cf630be8bb955673721164c326c8dffee,Intel(R) Graphics (ADL GT2),109060096,Release,ad124868b0d228b3,compute,1920,1080,64,0,256,8.052707309163193,disabled,2026-10-31-clean/throughput.json
+6cc0716cf630be8bb955673721164c326c8dffee,Intel(R) Graphics (ADL GT2),109060096,Release,ad124868b0d228b3,compute,1920,1080,64,1,256,8.379353838954403,disabled,2026-10-31-clean/throughput.json
+6cc0716cf630be8bb955673721164c326c8dffee,Intel(R) Graphics (ADL GT2),109060096,Release,ad124868b0d228b3,compute,1920,1080,64,2,256,8.040197476578543,disabled,2026-10-31-clean/throughput.json
+6cc0716cf630be8bb955673721164c326c8dffee,Intel(R) Graphics (ADL GT2),109060096,Release,ad124868b0d228b3,compute,1920,1080,64,3,256,8.059975531502857,disabled,2026-10-31-clean/throughput.json
+6cc0716cf630be8bb955673721164c326c8dffee,Intel(R) Graphics (ADL GT2),109060096,Release,ad124868b0d228b3,compute,1920,1080,64,4,256,8.088457049458654,disabled,2026-10-31-clean/throughput.json

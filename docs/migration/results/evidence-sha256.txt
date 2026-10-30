@@ -1,0 +1,12 @@
+f59735a4b4d80a3a0dd5b493ded96169c2e716dd00c06c671d80dac74d355975  docs/migration/results/2026-10-31/gpu.json
+164064936824b060107e37b49c0b1696c4e56ea1cb3375f82728c10880110a77  docs/migration/results/2026-10-31/throughput.json
+2474befd03fd08b53c6faffa56e8a0a23c83d6a13c64c38f7c08487d6a2fafb7  docs/migration/results/2026-10-31-clean/binary-sha256.txt
+19083af6c51c3069ecf3d806b822d499da4eca6fcf33b0f2ea928c08a176744c  docs/migration/results/2026-10-31-clean/dependency-revisions.csv
+e516563adfc64d5665401671914dee354b7d23a331a9bc4bf96fbe4e1bf2d6ef  docs/migration/results/2026-10-31-clean/evidence.tar.gz
+752aba80eba004ac866434410bfe23cf63ea7cc3b543a7c7ac1b7e9afdcfe717  docs/migration/results/2026-10-31-clean/gpu.json
+91b516e5ec394b6e70091b90989fdb3102a9f54793dbb487a9c87dcac538d119  docs/migration/results/2026-10-31-clean/reference-comparison.json
+51a0e758d247672c9157e9b83c3ccd617bf58506786e0c0f58aa99ec76e10998  docs/migration/results/2026-10-31-clean/reference-compute.png
+b5b6e1864ba709b60bf58609f63daa306b3d52f53fb2b9e4358ffc0c163ca427  docs/migration/results/2026-10-31-clean/reference-graphics.png
+acde3df990d1ee34ef1238da1346731f681c80ab81699711338a8a15180108c9  docs/migration/results/2026-10-31-clean/throughput.json
+e3b0d49ab8b287b2c89eccd5a1aa2a21fd4d5b28c7427a4c7997d2be77e51502  docs/migration/results/gpu-baseline.csv
+be230a7252f66687432ef39c412d0e78692620bf9a34dec4550b6459b1966722  docs/migration/results/throughput-baseline.csv
