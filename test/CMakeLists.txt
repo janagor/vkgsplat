@@ -85,6 +85,15 @@ if(TARGET vkgsplat::vkgsplat_utility)
   endif()
 
   if(TARGET vkgsplat::vkgsplat_backend)
+    add_executable(vkgsplat_synchronization_test synchronization.cpp)
+    target_link_libraries(vkgsplat_synchronization_test PRIVATE Catch2::Catch2WithMain vkgsplat::vkgsplat_backend)
+    target_include_directories(vkgsplat_synchronization_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/..")
+    catch_discover_tests(
+      vkgsplat_synchronization_test
+      PROPERTIES
+      LABELS
+      synchronization)
+
     add_executable(vkgsplat_tiled_status_test tiled_status.cpp)
     target_link_libraries(vkgsplat_tiled_status_test PRIVATE Catch2::Catch2WithMain vkgsplat::vkgsplat_backend)
     target_include_directories(vkgsplat_tiled_status_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/..")
@@ -530,3 +539,35 @@ if(TARGET vkgsplat::vkgsplat_backend)
   target_link_libraries(vkgsplat_pass_resources_test PRIVATE Catch2::Catch2WithMain vkgsplat::vkgsplat_backend)
   catch_discover_tests(vkgsplat_pass_resources_test)
 endif()
+
+# Run the renderer dependency regressions with synchronization validation enabled.
+if(vkgsplat_ENABLE_HEADLESS_GPU_TESTS)
+  foreach(
+    sync_test IN
+    ITEMS headless.gpu.smoke
+          tiled.gpu.image_and_overflow
+          offscreen.gpu.sequence
+          benchmark.gpu.timing.smoke)
+    if(TEST ${sync_test})
+      set_property(
+        TEST ${sync_test}
+        APPEND
+        PROPERTY ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1")
+      set_property(
+        TEST ${sync_test}
+        APPEND
+        PROPERTY LABELS "synchronization")
+    endif()
+  endforeach()
+endif()
+
+# These offscreen paths have no baseline synchronization errors. Fail on layer
+# diagnostics even when the renderer returns successful pixels.
+foreach(sync_test IN ITEMS tiled.gpu.image_and_overflow offscreen.gpu.sequence)
+  if(TEST ${sync_test})
+    set_property(
+      TEST ${sync_test}
+      APPEND
+      PROPERTY FAIL_REGULAR_EXPRESSION "SYNC-HAZARD-" "\\[ERROR: Validation\\]")
+  endif()
+endforeach()

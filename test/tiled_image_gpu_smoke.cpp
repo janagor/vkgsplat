@@ -520,6 +520,23 @@ struct ReferenceIntersection
   auto snapshot = compute->tiled_debug_snapshot();
   if (!snapshot || !ValidateSnapshot(*snapshot, *compute_frame)) { return EXIT_FAILURE; }
   if (!CompareFrames(*graphics_frame, *compute_frame, heatmap_path)) { return EXIT_FAILURE; }
+  // Reusing the same buffers must preserve every deterministic debug section,
+  // both before and after radix sorting (including COPY -> compute WAR ordering).
+  for (vkgsplat::u32 repeat = 0; repeat < 3U; ++repeat) {
+    auto repeated_frame = compute->render_frame(camera);
+    auto repeated = compute->tiled_debug_snapshot();
+    if (!repeated_frame || !repeated || !ValidateSnapshot(*repeated, *repeated_frame)
+        || repeated->projected != snapshot->projected || repeated->counts != snapshot->counts
+        || repeated->offsets != snapshot->offsets || repeated->emitted_key_words != snapshot->emitted_key_words
+        || repeated->emitted_indices != snapshot->emitted_indices
+        || repeated->sorted_key_words != snapshot->sorted_key_words
+        || repeated->sorted_indices != snapshot->sorted_indices || repeated->range_words != snapshot->range_words
+        || repeated->intersections != snapshot->intersections) {
+      std::cerr << "Tiled debug sections changed across identical frames\n";
+      return EXIT_FAILURE;
+    }
+  }
+
   vkgsplat::Camera const side_camera{ vkgsplat::CameraConfig{
     .position = { kCameraSideOffset, 0.0, kCameraDistance },
     .target = { 0.0, 0.0, 0.0 },

@@ -382,6 +382,35 @@ auto Run(std::string const &scene_path, std::string const &compact_path, bool va
       }
     }
   }
+  // Nine views exceed the default four-view projection batch, exercising
+  // camera-buffer updates and projected-buffer reuse between batches.
+  constexpr vkgsplat::u32 kLargeGrid = 3U;
+  config.lfd_grid = { kLargeGrid, kLargeGrid };
+  constexpr auto kLargeWidth = (kTestWidth / kLargeGrid) * kLargeGrid;
+  constexpr auto kLargeHeight = (kTestHeight / kLargeGrid) * kLargeGrid;
+  config.quilt_size = { kLargeWidth, kLargeHeight };
+  auto batched_renderer = vkgsplat::Renderer::create(config, *platform);
+  if (!batched_renderer) {
+    std::cerr << batched_renderer.error().message() << '\n';
+    return EXIT_FAILURE;
+  }
+  auto batched = batched_renderer->render_frame(camera_a);
+  auto repeated_batch = batched_renderer->render_frame(camera_a);
+  if (!batched || !repeated_batch || !RepeatedFrameMatches(*batched, *repeated_batch, "Multi-batch quilt")) {
+    return EXIT_FAILURE;
+  }
+  for (vkgsplat::u32 row = 0; row < kLargeGrid; ++row) {
+    for (vkgsplat::u32 col = 0; col < kLargeGrid; ++col) {
+      if (!HasScenePixels(*batched,
+            col * (kTestWidth / kLargeGrid),
+            row * (kTestHeight / kLargeGrid),
+            kTestWidth / kLargeGrid,
+            kTestHeight / kLargeGrid)) {
+        std::cerr << "Multi-batch quilt tile has no scene pixels\n";
+        return EXIT_FAILURE;
+      }
+    }
+  }
   return EXIT_SUCCESS;
 }
 
