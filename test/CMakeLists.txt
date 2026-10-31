@@ -27,6 +27,17 @@ endif()
 
 include(${Catch2_SOURCE_DIR}/extras/Catch.cmake)
 
+# Compile every affected public factory, with tensor.hpp included first to expose
+# factory::detail name lookup. This target never executes Vulkan operations.
+foreach(required_target IN ITEMS vkexec::vma vkexec::ext_timeline_semaphore)
+  if(NOT TARGET ${required_target})
+    message(FATAL_ERROR "Public factory regression requires target ${required_target}")
+  endif()
+endforeach()
+add_library(vkgsplat_vkexec_public_factories OBJECT vkexec_public_factories.cpp)
+target_compile_features(vkgsplat_vkexec_public_factories PRIVATE cxx_std_23)
+target_link_libraries(vkgsplat_vkexec_public_factories PRIVATE vkexec::vma vkexec::ext_timeline_semaphore)
+
 if(TARGET vkgsplat::vkgsplat_utility)
   if(TARGET vkgsplat::vkgsplat_animation)
     add_executable(vkgsplat_camera_path_test camera_path.cpp camera_path_json.cpp)
