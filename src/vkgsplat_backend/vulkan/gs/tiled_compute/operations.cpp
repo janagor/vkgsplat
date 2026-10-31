@@ -227,43 +227,17 @@ namespace {
     return {};
   }
 
-  [[nodiscard]] auto IndirectBarrier(vulkan::Context const &context, VkCommandBuffer command_buffer)
-    -> std::expected<void, Error>
-  {
-    VkMemoryBarrier const dependency{ .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
-      .pNext = nullptr,
-      .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
-      .dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT };
-    context.disp.cmdPipelineBarrier(command_buffer,
-      VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-      VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
-      0U,
-      1U,
-      &dependency,
-      0U,
-      nullptr,
-      0U,
-      nullptr);
-    return {};
-  }
-
   [[nodiscard]] auto DebugCopyBarrier(vulkan::Context const &context, VkCommandBuffer command_buffer)
     -> std::expected<void, Error>
   {
-    VkMemoryBarrier const dependency{ .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
-      .pNext = nullptr,
-      .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
-      .dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT };
-    context.disp.cmdPipelineBarrier(command_buffer,
-      VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-      VK_PIPELINE_STAGE_TRANSFER_BIT,
-      0U,
-      1U,
-      &dependency,
-      0U,
-      nullptr,
-      0U,
-      nullptr);
+    // One dependency covers all copy sources, including device-address shader writes.
+    auto barrier = vkexec::memory_barrier(*context.vkexec_context,
+      command_buffer,
+      { .src_stage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        .dst_stage = VK_PIPELINE_STAGE_2_COPY_BIT,
+        .src_access = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+        .dst_access = VK_ACCESS_2_TRANSFER_READ_BIT });
+    if (!barrier) { return std::unexpected(MakeError(std::errc::io_error, barrier.error().message())); }
     return {};
   }
 
@@ -427,7 +401,7 @@ namespace {
       return result;
     }
     if (auto result = ComputeBarrier(context, command_buffer); !result) { return result; }
-    if (auto result = IndirectBarrier(context, command_buffer); !result) { return result; }
+    // ComputeBarrier also covers DRAW_INDIRECT / INDIRECT_COMMAND_READ in pinned vkexec.
     data.gpu_pass_timer.write(context, data.current_slot, GpuPass::kTiledScan, true, command_buffer);
 
     EmitPush const emit_push{ .counts_address = prepare_push.counts_address,
@@ -621,10 +595,10 @@ auto RecordRasterization(vulkan::Context const &context, RenderData const &data,
     { .image = data.color_image->handle(),
       .old_layout = VK_IMAGE_LAYOUT_UNDEFINED,
       .new_layout = VK_IMAGE_LAYOUT_GENERAL,
-      .src_stage = VK_PIPELINE_STAGE_TRANSFER_BIT,
-      .dst_stage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-      .src_access = VK_ACCESS_TRANSFER_READ_BIT,
-      .dst_access = VK_ACCESS_SHADER_WRITE_BIT });
+      .src_stage = VK_PIPELINE_STAGE_2_NONE,
+      .dst_stage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+      .src_access = VK_ACCESS_2_NONE,
+      .dst_access = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT });
   if (!before) { return std::unexpected(MakeError(std::errc::io_error, before.error().message())); }
   TiledRasterPush const push{ .raster = data.raster_push,
     .overflow_address = vulkan::DeviceAddressOrZero(data.tiled_overflow_buffer) };
@@ -641,10 +615,10 @@ auto RecordRasterization(vulkan::Context const &context, RenderData const &data,
     { .image = data.color_image->handle(),
       .old_layout = VK_IMAGE_LAYOUT_GENERAL,
       .new_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-      .src_stage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-      .dst_stage = VK_PIPELINE_STAGE_TRANSFER_BIT,
-      .src_access = VK_ACCESS_SHADER_WRITE_BIT,
-      .dst_access = VK_ACCESS_TRANSFER_READ_BIT });
+      .src_stage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+      .dst_stage = VK_PIPELINE_STAGE_2_BLIT_BIT | VK_PIPELINE_STAGE_2_COPY_BIT,
+      .src_access = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+      .dst_access = VK_ACCESS_2_TRANSFER_READ_BIT });
   if (!after) { return std::unexpected(MakeError(std::errc::io_error, after.error().message())); }
   return {};
 }

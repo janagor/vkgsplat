@@ -86,22 +86,17 @@ auto DispatchProjectionBatch(vulkan::Context const &context,
   if (group_count_y > limits.maxComputeWorkGroupCount[1] || cameras.size() > limits.maxComputeWorkGroupCount[2]) {
     return std::unexpected{ MakeError(std::errc::value_too_large, "batch projection exceeds compute dispatch limits") };
   }
-  VkMemoryBarrier const reuse_barrier{
-    .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
-    .pNext = nullptr,
-    .srcAccessMask = VK_ACCESS_SHADER_READ_BIT,
-    .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
-  };
-  context.disp.cmdPipelineBarrier(command_buffer,
-    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-    VK_PIPELINE_STAGE_TRANSFER_BIT,
-    0U,
-    1U,
-    &reuse_barrier,
-    0U,
-    nullptr,
-    0U,
-    nullptr);
+  // WAR: the preceding batch must finish reading cameras before this update.
+  auto reuse_barrier = vkexec::buffer_barrier(*context.vkexec_context,
+    command_buffer,
+    { .buffer = data.projection_cameras_buffer->handle(),
+      .offset = 0,
+      .size = VK_WHOLE_SIZE,
+      .src_stage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+      .dst_stage = VK_PIPELINE_STAGE_2_CLEAR_BIT,
+      .src_access = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
+      .dst_access = VK_ACCESS_2_TRANSFER_WRITE_BIT });
+  if (!reuse_barrier) { return std::unexpected{ MakeError(std::errc::io_error, reuse_barrier.error().message()) }; }
   context.disp.cmdUpdateBuffer(
     command_buffer, data.projection_cameras_buffer->handle(), 0, cameras.size_bytes(), cameras.data());
   if (auto barrier = vkexec::barrier::transfer_to_compute(*context.vkexec_context, command_buffer); !barrier) {
