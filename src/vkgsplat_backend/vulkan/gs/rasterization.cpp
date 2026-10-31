@@ -1,4 +1,5 @@
 #include "gs/rasterization.hpp"
+#include "gs/quilt_attachment_barrier.hpp"
 
 #include "app_state.hpp"
 #include "gs/push_constants.hpp"
@@ -186,10 +187,10 @@ auto BeginColorTargetFrame(vulkan::Context const &context, RenderData const &dat
       .image = data.color_image->handle(),
       .old_layout = VK_IMAGE_LAYOUT_UNDEFINED,
       .new_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-      .src_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-      .dst_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-      .src_access = 0,
-      .dst_access = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+      .src_stage = VK_PIPELINE_STAGE_2_NONE,
+      .dst_stage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+      .src_access = VK_ACCESS_2_NONE,
+      .dst_access = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
     });
   if (!color_barrier) { return std::unexpected{ MakeError(std::errc::io_error, color_barrier.error().message()) }; }
   return {};
@@ -208,22 +209,20 @@ auto DrawQuiltTile(vulkan::Context const &context,
     if (!barrier) { return std::unexpected{ MakeError(std::errc::io_error, barrier.error().message()) }; }
   }
   if (!clear_attachment) {
-    VkMemoryBarrier const attachment_barrier{
-      .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
+    // Between dynamic rendering instances: subsequent tiles LOAD the atlas.
+    auto const attachment_barrier = QuiltAttachmentBarrier(data.color_image->handle());
+    VkDependencyInfo const dependency{
+      .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
       .pNext = nullptr,
-      .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-      .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+      .dependencyFlags = kQuiltAttachmentDependencyFlags,
+      .memoryBarrierCount = 0,
+      .pMemoryBarriers = nullptr,
+      .bufferMemoryBarrierCount = 0,
+      .pBufferMemoryBarriers = nullptr,
+      .imageMemoryBarrierCount = 1,
+      .pImageMemoryBarriers = &attachment_barrier,
     };
-    context.disp.cmdPipelineBarrier(command_buffer,
-      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-      VK_DEPENDENCY_BY_REGION_BIT,
-      1U,
-      &attachment_barrier,
-      0U,
-      nullptr,
-      0U,
-      nullptr);
+    context.disp.cmdPipelineBarrier2(command_buffer, &dependency);
   }
 
   // First tile may clear the full atlas; later tiles LOAD and only write their viewport.
@@ -257,10 +256,10 @@ auto FinishColorTargetFrame(vulkan::Context const &context, RenderData const &da
       .image = data.color_image->handle(),
       .old_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
       .new_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-      .src_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-      .dst_stage = VK_PIPELINE_STAGE_TRANSFER_BIT,
-      .src_access = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-      .dst_access = VK_ACCESS_TRANSFER_READ_BIT,
+      .src_stage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+      .dst_stage = VK_PIPELINE_STAGE_2_BLIT_BIT | VK_PIPELINE_STAGE_2_COPY_BIT,
+      .src_access = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+      .dst_access = VK_ACCESS_2_TRANSFER_READ_BIT,
     });
   if (!barrier) { return std::unexpected{ MakeError(std::errc::io_error, barrier.error().message()) }; }
   return {};
@@ -281,10 +280,10 @@ auto BlitQuiltToSwapchain(vulkan::Context const &context,
       .image = context.swapchain->images().at(image_index),
       .old_layout = VK_IMAGE_LAYOUT_UNDEFINED,
       .new_layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-      .src_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-      .dst_stage = VK_PIPELINE_STAGE_TRANSFER_BIT,
-      .src_access = 0,
-      .dst_access = VK_ACCESS_TRANSFER_WRITE_BIT,
+      .src_stage = VK_PIPELINE_STAGE_2_NONE,
+      .dst_stage = VK_PIPELINE_STAGE_2_BLIT_BIT,
+      .src_access = VK_ACCESS_2_NONE,
+      .dst_access = VK_ACCESS_2_TRANSFER_WRITE_BIT,
     });
   if (!swapchain_barrier) {
     return std::unexpected{ MakeError(std::errc::io_error, swapchain_barrier.error().message()) };

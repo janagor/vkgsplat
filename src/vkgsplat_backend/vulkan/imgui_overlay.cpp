@@ -706,10 +706,10 @@ auto RecordImguiOverlay(vulkan::Context &context,
         .image = swapchain_image,
         .old_layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         .new_layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-        .src_stage = VK_PIPELINE_STAGE_TRANSFER_BIT,
-        .dst_stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-        .src_access = VK_ACCESS_TRANSFER_WRITE_BIT,
-        .dst_access = 0,
+        .src_stage = VK_PIPELINE_STAGE_2_BLIT_BIT,
+        .dst_stage = VK_PIPELINE_STAGE_2_NONE,
+        .src_access = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+        .dst_access = VK_ACCESS_2_NONE,
       });
     if (!barrier) { return std::unexpected{ MakeError(std::errc::io_error, barrier.error().message()) }; }
     return {};
@@ -732,10 +732,10 @@ auto RecordImguiOverlay(vulkan::Context &context,
         .image = swapchain_image,
         .old_layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         .new_layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-        .src_stage = VK_PIPELINE_STAGE_TRANSFER_BIT,
-        .dst_stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-        .src_access = VK_ACCESS_TRANSFER_WRITE_BIT,
-        .dst_access = 0,
+        .src_stage = VK_PIPELINE_STAGE_2_BLIT_BIT,
+        .dst_stage = VK_PIPELINE_STAGE_2_NONE,
+        .src_access = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+        .dst_access = VK_ACCESS_2_NONE,
       });
     if (!barrier) { return std::unexpected{ MakeError(std::errc::io_error, barrier.error().message()) }; }
     return {};
@@ -753,10 +753,10 @@ auto RecordImguiOverlay(vulkan::Context &context,
       .image = swapchain_image,
       .old_layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
       .new_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-      .src_stage = VK_PIPELINE_STAGE_TRANSFER_BIT,
-      .dst_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-      .src_access = VK_ACCESS_TRANSFER_WRITE_BIT,
-      .dst_access = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+      .src_stage = VK_PIPELINE_STAGE_2_BLIT_BIT,
+      .dst_stage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+      .src_access = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+      .dst_access = VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
     });
   if (!color_barrier) { return std::unexpected{ MakeError(std::errc::io_error, color_barrier.error().message()) }; }
 
@@ -796,10 +796,10 @@ auto RecordImguiOverlay(vulkan::Context &context,
       .image = swapchain_image,
       .old_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
       .new_layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-      .src_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-      .dst_stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-      .src_access = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-      .dst_access = 0,
+      .src_stage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+      .dst_stage = VK_PIPELINE_STAGE_2_NONE,
+      .src_access = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+      .dst_access = VK_ACCESS_2_NONE,
     });
   if (!present_barrier) { return std::unexpected{ MakeError(std::errc::io_error, present_barrier.error().message()) }; }
   return {};

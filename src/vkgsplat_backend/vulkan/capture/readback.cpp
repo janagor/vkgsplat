@@ -86,10 +86,12 @@ namespace {
         .image = color_image,
         .old_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         .new_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        .src_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
-        .dst_stage = VK_PIPELINE_STAGE_TRANSFER_BIT,
-        .src_access = VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-        .dst_access = VK_ACCESS_TRANSFER_READ_BIT,
+        .src_stage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT
+                     | VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
+        .dst_stage = VK_PIPELINE_STAGE_2_COPY_BIT,
+        .src_access =
+          VK_ACCESS_2_TRANSFER_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+        .dst_access = VK_ACCESS_2_TRANSFER_READ_BIT,
       });
     if (!barrier) { return std::unexpected(VkexecFailure(barrier.error())); }
 
@@ -167,7 +169,7 @@ auto ReadColorTargetRgba8(Context &context, RenderData &data) -> std::expected<R
   std::array<vkexec::semaphore_submit, 1> const signals{ vkexec::semaphore_submit{
     .semaphore = timeline,
     .value = signal_value,
-    .stage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+    .stage = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
   } };
   std::array<VkCommandBuffer, 1> const cmds{ cmd };
   if (auto submitted = context.vkexec_context->submit(vkexec::queue_submit{
