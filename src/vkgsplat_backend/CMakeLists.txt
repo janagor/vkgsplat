@@ -22,6 +22,8 @@ add_library(
   vulkan/frame_context.cpp
   vulkan/render_thread.cpp
   vulkan/present_pacer.cpp
+  vulkan/gs/pass_resources.cpp
+  vulkan/gs/tiled_compute/pass_resources.cpp
   vulkan/gs/projection.cpp
   vulkan/gs/graphics/binning.cpp
   vulkan/gs/graphics/sorting.cpp
