@@ -168,3 +168,144 @@ Compare identical scenes, cameras, modes, dimensions, hardware and clean build
 settings. Preserve and compare the known synchronization hazard explicitly;
 PR 01 does not repair it or certify clean headless synchronization. Interactive
 coverage and canonical quilt references remain open runtime-equivalence gates.
+
+## PR 03 compatibility audit (2026-10-31)
+
+### Current implementation and review status
+
+The upstream factory prerequisite is resolved by
+[`10df03e03d06cc05813393dd66af1178df38b4b5`](https://github.com/janagor/vkexec/commit/10df03e03d06cc05813393dd66af1178df38b4b5),
+now pinned in Dependencies.cmake. The upstream commit includes the three factory
+namespace fixes and regression coverage. The local factory patch, configure-time
+header repair and both parent-side Vulkan header links are removed. WP-A's code
+changes are complete.
+
+The user confirmed final-revision validation during PR review. This confirmation
+is the basis for closing the final-revision validation gate; the agent did not
+rerun configuration, builds or tests. No detailed final-revision test totals,
+clean-checkout log or capture metrics were supplied, so none are inferred here.
+The earlier measurements below are explicitly historical and are not attributed
+to the final pin. GCC, Debug, Windows, full performance repetitions and exhaustive
+interactive checks are outside the agreed final gate. The baseline synchronization
+hazard remains a separate issue. No additional implementation blocker is identified
+in this review; normal PR/CI approval remains separate.
+
+### Historical factory investigation against the PR 02 pin
+
+This section preserves the investigation based on PR 02, vkgsplat `3fd2858`,
+with vkexec `fb6b1f71d719b8943ccde48d237103bb3b305d75`. Agent validation used
+**Clang Release** only.
+
+A pristine local clone of that revision compiled the SPIR-V, GLSL and frame-ring
+calls when their headers came first. Including public `vkexec/tensor.hpp` first
+failed all three names: its nested `vkexec::factory::detail` shadowed
+`vkexec::detail`. The same test passed with exactly the three namespace
+qualifications. Thus a compute-first test alone would have falsely justified
+removal of the workaround. This historical prerequisite is now resolved upstream.
+
+The vkgsplat test build compiles the tensor-first public factory calls and a VMA
+allocator factory in a mandatory object library linked only through upstream
+public targets. It never executes GPU operations. See the
+[compatibility notes](pr03/README.md) and adjacent compiler diagnostics.
+
+### Dependency and public API contracts
+
+Removed both parent-side mutations linking Vulkan::Headers into vkexec and
+vkexec_vma. The pinned upstream Dependencies.cmake provides vkexec_vulkan,
+which exposes Vulkan::Headers and a link-only Vulkan::Vulkan requirement;
+src/vkexec links that target publicly for source builds. vkexec::vma links
+vkexec::vkexec and GPUOpen::VulkanMemoryAllocator publicly. No fallback include
+path or per-executable workaround was added. This validates source-build use,
+not an installed-package export or an environment without system headers.
+
+Repeated searches over src, include, test and benchmark find no direct
+vkexec::detail/internal uses, private detail-header imports or fetched-source
+includes. Adoption, compute/descriptor factories, VMA, record_pass, context
+submission, frame_ring and lock_queue remain public interfaces. Their owning
+public headers and the PR 02 inventory were reviewed; no renderer API rewrite
+or ownership adapter is justified. The new compile regression exercises return
+type deduction for both core compute overloads, frame_ring and VMA allocation.
+
+### Ownership and queue synchronization
+
+The native instance/device belong to VulkanDriver. The adopted context borrows
+them and their queues; AdoptVkexecContext explicitly rejects unexpected owned
+instance/device flags. The VMA allocator borrows this context. Renderer resources
+(pipelines, heaps, tensors/images, frame_ring, command pools and swapchain views)
+therefore must be released before allocator, context and native device.
+
+Renderer destruction stops/joins the render worker before Cleanup. Cleanup
+waits for device/present completion, resets frame_ring and offscreen sync,
+readbacks and commands, shuts down ImGui before shared descriptors, and releases
+pipelines and allocations. VulkanDriver then waits idle, resets swapchain,
+allocator and vkexec context, destroys device, surface and instance in that order.
+Renderer::Impl deliberately declares owned_engine before render_data and
+render_thread, so reverse member destruction also preserves the owner lifetime.
+The overload accepting an external Engine requires that Engine to outlive Renderer.
+
+Driver creation uses a local unique_ptr: failures during native initialization,
+adoption, allocator or swapchain creation unwind the successfully created owners.
+Renderer resource creation failures explicitly call Cleanup before returning the
+original built.error(); cleanup does not overwrite it. GPU error paths preserve
+the first worker error. This is a source audit, not exhaustive injected-failure
+coverage of every Vulkan allocation site.
+
+PresentSwapchainImage's lock_queue guard is unchanged. Direct video encoder and
+color converter submissions and queue waits also lock the specific queue. Normal
+rendering and readback submit through context. Renderer recreation/cleanup and
+driver idle calls rely on worker serialization or worker shutdown; they do not
+make one queue's lock cover another queue. External users sharing an Engine must
+serialize teardown/recreation against other queue users. No waits, frame-ring
+behavior or barrier declarations changed here.
+
+Interactive resize, scene reload and ImGui toggling still require runtime
+coverage; the source audit does not certify them. The known baseline headless
+synchronization hazard remains separate from PR 03. These interactive checks
+are outside the agreed final validation gate.
+
+### Historical Clang Release results against `fb6b1f7`
+
+Fresh binary tree `out/build/pr03-clang-release`, Clang 22.1.8, Ninja,
+`CMAKE_BUILD_TYPE=Release`, IPO ON, ASan/UBSan OFF, analysis tools OFF,
+benchmarks and headless GPU tests ON. Unchanged dependency sources reuse the
+PR 02 initial cache; vkexec was freshly fetched at `fb6b1f7`. First
+configure and repeated configure pass on the host. Sandbox attempts hit the
+previous CPM DNS and ccache write restrictions; host retries pass. The fetched
+vkexec diff at that time was exactly the retained three-line factory repair,
+confirmed by reverse patch check. This historical run did not establish the
+final revision’s unmodified-source status.
+
+| Check | Result |
+| --- | --- |
+| Fresh and repeated configure | PASS |
+| Full Clang Release application/test build | PASS, including public factory/VMA compile target |
+| Host CTest | PASS: 131/131, 19.39 s |
+| Focused synchronization-validation CTest | PASS: 6/6; layer still reports baseline errors |
+| Canonical graphics versus PR 02 | Mean channel difference 0.0000313465/255, max 2/255, 0% pixels beyond 4/255 |
+| Canonical compute versus PR 02 | Pixel-identical decoded RGB8 |
+| Internal namespace/private include search | No matches in renderer/test/benchmark/include sources |
+| Patch removal / unmodified dependency | Not established by this historical run; upstream prerequisite subsequently resolved |
+| Full performance repetitions | Not rerun; no throughput or CPU/GPU timing equivalence claim |
+| Interactive resize, reload, ImGui toggle, Windows, GCC, Debug | Not executed |
+
+The restricted-sandbox CTest run failed tiled image/overflow, offscreen sequence
+and canonical fixture GPU smoke with DRM enumeration errors/fallback-driver
+behavior. The host retry on the PR 02 Intel GPU passes all 131 tests. Preserve
+both logs rather than interpreting the sandbox result as a dependency regression.
+
+Focused validation matches PR 02: one headless and ten timing-smoke
+SYNC-HAZARD-WRITE-AFTER-READ diagnostics (the identifier appears twice per report,
+22 text matches in both logs). Other focused rendering logs have no validation
+errors. This is the existing acquire/layout-transition issue #14, not clean
+synchronization validation. Captures use PR 02's canonical scene and camera
+at 1920×1080, comparing each renderer against its own PR 02 output.
+
+The historical evidence archive contains configure/build/test and validation
+logs, captures/comparison data, the fetched-header diff and reproduction settings.
+It and its checksum are retained locally in
+`out/pr03-validation/historical-evidence/`, outside the source documentation.
+The include-order compiler diagnostics remain in `docs/migration/pr03/`.
+The obsolete proposed upstream patch is removed; the committed fix is linked
+above. Current implementation and user-reported final-revision validation status
+are recorded separately at the start of this audit. No PR 04 resource-use or
+PR 05 barrier work is included.
