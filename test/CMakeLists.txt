@@ -524,3 +524,9 @@ add_test(NAME cmake.sanitizers.apple_excludes_leak
          COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/test_sanitizers_apple_excludes_leak.cmake)
 add_test(NAME cmake.sanitizers.non_apple_includes_leak
          COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/test_sanitizers_non_apple_includes_leak.cmake)
+
+if(TARGET vkgsplat::vkgsplat_backend)
+  add_executable(vkgsplat_pass_resources_test pass_resources.cpp)
+  target_link_libraries(vkgsplat_pass_resources_test PRIVATE Catch2::Catch2WithMain vkgsplat::vkgsplat_backend)
+  catch_discover_tests(vkgsplat_pass_resources_test)
+endif()
